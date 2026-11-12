@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Page de paramètres · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --amber:oklch(0.72 0.16 70);
+    --amber-soft:oklch(0.72 0.16 70 / 0.12);
+    --red:oklch(0.577 0.245 27.325);
+    --red-soft:oklch(0.577 0.245 27.325 / 0.10);
+    --green:oklch(0.62 0.13 150);
+    --green-soft:oklch(0.62 0.13 150 / 0.12);
+    --radius:0.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    font-size:15px;line-height:1.5;padding:40px 20px 80px;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+
+  /* ── En-tête de planche ─────────────────────────────── */
+  .page-head h1{font-size:26px;font-weight:700;letter-spacing:-0.02em}
+  .page-head .sub{color:var(--muted-foreground);margin-top:6px;max-width:60ch}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;font-weight:500;padding:4px 11px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted-foreground)}
+  .chip b{color:var(--foreground);font-weight:600}
+
+  /* ── Scènes ─────────────────────────────────────────── */
+  .scene{background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:26px 26px 20px;margin-top:26px;box-shadow:0 1px 2px oklch(0.19 0.004 60 / 0.04)}
+  .scene-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .scene-num{flex:none;width:26px;height:26px;border-radius:8px;background:var(--hermes-soft);
+    color:var(--hermes);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+    transform:translateY(4px)}
+  .scene-head h2{font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  .scene-head .why{width:100%;color:var(--muted-foreground);font-size:13.5px;margin-top:4px;padding-left:38px}
+  .stage{margin:22px auto 6px;max-width:660px;background:var(--background);
+    border:1px solid var(--border);border-radius:22px;padding:34px 18px 26px;position:relative}
+  .stage.wide{max-width:780px}
+  .stage.dim-stage{padding:24px 16px 18px}
+  .notes{margin:16px 4px 0;padding-left:38px;list-style:none}
+  .notes li{font-size:13px;color:var(--muted-foreground);padding:3px 0 3px 22px;position:relative}
+  .notes li::before{content:attr(data-n);position:absolute;left:0;top:5px;width:15px;height:15px;
+    border-radius:5px;background:var(--muted);color:var(--card);font-size:9.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  .notes li b{color:var(--foreground);font-weight:600}
+  .notes code, .desc code, .why code{font-family:ui-monospace,monospace;font-size:11px;
+    background:var(--muted);border-radius:4px;padding:0 4px}
+
+  /* Avant / après */
+  .compare-label{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:0.07em;color:var(--muted-foreground);margin:20px 2px 9px}
+  .compare-label .tag{font-size:9.5px;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:0.04em}
+  .compare-label.before .tag{background:var(--muted);color:var(--muted-foreground)}
+  .compare-label.after .tag{background:var(--hermes-soft);color:var(--hermes)}
+  .stage .compare-label:first-child{margin-top:0}
+  .dim{opacity:.9}
+  .spotlight{position:relative;display:inline-flex;gap:7px;padding:3px 5px;
+    border:1.5px dashed oklch(0.63 0.17 42 / 0.5);border-radius:11px}
+  .new-tag{position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-size:8.5px;font-weight:700;
+    letter-spacing:0.05em;background:var(--hermes);color:var(--hermes-foreground);
+    border-radius:999px;padding:1.5px 7px;white-space:nowrap;box-shadow:0 1px 4px oklch(0.19 0.004 60 / 0.2)}
+
+  /* ── Fragment de sidebar (scène A) ──────────────────── */
+  .side-frag{width:252px;margin:0 auto;background:var(--card);border:1px solid var(--border);
+    border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:10px}
+  .side-top{display:flex;align-items:center;gap:8px;padding:4px 4px 0}
+  .side-top .logo{width:22px;height:22px;border-radius:7px;background:var(--hermes);
+    display:flex;align-items:center;justify-content:center;color:var(--hermes-foreground)}
+  .side-top .name{font-size:13px;font-weight:600}
+  .side-top .plus{margin-left:auto;width:24px;height:24px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card);color:var(--muted-foreground);display:flex;align-items:center;justify-content:center}
+  .side-search{display:flex;align-items:center;gap:7px;height:30px;border:1px solid var(--border);
+    border-radius:9px;background:var(--background);padding:0 9px;color:var(--muted-foreground);font-size:12px}
+  .side-lines{display:flex;flex-direction:column;gap:7px;padding:6px 4px}
+  .side-lines i{display:block;height:8px;border-radius:4px;background:var(--muted)}
+  .side-lines i.w1{width:64%}.side-lines i.w2{width:82%}.side-lines i.w3{width:47%}
+  .side-lines i.w4{width:71%}
+  .side-lines .gap{height:6px}
+
+  /* Carte de statut — copie de sidebar.tsx */
+  .status-card{background:var(--muted);border-radius:12px;padding:10px 12px}
+  .status-line{display:flex;align-items:center;gap:8px;min-width:0}
+  .status-line .dot{flex:none;width:8px;height:8px;border-radius:999px;background:var(--hermes)}
+  .status-line .mode{font-size:12.5px;font-weight:500;line-height:1.1;white-space:nowrap}
+  .status-sub{margin-top:6px;font-size:11.5px;line-height:1.45;color:var(--muted-foreground)}
+  .status-sub code{font-family:ui-monospace,monospace;font-size:10.5px;background:oklch(1 0 0 / 0.6);
+    border-radius:4px;padding:1px 4px;word-break:break-all}
+  .gear-btn{flex:none;margin-left:auto;width:27px;height:27px;border-radius:8px;border:none;
+    background:transparent;color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:background .15s,color .15s}
+  .gear-btn:hover{background:var(--card);color:var(--foreground);box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.12)}
+
+  /* ── Application derrière le sheet (scènes B / C) ────── */
+  .overlay-stage{display:flex;justify-content:flex-end;padding:20px 16px}
+  .ghost{position:absolute;top:16px;bottom:16px;left:16px;right:16px;display:flex;gap:10px;
+    opacity:.42;filter:grayscale(.35) blur(.4px);border-radius:14px;overflow:hidden}
+  .ghost .g-side{flex:0 0 21%;background:var(--muted);border-radius:12px;padding:10px;
+    display:flex;flex-direction:column;gap:9px}
+  .g-line{height:8px;border-radius:4px;background:var(--border)}
+  .g-line.w30{width:30%}.g-line.w80{width:80%}.g-line.w55{width:55%}
+  .g-side .g-status{margin-top:auto;background:var(--card);border-radius:9px;padding:8px}
+  .ghost .g-main{flex:1;background:var(--card);border-radius:12px;padding:14px;
+    display:flex;flex-direction:column;gap:10px}
+  .g-bubble{width:58%;height:32px;border-radius:12px;background:var(--muted)}
+  .g-bubble.b{align-self:flex-end;background:var(--hermes-soft)}
+  .g-composer{margin-top:auto;height:56px;border-radius:18px;border:1px solid var(--border);
+    background:var(--card)}
+
+  /* ── Le sheet ───────────────────────────────────────── */
+  .sheet{position:relative;z-index:10;width:460px;max-width:100%;background:var(--card);
+    border:1px solid var(--border);border-radius:22px;display:flex;flex-direction:column;overflow:hidden;
+    box-shadow:0 24px 70px oklch(0.19 0.004 60 / 0.22);animation:slidein .2s ease-out}
+  @keyframes slidein{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+  .sheet-head{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--border)}
+  .sheet-head .gear-badge{flex:none;width:30px;height:30px;border-radius:10px;background:var(--hermes-soft);
+    color:var(--hermes);display:flex;align-items:center;justify-content:center}
+  .sheet-head .tt{min-width:0}
+  .sheet-head .tt h2{font-size:15.5px;font-weight:600;letter-spacing:-0.01em}
+  .sheet-head .tt p{font-size:11px;color:var(--muted-foreground);margin-top:1px}
+  .x-btn{margin-left:auto;flex:none;width:30px;height:30px;border-radius:9px;border:none;background:transparent;
+    color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .15s,color .15s}
+  .x-btn:hover{background:var(--muted);color:var(--foreground)}
+  .sheet-body{padding:2px 0 12px;max-height:566px;overflow-y:auto}
+  .sheet-body::-webkit-scrollbar{width:8px}
+  .sheet-body::-webkit-scrollbar-thumb{background:var(--muted);border-radius:999px}
+
+  /* Sections = registres */
+  .sec{display:flex;align-items:center;gap:9px;padding:15px 16px 7px}
+  .sec + .sec{border-top:1px solid var(--border);margin-top:8px}
+  .sec .ico{flex:none;width:23px;height:23px;border-radius:8px;background:var(--hermes-soft);color:var(--hermes);
+    display:flex;align-items:center;justify-content:center}
+  .sec .ico.fork{background:var(--green-soft);color:var(--green)}
+  .sec h3{font-size:13px;font-weight:600;letter-spacing:-0.01em}
+  .sec .cnt{flex:none;font-size:10px;font-weight:600;color:var(--muted-foreground);
+    background:var(--muted);border-radius:999px;padding:2px 8px}
+  .sec .ns{margin-left:auto;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted-foreground)}
+  .subsec{display:flex;align-items:center;gap:8px;padding:11px 16px 4px;font-size:10.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:0.06em;color:var(--muted-foreground)}
+  .subsec::after{content:"";flex:1;height:1px;background:var(--border)}
+
+  /* Ligne de réglage */
+  .row{padding:9px 16px;transition:background .12s}
+  .row:hover{background:oklch(0.955 0.003 75 / 0.55)}
+  .row-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .row-top .lbl{flex:1;min-width:0;font-size:13px;font-weight:500}
+  .row-top .lbl .val{display:block;font-size:10.5px;color:var(--muted-foreground);font-weight:400;margin-top:1px}
+  .desc{font-size:11.5px;color:var(--muted-foreground);line-height:1.5;margin-top:3px;max-width:52ch}
+
+  /* Badges application */
+  .bdg{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;
+    padding:2.5px 8px;border-radius:999px;white-space:nowrap}
+  .bdg.live{background:var(--green-soft);color:var(--green)}
+  .bdg.reload{background:var(--amber-soft);color:var(--amber)}
+
+  /* Switch */
+  .switch{flex:none;width:38px;height:22px;border-radius:999px;background:var(--muted);
+    border:1px solid var(--border);position:relative;cursor:pointer;transition:background .16s,border-color .16s}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:999px;
+    background:var(--card);box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.25);transition:transform .17s}
+  .switch.on{background:var(--hermes);border-color:var(--hermes)}
+  .switch.on::after{transform:translateX(16px)}
+  .switch:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+
+  /* Segment (même composant que le picker) */
+  .seg{flex:none;display:flex;background:var(--muted);border-radius:9px;padding:2.5px;gap:2px}
+  .seg button{flex:1;border:none;background:transparent;font:inherit;font-size:11px;font-weight:500;
+    color:var(--muted-foreground);padding:5px 8px;border-radius:7px;cursor:pointer;transition:all .12s;
+    white-space:nowrap}
+  .seg button:hover{color:var(--foreground)}
+  .seg button.on{background:var(--card);color:var(--hermes);font-weight:600;
+    box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.12)}
+  .seg button:focus-visible{outline:2px solid var(--hermes);outline-offset:-2px}
+
+  /* Select modèle */
+  .sel-wrap{position:relative;flex:none}
+  .sel-btn{display:flex;align-items:center;gap:9px;height:32px;padding:0 11px;
+    border:1px solid var(--border);border-radius:10px;background:var(--background);font:inherit;
+    font-size:12.5px;font-weight:500;cursor:pointer;transition:border-color .14s,box-shadow .14s}
+  .sel-btn:hover{border-color:var(--hermes)}
+  .sel-btn:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  .sel-btn .chev{color:var(--muted-foreground)}
+  .sel-list{position:absolute;top:calc(100% + 7px);right:0;width:262px;background:var(--card);
+    border:1px solid var(--border);border-radius:13px;box-shadow:0 12px 40px oklch(0.19 0.004 60 / 0.16);
+    padding:5px;z-index:30;animation:pop .14s ease-out}
+  @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .sel-list[hidden]{display:none}
+  .sel-item{display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;border:none;
+    background:transparent;font:inherit;padding:7px 8px;border-radius:9px;cursor:pointer}
+  .sel-item:hover{background:var(--muted)}
+  .sel-item .check{flex:none;width:15px;height:15px;margin-top:2px;display:flex;align-items:center;justify-content:center}
+  .sel-item .m-name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px}
+  .sel-item .m-id{font-size:10.5px;color:var(--muted-foreground);font-family:ui-monospace,monospace;margin-top:1px}
+  .badge-flag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;
+    padding:1px 7px;border-radius:999px;background:var(--hermes-soft);color:var(--hermes)}
+  .badge-flag.gray{background:var(--muted);color:var(--muted-foreground)}
+
+  /* Favoris */
+  .fav-zone{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .fav-chip{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 3px 0 10px;
+    border:1px solid var(--border);border-radius:999px;background:var(--background);font-size:12px;font-weight:500}
+  .fav-chip .star{color:var(--amber);flex:none}
+  .fav-chip .rm{width:22px;height:22px;border-radius:999px;border:none;background:transparent;
+    color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .12s,color .12s}
+  .fav-chip .rm:hover{background:var(--red-soft);color:var(--red)}
+  .add-btn{display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 13px;
+    border:1.5px dashed var(--border);border-radius:999px;background:transparent;font:inherit;
+    font-size:12px;font-weight:500;color:var(--muted-foreground);cursor:pointer;
+    transition:color .13s,border-color .13s}
+  .add-btn:hover{color:var(--hermes);border-color:var(--hermes)}
+
+  /* Slider largeur */
+  .slider-row{flex:none;display:flex;align-items:center;gap:10px;width:196px}
+  .slider-row input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;
+    border-radius:999px;background:var(--muted);outline:none;cursor:pointer}
+  .slider-row input[type=range]:focus-visible{outline:2px solid var(--hermes);outline-offset:3px;border-radius:999px}
+  .slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;
+    border-radius:999px;background:var(--hermes);border:2.5px solid var(--card);
+    box-shadow:0 1px 4px oklch(0.19 0.004 60 / 0.25);cursor:grab}
+  .slider-row input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:999px;
+    background:var(--hermes);border:2.5px solid var(--card);cursor:grab}
+  .slider-val{flex:none;width:38px;text-align:right;font-size:11.5px;font-weight:600;
+    font-variant-numeric:tabular-nums;color:var(--hermes)}
+
+  /* Lecture seule */
+  .ro{flex:none;font-size:11.5px;color:var(--muted-foreground);background:var(--muted);
+    border-radius:8px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px}
+
+  /* ── Scène D : légende + flux ────────────────────────── */
+  .legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 2px 4px}
+  .flow{display:flex;align-items:stretch;gap:14px;flex-wrap:wrap;margin:20px 0 4px}
+  .fbox{flex:1;min-width:170px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+  .fbox h4{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--muted-foreground);margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .fbox .frow{display:flex;align-items:center;gap:7px;font-size:12px;padding:3.5px 0;flex-wrap:wrap}
+  .fbox .frow code{font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);
+    border-radius:4px;padding:1px 5px}
+  .fbox .frow .who{color:var(--muted-foreground);font-size:10.5px;white-space:nowrap}
+  .arrow{align-self:center;flex:none;color:var(--muted-foreground)}
+  .states{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+  .state-card{border:1px solid var(--border);border-radius:14px;padding:14px 14px 12px;background:var(--card)}
+  .state-ttl{font-size:11px;font-weight:600;color:var(--muted-foreground);margin-bottom:11px}
+  .state-card .demo{display:flex;align-items:center;gap:10px;min-height:34px}
+  .state-card .demo .r{width:76px;height:8px;border-radius:4px;background:var(--muted)}
+
+  /* ── Scène E : mobile ────────────────────────────────── */
+  .phone{width:288px;margin:6px auto 0;border:1.5px solid oklch(0.19 0.004 60 / 0.28);border-radius:38px;
+    padding:10px;background:var(--background);box-shadow:0 16px 50px oklch(0.19 0.004 60 / 0.16)}
+  .phone .notch{width:88px;height:5px;border-radius:999px;background:var(--border);margin:2px auto 10px}
+  .sheet-mobile{width:100%;border-radius:26px;height:540px}
+  .sheet-mobile .sheet-body{max-height:none;flex:1}
+
+  /* ── Tableau de spec ────────────────────────────────── */
+  .spec{margin-top:26px}
+  .spec h2{font-size:17px;font-weight:600;margin-bottom:4px}
+  .spec .sub{color:var(--muted-foreground);font-size:13.5px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--muted-foreground);padding:7px 10px;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  td code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+  tr:last-child td{border-bottom:none}
+  .spec .files{margin-top:16px;font-size:12.5px;color:var(--muted-foreground);line-height:1.6}
+  .spec .files code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+
+  .page-foot{margin-top:30px;text-align:center;font-size:11.5px;color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>Maquette interactive — Page de paramètres</h1>
+    <p class="sub">Hermes Web · chantier « paramètres ». La page rend les deux registres du §6 du FORK.md
+    en deux sections — aucune logique métier dedans. Cette planche est cliquable&nbsp;: engrenages, switches,
+    segments, listes et slider réagissent.</p>
+    <div class="chips">
+      <span class="chip">Forme&nbsp;: <b>Sheet overlay · 460px</b></span>
+      <span class="chip">Sections&nbsp;: <b>hermes.* / fork.*</b></span>
+      <span class="chip">Application&nbsp;: <b>immédiat + badge rechargement</b></span>
+      <span class="chip">Entrée&nbsp;: <b>engrenage · carte de statut</b></span>
+      <span class="chip"><b>Zéro logique métier</b> (§6)</span>
+    </div>
+  </header>
+
+  <!-- ══════════ SCÈNE A ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">A</span>
+      <h2>Point d&apos;entrée — l&apos;engrenage de la carte de statut</h2>
+      <p class="why">La carte en bas de la sidebar ne change ni de place ni de contenu&nbsp;:
+      l&apos;engrenage s&apos;ajoute à droite de la ligne d&apos;état. Cliquez-le — la planche défile au sheet.</p>
+    </div>
+    <div class="stage dim-stage">
+      <div class="compare-label before"><span class="tag">Aujourd'hui</span> carte de statut actuelle (sidebar.tsx)</div>
+      <div class="side-frag dim">
+        <div class="side-top">
+          <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
+          <span class="name">Hermes</span>
+          <span class="plus"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+        </div>
+        <div class="side-search">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          Rechercher…
+        </div>
+        <div class="side-lines">
+          <i class="w1"></i><i class="w2"></i><span class="gap"></span><i class="w3"></i><i class="w4"></i>
+        </div>
+        <div class="status-card">
+          <div class="status-line">
+            <span class="dot"></span>
+            <p class="mode">Mode démo · LLM intégré</p>
+          </div>
+          <p class="status-sub">
+            GLM-4.6 · Définissez
+            <code>HERMES_GATEWAY_URL</code>
+            pour brancher l&apos;agent Hermes.
+          </p>
+        </div>
+      </div>
+
+      <div class="compare-label after"><span class="tag">Après le chantier</span> même carte, engrenage à droite de la ligne d&apos;état</div>
+      <div class="side-frag">
+        <div class="side-top">
+          <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
+          <span class="name">Hermes</span>
+          <span class="plus"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+        </div>
+        <div class="side-search">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          Rechercher…
+        </div>
+        <div class="side-lines">
+          <i class="w1"></i><i class="w2"></i><span class="gap"></span><i class="w3"></i><i class="w4"></i>
+        </div>
+        <div class="status-card">
+          <div class="status-line">
+            <span class="dot"></span>
+            <p class="mode">Mode démo · LLM intégré</p>
+            <span class="spotlight">
+              <span class="new-tag">entrée</span>
+              <button class="gear-btn goto-sheet" title="Paramètres" aria-label="Ouvrir les paramètres">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </span>
+          </div>
+          <p class="status-sub">
+            GLM-4.6 · Définissez
+            <code>HERMES_GATEWAY_URL</code>
+            pour brancher l&apos;agent Hermes.
+          </p>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">L&apos;engrenage vit dans la carte de statut existante (27px, tooltip «&nbsp;Paramètres&nbsp;») — aucun nouvel élément flottant dans la sidebar, aucune retouche du layout au-dessus.</li>
+      <li data-n="2">Même entrée sur mobile&nbsp;: la sidebar mobile est un Sheet gauche, sa carte de statut porte le même engrenage (scène E).</li>
+      <li data-n="3">Échap referme le sheet&nbsp;; le chat reste lisible derrière. <b>Cmd/Ctrl+K</b> reste actif pendant l&apos;ouverture (l&apos;overlay ne capture pas les raccourcis globaux).</li>
+      <li data-n="4">Palette de commandes et raccourci clavier refusés volontairement en v1 — un seul point d&apos;entrée, celui qu&apos;on voit.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE B ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">B</span>
+      <h2>Le sheet, section « Agent Hermes » — registre amont</h2>
+      <p class="why">Sheet de 460px glissant depuis la droite, chat assombri derrière. Le select des modèles
+      s&apos;ouvre, les favoris se retirent, l&apos;effort et les autorisations réagissent.</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneB">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <span class="gear-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
+          <div class="tt">
+            <h2>Paramètres</h2>
+            <p>L&apos;agent Hermes · cette interface — tout s&apos;applique en place</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+
+          <div class="sec">
+            <span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
+            <h3>Agent Hermes</h3>
+            <span class="cnt">4 réglages</span>
+            <span class="ns">amont · hermes.*</span>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Modèle par défaut</span>
+              <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              <span class="sel-wrap">
+                <button class="sel-btn" id="modelSelBtn">
+                  <span id="modelSelLabel">Hermes 4 70B</span>
+                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="sel-list" id="modelSelList" hidden>
+                  <button class="sel-item" data-name="Hermes 4 405B">
+                    <span class="check"></span>
+                    <span>
+                      <span class="m-name">Hermes 4 405B
+                        <span class="badge-flag"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>Flagship</span>
+                      </span>
+                      <span class="m-id">hermes-4-405b · Nous Research</span>
+                    </span>
+                  </button>
+                  <button class="sel-item on" data-name="Hermes 4 70B">
+                    <span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                    <span>
+                      <span class="m-name">Hermes 4 70B
+                        <span class="badge-flag gray">Défaut</span>
+                      </span>
+                      <span class="m-id">hermes-4-70b · Nous Research</span>
+                    </span>
+                  </button>
+                  <button class="sel-item" data-name="Hermes 4 14B">
+                    <span class="check"></span>
+                    <span><span class="m-name">Hermes 4 14B</span><span class="m-id">hermes-4-14b · Nous Research</span></span>
+                  </button>
+                  <button class="sel-item" data-name="Hermes 3 405B">
+                    <span class="check"></span>
+                    <span><span class="m-name">Hermes 3 405B</span><span class="m-id">hermes-3-405b · Nous Research</span></span>
+                  </button>
+                  <button class="sel-item" data-name="Hermes 3 8B">
+                    <span class="check"></span>
+                    <span><span class="m-name">Hermes 3 8B</span><span class="m-id">hermes-3-8b · Nous Research</span></span>
+                  </button>
+                </div>
+              </span>
+            </div>
+            <p class="desc">Modèle sélectionné pour les nouveaux tours de chat — même source que le picker
+            (gateway ou catalogue). La pilule du composer suit immédiatement.</p>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Modèles favoris</span>
+              <span class="ro"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>2 / 5 épinglés</span>
+            </div>
+            <div class="fav-zone" id="favZone">
+              <span class="fav-chip">
+                <svg class="star" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+                Hermes 4 405B
+                <button class="rm" title="Retirer des favoris" aria-label="Retirer Hermes 4 405B des favoris">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </span>
+              <span class="fav-chip">
+                <svg class="star" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+                Hermes 4 14B
+                <button class="rm" title="Retirer des favoris" aria-label="Retirer Hermes 4 14B des favoris">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </span>
+              <button class="add-btn" id="favAddBtn">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                Ajouter
+              </button>
+            </div>
+            <p class="desc">Épinglés en tête du sélecteur de modèles, retirés d&apos;un clic — le picker relit
+            la liste à chaque ouverture (aucun badge&nbsp;: pas de rechargement à prévoir).</p>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Effort de raisonnement</span>
+              <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              <span class="seg" role="radiogroup" aria-label="Effort de raisonnement" id="effortSeg">
+                <button type="button">Off</button>
+                <button type="button" class="on">Standard</button>
+                <button type="button">Élevé</button>
+              </span>
+            </div>
+            <p class="desc">Envoyé dans <code>api_turn_v1.settings</code> — ignoré sans dommage si le fournisseur
+            ne le supporte pas. L&apos;échelle suit le modèle sélectionné (ici&nbsp;: Nous Portal).</p>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Autorisations de l&apos;agent</span>
+              <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              <button class="switch" role="switch" aria-checked="false" aria-label="Autorisations automatiques" title="ask : confirmation avant chaque action · auto : tout exécuter"></button>
+            </div>
+            <p class="desc">ask&nbsp;: confirmation avant chaque action · auto&nbsp;: tout exécuter.
+            Réinitialisé sur «&nbsp;ask&nbsp;» à chaque session — le bouclier du composer suit.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Sheet de <b>460px</b> depuis la droite (shadcn Sheet), chat assombri derrière — la conversation reste le chef d&apos;orchestre, on ne quitte jamais le chat.</li>
+      <li data-n="2">Section «&nbsp;Agent Hermes&nbsp;» = rendu de <code>HERMES_SETTINGS</code> (§6). Aucune logique métier&nbsp;: chaque ligne lit et écrit son réglage du registre, point.</li>
+      <li data-n="3">Pas de bouton «&nbsp;Enregistrer&nbsp;» — tout s&apos;applique en place, le badge vert signale ce qui prend effet immédiatement (bus d&apos;événements, scène D).</li>
+      <li data-n="4">Le select partage la source du picker (gateway en mode connecté, catalogue en repli) — ids disparus ignorés silencieusement, comme partout.</li>
+      <li data-n="5">Favoris&nbsp;: c&apos;est ici qu&apos;ils se gèrent (le picker les relit à chaque ouverture — comportement déjà en place, zéro retouche du picker).</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE C ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">C</span>
+      <h2>Le sheet, section « Cette interface » — registre du fork</h2>
+      <p class="why">Même sheet, déroulé d&apos;un cran&nbsp;: les 4 réglages du fork, groupés par catégorie
+      (Interface, Projets). Le slider redimensionne la sidebar en direct dans la maquette.</p>
+    </div>
+    <div class="stage wide overlay-stage">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <span class="gear-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
+          <div class="tt">
+            <h2>Paramètres</h2>
+            <p>L&apos;agent Hermes · cette interface — tout s&apos;applique en place</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+
+          <div class="sec">
+            <span class="ico fork"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
+            <h3>Cette interface</h3>
+            <span class="cnt">4 réglages</span>
+            <span class="ns">fork · fork.*</span>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Jauge de contexte</span>
+              <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              <button class="switch on" role="switch" aria-checked="true" aria-label="Afficher la jauge de contexte"></button>
+            </div>
+            <p class="desc">Affiche la jauge de consommation de tokens dans le composer — l&apos;anneau
+            apparaît ou disparaît sans rechargement.</p>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Largeur de la sidebar</span>
+              <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              <span class="slider-row">
+                <input type="range" min="12" max="34" value="19" step="1" aria-label="Largeur de la sidebar en pourcentage" id="widthSlider">
+                <span class="slider-val" id="widthVal">19%</span>
+              </span>
+            </div>
+            <p class="desc">Pourcentage de la largeur d&apos;écran (12 à 34) — la sidebar se redimensionne
+            pendant le glissement, même geste que la poignée.</p>
+          </div>
+
+          <div class="subsec">Projets</div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Tri des conversations</span>
+              <span class="bdg reload">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                au rechargement
+              </span>
+              <span class="seg" role="radiogroup" aria-label="Tri des conversations" id="sortSeg">
+                <button type="button" class="on">Mis à jour</button>
+                <button type="button">Création</button>
+                <button type="button">Titre</button>
+              </span>
+            </div>
+            <p class="desc">Ordre des conversations à l&apos;intérieur d&apos;un projet — la sidebar lit ce
+            réglage au montage, d&apos;où le badge honnête.</p>
+          </div>
+
+          <div class="row">
+            <div class="row-top">
+              <span class="lbl">Projets repliés</span>
+              <span class="ro">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 15l3-3-3-3"/></svg>
+                2 / 5 repliés
+              </span>
+            </div>
+            <p class="desc">État interne de la sidebar (JSON d&apos;ids), piloté par les chevrons des groupes
+            — lecture seule ici, rien à régler.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Section «&nbsp;Cette interface&nbsp;» = rendu de <code>FORK_SETTINGS</code>, sous-groupes par <code>category</code> du registre («&nbsp;Projets&nbsp;» ici) — le jour où une catégorie nouvelle apparaît, la page la rend sans retouche.</li>
+      <li data-n="2">Jauge et largeur&nbsp;: immédiats (le composer et la page écoutent le bus d&apos;événements, scène D). Tri&nbsp;: au rechargement — la sidebar lit au montage, on assume plutôt que de mentir.</li>
+      <li data-n="3">«&nbsp;Projets repliés&nbsp;» rendu en lecture seule&nbsp;: c&apos;est la sidebar qui écrit ce réglage (chevrons des groupes) — la page affiche l&apos;état, elle ne le manipule pas.</li>
+      <li data-n="4">Les réglages de portée serveur (<code>scope: "server"</code>) rejoindront ces sections le jour où ils existeront — aucun aujourd&apos;hui, la table <code>settings</code> du mini-service n&apos;a pas besoin d&apos;être touchée.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE D ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">D</span>
+      <h2>Immédiat ou au rechargement — le bus d&apos;événements</h2>
+      <p class="why">Deux badges, un mécanisme&nbsp;: le registre émet, les composants qui veulent réagir écoutent.
+      Les états focus / hover des contrôles sont spécifiés à droite.</p>
+    </div>
+    <div class="stage wide dim-stage">
+      <div class="legend">
+        <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+        <span style="font-size:12.5px;color:var(--muted-foreground)">le composant concerné écoute et réagit en place</span>
+        <span class="bdg reload"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>au rechargement</span>
+        <span style="font-size:12.5px;color:var(--muted-foreground)">la valeur sert au prochain montage — comportement actuel</span>
+      </div>
+
+      <div class="flow">
+        <div class="fbox">
+          <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Écriture</h4>
+          <div class="frow"><code>writeClientSetting(key, value)</code></div>
+          <div class="frow" style="color:var(--muted-foreground);font-size:11px">le sheet — ou n&apos;importe quel contrôle</div>
+          <div class="frow"><code>localStorage</code><span class="who">hermes-ui:&lt;clé&gt;</span></div>
+        </div>
+        <span class="arrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+        <div class="fbox">
+          <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Annonce</h4>
+          <div class="frow"><code>hermes-ui:settings-changed</code></div>
+          <div class="frow" style="color:var(--muted-foreground);font-size:11px">CustomEvent — <code>{key, value}</code> — sur window</div>
+          <div class="frow" style="color:var(--muted-foreground);font-size:11px">émis depuis <code>settings.ts</code> uniquement</div>
+        </div>
+        <span class="arrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+        <div class="fbox">
+          <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>Auditeurs v1</h4>
+          <div class="frow"><code>fork.context.gauge</code><span class="who">composer</span></div>
+          <div class="frow"><code>hermes.model · effort · permissions</code></div>
+          <div class="frow" style="margin-top:-4px"><span class="who" style="margin-left:2px">use-hermes-chat</span></div>
+          <div class="frow"><code>fork.ui.sidebar.width</code><span class="who">page → resize</span></div>
+        </div>
+      </div>
+
+      <div class="states">
+        <div class="state-card">
+          <div class="state-ttl">Switch — focus visible</div>
+          <div class="demo">
+            <span class="r"></span>
+            <button class="switch on" role="switch" aria-checked="true" aria-label="Démo focus" id="focusSwitch"></button>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Segment — cran actif / hover</div>
+          <div class="demo">
+            <span class="seg"><button type="button">Off</button><button type="button" class="on">Standard</button><button type="button">Élevé</button></span>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Favori — retrait au survol</div>
+          <div class="demo">
+            <span class="fav-chip">
+              <svg class="star" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              Hermes 4 405B
+              <button class="rm hover-keep" title="Retirer des favoris" style="background:var(--red-soft);color:var(--red)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </span>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Select — liste ouverte</div>
+          <div class="demo">
+            <span class="sel-wrap">
+              <button class="sel-btn">Hermes 4 70B
+                <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <span class="sel-list" style="position:static;display:block;width:210px;animation:none">
+                <span class="sel-item" style="cursor:default"><span class="check"></span><span><span class="m-name">Hermes 4 405B</span></span></span>
+                <span class="sel-item on" style="cursor:default"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span><span class="m-name">Hermes 4 70B</span></span></span>
+              </span>
+            </span>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Ligne — survol discret</div>
+          <div class="demo" style="background:oklch(0.955 0.003 75 / 0.55);border-radius:10px;padding:9px 12px">
+            <span class="r" style="width:110px"></span>
+            <button class="switch on" role="switch" aria-checked="true" aria-label="Démo"></button>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Slider — pouce hermes</div>
+          <div class="demo">
+            <span class="slider-row" style="width:150px">
+              <input type="range" min="12" max="34" value="24" aria-label="Démo slider">
+              <span class="slider-val">24%</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Le bus est un <b>CustomEvent</b> <code>hermes-ui:settings-changed</code> émis par <code>writeClientSetting()</code> — les seules API du registre restent lecture / écriture, aucune dépendance injectée dans les composants.</li>
+      <li data-n="2">Personne n&apos;est obligé d&apos;écouter&nbsp;: sans auditeur, la valeur sert au prochain montage — c&apos;est exactement le comportement actuel des composants.</li>
+      <li data-n="3">Tous les contrôles restent focusables au clavier (focus visible couleur hermes, Tab / Maj+Tab), Échap ferme le sheet sans modifier la valeur en cours.</li>
+      <li data-n="4">Un seul badge «&nbsp;au rechargement&nbsp;» en v1 (tri des conversations) — le tableau de spec recense la portée de chaque clé.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE E ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">E</span>
+      <h2>Mobile — plein écran depuis la droite</h2>
+      <p class="why">Sous 768px, le sheet prend toute la largeur (shadcn Sheet responsive), mêmes sections,
+      contrôles étirés. L&apos;entrée reste l&apos;engrenage de la carte de statut — dans la sidebar mobile.</p>
+    </div>
+    <div class="stage dim-stage" style="padding-bottom:20px">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="sheet sheet-mobile">
+          <div class="sheet-head">
+            <span class="gear-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </span>
+            <div class="tt">
+              <h2>Paramètres</h2>
+              <p>L&apos;agent Hermes · cette interface</p>
+            </div>
+            <button class="x-btn" title="Fermer" aria-label="Fermer les paramètres">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body">
+            <div class="sec">
+              <span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
+              <h3>Agent Hermes</h3>
+              <span class="cnt">4</span>
+              <span class="ns">hermes.*</span>
+            </div>
+            <div class="row">
+              <div class="row-top">
+                <span class="lbl">Modèle par défaut</span>
+                <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              </div>
+              <div class="demo-mobile" style="margin-top:7px">
+                <button class="sel-btn" style="width:100%;justify-content:space-between">
+                  <span>Hermes 4 70B</span>
+                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-top">
+                <span class="lbl">Effort de raisonnement</span>
+                <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
+              </div>
+              <div style="margin-top:7px">
+                <span class="seg" style="display:flex;width:100%"><button type="button">Off</button><button type="button" class="on">Standard</button><button type="button">Élevé</button></span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-top">
+                <span class="lbl">Autorisations de l&apos;agent</span>
+                <button class="switch" role="switch" aria-checked="false" aria-label="Autorisations automatiques"></button>
+              </div>
+              <p class="desc">ask&nbsp;: confirmation avant chaque action · auto&nbsp;: tout exécuter.</p>
+            </div>
+            <div class="sec">
+              <span class="ico fork"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
+              <h3>Cette interface</h3>
+              <span class="cnt">4</span>
+              <span class="ns">fork.*</span>
+            </div>
+            <div class="row">
+              <div class="row-top">
+                <span class="lbl">Jauge de contexte</span>
+                <button class="switch on" role="switch" aria-checked="true" aria-label="Afficher la jauge de contexte"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Le sheet mobile garde l&apos;en-tête et la structure des sections — les badges et descriptions restent, les libellés passent au-dessus des contrôles quand la place manque.</li>
+      <li data-n="2">L&apos;engrenage vit dans la carte de statut de la <b>sidebar mobile</b> (Sheet gauche) — même composant, même réglage, aucune dérive de comportement.</li>
+      <li data-n="3">La fermeture se fait au X ou au geste de glissement depuis le bord (shadcn Sheet) — le chat n&apos;a jamais bougé derrière.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SPÉC ══════════ -->
+  <section class="scene spec">
+    <h2>Clés rendues par la page (registre §6 — R7)</h2>
+    <p class="sub">Toutes de portée client en v1&nbsp;: aucun changement de schéma SQLite, aucune migration,
+    la table <code>settings</code> du mini-service n&apos;est pas touchée.</p>
+    <table>
+      <thead><tr><th>Clé</th><th>Type</th><th>Défaut</th><th>Contrôle dans le sheet</th><th>Application</th></tr></thead>
+      <tbody>
+        <tr><td><code>hermes.model</code></td><td>string</td><td>—</td><td>Select (source du picker)</td><td>immédiate</td></tr>
+        <tr><td><code>hermes.models.favorites</code></td><td>JSON</td><td><code>[]</code></td><td>Chips + Ajouter</td><td>prochaine ouverture du picker</td></tr>
+        <tr><td><code>hermes.reasoning.effort</code></td><td>string</td><td><code>"medium"</code></td><td>Segment (échelle du modèle)</td><td>immédiate</td></tr>
+        <tr><td><code>hermes.permissions.mode</code></td><td>enum</td><td><code>ask</code></td><td>Switch ask | auto</td><td>immédiate</td></tr>
+        <tr><td><code>fork.ui.sidebar.width</code></td><td>number</td><td><code>19</code></td><td>Slider 12–34</td><td>immédiate (resize)</td></tr>
+        <tr><td><code>fork.projects.sort</code></td><td>enum</td><td><code>updated</code></td><td>Segment 3 modes</td><td><b>au rechargement</b></td></tr>
+        <tr><td><code>fork.projects.collapsed</code></td><td>JSON</td><td><code>[]</code></td><td>Lecture seule</td><td>— (écrite par la sidebar)</td></tr>
+        <tr><td><code>fork.context.gauge</code></td><td>boolean</td><td><code>true</code></td><td>Switch</td><td>immédiate</td></tr>
+      </tbody>
+    </table>
+    <p class="files">Fichiers&nbsp;: nouveaux <code>src/components/settings/settings-sheet.tsx</code> (sheet + rendu des
+    deux registres) et <code>src/components/settings/setting-row.tsx</code> (ligne label + contrôle + description) ·
+    retouches chirurgicales&nbsp;: <code>settings.ts</code> (émission du CustomEvent
+    <code>hermes-ui:settings-changed</code> dans writeClientSetting), <code>sidebar.tsx</code> (engrenage + prop
+    <code>onOpenSettings</code>), <code>page.tsx</code> (état d&apos;ouverture, rendu du Sheet, écoute de la largeur),
+    <code>composer.tsx</code> (écoute live de la jauge), <code>use-hermes-chat.ts</code> (écoute live modèle / effort /
+    permissions). Le picker, le connecteur et le mini-service ne bougent pas.</p>
+  </section>
+
+  <footer class="page-foot">
+    Maquette de travail — validation avant implémentation (convention du repo) · palette officielle Hermes Web (blanc chaud + terracotta) · Geist
+  </footer>
+</div>
+
+<script>
+(function(){
+  // ── Scène A : l'engrenage défile vers le sheet ──────────
+  document.querySelectorAll('.goto-sheet').forEach(function(b){
+    b.addEventListener('click', function(){
+      var t = document.getElementById('sceneB');
+      if (t) t.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  });
+
+  // ── Switches (toutes scènes) ────────────────────────────
+  document.querySelectorAll('.switch').forEach(function(sw){
+    sw.addEventListener('click', function(){
+      var on = sw.classList.toggle('on');
+      sw.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  });
+
+  // ── Segments (effort, tri, démo) ────────────────────────
+  document.querySelectorAll('.seg').forEach(function(seg){
+    seg.querySelectorAll('button').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        seg.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+        btn.classList.add('on');
+      });
+    });
+  });
+
+  // ── Select modèle (scène B) ─────────────────────────────
+  var selBtn = document.getElementById('modelSelBtn');
+  var selList = document.getElementById('modelSelList');
+  var selLabel = document.getElementById('modelSelLabel');
+  if (selBtn && selList) {
+    selBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      selList.hidden = !selList.hidden;
+    });
+    selList.querySelectorAll('.sel-item').forEach(function(item){
+      item.addEventListener('click', function(){
+        selList.querySelectorAll('.sel-item').forEach(function(x){
+          x.classList.remove('on');
+          var c = x.querySelector('.check'); if (c) c.innerHTML = '';
+        });
+        item.classList.add('on');
+        item.querySelector('.check').innerHTML =
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+        selLabel.textContent = item.dataset.name;
+        selList.hidden = true;
+      });
+    });
+    document.addEventListener('click', function(){ selList.hidden = true; });
+  }
+
+  // ── Favoris : retrait d'une puce ────────────────────────
+  document.querySelectorAll('#favZone .fav-chip .rm').forEach(function(rm){
+    rm.addEventListener('click', function(e){
+      e.stopPropagation();
+      var chip = rm.closest('.fav-chip');
+      chip.style.transition = 'opacity .15s, transform .15s';
+      chip.style.opacity = '0'; chip.style.transform = 'scale(.9)';
+      setTimeout(function(){ chip.remove(); }, 150);
+    });
+  });
+
+  // ── Slider largeur (scène C) ────────────────────────────
+  var slider = document.getElementById('widthSlider');
+  var widthVal = document.getElementById('widthVal');
+  if (slider && widthVal) {
+    slider.addEventListener('input', function(){
+      widthVal.textContent = slider.value + '%';
+    });
+  }
+})();
+</script>
+</body>
+</html>

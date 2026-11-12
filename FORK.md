@@ -220,13 +220,25 @@ affichées (k + %, seuils ambre 50 % / rouge 80 %).
   à chaque session).
 - Réglage `fork.context.gauge` (affichage de la jauge), déclaré dans le registre (§6).
 
-### 7.4 Plus tard
+### 7.4 En chantier — page de paramètres
+
+- Décisions validées le 2026-11-13 : **Sheet overlay 460px** glissant depuis la droite (le chat
+  reste visible — la conversation reste le chef d'orchestre), contenu = **les deux registres
+  seuls** (§6, aucune section gateway/données en v1), **application immédiate** via un
+  CustomEvent `hermes-ui:settings-changed` émis par `writeClientSetting()` + badge
+  « au rechargement » là où le consommateur lit au montage (seul `fork.projects.sort` en v1),
+  **entrée unique** = engrenage dans la carte de statut de la sidebar (palette et raccourci
+  clavier refusés volontairement en v1).
+- Maquette de validation : **`design/maquette-parametres.html`** (scènes A-E : entrée,
+  section « Agent Hermes », section « Cette interface », bus d'événements et états, mobile ;
+  spec des clés + fichiers en fin de planche) — **en attente de validation avant
+  implémentation**.
+
+### 7.5 Plus tard
 
 - **Browsing agent** (étape 6 de la vision artefacts) : chip de statut discrète près du champ
   de saisie (favicon + titre), résultats en citations cliquables repliables
   « Pages consultées (n) », jamais de panneau dédié. Branché sur le daemon dev-browser.
-- **Page de paramètres** : rendu des deux registres (§6), sections « Agent Hermes » /
-  « Cette interface ».
 
 ## 8. Dettes techniques et pièges
 
@@ -257,6 +269,7 @@ affichées (k + %, seuils ambre 50 % / rouge 80 %).
 | 2026-11-12 | `README.md` racine ajouté (page d'accueil du repo GitHub). Troisième voie de publication : **archive zip** des fichiers seuls (`download/push/hermes_ui-a-televerser.zip`), pour téléversement manuel via l'interface web GitHub — sans historique git, choix de l'utilisatrice. |
 | 2026-11-13 | **Composer v2 livré** (cf. §7.3) d'après la maquette validée, versionnée au passage dans `design/maquette-composer.html`. 5 erreurs TypeScript introduites par le chantier corrigées avant publication (props `onUploadFile`/`onTranscribe` du composer, `TurnRequest` `string \| null`, `@ts-expect-error` obsolète du démo-engine) ; `bunx tsc --noEmit` ne remonte plus que les 10 erreurs préexistantes hors périmètre (API Bun vues par le tsc racine, outillage du bac à sable). Artefacts de publication régénérés : `publish` passe à 2 commits propres (base + Composer v2), bundle et zip à jour. |
 | 2026-11-13 | **Repo GitHub passé en privé** et publication depuis le bac à sable : `publish` (2 commits propres) poussé sur `main` distant via PAT fine-grained fourni dans le chat — utilisé en helper d'identification **jetable** (jamais écrit dans `.git/config`, `~/.git-credentials` ni aucun fichier ; bac à sable audité après coup). Le PAT étant à expiration illimitée, le régénérer reste conseillé en cas de doute. |
+| 2026-11-13 | **Chantier paramètres démarré** : forme = Sheet overlay 460px depuis la droite (chat visible derrière), contenu = les deux registres seuls (§6), application = immédiate via CustomEvent `hermes-ui:settings-changed` émis par `writeClientSetting()` + badge « au rechargement » (seul `fork.projects.sort`, lu au montage par la sidebar), entrée unique = engrenage de la carte de statut de la sidebar (palette/raccourci refusés en v1). Maquette `design/maquette-parametres.html` produite (scènes A-E + spec des clés/fichiers) — en attente de validation avant implémentation. |
 
 ## 10. Synchronisation git et passation
 
