@@ -1,0 +1,32 @@
+{
+  "name": "Hermes Web — Chat pour l'agent Hermes",
+  "short_name": "Hermes Web",
+  "description": "Interface de chat type ChatGPT pour l'agent Hermes de Nous Research : conversations persistantes, streaming, outils, raisonnement et pièces jointes multimédia.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f0d0c",
+  "theme_color": "#b3542a",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

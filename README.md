@@ -1,0 +1,40 @@
+# hermes_ui
+
+Interface web de chat pour l'agent Hermes (Nous Research), avec rangement des
+conversations par projets et artefacts versionnés.
+
+> Fork maintenu par auriannedrumont-eng — documentation technique complète :
+> **[FORK.md](FORK.md)** (architecture, conventions, feuille de route, passation).
+
+## Deux modes
+
+- **Gateway** : connexion à un agent Hermes réel via le protocole `api_turn_v1`
+  (variables `HERMES_GATEWAY_URL` et `HERMES_GATEWAY_TOKEN`).
+- **Démo** (par défaut) : persona Hermes servie par un LLM de repli, sans gateway.
+
+## Démarrage rapide
+
+```bash
+# Frontend Next.js (port 3000)
+bun install
+bun dev
+
+# Mini-service socket.io (port 3003) — indispensable au chat
+cd mini-services/hermes-chat
+bun install
+bun run dev
+```
+
+Le rendu des artefacts HTML passe par un pipeline `chrome-headless-shell`
+(voir le `README.md` du mini-service). Caddy (facultatif) sert de reverse
+proxy : port 81 vers localhost:3000 (cf. `Caddyfile`).
+
+## Fonctionnalités du fork
+
+- Conversations rangées **par projet** : groupes repliables, glisser-déposer,
+  largeur de sidebar fluide, section « Sans projet ».
+- **Artefacts versionnés** dans les conversations : rendu code / Markdown /
+  CSV / JSON / SVG / PDF, captures PNG et PDF vectoriel, diff entre versions.
+- Registre de réglages séparé `hermes.*` (amont) / `fork.*` (fork).
+
+Détails, tests manuels et conventions : voir **[FORK.md](FORK.md)**.

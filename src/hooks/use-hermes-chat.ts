@@ -1,0 +1,876 @@
+// Hook principal : orchestre les conversations, la sélection de modèle,
+// les pièces jointes multimédia et le streaming via socket.io
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getSocket } from "@/lib/socket";
+import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import type {
+  Artifact,
+  Attachment,
+  ChatMessage,
+  ConversationMeta,
+  GatewayMode,
+  ModelOption,
+  ModelsResult,
+  Project,
+  SearchHit,
+  ServerHello,
+  StreamingState,
+  ToolEvent,
+} from "@/lib/chat-types";
+
+const MODEL_SETTING_KEY = "hermes.model"; // registre des réglages (FORK.md §6)
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 Mo, aligné sur le service
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.includes(",") ? result.split(",")[1] : result);
+    };
+    reader.onerror = () => reject(new Error("Lecture du fichier impossible"));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function useHermesChat() {
+  const [connected, setConnected] = useState(false);
+  const [serverInfo, setServerInfo] = useState<ServerHello | null>(null);
+  const [conversations, setConversations] = useState<ConversationMeta[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [modelsSource, setModelsSource] = useState<ModelsResult["source"] | null>(null);
+  const [selectedModel, setSelectedModelState] = useState<string | null>(null);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  // ── Artefacts de la conversation active + panneau dédié ──────────
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  /** Contenu source en cours de stream, par clé d'artefact (aperçu vivant). */
+  const [streamingArtifacts, setStreamingArtifacts] = useState<Record<string, string>>({});
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelArtifactId, setPanelArtifactId] = useState<string | null>(null);
+  const activeIdRef = useRef<string | null>(null);
+  const selectedModelRef = useRef<string | null>(null);
+  /** Clé de l'artefact affiché dans le panneau (survit aux changements de version). */
+  const panelKeyRef = useRef<string | null>(null);
+
+  // Synchronise les refs (lecture seule côté handlers d'événements)
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
+
+  // Sélection persistée (registre des réglages, cf. FORK.md §6)
+  useEffect(() => {
+    const saved = readClientSetting<string | null>(MODEL_SETTING_KEY);
+    if (saved) setSelectedModelState(saved);
+  }, []);
+
+  const setSelectedModel = useCallback((id: string) => {
+    setSelectedModelState(id);
+    writeClientSetting(MODEL_SETTING_KEY, id);
+  }, []);
+
+  const isBusy = streaming !== null || uploadingCount > 0;
+
+  const refreshConversations = useCallback(() => {
+    const socket = getSocket();
+    socket.emit("conversations:list", (res: { conversations?: ConversationMeta[] } = {}) => {
+      if (res.conversations) setConversations(res.conversations);
+    });
+  }, []);
+
+  /** Charge la liste des projets (rangement des conversations). */
+  const fetchProjects = useCallback(() => {
+    getSocket().emit("projects:list", (res: { projects?: Project[] } = {}) => {
+      if (res.projects) setProjects(res.projects);
+    });
+  }, []);
+
+  const fetchModels = useCallback(() => {
+    const socket = getSocket();
+    socket.emit("models:list", (res: ModelsResult = {} as ModelsResult) => {
+      const list = res.models ?? [];
+      if (list.length > 0) {
+        setModels(list);
+        setModelsSource(res.source ?? "catalogue");
+        setSelectedModelState((current) => {
+          if (current && list.some((m) => m.id === current)) return current;
+          return res.defaultModel && list.some((m) => m.id === res.defaultModel)
+            ? res.defaultModel
+            : list[0].id;
+        });
+      }
+    });
+  }, []);
+
+  /** Charge les artefacts d'une conversation (toutes versions, métadonnées). */
+  const fetchArtifacts = useCallback((conversationId: string) => {
+    getSocket().emit(
+      "artifacts:list",
+      { conversationId },
+      (res: { artifacts?: Artifact[] } = {}) => {
+        if (conversationId === activeIdRef.current) {
+          setArtifacts(res.artifacts ?? []);
+        }
+      }
+    );
+  }, []);
+
+  // --- Connexion socket + écoute des événements de stream ---
+  useEffect(() => {
+    const socket = getSocket();
+
+    const onConnect = () => {
+      setConnected(true);
+      socket.emit("hello", (info: ServerHello) => setServerInfo(info));
+      refreshConversations();
+      fetchProjects();
+      fetchModels();
+    };
+    const onDisconnect = () => {
+      setConnected(false);
+      setStreaming(null);
+    };
+
+    const onStreamStart = (p: { conversationId: string; messageId: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreaming({
+        messageId: p.messageId,
+        conversationId: p.conversationId,
+        content: "",
+        reasoning: "",
+        status: "Hermes réfléchit…",
+        toolEvents: [],
+      });
+    };
+
+    const onStreamDelta = (p: { conversationId: string; messageId: string; delta: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreaming((s) =>
+        s && s.messageId === p.messageId
+          ? { ...s, content: s.content + p.delta, status: null }
+          : s
+      );
+    };
+
+    const onStreamReasoning = (p: { conversationId: string; messageId: string; delta: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreaming((s) =>
+        s && s.messageId === p.messageId ? { ...s, reasoning: s.reasoning + p.delta } : s
+      );
+    };
+
+    const onStreamStatus = (p: { conversationId: string; messageId: string | null; status: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreaming((s) => (s ? { ...s, status: p.status } : s));
+    };
+
+    const onStreamTool = (p: { conversationId: string; messageId: string; event: ToolEvent }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreaming((s) =>
+        s && s.messageId === p.messageId
+          ? { ...s, toolEvents: [...s.toolEvents, p.event], status: null }
+          : s
+      );
+    };
+
+    const onStreamDone = (p: {
+      conversationId: string;
+      messageId: string;
+      conversation?: ConversationMeta;
+      message?: ChatMessage;
+    }) => {
+      if (p.conversationId !== activeIdRef.current) {
+        refreshConversations();
+        setStreaming(null);
+        return;
+      }
+      if (p.message) {
+        setMessages((prev) => [...prev, p.message as ChatMessage]);
+      }
+      setStreaming(null);
+      refreshConversations();
+    };
+
+    const onStreamError = (p: { conversationId: string; error: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreaming((s) => (s ? { ...s, status: `Erreur : ${p.error}` } : s));
+      setTimeout(() => setStreaming(null), 2500);
+    };
+
+    const onConversationsDeleted = (p: { id: string }) => {
+      setConversations((prev) => prev.filter((c) => c.id !== p.id));
+      if (activeIdRef.current === p.id) {
+        setActiveId(null);
+        setMessages([]);
+        setArtifacts([]);
+        setStreamingArtifacts({});
+        setPanelOpen(false);
+        setPanelArtifactId(null);
+        panelKeyRef.current = null;
+      }
+    };
+
+    // ── Artefacts : naissance, stream du source, mises à jour ──────────
+    const onArtifactCreated = (p: {
+      conversationId: string;
+      messageId: string;
+      artifact: Artifact;
+    }) => {
+      if (p.conversationId !== activeIdRef.current || !p.artifact) return;
+      const a = p.artifact;
+      setArtifacts((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
+      setStreamingArtifacts((prev) => ({ ...prev, [a.key]: prev[a.key] ?? "" }));
+      // Ouverture automatique du panneau à la naissance d'un artefact
+      panelKeyRef.current = a.key;
+      setPanelArtifactId(a.id);
+      setPanelOpen(true);
+    };
+
+    const onArtifactDelta = (p: { conversationId: string; key: string; delta: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreamingArtifacts((prev) => ({
+        ...prev,
+        [p.key]: (prev[p.key] ?? "") + (p.delta ?? ""),
+      }));
+    };
+
+    const onArtifactUpdated = (p: { conversationId: string; artifact: Artifact }) => {
+      if (p.conversationId !== activeIdRef.current || !p.artifact) return;
+      const a = p.artifact;
+      setArtifacts((prev) => {
+        const idx = prev.findIndex((x) => x.id === a.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = a;
+          return next;
+        }
+        return [...prev, a];
+      });
+      // Fin de génération : le source streamé laisse place au contenu final
+      if (a.status !== "generating") {
+        setStreamingArtifacts((prev) => {
+          if (!(a.key in prev)) return prev;
+          const next = { ...prev };
+          delete next[a.key];
+          return next;
+        });
+      }
+      // Le panneau suit la dernière version de l'artefact affiché
+      if (panelKeyRef.current === a.key) {
+        setPanelArtifactId(a.id);
+      }
+    };
+
+    // Le serveur confirme la persistance du message utilisateur :
+    // remplace le message optimiste (id local-) par l'id réel.
+    const onMessageAppended = (p: { conversationId: string; message: ChatMessage }) => {
+      if (p.conversationId !== activeIdRef.current || !p.message) return;
+      setMessages((prev) => {
+        const idx = [...prev].reverse().findIndex(
+          (m) => m.role === "user" && m.id.startsWith("local-")
+        );
+        if (idx < 0) {
+          return prev.some((m) => m.id === p.message.id) ? prev : [...prev, p.message];
+        }
+        const realIdx = prev.length - 1 - idx;
+        const next = [...prev];
+        next[realIdx] = p.message;
+        return next;
+      });
+    };
+
+    // Suppression d'un message (broadcast)
+    const onMessageDeleted = (p: { conversationId: string; messageId: string }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setMessages((prev) => prev.filter((m) => m.id !== p.messageId));
+    };
+
+    // Messages supprimés côté serveur (régénération)
+    const onMessagesRemoved = (p: { conversationId: string; messageIds: string[] }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      const ids = new Set(p.messageIds);
+      setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
+    };
+
+    // Message modifié + tronqué (broadcast d'une autre session)
+    const onMessageUpdated = (p: {
+      conversationId: string;
+      message: ChatMessage;
+      removedIds: string[];
+    }) => {
+      if (p.conversationId !== activeIdRef.current || !p.message) return;
+      const ids = new Set(p.removedIds ?? []);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === p.message.id ? p.message : m)).filter((m) => !ids.has(m.id))
+      );
+    };
+
+    // Conversation épinglée (broadcast)
+    const onConversationsPinned = (p: { conversation: ConversationMeta }) => {
+      if (!p.conversation) return;
+      setConversations((prev) =>
+        prev
+          .map((c) => (c.id === p.conversation.id ? { ...c, pinned: p.conversation.pinned } : c))
+          .sort(
+            (a, b) =>
+              Number(!!b.pinned) - Number(!!a.pinned) ||
+              b.updatedAt.localeCompare(a.updatedAt)
+          )
+      );
+    };
+
+    // Nouvelle conversation créée (fork depuis une autre session)
+    const onConversationsCreated = (p: { conversation: ConversationMeta }) => {
+      if (!p.conversation) return;
+      setConversations((prev) =>
+        prev.some((c) => c.id === p.conversation.id) ? prev : [p.conversation, ...prev]
+      );
+    };
+
+    // ── Projets : synchronisation multi-sessions ───────────────────
+    const onProjectCreated = (p: { project?: Project }) => {
+      if (!p.project) return;
+      const project = p.project;
+      setProjects((prev) =>
+        prev.some((x) => x.id === project.id) ? prev : [...prev, project]
+      );
+    };
+
+    const onProjectRenamed = (p: { project?: Project }) => {
+      if (!p.project) return;
+      const project = p.project;
+      setProjects((prev) => prev.map((x) => (x.id === project.id ? project : x)));
+    };
+
+    const onProjectDeleted = (p: { id: string }) => {
+      setProjects((prev) => prev.filter((x) => x.id !== p.id));
+      // Les conversations du projet retombent dans « Sans projet »
+      setConversations((prev) =>
+        prev.map((c) => (c.projectId === p.id ? { ...c, projectId: null } : c))
+      );
+    };
+
+    const onProjectsReordered = (p: { projects?: Project[] }) => {
+      if (Array.isArray(p.projects)) setProjects(p.projects);
+    };
+
+    const onConversationMoved = (p: { conversation?: ConversationMeta }) => {
+      if (!p.conversation) return;
+      const moved = p.conversation;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === moved.id ? { ...c, projectId: moved.projectId ?? null } : c))
+      );
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("stream:start", onStreamStart);
+    socket.on("stream:delta", onStreamDelta);
+    socket.on("stream:reasoning", onStreamReasoning);
+    socket.on("stream:status", onStreamStatus);
+    socket.on("stream:tool", onStreamTool);
+    socket.on("stream:done", onStreamDone);
+    socket.on("stream:error", onStreamError);
+    socket.on("conversations:deleted", onConversationsDeleted);
+    socket.on("message:appended", onMessageAppended);
+    socket.on("message:deleted", onMessageDeleted);
+    socket.on("messages:removed", onMessagesRemoved);
+    socket.on("message:updated", onMessageUpdated);
+    socket.on("conversations:pinned", onConversationsPinned);
+    socket.on("conversations:created", onConversationsCreated);
+    socket.on("projects:created", onProjectCreated);
+    socket.on("projects:renamed", onProjectRenamed);
+    socket.on("projects:deleted", onProjectDeleted);
+    socket.on("projects:reordered", onProjectsReordered);
+    socket.on("conversations:moved", onConversationMoved);
+    socket.on("artifact:created", onArtifactCreated);
+    socket.on("artifact:delta", onArtifactDelta);
+    socket.on("artifact:updated", onArtifactUpdated);
+
+    if (socket.connected) onConnect();
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("stream:start", onStreamStart);
+      socket.off("stream:delta", onStreamDelta);
+      socket.off("stream:reasoning", onStreamReasoning);
+      socket.off("stream:status", onStreamStatus);
+      socket.off("stream:tool", onStreamTool);
+      socket.off("stream:done", onStreamDone);
+      socket.off("stream:error", onStreamError);
+      socket.off("conversations:deleted", onConversationsDeleted);
+      socket.off("message:appended", onMessageAppended);
+      socket.off("message:deleted", onMessageDeleted);
+      socket.off("messages:removed", onMessagesRemoved);
+      socket.off("message:updated", onMessageUpdated);
+      socket.off("conversations:pinned", onConversationsPinned);
+      socket.off("conversations:created", onConversationsCreated);
+      socket.off("projects:created", onProjectCreated);
+      socket.off("projects:renamed", onProjectRenamed);
+      socket.off("projects:deleted", onProjectDeleted);
+      socket.off("projects:reordered", onProjectsReordered);
+      socket.off("conversations:moved", onConversationMoved);
+      socket.off("artifact:created", onArtifactCreated);
+      socket.off("artifact:delta", onArtifactDelta);
+      socket.off("artifact:updated", onArtifactUpdated);
+    };
+  }, [refreshConversations, fetchProjects, fetchModels, fetchArtifacts]);
+
+  // --- Actions ---
+  const newConversation = useCallback(
+    async (projectId?: string | null): Promise<string | null> => {
+      const socket = getSocket();
+      return new Promise((resolve) => {
+        socket.emit(
+          "conversations:create",
+          { projectId: projectId ?? null },
+          (res: { conversation?: ConversationMeta }) => {
+            if (res.conversation) {
+              activeIdRef.current = res.conversation.id;
+              setConversations((prev) => [res.conversation as ConversationMeta, ...prev]);
+              setActiveId(res.conversation.id);
+              setMessages([]);
+              resolve(res.conversation.id);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+    },
+    []
+  );
+
+  const openConversation = useCallback(
+    (id: string) => {
+      const socket = getSocket();
+      setLoadingHistory(true);
+      activeIdRef.current = id;
+      setActiveId(id);
+      setStreaming(null);
+      // Le panneau appartient à la conversation : on le referme au changement
+      setPanelOpen(false);
+      setPanelArtifactId(null);
+      panelKeyRef.current = null;
+      setArtifacts([]);
+      setStreamingArtifacts({});
+      socket.emit(
+        "conversations:open",
+        { id },
+        (res: { conversationId: string; messages: ChatMessage[] } = {} as any) => {
+          if (res.conversationId === id) setMessages(res.messages ?? []);
+          setLoadingHistory(false);
+        }
+      );
+      fetchArtifacts(id);
+    },
+    [fetchArtifacts]
+  );
+
+  const deleteConversation = useCallback((id: string) => {
+    getSocket().emit("conversations:delete", { id });
+  }, []);
+
+  const renameConversation = useCallback((id: string, title: string) => {
+    const socket = getSocket();
+    socket.emit("conversations:rename", { id, title }, (res: { conversation?: ConversationMeta }) => {
+      if (res.conversation) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, title: res.conversation!.title } : c))
+        );
+      }
+    });
+  }, []);
+
+  /** Envoie un fichier au service (base64) et renvoie la pièce jointe enregistrée. */
+  const uploadAttachment = useCallback(async (file: File): Promise<Attachment | null> => {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      throw new Error(
+        `« ${file.name} » dépasse la limite de ${MAX_ATTACHMENT_BYTES / 1024 / 1024} Mo`
+      );
+    }
+    const socket = getSocket();
+    setUploadingCount((n) => n + 1);
+    try {
+      const dataBase64 = await fileToBase64(file);
+      return await new Promise<Attachment | null>((resolve, reject) => {
+        socket.emit(
+          "attachments:upload",
+          { name: file.name, mime: file.type || "application/octet-stream", dataBase64 },
+          (res: { attachment?: Attachment; error?: string }) => {
+            if (res?.attachment) resolve(res.attachment);
+            else reject(new Error(res?.error ?? "Échec de l'envoi du fichier"));
+          }
+        );
+      });
+    } finally {
+      setUploadingCount((n) => Math.max(0, n - 1));
+    }
+  }, []);
+
+  const sendMessage = useCallback(
+    async (text: string, attachments: Attachment[] = []) => {
+      const content = text.trim();
+      if ((!content && attachments.length === 0) || streaming) return;
+
+      let conversationId = activeIdRef.current;
+      if (!conversationId) {
+        conversationId = await newConversation();
+        if (!conversationId) return;
+      }
+
+      // Message utilisateur optimiste
+      const optimistic: ChatMessage = {
+        id: `local-${Date.now()}`,
+        conversationId,
+        role: "user",
+        content,
+        attachments: attachments.length ? attachments : undefined,
+        model: selectedModelRef.current ?? undefined,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimistic]);
+
+      const socket = getSocket();
+      socket.emit("chat:send", {
+        conversationId,
+        content,
+        model: selectedModelRef.current ?? undefined,
+        attachments: attachments.length ? attachments : undefined,
+      });
+    },
+    [newConversation, streaming]
+  );
+
+  const stopGeneration = useCallback(() => {
+    if (!activeIdRef.current) return;
+    getSocket().emit("chat:stop", { conversationId: activeIdRef.current });
+  }, []);
+
+  /** Régénère la dernière réponse (relance le tour depuis le dernier message utilisateur). */
+  const regenerate = useCallback(() => {
+    const conversationId = activeIdRef.current;
+    if (!conversationId || streaming) return;
+    // Optimiste : retire les messages assistant en fin de fil
+    setMessages((prev) => {
+      const next = [...prev];
+      while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
+      return next;
+    });
+    getSocket().emit("chat:regenerate", {
+      conversationId,
+      model: selectedModelRef.current ?? undefined,
+    });
+  }, [streaming]);
+
+  /** Modifie un message utilisateur et relance le tour depuis ce point. */
+  const editMessage = useCallback(
+    (messageId: string, content: string) => {
+      const conversationId = activeIdRef.current;
+      const clean = content.trim();
+      if (!conversationId || !clean || streaming) return;
+      const socket = getSocket();
+      if (messageId.startsWith("local-")) {
+        // Message pas encore synchronisé : resynchronise le fil
+        openConversation(conversationId);
+        return;
+      }
+      // Optimiste : met à jour le contenu et retire tout ce qui suit
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === messageId);
+        if (idx < 0) return prev;
+        return [...prev.slice(0, idx), { ...prev[idx], content: clean }];
+      });
+      socket.emit(
+        "message:edit",
+        {
+          conversationId,
+          messageId,
+          content: clean,
+          model: selectedModelRef.current ?? undefined,
+        },
+        (res: { ok?: boolean; error?: string }) => {
+          if (!res?.ok) openConversation(conversationId);
+        }
+      );
+    },
+    [openConversation, streaming]
+  );
+
+  /** Supprime un message individuel. */
+  const deleteMessage = useCallback(
+    (messageId: string) => {
+      const conversationId = activeIdRef.current;
+      if (!conversationId) return;
+      if (messageId.startsWith("local-")) {
+        openConversation(conversationId);
+        return;
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      getSocket().emit(
+        "message:delete",
+        { conversationId, messageId },
+        (res: { ok?: boolean; error?: string }) => {
+          if (!res?.ok) openConversation(conversationId);
+        }
+      );
+    },
+    [openConversation]
+  );
+
+  /** Épingle / détache une conversation. */
+  const togglePin = useCallback(
+    (id: string) => {
+      const current = conversations.find((c) => c.id === id);
+      const pinned = !current?.pinned;
+      getSocket().emit(
+        "conversations:pin",
+        { id, pinned },
+        (res: { conversation?: ConversationMeta }) => {
+          if (res?.conversation) {
+            const conv = res.conversation;
+            setConversations((prev) =>
+              prev
+                .map((c) => (c.id === conv.id ? { ...c, pinned: conv.pinned } : c))
+                .sort(
+                  (a, b) =>
+                    Number(!!b.pinned) - Number(!!a.pinned) ||
+                    b.updatedAt.localeCompare(a.updatedAt)
+                )
+            );
+          }
+        }
+      );
+    },
+    [conversations]
+  );
+
+  /** Duplique la conversation active (entière ou jusqu'à un message). */
+  const forkConversation = useCallback(
+    async (fromMessageId?: string): Promise<string | null> => {
+      const conversationId = activeIdRef.current;
+      if (!conversationId) return null;
+      return new Promise((resolve) => {
+        getSocket().emit(
+          "conversations:fork",
+          { conversationId, fromMessageId },
+          (res: { conversation?: ConversationMeta }) => {
+            if (res?.conversation) {
+              resolve(res.conversation.id);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+    },
+    []
+  );
+
+  /** Recherche plein-texte dans les messages de toutes les conversations. */
+  const searchMessages = useCallback((query: string): Promise<SearchHit[]> => {
+    const q = query.trim();
+    if (q.length < 2) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      getSocket().emit(
+        "conversations:search",
+        { query: q },
+        (res: { results?: SearchHit[] } = {}) => {
+          resolve(res.results ?? []);
+        }
+      );
+    });
+  }, []);
+
+  /** Transcrit un audio base64 en texte (dictée vocale). */
+  const transcribeAudio = useCallback(
+    (dataBase64: string, mime = "audio/webm"): Promise<string> =>
+      new Promise((resolve, reject) => {
+        getSocket().emit(
+          "audio:transcribe",
+          { dataBase64, mime },
+          (res: { text?: string; error?: string }) => {
+            if (typeof res?.text === "string" && res.text) resolve(res.text);
+            else reject(new Error(res?.error ?? "Échec de la transcription"));
+          }
+        );
+      }),
+    []
+  );
+
+  // ── Projets : actions ───────────────────────────────────────────
+
+  /** Crée un projet (rangement de conversations). */
+  const createProject = useCallback(
+    (name: string): Promise<Project | null> =>
+      new Promise((resolve) => {
+        getSocket().emit(
+          "projects:create",
+          { name },
+          (res: { project?: Project; error?: string } = {}) => {
+            resolve(res.project ?? null);
+          }
+        );
+      }),
+    []
+  );
+
+  /** Renomme un projet. */
+  const renameProject = useCallback((id: string, name: string) => {
+    getSocket().emit(
+      "projects:rename",
+      { id, name },
+      (res: { project?: Project } = {}) => {
+        if (res.project)
+          setProjects((prev) => prev.map((x) => (x.id === id ? res.project! : x)));
+      }
+    );
+  }, []);
+
+  /** Supprime un projet (les conversations passent dans « Sans projet »). */
+  const deleteProject = useCallback((id: string) => {
+    getSocket().emit("projects:delete", { id }, (res: { ok?: boolean } = {}) => {
+      if (res.ok) {
+        setProjects((prev) => prev.filter((x) => x.id !== id));
+        setConversations((prev) =>
+          prev.map((c) => (c.projectId === id ? { ...c, projectId: null } : c))
+        );
+      }
+    });
+  }, []);
+
+  /** Réordonne les projets (liste complète d'ids). */
+  const reorderProjects = useCallback((ids: string[]) => {
+    getSocket().emit(
+      "projects:reorder",
+      { ids },
+      (res: { projects?: Project[] } = {}) => {
+        if (res.projects) setProjects(res.projects);
+      }
+    );
+  }, []);
+
+  /** Déplace une conversation vers un projet (null = « Sans projet »). */
+  const moveConversation = useCallback((id: string, projectId: string | null) => {
+    getSocket().emit(
+      "conversations:move",
+      { id, projectId },
+      (res: { conversation?: ConversationMeta } = {}) => {
+        if (res.conversation) {
+          const moved = res.conversation;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === id ? { ...c, projectId: moved.projectId ?? null } : c
+            )
+          );
+        }
+      }
+    );
+  }, []);
+
+  // ── Artefacts : panneau, retry, versions ──────────────────────────────
+
+  /** Ouvre le panneau sur un artefact précis (clic carte, carte « Ouvrir »). */
+  const openArtifact = useCallback((artifact: Artifact) => {
+    panelKeyRef.current = artifact.key;
+    setPanelArtifactId(artifact.id);
+    setPanelOpen(true);
+  }, []);
+
+  /** Referme le panneau (l'utilisateur reprend le fil de la conversation). */
+  const closePanel = useCallback(() => setPanelOpen(false), []);
+
+  /** Sélectionne une version précise dans le panneau (sans l'ouvrir). */
+  const selectArtifactVersion = useCallback((artifact: Artifact) => {
+    panelKeyRef.current = artifact.key;
+    setPanelArtifactId(artifact.id);
+  }, []);
+
+  /** Relance le rendu d'un artefact en erreur. */
+  const retryArtifact = useCallback((artifactId: string) => {
+    const conversationId = activeIdRef.current;
+    if (!conversationId) return;
+    getSocket().emit(
+      "artifact:retry",
+      { conversationId, artifactId },
+      (res: { ok?: boolean; error?: string }) => {
+        if (!res?.ok && res?.error) {
+          console.warn("[hermes] retry artefact :", res.error);
+        }
+      }
+    );
+  }, []);
+
+  /** Toutes les versions d'une clé d'artefact (sélecteur + diff du panneau). */
+  const fetchArtifactVersions = useCallback(
+    (key: string): Promise<Artifact[]> =>
+      new Promise((resolve) => {
+        const conversationId = activeIdRef.current;
+        if (!conversationId) return resolve([]);
+        getSocket().emit(
+          "artifact:versions",
+          { conversationId, key },
+          (res: { versions?: Artifact[] } = {}) => resolve(res.versions ?? [])
+        );
+      }),
+    []
+  );
+
+  return {
+    connected,
+    mode: (serverInfo?.mode ?? null) as GatewayMode | null,
+    serverModel: serverInfo?.model ?? null,
+    conversations,
+    projects,
+    activeId,
+    messages,
+    streaming,
+    isBusy,
+    loadingHistory,
+    models,
+    modelsSource,
+    selectedModel,
+    setSelectedModel,
+    uploadAttachment,
+    newConversation,
+    openConversation,
+    deleteConversation,
+    renameConversation,
+    sendMessage,
+    stopGeneration,
+    regenerate,
+    editMessage,
+    deleteMessage,
+    togglePin,
+    forkConversation,
+    searchMessages,
+    transcribeAudio,
+    // Projets
+    createProject,
+    renameProject,
+    deleteProject,
+    reorderProjects,
+    moveConversation,
+    // Artefacts
+    artifacts,
+    streamingArtifacts,
+    panelOpen,
+    panelArtifactId,
+    openArtifact,
+    closePanel,
+    selectArtifactVersion,
+    retryArtifact,
+    fetchArtifactVersions,
+  };
+}
