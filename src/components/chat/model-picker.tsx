@@ -1,16 +1,50 @@
-// Sélecteur de modèle façon ChatGPT : liste déroulante (en-tête ou composer)
+// Sélecteur de modèle — chantier « Composer v2 » :
+// popover cmdk avec recherche (nom, id, fournisseur — insensible à la casse
+// et aux accents), section Favoris (hermes.models.favorites), groupes par
+// fournisseur en mode gateway, et échelle d'effort de raisonnement portée
+// par le modèle (repli générique off·low·medium·high·max).
 "use client";
 
-import { Check, ChevronDown, Sparkles, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Command as CommandPrimitive } from "cmdk";
+import { Check, ChevronDown, Search, Sparkles, Star, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { ModelOption } from "@/lib/chat-types";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import { GENERIC_EFFORTS, type ModelOption } from "@/lib/chat-types";
+
+const FAVORITES_KEY = "hermes.models.favorites";
+const EFFORT_KEY = "hermes.reasoning.effort";
+
+/** Normalisation de recherche : minuscules + suppression des diacritiques. */
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Favoris du registre : ids JSON, ids disparus ignorés silencieusement. */
+function readFavoriteIds(): string[] {
+  try {
+    const raw = readClientSetting<string>(FAVORITES_KEY) ?? "[]";
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 interface ModelPickerProps {
   models: ModelOption[];
@@ -21,6 +55,9 @@ interface ModelPickerProps {
   /** Variante compacte (dans le composer). */
   compact?: boolean;
   onSelect: (id: string) => void;
+  /** Effort de raisonnement courant (valeur brute du fournisseur). */
+  effort: string | null;
+  onEffortChange: (effort: string) => void;
 }
 
 export function ModelPicker({
@@ -31,15 +68,133 @@ export function ModelPicker({
   disabled,
   compact = false,
   onSelect,
+  effort,
+  onEffortChange,
 }: ModelPickerProps) {
-  const list = Array.isArray(models) ? models : [];
-  const current = list.find((m) => m.id === selectedModel) ?? null;
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+
+  const list = useMemo(() => (Array.isArray(models) ? models : []), [models]);
+  const current = useMemo(
+    () => list.find((m) => m.id === selectedModel) ?? null,
+    [list, selectedModel]
+  );
   const label = current?.label ?? "Modèle";
   const busy = disabled || list.length === 0;
 
+  // ── Recherche (insensible casse + accents, sur nom / id / fournisseur) ──
+  const q = norm(query.trim());
+  const filtered = useMemo(
+    () =>
+      q
+        ? list.filter((m) => norm(`${m.label} ${m.id} ${m.provider}`).includes(q))
+        : list,
+    [list, q]
+  );
+
+  // ── Favoris (masqués si vides, ids disparus ignorés) ───────────────────
+  const favorites = useMemo(
+    () =>
+      favoriteIds
+        .map((id) => filtered.find((m) => m.id === id))
+        .filter((m): m is ModelOption => Boolean(m)),
+    [favoriteIds, filtered]
+  );
+  const favoriteIdSet = useMemo(() => new Set(favorites.map((m) => m.id)), [favorites]);
+
+  // ── Groupes : par fournisseur en mode gateway, liste à plat sinon ──────
+  const grouped = useMemo(() => {
+    const rest = filtered.filter((m) => !favoriteIdSet.has(m.id));
+    if (source === "gateway" && mode === "gateway") {
+      const groups = new Map<string, ModelOption[]>();
+      for (const m of rest) {
+        const k = m.provider || "Gateway";
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k)!.push(m);
+      }
+      return [...groups.entries()];
+    }
+    return rest.length ? [["", rest] as [string, ModelOption[]]] : [];
+  }, [filtered, favoriteIdSet, source, mode]);
+
+  const providers = useMemo(
+    () => new Set(filtered.map((m) => m.provider || "Gateway")),
+    [filtered]
+  );
+
+  // ── Échelle d'effort : portée par le modèle, repli générique ───────────
+  const efforts = current?.efforts?.length ? current.efforts : GENERIC_EFFORTS;
+  const effortScaleLabel = current?.effortLabel
+    ? `Échelle : ${current.effortLabel}`
+    : source === "gateway" && mode === "gateway" && current?.provider
+      ? `Échelle : ${current.provider}`
+      : "Échelle : générique";
+  const activeEffort = effort && efforts.includes(effort) ? effort : null;
+
+  const pick = (id: string) => {
+    onSelect(id);
+    setOpen(false);
+    setQuery("");
+  };
+
+  const renderModel = (m: ModelOption) => {
+    const isSelected = m.id === selectedModel;
+    return (
+      <CommandItem
+        key={m.id}
+        // Valeur normalisée : sélection clavier cohérente avec la recherche
+        value={norm(`${m.label} ${m.id} ${m.provider}`)}
+        onSelect={() => pick(m.id)}
+        role="menuitemradio"
+        aria-checked={isSelected}
+        className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left"
+      >
+        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+          {isSelected ? <Check className="h-4 w-4 text-hermes" /> : null}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[13.5px] font-medium">{m.label}</span>
+            {favoriteIds.includes(m.id) ? (
+              <Star className="h-3 w-3 shrink-0 fill-amber-500 text-amber-500" />
+            ) : null}
+            {m.badge ? (
+              <span
+                className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-medium ${
+                  m.badge === "Défaut"
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-hermes/10 text-hermes"
+                }`}
+              >
+                {m.badge === "Flagship" ? <Zap className="h-2.5 w-2.5" /> : null}
+                {m.badge}
+              </span>
+            ) : null}
+          </span>
+          {m.description ? (
+            <span className="mt-0.5 block truncate text-[11.5px] leading-snug text-muted-foreground">
+              {m.description}
+            </span>
+          ) : null}
+          <span className="mt-0.5 block font-mono text-[10.5px] text-muted-foreground/70">
+            {m.id} · {m.provider}
+          </span>
+        </span>
+      </CommandItem>
+    );
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        // Les favoris sont relus à chaque ouverture (gérés depuis les paramètres)
+        if (o) setFavoriteIds(readFavoriteIds());
+        setOpen(o);
+      }}
+    >
+      <PopoverTrigger asChild>
         <Button
           variant="ghost"
           disabled={busy}
@@ -54,69 +209,111 @@ export function ModelPicker({
           <span className="max-w-40 truncate sm:max-w-none">{label}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align={compact ? "start" : "center"} className="w-72">
-        <DropdownMenuLabel className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-hermes" />
-          Choisir un modèle
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="max-h-80 overflow-y-auto p-1">
-          {list.map((m) => {
-            const isSelected = m.id === selectedModel;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => onSelect(m.id)}
-                role="menuitemradio"
-                aria-checked={isSelected}
-                className={`flex w-full cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors ${
-                  isSelected ? "bg-muted/70" : "hover:bg-muted/50"
-                }`}
-              >
-                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
-                  {isSelected ? (
-                    <Check className="h-4 w-4 text-hermes" />
-                  ) : null}
-                </span>
-                <span className="min-w-0 flex-1">
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align={compact ? "start" : "center"}
+        className="w-[352px] p-0"
+        // Le picker vit dans le composer : ouverture vers le haut
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <Command shouldFilter={false} className="overflow-hidden rounded-xl">
+          <div className="flex items-center gap-1.5 px-3.5 pt-3 pb-1 text-[11.5px] font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-hermes" />
+            Choisir un modèle
+          </div>
+          <div className="px-2 pb-1">
+            <div className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-2.5 focus-within:border-hermes focus-within:ring-2 focus-within:ring-hermes/20">
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <CommandPrimitive.Input
+                value={query}
+                onValueChange={setQuery}
+                placeholder="Rechercher par nom, id ou fournisseur…"
+                className="h-9 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+                aria-label="Rechercher un modèle"
+              />
+              <kbd className="rounded border border-border bg-card px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+                esc
+              </kbd>
+            </div>
+          </div>
+          <CommandList className="max-h-[252px] overflow-y-auto p-1">
+            <CommandEmpty className="py-5 text-center text-[13px] text-muted-foreground">
+              Aucun modèle ne correspond à «&nbsp;{query.trim()}&nbsp;»
+            </CommandEmpty>
+
+            {favorites.length > 0 ? (
+              <CommandGroup
+                heading={
                   <span className="flex items-center gap-1.5">
-                    <span className="truncate text-[13.5px] font-medium">{m.label}</span>
-                    {m.badge ? (
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-medium ${
-                          m.badge === "Défaut"
-                            ? "bg-muted text-muted-foreground"
-                            : "bg-hermes/10 text-hermes"
-                        }`}
-                      >
-                        {m.badge === "Flagship" ? <Zap className="h-2.5 w-2.5" /> : null}
-                        {m.badge}
-                      </span>
-                    ) : null}
+                    <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                    Favoris
                   </span>
-                  {m.description ? (
-                    <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
-                      {m.description}
-                    </span>
-                  ) : null}
-                  <span className="mt-0.5 block text-[10.5px] text-muted-foreground/70">
-                    {m.provider}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <DropdownMenuSeparator />
-        <p className="px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-          {source === "gateway" && mode === "gateway"
-            ? "Modèles exposés par la gateway Hermes connectée."
-            : "Catalogue Hermes (Nous Research). Connectez HERMES_GATEWAY_URL pour servir ces modèles via l'agent."}
-        </p>
-      </DropdownMenuContent>
-    </DropdownMenu>
+                }
+              >
+                {favorites.map(renderModel)}
+              </CommandGroup>
+            ) : null}
+
+            {grouped.map(([provider, groupModels]) =>
+              provider ? (
+                <CommandGroup key={provider} heading={provider}>
+                  {groupModels.map(renderModel)}
+                </CommandGroup>
+              ) : (
+                <CommandGroup key="__flat">{groupModels.map(renderModel)}</CommandGroup>
+              )
+            )}
+          </CommandList>
+
+          <p className="border-t border-border/60 px-3.5 py-2 text-[11px] leading-snug text-muted-foreground">
+            {filtered.length}
+            {filtered.length > 1 ? " modèles" : " modèle"} · {providers.size}
+            {providers.size > 1 ? " fournisseurs — " : " fournisseur — "}
+            {source === "gateway" && mode === "gateway"
+              ? "modèles exposés par la gateway Hermes"
+              : "catalogue Hermes (Nous Research)"}
+          </p>
+
+          {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné */}
+          <div className="border-t border-border/60 px-3.5 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+              <span>Effort de raisonnement</span>
+              <span className="text-[10.5px] font-medium">{effortScaleLabel}</span>
+            </div>
+            <div
+              className="flex gap-0.5 rounded-[9px] bg-muted p-[3px]"
+              role="radiogroup"
+              aria-label="Effort de raisonnement"
+            >
+              {efforts.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  role="radio"
+                  aria-checked={e === activeEffort}
+                  onClick={() => {
+                    onEffortChange(e);
+                    writeClientSetting(EFFORT_KEY, e);
+                  }}
+                  className={`flex-1 cursor-pointer rounded-[7px] border-0 bg-transparent px-2 py-[5px] text-[11.5px] font-medium capitalize transition-colors ${
+                    e === activeEffort
+                      ? "bg-card font-semibold text-hermes shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+              Envoyé dans <code className="rounded bg-muted px-1 font-mono text-[10.5px]">api_turn_v1.settings</code>{" "}
+              — ignoré sans dommage si le fournisseur ne le supporte pas.
+            </p>
+          </div>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

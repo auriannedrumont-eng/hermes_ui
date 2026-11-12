@@ -10,17 +10,38 @@ import {
   Loader2,
   Mic,
   Paperclip,
+  ShieldCheck,
   Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PendingAttachmentChip } from "@/components/chat/attachments";
+import { ContextGauge } from "@/components/chat/context-gauge";
 import { ModelPicker } from "@/components/chat/model-picker";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useDictation } from "@/hooks/use-dictation";
 import { filterPromptLibrary, type PromptTemplate } from "@/lib/prompt-library";
+import { readClientSetting } from "@/lib/settings";
+import {
+  attachmentsSub,
+  buildUsage,
+  estimateAttachmentTokens,
+  estimateTokens,
+  type ContextRow,
+} from "@/lib/tokens";
 import type {
   Attachment,
   GatewayMode,
   ModelOption,
+  PermissionsMode,
 } from "@/lib/chat-types";
 
 const MAX_ATTACHMENTS = 6;
@@ -54,10 +75,31 @@ interface ComposerProps {
   mode: GatewayMode | null;
   selectedModel: string | null;
   onSelectModel: (id: string) => void;
+  /** Effort de raisonnement courant (valeur brute du fournisseur). */
+  effort: string | null;
+  onEffortChange: (effort: string) => void;
+  /** Mode d'autorisations (ask | auto) — reset sur « ask » à chaque session. */
+  permissionsMode: PermissionsMode;
+  onPermissionsChange: (mode: PermissionsMode) => void;
+  /** Base du contexte du tour (système + historique + fenêtre) — le brouillon
+   *  et les pièces jointes en attente sont ajoutés ici, en direct. */
+  contextBase: {
+    rows: ContextRow[];
+    historyCount: number;
+    historyCompacted: boolean;
+    windowTokens: number;
+    windowEstimated: boolean;
+  } | null;
+  /** Compaction possible (conversation ouverte, ≥ 2 messages, tour au repos). */
+  canCompact: boolean;
+  /** Compaction en cours (synthèse LLM). */
+  compactRunning: boolean;
+  onCompact: () => void;
+  onNewSession: () => void;
   onSend: (text: string, attachments: Attachment[]) => void;
   onStop: () => void;
-  onUploadFile: (file: File) => Promise<Attachment>;
-  onTranscribe: (dataBase64: string) => Promise<string>;
+  onUploadFile: (file: File) => Promise<Attachment | null>;
+  onTranscribe: (dataBase64: string, mime?: string) => Promise<string>;
 }
 
 function draftStorageKey(draftKey: string): string {
@@ -73,6 +115,15 @@ export function Composer({
   mode,
   selectedModel,
   onSelectModel,
+  effort,
+  onEffortChange,
+  permissionsMode,
+  onPermissionsChange,
+  contextBase,
+  canCompact,
+  compactRunning,
+  onCompact,
+  onNewSession,
   onSend,
   onStop,
   onUploadFile,
@@ -82,9 +133,16 @@ export function Composer({
   const [pending, setPending] = useState<PendingAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [permDialogOpen, setPermDialogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
+
+  // Visibilité de la jauge : réglage fork.context.gauge (registre, défaut : affichée)
+  const [gaugeVisible, setGaugeVisible] = useState(true);
+  useEffect(() => {
+    setGaugeVisible(readClientSetting<boolean>("fork.context.gauge") !== false);
+  }, []);
 
   // ── Brouillons persistants (localStorage, par conversation) ──────────
   useEffect(() => {
@@ -160,6 +218,7 @@ export function Composer({
     async (localId: string, file: File) => {
       try {
         const uploaded = await onUploadFile(file);
+        if (!uploaded) throw new Error("Pièce jointe refusée par le service");
         setPending((prev) =>
           prev.map((p) =>
             p.localId === localId
@@ -252,6 +311,33 @@ export function Composer({
   const hasBlocking = pending.some((p) => !p.uploaded && !p.error);
   const canSend =
     !disabled && !isBusy && !uploading && !hasBlocking && (value.trim().length > 0 || ready.length > 0);
+
+  // ── Jauge de contexte : base du fil + brouillon en direct ─────────────
+  // Le brouillon se compte pendant la frappe : la jauge grossit avant
+  // même l'envoi. Les pièces jointes prêtes partent aussi dans le tour.
+  const contextUsage = useMemo(() => {
+    if (!contextBase) return null;
+    const rows = [...contextBase.rows];
+    const readyAtts = ready.map((p) => p.uploaded!);
+    if (readyAtts.length > 0) {
+      rows.push({
+        key: "attachments",
+        label: "Pièces jointes",
+        sub: attachmentsSub(readyAtts),
+        tokens: readyAtts.reduce((acc, a) => acc + estimateAttachmentTokens(a), 0),
+      });
+    }
+    const draftTokens = estimateTokens(value);
+    if (draftTokens > 0) {
+      rows.push({
+        key: "draft",
+        label: "Brouillon",
+        sub: "comptage en direct",
+        tokens: draftTokens,
+      });
+    }
+    return buildUsage(rows, contextBase.windowTokens, contextBase.windowEstimated);
+  }, [contextBase, ready, value]);
 
   const submit = () => {
     if (!canSend) return;
@@ -495,7 +581,9 @@ export function Composer({
           )}
         </div>
 
-        {/* Barre inférieure : sélecteur de modèle + aide */}
+        {/* Barre inférieure : modèle · aide clavier · bouclier · jauge.
+            Ordre immuable du groupe de droite — la jauge reste l'élément
+            le plus à droite. */}
         <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5 sm:px-4">
           <ModelPicker
             compact
@@ -504,13 +592,99 @@ export function Composer({
             source={modelsSource}
             mode={mode}
             onSelect={onSelectModel}
+            effort={effort}
+            onEffortChange={onEffortChange}
           />
-          <p className="hidden items-center gap-1.5 text-[11.5px] text-muted-foreground sm:flex">
-            <CornerDownLeft className="h-3 w-3" />
-            Entrée pour envoyer · Maj+Entrée pour un saut de ligne
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="hidden items-center gap-1.5 text-[11.5px] text-muted-foreground lg:flex">
+              <CornerDownLeft className="h-3 w-3" />
+              Entrée pour envoyer
+            </p>
+            {/* Bouclier des autorisations — sans objet en mode démo (pas d'outils) */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (mode !== "gateway") return;
+                if (permissionsMode === "auto") onPermissionsChange("ask");
+                else setPermDialogOpen(true);
+              }}
+              disabled={mode !== "gateway"}
+              title={
+                mode === "gateway"
+                  ? permissionsMode === "auto"
+                    ? "Autorisations : tout exécuter sans confirmation — cliquer pour revenir en mode « ask »"
+                    : "Autorisations : confirmation avant chaque action"
+                  : "Sans objet en mode démo — actif avec une gateway"
+              }
+              aria-label="Autorisations de l'agent"
+              className={`h-[34px] w-[34px] shrink-0 rounded-full transition-colors ${
+                permissionsMode === "auto"
+                  ? "bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 dark:text-amber-400"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              } ${mode !== "gateway" ? "opacity-45" : ""}`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Button>
+            {/* Jauge de contexte — visible selon fork.context.gauge */}
+            {gaugeVisible ? (
+              <ContextGauge
+                usage={contextUsage}
+                historyCount={contextBase?.historyCount ?? 0}
+                historyCompacted={contextBase?.historyCompacted ?? false}
+                canCompact={canCompact}
+                compactRunning={compactRunning}
+                onCompact={onCompact}
+                onNewSession={onNewSession}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
+
+      {/* Bandeau « toutes permissions » : le signal survit au scroll et à l'oubli */}
+      {mode === "gateway" && permissionsMode === "auto" ? (
+        <div
+          className="mx-auto mt-2.5 flex w-full max-w-3xl items-center gap-2 rounded-xl bg-amber-500/12 px-3.5 py-2 text-[12.5px] font-medium"
+          role="status"
+        >
+          <ShieldCheck className="h-[15px] w-[15px] shrink-0 text-amber-600 dark:text-amber-400" />
+          Mode toutes permissions actif — l&apos;agent exécute sans confirmation
+          <button
+            type="button"
+            onClick={() => onPermissionsChange("ask")}
+            className="ml-auto shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11.5px] font-semibold text-amber-700 underline underline-offset-2 dark:text-amber-400"
+          >
+            Désactiver
+          </button>
+        </div>
+      ) : null}
+
+      {/* Armement explicite, jamais silencieux */}
+      <AlertDialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
+        <AlertDialogContent className="max-w-[340px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-[15px]">
+              <ShieldCheck className="h-[18px] w-[18px] text-amber-600 dark:text-amber-400" />
+              Autoriser toutes les actions ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Hermes pourra exécuter <strong>terminal, fichiers et web sans confirmation</strong>.
+              Le mode se réinitialise à la prochaine session.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onPermissionsChange("auto")}
+              className="bg-amber-600 text-white hover:bg-amber-600/90"
+            >
+              Autoriser
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {dictation.error ? (
         <p className="mt-1.5 text-center text-[11.5px] text-destructive" role="alert">
           {dictation.error}

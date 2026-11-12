@@ -39,6 +39,37 @@ export const HERMES_SETTINGS: SettingDef[] = [
     category: "Agent Hermes",
     legacyKeys: ["hermes.selectedModel"],
   },
+  {
+    key: "hermes.models.favorites",
+    type: "string",
+    default: "[]",
+    label: "Modèles favoris",
+    description: "Ids des modèles épinglés en tête du sélecteur (JSON).",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.reasoning.effort",
+    type: "string",
+    default: "medium",
+    label: "Effort de raisonnement",
+    description:
+      "Valeur brute de l'échelle du fournisseur (ignorée sans dommage si non supportée).",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.permissions.mode",
+    type: "enum",
+    options: ["ask", "auto"],
+    default: "ask",
+    label: "Autorisations de l'agent",
+    description:
+      "ask : confirmation avant chaque action · auto : tout exécuter. " +
+      "Réinitialisé sur « ask » à chaque session.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
 ];
 
 // ── Réglages propres au fork ───────────────────────────────────────────
@@ -71,6 +102,15 @@ export const FORK_SETTINGS: SettingDef[] = [
     description: "Identifiants des projets repliés dans la sidebar (JSON).",
     scope: "client",
     category: "Projets",
+  },
+  {
+    key: "fork.context.gauge",
+    type: "boolean",
+    default: true,
+    label: "Jauge de contexte",
+    description: "Affiche la jauge de consommation de tokens dans le composer.",
+    scope: "client",
+    category: "Interface",
   },
 ];
 

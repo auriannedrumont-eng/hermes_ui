@@ -4,7 +4,7 @@
 // multimodal (vision), les autres fichiers en métadonnées textuelles.
 import ZAI from "z-ai-web-dev-sdk";
 import { readAttachmentDataUrl } from "./uploads";
-import type { Attachment } from "./types";
+import type { Attachment, TurnSettings } from "./types";
 
 interface VisionMessageLike {
   role: "assistant" | "user";
@@ -22,9 +22,11 @@ export interface TurnCallbacks {
 export interface TurnRequest {
   content: string;
   history: { role: "user" | "assistant"; content: string }[];
-  model?: string;
-  modelId?: string;
+  model?: string | null;
+  modelId?: string | null;
   attachments?: Attachment[];
+  /** Réglages additifs (effort, permissions) — ignorés sans dommage. */
+  settings?: TurnSettings;
 }
 
 const SYSTEM_PROMPT = `Tu es Hermes, l'assistant au volant de l'interface web « Hermes Web » — un client de chat pour l'agent Hermes de Nous Research (https://github.com/NousResearch/hermes-agent).
@@ -46,6 +48,9 @@ Artefacts (fichiers générés) :
 - Pour modifier un artefact existant, réémet le fichier COMPLET avec le MÊME nom de fichier : il deviendra v2 du même artefact.
 - N'annote PAS les simples extraits de code illustratifs (snippets courts dans une explication) : seuls les fichiers complets deviennent des artefacts.
 - Pour le HTML : produis des documents autonomes (styles et polices intégrés ou système, aucune dépendance externe obligatoire), avec un design soigné et une mise en page professionnelle.`;
+
+/** Taille des instructions système (estimation honnête de la jauge de contexte). */
+export const SYSTEM_PROMPT_CHARS = SYSTEM_PROMPT.length;
 
 // Décodeur UTF-8 persistant : gère les caractères multi-octets coupés entre chunks
 const utf8Decoder = new TextDecoder("utf-8");
@@ -134,11 +139,15 @@ export class DemoEngine {
       { role: "user", content: textContent },
     ];
 
-    // @ts-expect-error l'option stream est supportée par l'API sous-jacente
+    // Effort de raisonnement : « off » coupe le thinking, toute autre valeur
+    // du fournisseur l'active (échelle portée par le modèle, ignorée sans dommage).
+    const thinkingType: "enabled" | "disabled" =
+      req.settings?.reasoningEffort === "off" ? "disabled" : "enabled";
+
     const stream = await this.zai!.chat.completions.create({
       messages,
       stream: true,
-      thinking: { type: "enabled" },
+      thinking: { type: thinkingType },
     });
 
     let content = "";
@@ -175,6 +184,39 @@ export class DemoEngine {
     }
 
     return { content, reasoning, model: req.model || model };
+  }
+
+  /**
+   * Synthèse de compaction : résume un fil de messages en un texte compact
+   * conservé en tête de session (l'affichage de la conversation reste intact).
+   */
+  async summarize(
+    history: { role: "user" | "assistant"; content: string }[]
+  ): Promise<string> {
+    await this.init();
+    const transcript = history
+      .map((m) => `${m.role === "user" ? "Utilisateur" : "Hermes"} : ${m.content}`)
+      .join("\n\n")
+      .slice(0, 60_000);
+    const response = await this.zai!.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content:
+            "Résume la conversation suivante pour la suite d'une session de chat avec un agent. " +
+            "Conserve : le sujet et l'objectif, les décisions prises, les fichiers/artefacts produits " +
+            "(noms), les contraintes et préférences de l'utilisateur, et les prochaines étapes en cours. " +
+            "Réponds en français, en 10 lignes maximum, sans préambule.\n\n" +
+            transcript,
+        },
+      ],
+      thinking: { type: "disabled" },
+    });
+    const content = (response as any)?.choices?.[0]?.message?.content ?? "";
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error("Résumé de compaction vide");
+    }
+    return content.trim();
   }
 
   /** Tour multimodal : images en content parts (format vision), réponse en un tenant. */

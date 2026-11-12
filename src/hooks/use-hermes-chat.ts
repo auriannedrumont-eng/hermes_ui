@@ -2,17 +2,26 @@
 // les pièces jointes multimédia et le streaming via socket.io
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import { useToast } from "@/hooks/use-toast";
+import {
+  contextWindowOf,
+  estimateTokens,
+  SYSTEM_PROMPT_ESTIMATE,
+  type ContextRow,
+} from "@/lib/tokens";
 import type {
   Artifact,
   Attachment,
   ChatMessage,
+  CompactInfo,
   ConversationMeta,
   GatewayMode,
   ModelOption,
   ModelsResult,
+  PermissionsMode,
   Project,
   SearchHit,
   ServerHello,
@@ -21,6 +30,8 @@ import type {
 } from "@/lib/chat-types";
 
 const MODEL_SETTING_KEY = "hermes.model"; // registre des réglages (FORK.md §6)
+const EFFORT_SETTING_KEY = "hermes.reasoning.effort";
+const PERMISSIONS_SETTING_KEY = "hermes.permissions.mode";
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 Mo, aligné sur le service
 
 function fileToBase64(file: File): Promise<string> {
@@ -36,6 +47,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function useHermesChat() {
+  const { toast } = useToast();
   const [connected, setConnected] = useState(false);
   const [serverInfo, setServerInfo] = useState<ServerHello | null>(null);
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
@@ -48,6 +60,15 @@ export function useHermesChat() {
   const [modelsSource, setModelsSource] = useState<ModelsResult["source"] | null>(null);
   const [selectedModel, setSelectedModelState] = useState<string | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
+  // ── Chantier « Composer v2 » : effort, permissions, compaction ──────
+  /** Effort de raisonnement (valeur brute du fournisseur, persisté). */
+  const [effort, setEffortState] = useState<string | null>(null);
+  /** Autorisations : reset sur « ask » à chaque session — jamais restauré. */
+  const [permissionsMode, setPermissionsMode] = useState<PermissionsMode>("ask");
+  /** État de compaction de la conversation active. */
+  const [compactInfo, setCompactInfo] = useState<CompactInfo | null>(null);
+  /** Compaction en cours (synthèse LLM côté service). */
+  const [compacting, setCompacting] = useState(false);
   // ── Artefacts de la conversation active + panneau dédié ──────────
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   /** Contenu source en cours de stream, par clé d'artefact (aperçu vivant). */
@@ -58,6 +79,8 @@ export function useHermesChat() {
   const selectedModelRef = useRef<string | null>(null);
   /** Clé de l'artefact affiché dans le panneau (survit aux changements de version). */
   const panelKeyRef = useRef<string | null>(null);
+  const effortRef = useRef<string | null>(null);
+  const permissionsRef = useRef<PermissionsMode>("ask");
 
   // Synchronise les refs (lecture seule côté handlers d'événements)
   useEffect(() => {
@@ -68,16 +91,62 @@ export function useHermesChat() {
     selectedModelRef.current = selectedModel;
   }, [selectedModel]);
 
+  useEffect(() => {
+    effortRef.current = effort;
+  }, [effort]);
+
+  useEffect(() => {
+    permissionsRef.current = permissionsMode;
+  }, [permissionsMode]);
+
   // Sélection persistée (registre des réglages, cf. FORK.md §6)
   useEffect(() => {
     const saved = readClientSetting<string | null>(MODEL_SETTING_KEY);
     if (saved) setSelectedModelState(saved);
+    const savedEffort = readClientSetting<string>(EFFORT_SETTING_KEY);
+    if (savedEffort) setEffortState(savedEffort);
+  }, []);
+
+  // Autorisations : reset explicite sur « ask » à chaque session (spec) —
+  // la persistance viendra plus tard de la page de paramètres.
+  useEffect(() => {
+    writeClientSetting(PERMISSIONS_SETTING_KEY, "ask");
   }, []);
 
   const setSelectedModel = useCallback((id: string) => {
     setSelectedModelState(id);
     writeClientSetting(MODEL_SETTING_KEY, id);
   }, []);
+
+  /** Effort de raisonnement : valeur brute du fournisseur, persistée. */
+  const setEffort = useCallback((e: string) => {
+    setEffortState(e);
+    writeClientSetting(EFFORT_SETTING_KEY, e);
+  }, []);
+
+  /** Autorisations : armement explicite — jamais silencieux. */
+  const changePermissions = useCallback((mode: PermissionsMode) => {
+    setPermissionsMode(mode);
+    writeClientSetting(PERMISSIONS_SETTING_KEY, mode);
+  }, []);
+
+  // L'échelle d'effort est portée par le modèle : quand le modèle change et
+  // que l'effort courant n'existe pas dans la nouvelle échelle, on retombe
+  // sur le cran équivalent le plus proche (standard > medium > milieu).
+  useEffect(() => {
+    if (!models.length || !selectedModel) return;
+    const model = models.find((m) => m.id === selectedModel);
+    if (!model) return;
+    const scale = model.efforts?.length ? model.efforts : ["off", "low", "medium", "high", "max"];
+    const current = effortRef.current;
+    if (current && scale.includes(current)) return;
+    const fallback =
+      scale.find((e) => e === "standard") ??
+      scale.find((e) => e === "medium") ??
+      scale[Math.floor((scale.length - 1) / 2)];
+    setEffortState(fallback);
+    writeClientSetting(EFFORT_SETTING_KEY, fallback);
+  }, [models, selectedModel]);
 
   const isBusy = streaming !== null || uploadingCount > 0;
 
@@ -212,11 +281,26 @@ export function useHermesChat() {
       if (activeIdRef.current === p.id) {
         setActiveId(null);
         setMessages([]);
+        setCompactInfo(null);
         setArtifacts([]);
         setStreamingArtifacts({});
         setPanelOpen(false);
         setPanelArtifactId(null);
         panelKeyRef.current = null;
+      }
+    };
+
+    // Compaction terminée côté service : le résumé est en tête de session,
+    // la jauge et le popover reflètent le nouveau contexte envoyé au modèle.
+    const onConversationCompacted = (p: { conversationId: string; compact?: CompactInfo }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setCompactInfo(p.compact ?? null);
+      setCompacting(false);
+      if (p.compact) {
+        toast({
+          title: "Contexte compacté",
+          description: `${p.compact.summarizedCount} messages résumés — le fil continue dans la même session.`,
+        });
       }
     };
 
@@ -382,6 +466,7 @@ export function useHermesChat() {
     socket.on("stream:done", onStreamDone);
     socket.on("stream:error", onStreamError);
     socket.on("conversations:deleted", onConversationsDeleted);
+    socket.on("conversation:compacted", onConversationCompacted);
     socket.on("message:appended", onMessageAppended);
     socket.on("message:deleted", onMessageDeleted);
     socket.on("messages:removed", onMessagesRemoved);
@@ -410,6 +495,7 @@ export function useHermesChat() {
       socket.off("stream:done", onStreamDone);
       socket.off("stream:error", onStreamError);
       socket.off("conversations:deleted", onConversationsDeleted);
+      socket.off("conversation:compacted", onConversationCompacted);
       socket.off("message:appended", onMessageAppended);
       socket.off("message:deleted", onMessageDeleted);
       socket.off("messages:removed", onMessagesRemoved);
@@ -441,6 +527,7 @@ export function useHermesChat() {
               setConversations((prev) => [res.conversation as ConversationMeta, ...prev]);
               setActiveId(res.conversation.id);
               setMessages([]);
+              setCompactInfo(null);
               resolve(res.conversation.id);
             } else {
               resolve(null);
@@ -459,6 +546,7 @@ export function useHermesChat() {
       activeIdRef.current = id;
       setActiveId(id);
       setStreaming(null);
+      setCompactInfo(null);
       // Le panneau appartient à la conversation : on le referme au changement
       setPanelOpen(false);
       setPanelArtifactId(null);
@@ -468,8 +556,15 @@ export function useHermesChat() {
       socket.emit(
         "conversations:open",
         { id },
-        (res: { conversationId: string; messages: ChatMessage[] } = {} as any) => {
-          if (res.conversationId === id) setMessages(res.messages ?? []);
+        (res: {
+          conversationId: string;
+          messages: ChatMessage[];
+          compact?: CompactInfo | null;
+        } = {} as any) => {
+          if (res.conversationId === id) {
+            setMessages(res.messages ?? []);
+            setCompactInfo(res.compact ?? null);
+          }
           setLoadingHistory(false);
         }
       );
@@ -548,6 +643,8 @@ export function useHermesChat() {
         content,
         model: selectedModelRef.current ?? undefined,
         attachments: attachments.length ? attachments : undefined,
+        effort: effortRef.current ?? undefined,
+        permissionsMode: permissionsRef.current,
       });
     },
     [newConversation, streaming]
@@ -571,6 +668,8 @@ export function useHermesChat() {
     getSocket().emit("chat:regenerate", {
       conversationId,
       model: selectedModelRef.current ?? undefined,
+      effort: effortRef.current ?? undefined,
+      permissionsMode: permissionsRef.current,
     });
   }, [streaming]);
 
@@ -599,6 +698,8 @@ export function useHermesChat() {
           messageId,
           content: clean,
           model: selectedModelRef.current ?? undefined,
+          effort: effortRef.current ?? undefined,
+          permissionsMode: permissionsRef.current,
         },
         (res: { ok?: boolean; error?: string }) => {
           if (!res?.ok) openConversation(conversationId);
@@ -779,6 +880,85 @@ export function useHermesChat() {
     );
   }, []);
 
+  // ── Compaction & nouvelle session (chantier « Composer v2 ») ──────────
+
+  /** Lance la compaction de la conversation active (résumé en tête de session). */
+  const compactConversation = useCallback(() => {
+    const conversationId = activeIdRef.current;
+    if (!conversationId || streaming) return;
+    setCompacting(true);
+    getSocket().emit(
+      "conversation:compact",
+      { conversationId },
+      (res: { ok?: boolean; error?: string } = {}) => {
+        if (!res?.ok) {
+          setCompacting(false);
+          toast({ title: "Compaction impossible", description: res?.error, variant: "destructive" });
+        }
+        // Succès : la confirmation arrive par conversation:compacted (broadcast)
+      }
+    );
+  }, [streaming, toast]);
+
+  /** Ouvre une conversation vierge, dans le projet de la conversation active. */
+  const startNewSession = useCallback(async (): Promise<string | null> => {
+    const current = conversations.find((c) => c.id === activeIdRef.current);
+    return newConversation(current?.projectId ?? null);
+  }, [conversations, newConversation]);
+
+  /** Base du contexte du tour courant (le brouillon est ajouté par le composer). */
+  const contextBase = useMemo(() => {
+    const model = models.find((m) => m.id === selectedModel) ?? null;
+    const { windowTokens, estimated } = contextWindowOf(model);
+
+    // Instructions système : taille réelle du moteur démo, estimation sinon
+    const systemTokens = serverInfo?.systemPromptChars
+      ? Math.ceil(serverInfo.systemPromptChars / 3.5)
+      : SYSTEM_PROMPT_ESTIMATE;
+
+    // Historique tel qu'il partira au modèle : résumé de compaction en tête,
+    // puis les messages postérieurs (le service limite à 30 entrées).
+    const MAX_HISTORY = 30;
+    let historyTokens = 0;
+    let historyCount = messages.length;
+    let historySub: string | undefined =
+      messages.length > 0 ? `${messages.length} messages` : undefined;
+    if (compactInfo) {
+      const untilIdx = messages.findIndex((m) => m.id === compactInfo.untilMessageId);
+      const recent = messages.slice(untilIdx >= 0 ? untilIdx + 1 : 0);
+      const summaryTokens = Math.ceil(compactInfo.summaryChars / 3.5);
+      const recentTokens = recent.reduce(
+        (acc, m) => acc + estimateTokens(m.content ?? ""),
+        0
+      );
+      historyTokens = summaryTokens + recentTokens;
+      historyCount = compactInfo.summarizedCount + recent.length;
+      historySub = `résumé + ${recent.length} message${recent.length > 1 ? "s" : ""}`;
+    } else {
+      historyTokens = messages
+        .slice(-MAX_HISTORY)
+        .reduce((acc, m) => acc + estimateTokens(m.content ?? ""), 0);
+    }
+
+    const rows: ContextRow[] = [
+      { key: "system", label: "Instructions système", tokens: systemTokens },
+    ];
+    if (messages.length > 0 || compactInfo) {
+      rows.push({ key: "history", label: "Historique", sub: historySub, tokens: historyTokens });
+    }
+
+    return {
+      rows,
+      historyCount,
+      historyCompacted: Boolean(compactInfo),
+      windowTokens,
+      windowEstimated: estimated,
+    };
+  }, [models, selectedModel, serverInfo, messages, compactInfo]);
+
+  /** Peut-on compacter : conversation ouverte, ≥ 2 messages, tour au repos. */
+  const canCompact = Boolean(activeId) && messages.length >= 2 && !streaming;
+
   // ── Artefacts : panneau, retry, versions ──────────────────────────────
 
   /** Ouvre le panneau sur un artefact précis (clic carte, carte « Ouvrir »). */
@@ -842,6 +1022,16 @@ export function useHermesChat() {
     modelsSource,
     selectedModel,
     setSelectedModel,
+    // Chantier « Composer v2 »
+    effort,
+    setEffort,
+    permissionsMode,
+    setPermissionsMode: changePermissions,
+    contextBase,
+    canCompact,
+    compacting,
+    compactConversation,
+    startNewSession,
     uploadAttachment,
     newConversation,
     openConversation,

@@ -57,7 +57,9 @@ bun run dev        # bun --hot index.ts
 | `mini-services/hermes-chat/asr.ts`, `uploads.ts` | Dictée vocale (ffmpeg), pièces jointes | Fork |
 | `src/hooks/use-hermes-chat.ts` | Orchestrateur frontend (conversations, streaming, artefacts, panneau) | Fork (édition sensible) |
 | `src/lib/chat-types.ts` | Types du protocole client/service (dont artefacts) | Fork (partagé) |
-| `src/components/chat/` | UI du chat, dont `artifact-card.tsx` (cartes inline) et `artifact-panel.tsx` (split view) | Fork |
+| `src/lib/tokens.ts` | Estimation de contexte du Composer v2 (heuristique car/jetons, fenêtre par modèle, seuils) | Fork |
+| `src/components/chat/` | UI du chat, dont `composer.tsx` (Composer v2), `context-gauge.tsx` (jauge + popover de contexte), `artifact-card.tsx` (cartes inline), `artifact-panel.tsx` (split view) | Fork |
+| `design/` | Maquettes HTML autonomes de référence, validées avant implémentation (ex. `maquette-composer.html`, chantier Composer v2) | Fork (design) |
 | `src/lib/socket.ts`, `export.ts`, `notify.ts`, `prompt-library.ts` | Client socket.io, exports MD/JSON/PDF, notifications, bibliothèque de prompts | Fork |
 | `db/` | SQLite + fichiers générés (`artifacts/`) et uploadés (`uploads/`) | Fork (runtime) |
 | `prisma/` + scripts `db:*` du package.json racine | **Boilerplate résiduel non utilisé** (la vraie persistance est `bun:sqlite` dans `store.ts`) | À ignorer |
@@ -110,8 +112,8 @@ n'existe pas encore — le socle est posé **dès maintenant** pour ne jamais av
 
 | Namespace | Contenu | Exemples |
 | --- | --- | --- |
-| `hermes` | Réglages de l'agent amont | `hermes.gateway.url`, `hermes.gateway.token`, `hermes.model` |
-| `fork` | Tout ce que le fork ajoute | `fork.ui.sidebar.width`, `fork.artifacts.panel.autoOpen`, `fork.projects.sort` |
+| `hermes` | Réglages de l'agent amont | `hermes.gateway.url`, `hermes.gateway.token`, `hermes.model`, `hermes.models.favorites`, `hermes.reasoning.effort`, `hermes.permissions.mode` |
+| `fork` | Tout ce que le fork ajoute | `fork.ui.sidebar.width`, `fork.artifacts.panel.autoOpen`, `fork.projects.sort`, `fork.context.gauge` |
 
 ### Schéma (fichier unique source de vérité : `src/lib/settings.ts`, à créer)
 
@@ -134,10 +136,16 @@ interface SettingDef {
 - **Scope serveur** → table SQLite `settings (key TEXT PRIMARY KEY, value TEXT, updated_at)`,
   migration additive (à créer lors du chantier projets, en même temps que la table `projects`).
 
-### Inventaire au 2026-11-12
+### Inventaire au 2026-11-13
 
-- Client : **aucun réglage persisté** (terrain vierge — tout nouveau réglage passe par le registre).
-- Serveur : `.env` → `HERMES_GATEWAY_URL`/`HERMES_GATEWAY_TOKEN` (namespace `hermes`),
+- Client (`hermes-ui:`) : `hermes.model`, `hermes.models.favorites` (JSON d'ids),
+  `hermes.reasoning.effort` (valeur brute du fournisseur, chantier « Composer v2 »),
+  `hermes.permissions.mode` (ask | auto — reset sur `ask` à chaque session),
+  `fork.ui.sidebar.width`, `fork.projects.sort`, `fork.projects.collapsed`,
+  `fork.context.gauge` (affichage de la jauge de contexte).
+- Serveur : table `settings` du mini-service (`settings:get/set`), dont les résumés de
+  compaction `compact:<conversationId>` (chantier « Composer v2 ») ; `.env` →
+  `HERMES_GATEWAY_URL`/`HERMES_GATEWAY_TOKEN` (namespace `hermes`),
   `DATABASE_URL` (infrastructure fork, reste en `.env`).
 
 ### Règles d'or
@@ -166,7 +174,7 @@ interface SettingDef {
 - Versioning : même nom de fichier → **v2 sur la même carte**, sélecteur de version, diff
   ligne à ligne pour le code.
 
-### 7.2 Prochain chantier — UI projets (rangements des conversations par projet)
+### 7.2 Fait — UI projets (rangements des conversations par projet)
 
 Décision validée : pure couche stockage/présentation au-dessus du moteur, aucune refonte.
 Plan d'implémentation :
@@ -189,7 +197,30 @@ Plan d'implémentation :
 6. Ne pas toucher : moteur de tours, streaming, connecteur, fork de conversations, recherche
    plein-texte (extension par projet = optionnel, plus tard).
 
-### 7.3 Plus tard
+### 7.3 Fait — Composer v2 (composer redessiné autour du contexte)
+
+Livré le 2026-11-13 d'après la maquette validée `design/maquette-composer.html`
+(scènes A-E : repos, picker de modèles, popover de contexte, bouclier de permissions,
+alerte de fenêtre pleine). **La maquette fait foi** pour la physionomie et les valeurs
+affichées (k + %, seuils ambre 50 % / rouge 80 %).
+
+- `src/lib/tokens.ts` : estimation sans tokenizer (latin ≈ 3,5 car/jeton, CJK ≈ 1 car/jeton,
+  repli garanti dès que la gateway remonte l'usage réel) ; fenêtre par modèle
+  (`contextWindow` du catalogue, défaut 128k via `contextWindowOf`).
+- `src/components/chat/context-gauge.tsx` : anneau SVG dans le footer du composer +
+  popover de décomposition — un poste par ligne (instructions système, mémoire projet
+  AGENTS.md, historique, pièces jointes, skills, outils MCP, brouillon), part de fenêtre
+  en % + poids en k, la somme rejoint l'anneau, ligne absente si le poste est vide.
+- Actions « Compacter » / « Nouvelle session » au bas du popover (dialog de confirmation,
+  jamais de troncature silencieuse) ; la compaction produit un résumé LLM stocké côté
+  service (`compact:<conversationId>`) qui remplace l'historique résumé au tour suivant.
+- `model-picker.tsx` réécrit en cmdk (recherche, favoris), contrôleur d'effort de
+  raisonnement (`hermes.reasoning.effort`, « off » coupe le thinking côté démo-engine),
+  bouclier de permissions ask | auto (`hermes.permissions.mode`, reset sur « ask »
+  à chaque session).
+- Réglage `fork.context.gauge` (affichage de la jauge), déclaré dans le registre (§6).
+
+### 7.4 Plus tard
 
 - **Browsing agent** (étape 6 de la vision artefacts) : chip de statut discrète près du champ
   de saisie (favicon + titre), résultats en citations cliquables repliables
@@ -224,36 +255,45 @@ Plan d'implémentation :
 | 2026-11-12 | **UI projets livrée** (plan §7.2 complet) : migration additive (`projects`, `conversations.project_id` + index, table `settings`), événements `projects:list/create/rename/delete/reorder` + `conversations:move`, sidebar groupée repliable avec drag & drop `@dnd-kit`, **sidebar à largeur fluide** via `react-resizable-panels` (Modif 2 honorée), réglages `fork.ui.sidebar.width`, `fork.projects.sort`, `fork.projects.collapsed` déclarés dans le registre. Scripts de test : `scripts/test-projects-flow.ts`, `scripts/seed-projects-demo.ts`. |
 | 2026-11-12 | **Préparation publication GitHub** : retrait du suivi git de toutes les données locales et personnelles (`.env`, `db/`, `tool-results/`, `upload/`, `download/`, `.zscripts/` — fichiers conservés sur disque, ignorés via `.gitignore`) ; audit sécurité de tout l'historique (aucun token ni secret). Remote `origin` configuré ; branche `publish` = commit unique propre pour GitHub, `main` conserve l'historique de travail complet (voir §10). |
 | 2026-11-12 | `README.md` racine ajouté (page d'accueil du repo GitHub). Troisième voie de publication : **archive zip** des fichiers seuls (`download/push/hermes_ui-a-televerser.zip`), pour téléversement manuel via l'interface web GitHub — sans historique git, choix de l'utilisatrice. |
+| 2026-11-13 | **Composer v2 livré** (cf. §7.3) d'après la maquette validée, versionnée au passage dans `design/maquette-composer.html`. 5 erreurs TypeScript introduites par le chantier corrigées avant publication (props `onUploadFile`/`onTranscribe` du composer, `TurnRequest` `string \| null`, `@ts-expect-error` obsolète du démo-engine) ; `bunx tsc --noEmit` ne remonte plus que les 10 erreurs préexistantes hors périmètre (API Bun vues par le tsc racine, outillage du bac à sable). Artefacts de publication régénérés : `publish` passe à 2 commits propres (base + Composer v2), bundle et zip à jour. |
+| 2026-11-13 | **Repo GitHub passé en privé** et publication depuis le bac à sable : `publish` (2 commits propres) poussé sur `main` distant via PAT fine-grained fourni dans le chat — utilisé en helper d'identification **jetable** (jamais écrit dans `.git/config`, `~/.git-credentials` ni aucun fichier ; bac à sable audité après coup). Le PAT étant à expiration illimitée, le régénérer reste conseillé en cas de doute. |
 
 ## 10. Synchronisation git et passation
 
-- Repo GitHub de référence : `https://github.com/auriannedrumont-eng/hermes_ui`.
+- Repo GitHub de référence : `https://github.com/auriannedrumont-eng/hermes_ui`
+  (**privé**). Les commits propres y ont été publiés le 2026-11-13
+  (`git push origin publish:main`) ; le distant suit désormais notre lignée.
 - Remote `origin` configuré dans l'environnement de travail, **sans credentials** :
   un push depuis le bac à sable nécessite un PAT fine-grained GitHub (droits
   *Contents : Read & write* sur le seul repo `hermes_ui`, expiration courte), fourni
   au moment du push, ou passe par le bundle (`download/push/`).
 - Deux branches locales :
   - `main` : historique de travail complet (commits de session, messages techniques) ;
-  - `publish` : **commit unique propre**, signé `auriannedrumont-eng
+  - `publish` : **commits propres, un par chantier livré** (base : artefacts + UI projets ;
+    puis Composer v2), signés `auriannedrumont-eng
     <355807939+auriannedrumont-eng@users.noreply.github.com>`, arbre identique à `main`
     sans les données locales — c'est celle qu'on pousse vers GitHub
-    (`git push origin publish:main`, en `--force` tant que le point de départ distant
-    est l'ancien commit d'import sans ancêtre commun).
+    (`git push origin publish:main` ; le `--force` n'est plus nécessaire depuis la
+    publication du 2026-11-13 — le distant suit notre lignée, les push suivants
+    sont des fast-forward).
 - Le repo GitHub ne contient volontairement **aucune donnée locale** : bases SQLite
   (`db/`), uploads de conversation, artefacts dérivés, dumps d'outils
   (`tool-results/`), livrables (`download/`), matériaux de session (`upload/`) et
   outillage du bac à sable (`.zscripts/`) sont ignorés par `.gitignore`.
-  Audit sécurité de tout l'historique effectué le 2026-11-12 : aucun token ni secret.
+  Audit sécurité de tout l'historique effectué le 2026-11-12, ré-audit du chantier
+  Composer v2 le 2026-11-13 : aucun token ni secret.
 - Recette de republication après une session de travail :
   1) committer sur `main` ;
-  2) recréer `publish` : `git checkout --orphan publish && git add -A &&
-     git commit -m "<résumé>" && git checkout main` ;
+  2) ajouter un commit propre sur `publish` : `git switch publish &&
+     git restore --source=main --staged --worktree -- . && git add -A &&
+     git -c user.name="auriannedrumont-eng" -c user.email="355807939+auriannedrumont-eng@users.noreply.github.com" \
+       commit -m "<résumé du chantier>" && git switch main` ;
   3) pousser : `git push origin publish:main`.
 - Les livrables par archive restent possibles (`scripts/package-livrables.sh`).
 - **Téléversement manuel (sans git)** : `download/push/hermes_ui-a-televerser.zip`
   contient les fichiers seuls de `publish` (sans historique). Convient à un upload
   via l'interface web GitHub (limite : 100 fichiers par glisser-déposer — uploader
-  dossier par dossier, `src/` = 79 fichiers passe seul). Le repo obtenu n'a alors
+  dossier par dossier, `src/` = 81 fichiers passe seul). Le repo obtenu n'a alors
   qu'un commit d'upload, sans message descriptif ni auteur configuré.
 - **Checklist de passation à un nouveau LLM** : 1) lire ce `FORK.md` en entier ;
   2) lire `mini-services/hermes-chat/README.md` ; 3) `git log` + `git status` pour voir

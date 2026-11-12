@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Composer v2 · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --amber:oklch(0.72 0.16 70);
+    --amber-soft:oklch(0.72 0.16 70 / 0.12);
+    --red:oklch(0.577 0.245 27.325);
+    --red-soft:oklch(0.577 0.245 27.325 / 0.10);
+    --green:oklch(0.62 0.13 150);
+    --radius:0.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    font-size:15px;line-height:1.5;padding:40px 20px 80px;
+  }
+  .wrap{max-width:840px;margin:0 auto}
+
+  /* ── En-tête de planche ─────────────────────────────── */
+  .page-head h1{font-size:26px;font-weight:700;letter-spacing:-0.02em}
+  .page-head .sub{color:var(--muted-foreground);margin-top:6px;max-width:60ch}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;font-weight:500;padding:4px 11px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted-foreground)}
+  .chip b{color:var(--foreground);font-weight:600}
+
+  /* ── Scènes ─────────────────────────────────────────── */
+  .scene{background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:26px 26px 20px;margin-top:26px;box-shadow:0 1px 2px oklch(0.19 0.004 60 / 0.04)}
+  .scene-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .scene-num{flex:none;width:26px;height:26px;border-radius:8px;background:var(--hermes-soft);
+    color:var(--hermes);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+    transform:translateY(4px)}
+  .scene-head h2{font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  .scene-head .why{width:100%;color:var(--muted-foreground);font-size:13.5px;margin-top:4px;padding-left:38px}
+  .stage{margin:22px auto 6px;max-width:660px;background:var(--background);
+    border:1px solid var(--border);border-radius:22px;padding:34px 18px 26px;position:relative}
+  /* Hauteur réservée pour les popovers flottants (ancrés au composer, ouverture vers le haut) */
+  #stageB{padding-top:530px}
+  #stageC{padding-top:465px}
+  #stageE{padding-top:535px}
+  #stageB .dim{opacity:.9}
+  .stage.dim{filter:grayscale(0.15);opacity:0.85}
+  .notes{margin:16px 4px 0;padding-left:38px;list-style:none}
+  .notes li{font-size:13px;color:var(--muted-foreground);padding:3px 0 3px 22px;position:relative}
+  .notes li::before{content:attr(data-n);position:absolute;left:0;top:5px;width:15px;height:15px;
+    border-radius:5px;background:var(--muted);color:var(--card);font-size:9.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+
+  /* ── Composer (commun) ──────────────────────────────── */
+  .composer{background:var(--card);border:1px solid var(--border);border-radius:26px;
+    box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.05);transition:border-color .2s, box-shadow .2s;
+    position:relative}
+  .composer:focus-within{box-shadow:0 4px 14px oklch(0.19 0.004 60 / 0.08)}
+  .composer.armed{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+  .composer-row{display:flex;align-items:flex-end;gap:8px;padding:12px 14px 8px}
+  .icon-btn{flex:none;width:36px;height:36px;border-radius:999px;border:none;background:transparent;
+    color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .15s,color .15s}
+  .icon-btn:hover{background:var(--muted);color:var(--foreground)}
+  .composer textarea{flex:1;resize:none;border:none;outline:none;background:transparent;
+    font:inherit;color:inherit;min-height:26px;padding:5px 0}
+  .composer textarea::placeholder{color:var(--muted-foreground)}
+  .send-btn{flex:none;width:36px;height:36px;border-radius:999px;border:none;background:var(--hermes);
+    color:var(--hermes-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .composer-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    border-top:1px solid var(--border);padding:6px 10px 7px}
+  .foot-left{display:flex;align-items:center;gap:4px;min-width:0}
+  .foot-right{display:flex;align-items:center;gap:6px}
+
+  /* Pilule model picker */
+  .pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:999px;
+    border:none;background:transparent;font:inherit;font-size:12.5px;font-weight:500;
+    color:var(--muted-foreground);cursor:pointer;transition:background .15s,color .15s}
+  .pill:hover{background:var(--muted);color:var(--foreground)}
+  .pill .model-label{max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge-flag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;
+    padding:1px 7px;border-radius:999px;background:var(--hermes-soft);color:var(--hermes)}
+
+  /* Jauge anneau */
+  .gauge-btn{position:relative;flex:none;width:34px;height:34px;border-radius:999px;border:none;
+    background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .gauge-btn:hover{background:var(--muted)}
+  .gauge-btn svg{transform:rotate(-90deg)}
+  .gauge-pct{position:absolute;font-size:8px;font-weight:700;letter-spacing:-0.02em}
+
+  /* Bouton permissions */
+  .perm-btn{flex:none;width:34px;height:34px;border-radius:999px;border:none;background:transparent;
+    color:var(--muted-foreground);cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background .15s,color .15s}
+  .perm-btn:hover{background:var(--muted);color:var(--foreground)}
+  .perm-btn.on{color:var(--amber);background:var(--amber-soft)}
+
+  .kbd-hint{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted-foreground)}
+
+  /* Avant / après */
+  .compare-label{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:0.07em;color:var(--muted-foreground);margin:20px 2px 9px}
+  .compare-label .tag{font-size:9.5px;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:0.04em}
+  .compare-label.before .tag{background:var(--muted);color:var(--muted-foreground)}
+  .compare-label.after .tag{background:var(--hermes-soft);color:var(--hermes)}
+  .new-wrap{position:relative;display:inline-flex}
+  .new-tag{position:absolute;top:-9px;right:-4px;font-size:8.5px;font-weight:700;letter-spacing:0.05em;
+    background:var(--hermes);color:var(--hermes-foreground);border-radius:999px;padding:1.5px 6.5px;
+    box-shadow:0 1px 4px oklch(0.19 0.004 60 / 0.2);white-space:nowrap}
+  .spotlight{position:relative;display:inline-flex;gap:7px;padding:3px 5px;
+    border:1.5px dashed oklch(0.63 0.17 42 / 0.5);border-radius:13px}
+  .spotlight .new-tag{left:50%;right:auto;transform:translateX(-50%);top:-20px}
+
+  /* ── Popovers ───────────────────────────────────────── */
+  .pop{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:16px;
+    box-shadow:0 12px 40px oklch(0.19 0.004 60 / 0.14);z-index:30;animation:pop .16s ease-out}
+  @keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .pop-label{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;
+    color:var(--muted-foreground);text-transform:none;letter-spacing:0.01em;
+    padding:11px 12px 7px}
+  .pop-sep{height:1px;background:var(--border);margin:2px 0}
+
+  /* Popover picker */
+  .picker-pop{left:10px;bottom:calc(100% + 10px);width:352px}
+  .search-row{display:flex;align-items:center;gap:8px;margin:10px 12px 4px;padding:0 10px;height:36px;
+    border-radius:10px;border:1px solid var(--border);background:var(--background)}
+  .search-row:focus-within{border-color:var(--hermes);box-shadow:0 0 0 2px var(--hermes-soft)}
+  .search-row svg{flex:none;color:var(--muted-foreground)}
+  .search-row input{flex:1;border:none;outline:none;background:transparent;font:inherit;font-size:13.5px}
+  .search-row .esc{font-size:10.5px;color:var(--muted-foreground);border:1px solid var(--border);
+    border-radius:5px;padding:1px 5px;background:var(--card)}
+  .model-list{max-height:252px;overflow-y:auto;padding:4px 6px}
+  .group-head{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;
+    color:var(--muted-foreground);padding:9px 8px 5px}
+  .model-item{display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;border:none;
+    background:transparent;font:inherit;padding:7px 8px;border-radius:10px;cursor:pointer;transition:background .12s}
+  .model-item:hover{background:var(--muted)}
+  .model-item.sel{background:var(--muted)}
+  .model-item .check{flex:none;width:16px;height:16px;margin-top:2px;display:flex;align-items:center;justify-content:center}
+  .model-item .m-name{font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:7px}
+  .model-item .m-id{font-size:11px;color:var(--muted-foreground);font-family:ui-monospace,monospace;margin-top:1px}
+  .star{color:var(--amber)}
+  .fav-head{display:flex;align-items:center;gap:7px}
+  .empty-msg{padding:22px 12px;text-align:center;color:var(--muted-foreground);font-size:13px}
+  .picker-foot{padding:9px 12px 11px}
+  .effort-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;
+    font-weight:600;color:var(--muted-foreground);margin-bottom:7px}
+  .effort-label .prov{font-weight:500;font-size:10.5px}
+  .seg{display:flex;background:var(--muted);border-radius:9px;padding:2.5px;gap:2px}
+  .seg button{flex:1;border:none;background:transparent;font:inherit;font-size:11.5px;font-weight:500;
+    color:var(--muted-foreground);padding:5px 0;border-radius:7px;cursor:pointer;transition:all .12s}
+  .seg button:hover{color:var(--foreground)}
+  .seg button.on{background:var(--card);color:var(--hermes);font-weight:600;
+    box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.12)}
+  .effort-note{margin-top:7px;font-size:11px;color:var(--muted-foreground)}
+  .count-foot{padding:8px 14px;font-size:11.5px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+
+  /* Popover contexte */
+  .ctx-pop{right:10px;bottom:calc(100% + 10px);width:354px}
+  .ctx-top{display:flex;align-items:center;gap:13px;padding:14px 16px 10px}
+  .ctx-ring{position:relative;flex:none;display:flex;align-items:center;justify-content:center}
+  .ctx-pct{position:absolute;font-size:11px;font-weight:700}
+  .ctx-sum{min-width:0}
+  .ctx-sum .big{font-size:15px;font-weight:700;letter-spacing:-0.01em}
+  .ctx-sum .win{font-size:11.5px;color:var(--muted-foreground);margin-top:1px}
+  .ctx-est{margin-left:auto;flex:none;font-size:10px;font-weight:600;color:var(--muted-foreground);
+    background:var(--muted);border-radius:999px;padding:2px 8px}
+  .ctx-rows{padding:4px 16px 8px}
+  .ctx-row{display:flex;align-items:center;gap:10px;padding:4.5px 0}
+  .ctx-row .lbl{flex:none;width:118px;font-size:12.5px;color:var(--foreground)}
+  .ctx-row .sub{font-size:11px;color:var(--muted-foreground)}
+  .ctx-row .bar{flex:1;height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
+  .ctx-row .bar i{display:block;height:100%;border-radius:999px;background:var(--hermes);min-width:3px}
+  .ctx-row .val{flex:none;width:54px;display:flex;flex-direction:column;align-items:flex-end;
+    text-align:right;font-variant-numeric:tabular-nums;line-height:1.3}
+  .ctx-row .val b{font-size:12px;font-weight:600;color:var(--foreground)}
+  .ctx-row .val span{font-size:10.5px;color:var(--muted-foreground)}
+  .ctx-alert{display:flex;gap:9px;align-items:flex-start;margin:4px 12px 10px;padding:9px 11px;
+    border-radius:11px;background:var(--red-soft);font-size:12px;color:var(--foreground)}
+  .ctx-alert svg{flex:none;margin-top:1px;color:var(--red)}
+  .ctx-actions{display:flex;gap:8px;padding:10px 14px 13px;border-top:1px solid var(--border)}
+  .ctx-act{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font:inherit;
+    font-size:12px;font-weight:600;padding:7.5px 10px;border-radius:10px;border:1px solid var(--border);
+    background:var(--card);color:var(--foreground);cursor:pointer;transition:background .12s,border-color .12s}
+  .ctx-act svg{flex:none;color:var(--muted-foreground)}
+  .ctx-act:hover{background:var(--muted);border-color:var(--muted)}
+  .ctx-act:disabled{color:var(--green);border-color:var(--green);background:var(--card);cursor:default}
+  .ctx-act:disabled svg{color:var(--green)}
+
+  /* Bandeau permissions armées */
+  .armed-banner{display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 13px;
+    border-radius:12px;background:var(--amber-soft);font-size:12.5px;font-weight:500}
+  .armed-banner svg{flex:none;color:var(--amber)}
+  .armed-banner .off{margin-left:auto;border:none;background:transparent;font:inherit;font-size:11.5px;
+    font-weight:600;color:var(--amber);cursor:pointer;text-decoration:underline;padding:0}
+
+  /* Dialog confirmation */
+  .dialog{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:oklch(0.19 0.004 60 / 0.28);border-radius:22px;animation:fade .15s}
+  .dialog[hidden]{display:none}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .dialog-card{background:var(--card);border-radius:18px;padding:20px;width:min(88%,340px);
+    box-shadow:0 20px 60px oklch(0.19 0.004 60 / 0.25)}
+  .dialog-card h3{font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px}
+  .dialog-card h3 svg{color:var(--amber)}
+  .dialog-card p{font-size:13px;color:var(--muted-foreground);margin:9px 0 16px}
+  .dialog-card p b{color:var(--foreground);font-weight:600}
+  .dialog-actions{display:flex;justify-content:flex-end;gap:8px}
+  .btn{font:inherit;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:10px;cursor:pointer;border:none}
+  .btn.ghost{background:transparent;color:var(--muted-foreground)}
+  .btn.ghost:hover{background:var(--muted)}
+  .btn.amber{background:var(--amber);color:oklch(0.99 0.002 80)}
+  .btn.amber:hover{filter:brightness(1.05)}
+
+  /* ── Tableau de spec ────────────────────────────────── */
+  .spec{margin-top:26px}
+  .spec h2{font-size:17px;font-weight:600;margin-bottom:4px}
+  .spec .sub{color:var(--muted-foreground);font-size:13.5px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--muted-foreground);padding:7px 10px;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  td code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+  tr:last-child td{border-bottom:none}
+  .spec .files{margin-top:16px;font-size:12.5px;color:var(--muted-foreground)}
+  .spec .files code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+
+  .page-foot{margin-top:30px;text-align:center;font-size:11.5px;color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>Maquette interactive — Composer v2</h1>
+    <p class="sub">Hermes Web · chantier « composer ». Cette planche est cliquable : la recherche filtre,
+    les modèles se sélectionnent, l'échelle d'effort change avec le provider, la jauge et le bouclier
+    réagissent. Palette et rayons officiels du projet.</p>
+    <div class="chips">
+      <span class="chip">Recherche : <b>cmdk</b> (déjà installé)</span>
+      <span class="chip">Favoris : <b>hermes.models.favorites</b></span>
+      <span class="chip">Effort : <b>échelle par provider</b></span>
+      <span class="chip">Jauge : <b>k + %</b> · compaction / nouvelle session</span>
+      <span class="chip">Permissions : <b>reset / session</b></span>
+    </div>
+  </header>
+
+  <!-- ══════════ SCÈNE A ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">A</span>
+      <h2>Composer au repos — avant / après</h2>
+      <p class="why">La zone de saisie ne change pas : tout le chantier se concentre dans le pied du composer.
+      Comparez les deux versions ci-dessous.</p>
+    </div>
+    <div class="stage" id="stageA">
+      <div class="compare-label before"><span class="tag">Aujourd'hui</span> pied actuel — rien à droite que l'aide clavier</div>
+      <div class="composer dim">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1" readonly>Peux-tu revoir le plan de tests du module projets ?</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <span class="pill" style="cursor:default">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </span>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+          </div>
+        </div>
+      </div>
+      <div class="compare-label after"><span class="tag">Après le chantier</span> même composer, deux nouveaux contrôles à droite</div>
+      <div class="composer" id="composerA">
+        <div class="composer-row">
+          <button class="icon-btn" title="Joindre des fichiers" aria-label="Joindre des fichiers">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1" placeholder="Envoyer un message à Hermes… (/ pour les commandes)">Peux-tu revoir le plan de tests du module projets ?</textarea>
+          <button class="send-btn" aria-label="Envoyer">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill" id="pillA">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6.5 15.5 12 10l5.5 5.5"/></svg>
+              Entrée pour envoyer
+            </span>
+            <span class="spotlight">
+              <span class="new-tag">2 nouveautés</span>
+              <button class="perm-btn" title="Autorisations : confirmation avant chaque action" aria-label="Autorisations">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+              </button>
+              <button class="gauge-btn" title="Contexte : ≈ 30.6k / 128k tokens" aria-label="Contexte et consommation de tokens">
+                <svg width="22" height="22" viewBox="0 0 22 22">
+                  <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                  <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                    stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+                </svg>
+                <span class="gauge-pct">24</span>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Le composer ne change ni de forme ni de gestuelle de saisie — trombone, dictée, envoi et commandes slash restent à l'identique.</li>
+      <li data-n="2">Deux contrôles apparaissent à droite du pied : le <b>bouclier</b> des autorisations (scène D) et la <b>jauge</b> de contexte (scène C).</li>
+      <li data-n="3">Le picker gagne la recherche, les favoris et l'effort de raisonnement dans son popover — scène B, cliquez la pilule.</li>
+      <li data-n="4">Ordre immuable du groupe de droite : aide clavier · bouclier · jauge — la jauge reste l'élément le plus à droite.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE B ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">B</span>
+      <h2>Sélecteur de modèle — recherche, favoris, effort</h2>
+      <p class="why">Le popover s'ouvre au-dessus du composer. La recherche filtre en direct ; l'échelle
+      d'effort en pied s'adapte au provider du modèle sélectionné (essayez : OpenAI → 4 crans, Anthropic → budget, z-ai → 2).</p>
+    </div>
+    <div class="stage" id="stageB">
+      <div class="composer dim" id="composerB">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1">Peux-tu revoir le plan de tests du module projets ?</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill" id="pillB">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label" id="pillLabel">Hermes 4 405B</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" title="Autorisations : confirmation avant chaque action" aria-label="Autorisations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" id="gaugeB" title="Contexte : ≈ 30.6k / 128k tokens" aria-label="Contexte et consommation de tokens">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">24</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Popover picker ouvert -->
+        <div class="pop picker-pop" id="pickerPop">
+          <div class="pop-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+            Choisir un modèle
+          </div>
+          <div class="search-row">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="searchInput" type="text" placeholder="Rechercher par nom, id ou fournisseur…" autocomplete="off">
+            <span class="esc">esc</span>
+          </div>
+          <div class="model-list" id="modelList">
+            <div class="group-head fav-head">
+              <svg class="star" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              Favoris
+            </div>
+            <button class="model-item sel" data-search="hermes 4 405b nous research flagship" data-efforts="off,standard,élevé" data-effort-label="Nous Portal" data-name="Hermes 4 405B" data-id="hermes-4-405b">
+              <span class="check">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              </span>
+              <span>
+                <span class="m-name">Hermes 4 405B
+                  <svg class="star" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+                  <span class="badge-flag">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>Flagship</span>
+                </span>
+                <span class="m-id">hermes-4-405b · Nous Research</span>
+              </span>
+            </button>
+            <button class="model-item" data-search="hermes 4 70b nous research" data-efforts="off,standard,élevé" data-effort-label="Nous Portal" data-name="Hermes 4 70B" data-id="hermes-4-70b">
+              <span class="check"></span>
+              <span>
+                <span class="m-name">Hermes 4 70B
+                  <svg class="star" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+                  <span class="badge-flag" style="background:var(--muted);color:var(--muted-foreground)">Défaut</span>
+                </span>
+                <span class="m-id">hermes-4-70b · Nous Research</span>
+              </span>
+            </button>
+            <div class="group-head">OpenAI</div>
+            <button class="model-item" data-search="gpt-5.2 openai" data-efforts="minimal,low,medium,high" data-effort-label="OpenAI" data-name="GPT-5.2" data-id="gpt-5.2">
+              <span class="check"></span>
+              <span><span class="m-name">GPT-5.2</span><span class="m-id">gpt-5.2 · OpenAI</span></span>
+            </button>
+            <button class="model-item" data-search="gpt-5.2-mini openai" data-efforts="minimal,low,medium,high" data-effort-label="OpenAI" data-name="GPT-5.2 mini" data-id="gpt-5.2-mini">
+              <span class="check"></span>
+              <span><span class="m-name">GPT-5.2 mini</span><span class="m-id">gpt-5.2-mini · OpenAI</span></span>
+            </button>
+            <div class="group-head">Anthropic</div>
+            <button class="model-item" data-search="claude sonnet 4.6 anthropic" data-efforts="off,on" data-effort-label="Anthropic (budget)" data-name="Claude Sonnet 4.6" data-id="claude-sonnet-4.6">
+              <span class="check"></span>
+              <span><span class="m-name">Claude Sonnet 4.6</span><span class="m-id">claude-sonnet-4.6 · Anthropic</span></span>
+            </button>
+            <div class="group-head">z-ai</div>
+            <button class="model-item" data-search="glm-4.6 z-ai demo" data-efforts="off,standard" data-effort-label="z-ai (démo)" data-name="GLM-4.6" data-id="glm-4.6">
+              <span class="check"></span>
+              <span><span class="m-name">GLM-4.6</span><span class="m-id">glm-4.6 · z-ai · moteur de démo</span></span>
+            </button>
+            <div class="empty-msg" id="emptyMsg" hidden>Aucun modèle ne correspond à «&nbsp;<span id="emptyQ"></span>&nbsp;»</div>
+          </div>
+          <div class="count-foot" id="countFoot">6 modèles · 4 fournisseurs — modèles exposés par la gateway Hermes</div>
+          <div class="pop-sep"></div>
+          <div class="picker-foot">
+            <div class="effort-label">
+              <span>Effort de raisonnement</span>
+              <span class="prov" id="effortProv">Échelle : Nous Portal</span>
+            </div>
+            <div class="seg" id="effortSeg"></div>
+            <p class="effort-note" id="effortNote">Envoyé dans <code style="font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);border-radius:4px;padding:0 4px">api_turn_v1.settings</code> — ignoré sans dommage si le fournisseur ne le supporte pas.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Recherche insensible à la casse et aux accents sur nom, id et fournisseur ; ↑↓ + Entrée naviguent, échap ferme. Composant <code style="font-family:ui-monospace,monospace;font-size:11px;background:var(--muted);border-radius:4px;padding:0 4px">cmdk</code> déjà installé.</li>
+      <li data-n="2">Section Favoris alimentée par le réglage <b>hermes.models.favorites</b> — gérée plus tard depuis les paramètres ; masquée si vide, ids disparus ignorés silencieusement.</li>
+      <li data-n="3">Groupes par fournisseur uniquement en mode gateway ; le catalogue Nous Research reste une liste à plat.</li>
+      <li data-n="4">L'échelle d'effort est portée par le modèle (fournie par l'API si dispo, repli générique off·low·medium·high·max) — c'est ta remarque : l'échelle dépend du provider.</li>
+      <li data-n="5">Sélection persistée dans <b>hermes.model</b>, effort dans <b>hermes.reasoning.effort</b> (valeur brute du provider).</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE C ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">C</span>
+      <h2>Jauge de contexte — vue détaillée</h2>
+      <p class="why">Clic sur l'anneau du footer. Décomposition honnête de ce qui part au modèle à chaque tour.</p>
+    </div>
+    <div class="stage" id="stageC">
+      <div class="composer">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1">Peux-tu revoir le plan de tests du module projets ?</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" aria-label="Autorisations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" title="Contexte : ≈ 30.6k / 128k tokens" aria-label="Contexte et tokens">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">24</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="pop ctx-pop">
+          <div class="ctx-top">
+            <div class="ctx-ring">
+              <svg width="42" height="42" viewBox="0 0 42 42">
+                <circle cx="21" cy="21" r="17" fill="none" stroke="var(--muted)" stroke-width="4.5"/>
+                <circle cx="21" cy="21" r="17" fill="none" stroke="var(--hermes)" stroke-width="4.5"
+                  stroke-linecap="round" stroke-dasharray="106.8" stroke-dashoffset="81.2"/>
+              </svg>
+              <span class="ctx-pct">24%</span>
+            </div>
+            <div class="ctx-sum">
+              <div class="big">≈ 30.6k tokens</div>
+              <div class="win">fenêtre estimée : 128k</div>
+            </div>
+            <span class="ctx-est">estimation</span>
+          </div>
+          <div class="ctx-rows">
+            <div class="ctx-row">
+              <span class="lbl">Instructions système</span>
+              <span class="bar"><i style="width:0.7%"></i></span>
+              <span class="val"><b>0.7 %</b><span>850</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Mémoire projet<div class="sub">AGENTS.md · règles</div></span>
+              <span class="bar"><i style="width:0.5%"></i></span>
+              <span class="val"><b>0.5 %</b><span>640</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Historique<div class="sub">18 messages</div></span>
+              <span class="bar"><i style="width:15.9%"></i></span>
+              <span class="val"><b>15.9 %</b><span>20.3k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Pièces jointes<div class="sub">2 images · 1 PDF</div></span>
+              <span class="bar"><i style="width:3.4%"></i></span>
+              <span class="val"><b>3.4 %</b><span>4.4k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Skills<div class="sub">2 actives · xlsx, pdf</div></span>
+              <span class="bar"><i style="width:0.8%"></i></span>
+              <span class="val"><b>0.8 %</b><span>1k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Outils MCP<div class="sub">3 serveurs · 14 outils</div></span>
+              <span class="bar"><i style="width:2%"></i></span>
+              <span class="val"><b>2 %</b><span>2.6k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Brouillon<div class="sub">comptage en direct</div></span>
+              <span class="bar"><i style="width:0.6%"></i></span>
+              <span class="val"><b>0.6 %</b><span>760</span></span>
+            </div>
+          </div>
+          <div class="ctx-actions">
+            <button class="ctx-act" id="compactC">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="m14 10 7-7"/><path d="m3 21 7-7"/></svg>
+              Compacter
+            </button>
+            <button class="ctx-act" id="freshC">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6"/><path d="M9 10h6"/></svg>
+              Nouvelle session
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dialog ctx-dialog" hidden>
+        <div class="dialog-card">
+          <h3><span class="d-ico"></span><span class="d-title"></span></h3>
+          <p class="d-text"></p>
+          <div class="dialog-actions">
+            <button class="btn ghost d-cancel">Annuler</button>
+            <button class="btn amber d-ok"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Anneau 22 px dans le footer : discret → ambre à 50 % → rouge à 80 %. Le pourcentage reste lisible à taille réelle.</li>
+      <li data-n="2">Décomposition exhaustive : instructions système, mémoire projet, historique, pièces jointes, skills actives, outils MCP, brouillon — un poste absent de la session n'affiche pas de ligne (pas de serveur MCP, pas de ligne). Chaque poste donne sa part de fenêtre en <b>%</b> et son poids en tokens ; la somme rejoint l'anneau. Le raisonnement du modèle n'est pas renvoyé dans l'historique : on ne compte que le contenu réel envoyé.</li>
+      <li data-n="3">Fenêtre du modèle : depuis l'API gateway si elle l'expose, sinon 128k par défaut avec le badge « estimation » affiché — jamais de fausse précision.</li>
+      <li data-n="4">Le brouillon se compte en direct pendant la frappe — la jauge du footer grossit avant même l'envoi.</li>
+      <li data-n="5">Compacter et Nouvelle session en pied du popover, disponibles à tout moment — pas seulement au seuil rouge. Chaque action passe par une confirmation explicite ; jamais de troncature silencieuse.</li>
+      <li data-n="6">Visibilité réglable : <b>fork.context.gauge</b> (défaut : affichée).</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE D ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">D</span>
+      <h2>Mode « toutes les autorisations »</h2>
+      <p class="why">Armement explicite, jamais silencieux : confirmation au premier clic, signal permanent tant que le mode est actif.</p>
+    </div>
+    <div class="stage" id="stageD">
+      <div class="composer" id="composerD">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1">Peux-tu revoir le plan de tests du module projets ?</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" id="permBtnD" title="Autorisations" aria-label="Autorisations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+            </button>
+            <button class="gauge-btn" title="Contexte : ≈ 30.6k / 128k tokens" aria-label="Contexte">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">24</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confirmation (affichée au clic) -->
+      <div class="dialog" id="permDialog" hidden>
+        <div class="dialog-card">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            Autoriser toutes les actions ?
+          </h3>
+          <p>Hermes pourra exécuter <b>terminal, fichiers et web sans confirmation</b>.
+          Le mode se réinitialise à la prochaine session.</p>
+          <div class="dialog-actions">
+            <button class="btn ghost" id="permCancel">Annuler</button>
+            <button class="btn amber" id="permOk">Autoriser</button>
+          </div>
+        </div>
+      </div>
+      <div class="armed-banner" id="armedBanner" hidden>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        Mode toutes permissions actif — l'agent exécute sans confirmation
+        <button class="off" id="permOff">Désactiver</button>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Cliquez sur le bouclier pour dérouler la confirmation — la maquette est interactive.</li>
+      <li data-n="2">État armé = bouclier ambre + fine bordure ambre du composer + bandeau : le signal survit au scroll et à l'oubli.</li>
+      <li data-n="3"><b>hermes.permissions.mode</b> = ask | auto, envoyé dans <code style="font-family:ui-monospace,monospace;font-size:11px;background:var(--muted);border-radius:4px;padding:0 4px">api_turn_v1.settings</code> (clé à valider contre la gateway). Reset sur ask à chaque session — la persistance pourra venir plus tard des paramètres.</li>
+      <li data-n="4">En mode démo (pas d'outils) : grisé avec l'info-bulle « Sans objet en mode démo — actif avec une gateway ».</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE E ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">E</span>
+      <h2>Contexte critique — 82 %</h2>
+      <p class="why">Le même popover au seuil rouge : la donnée devient action.</p>
+    </div>
+    <div class="stage" id="stageE">
+      <div class="composer" style="border-color:oklch(0.577 0.245 27.325 / 0.35)">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1">…et n'oublie pas de mettre à jour le README du mini-service.</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" aria-label="Autorisations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" title="Contexte : ≈ 105.2k / 128k tokens" aria-label="Contexte" style="background:var(--red-soft)">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--red)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="9.6"/>
+              </svg>
+              <span class="gauge-pct" style="color:var(--red)">82</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="pop ctx-pop">
+          <div class="ctx-top">
+            <div class="ctx-ring">
+              <svg width="42" height="42" viewBox="0 0 42 42">
+                <circle cx="21" cy="21" r="17" fill="none" stroke="var(--muted)" stroke-width="4.5"/>
+                <circle cx="21" cy="21" r="17" fill="none" stroke="var(--red)" stroke-width="4.5"
+                  stroke-linecap="round" stroke-dasharray="106.8" stroke-dashoffset="19.2"/>
+              </svg>
+              <span class="ctx-pct" style="color:var(--red)">82%</span>
+            </div>
+            <div class="ctx-sum">
+              <div class="big">≈ 105.2k tokens</div>
+              <div class="win">fenêtre estimée : 128k</div>
+            </div>
+            <span class="ctx-est">estimation</span>
+          </div>
+          <div class="ctx-rows">
+            <div class="ctx-row">
+              <span class="lbl">Instructions système</span>
+              <span class="bar"><i style="width:0.7%"></i></span>
+              <span class="val"><b>0.7 %</b><span>850</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Mémoire projet<div class="sub">AGENTS.md · règles</div></span>
+              <span class="bar"><i style="width:0.5%"></i></span>
+              <span class="val"><b>0.5 %</b><span>640</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Historique<div class="sub">54 messages</div></span>
+              <span class="bar"><i style="width:73.4%;background:var(--red)"></i></span>
+              <span class="val"><b>73.4 %</b><span>94k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Pièces jointes<div class="sub">2 images · 1 PDF</div></span>
+              <span class="bar"><i style="width:3.4%"></i></span>
+              <span class="val"><b>3.4 %</b><span>4.4k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Skills<div class="sub">2 actives · xlsx, pdf</div></span>
+              <span class="bar"><i style="width:0.8%"></i></span>
+              <span class="val"><b>0.8 %</b><span>1k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Outils MCP<div class="sub">3 serveurs · 14 outils</div></span>
+              <span class="bar"><i style="width:2%"></i></span>
+              <span class="val"><b>2 %</b><span>2.6k</span></span>
+            </div>
+            <div class="ctx-row">
+              <span class="lbl">Brouillon<div class="sub">comptage en direct</div></span>
+              <span class="bar"><i style="width:1.3%"></i></span>
+              <span class="val"><b>1.3 %</b><span>1.7k</span></span>
+            </div>
+          </div>
+          <div class="ctx-alert">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <span>Contexte presque plein — la qualité peut chuter avant la limite.</span>
+          </div>
+          <div class="ctx-actions">
+            <button class="ctx-act" id="compactE">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="m14 10 7-7"/><path d="m3 21 7-7"/></svg>
+              Compacter
+            </button>
+            <button class="ctx-act" id="freshE">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6"/><path d="M9 10h6"/></svg>
+              Nouvelle session
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dialog ctx-dialog" hidden>
+        <div class="dialog-card">
+          <h3><span class="d-ico"></span><span class="d-title"></span></h3>
+          <p class="d-text"></p>
+          <div class="dialog-actions">
+            <button class="btn ghost d-cancel">Annuler</button>
+            <button class="btn amber d-ok"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Seuils : ambre à 50 %, rouge à 80 % — l'anneau du footer passe rouge avant même d'ouvrir le popover.</li>
+      <li data-n="2">Au seuil rouge, l'alerte ne déclenche rien toute seule : Compacter ou Nouvelle session restent des choix explicites — jamais de troncature silencieuse.</li>
+      <li data-n="3">La compaction résume l'historique (94k tokens ici) et ramène le contexte sous le seuil d'alerte ; la session et le projet conservent tout.</li>
+      <li data-n="4">La bordure du composer reprend le rouge en transparence : signal d'ambiance sans agressivité.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SPÉC ══════════ -->
+  <section class="scene spec">
+    <h2>Clés du registre (déclarées dès le chantier — R7)</h2>
+    <p class="sub">Toutes portée client pour cette v1 ; aucun changement de schéma SQLite, aucune migration.</p>
+    <table>
+      <thead><tr><th>Clé</th><th>Type</th><th>Défaut</th><th>Rôle</th></tr></thead>
+      <tbody>
+        <tr><td><code>hermes.model</code></td><td>string</td><td>—</td><td>Modèle sélectionné (existant)</td></tr>
+        <tr><td><code>hermes.models.favorites</code></td><td>JSON</td><td><code>[]</code></td><td>Ids des favoris, section dédiée du picker</td></tr>
+        <tr><td><code>hermes.reasoning.effort</code></td><td>string</td><td><code>"medium"</code></td><td>Valeur brute de l'échelle du provider</td></tr>
+        <tr><td><code>hermes.permissions.mode</code></td><td>enum</td><td><code>ask</code></td><td>ask | auto — reset à chaque session</td></tr>
+        <tr><td><code>fork.context.gauge</code></td><td>boolean</td><td><code>true</code></td><td>Affichage de la jauge dans le footer</td></tr>
+      </tbody>
+    </table>
+    <p class="files">Fichiers : nouveaux <code>src/lib/tokens.ts</code>, <code>src/components/chat/context-gauge.tsx</code> ·
+    retouchés <code>model-picker.tsx</code> (cmdk), <code>composer.tsx</code> (groupe de droite), <code>use-hermes-chat.ts</code> (effort + permissions),
+    <code>chat-types.ts</code>, <code>settings.ts</code> (registre), <code>demo-engine.ts</code> (thinking), <code>hermes-connector.ts</code> (settings additifs),
+    <code>types.ts</code> (TurnRequest). Aucun ne touche au streaming ; Compacter et Nouvelle session s'appuient sur le moteur de sessions existant (résumé et création), sans changement de schéma.</p>
+  </section>
+
+  <footer class="page-foot">
+    Maquette de travail — non incluse dans le repo · palette officielle Hermes Web (blanc chaud + terracotta) · Geist
+  </footer>
+</div>
+
+<script>
+(function(){
+  // ── Scène B : sélection modèle + échelle par provider ──
+  var sel = document.querySelector('#modelList .model-item.sel');
+  var pillLabel = document.getElementById('pillLabel');
+  var seg = document.getElementById('effortSeg');
+  var effortProv = document.getElementById('effortProv');
+  var currentEffort = 'élevé';
+
+  function renderEffort(item){
+    var efforts = (item.dataset.efforts || '').split(',').filter(Boolean);
+    effortProv.textContent = 'Échelle : ' + (item.dataset.effortLabel || 'générique');
+    seg.innerHTML = '';
+    efforts.forEach(function(e){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = e.charAt(0).toUpperCase() + e.slice(1);
+      if(e === currentEffort) b.className = 'on';
+      b.onclick = function(ev){
+        ev.stopPropagation();
+        currentEffort = e;
+        Array.prototype.forEach.call(seg.children, function(x){ x.className = ''; });
+        b.className = 'on';
+      };
+      seg.appendChild(b);
+    });
+  }
+
+  document.querySelectorAll('#modelList .model-item').forEach(function(item){
+    item.addEventListener('click', function(){
+      document.querySelectorAll('#modelList .model-item').forEach(function(x){
+        x.classList.remove('sel');
+        x.querySelector('.check').innerHTML = '';
+      });
+      item.classList.add('sel');
+      item.querySelector('.check').innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+      pillLabel.textContent = item.dataset.name;
+      renderEffort(item);
+    });
+  });
+  if(sel) renderEffort(sel);
+
+  // ── Scène B : recherche ──
+  var input = document.getElementById('searchInput');
+  var emptyMsg = document.getElementById('emptyMsg');
+  var emptyQ = document.getElementById('emptyQ');
+  var countFoot = document.getElementById('countFoot');
+  function norm(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+  input.addEventListener('input', function(){
+    var q = norm(input.value.trim());
+    var visible = 0, providers = {};
+    document.querySelectorAll('#modelList .model-item').forEach(function(item){
+      var hit = !q || norm(item.dataset.search).indexOf(q) !== -1;
+      item.style.display = hit ? '' : 'none';
+      if(hit){
+        visible++;
+        var p = item.dataset.search.split(' ').pop();
+        providers[p] = true;
+      }
+    });
+    document.querySelectorAll('#modelList .group-head').forEach(function(gh){
+      var next = gh.nextElementSibling, any = false;
+      while(next && !next.classList.contains('group-head')){
+        if(next.classList.contains('model-item') && next.style.display !== 'none') any = true;
+        next = next.nextElementSibling;
+      }
+      gh.style.display = any ? '' : 'none';
+    });
+    if(visible === 0){ emptyQ.textContent = input.value.trim(); emptyMsg.hidden = false; }
+    else emptyMsg.hidden = true;
+    countFoot.textContent = visible + (visible > 1 ? ' modèles' : ' modèle') + ' · ' + Object.keys(providers).length +
+      (Object.keys(providers).length > 1 ? ' fournisseurs' : ' fournisseur') + ' — modèles exposés par la gateway Hermes';
+  });
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){ input.value = ''; input.dispatchEvent(new Event('input')); }
+  });
+
+  // ── Scènes C & E : actions du popover contexte (compaction / nouvelle session) ──
+  var ICON_COMPACT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="m14 10 7-7"/><path d="m3 21 7-7"/></svg>';
+  var ICON_FRESH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6"/><path d="M9 10h6"/></svg>';
+
+  function wireCtxStage(stageId, compactId, freshId, flows){
+    var stage = document.getElementById(stageId);
+    if(!stage) return;
+    var dlg = stage.querySelector('.ctx-dialog');
+    var dIcon = dlg.querySelector('.d-ico');
+    var dTitle = dlg.querySelector('.d-title');
+    var dText = dlg.querySelector('.d-text');
+    var dOk = dlg.querySelector('.d-ok');
+    var dCancel = dlg.querySelector('.d-cancel');
+    var pendingBtn = null, pendingFlow = null;
+
+    function open(flow, btn){
+      pendingFlow = flow; pendingBtn = btn;
+      dIcon.innerHTML = flow.icon;
+      dTitle.textContent = flow.title;
+      dText.textContent = flow.text;
+      dOk.textContent = flow.ok;
+      dlg.hidden = false;
+    }
+    dCancel.addEventListener('click', function(){ dlg.hidden = true; });
+    dOk.addEventListener('click', function(){
+      dlg.hidden = true;
+      if(!pendingBtn || !pendingFlow) return;
+      var btn = pendingBtn, flow = pendingFlow, old = btn.innerHTML;
+      btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' + flow.done;
+      btn.disabled = true;
+      setTimeout(function(){ btn.innerHTML = old; btn.disabled = false; }, 2400);
+      pendingBtn = pendingFlow = null;
+    });
+    stage.querySelector('#' + compactId).addEventListener('click', function(){ open(flows.compact, this); });
+    stage.querySelector('#' + freshId).addEventListener('click', function(){ open(flows.fresh, this); });
+  }
+
+  wireCtxStage('stageC', 'compactC', 'freshC', {
+    compact: { icon: ICON_COMPACT, title: 'Compacter le contexte ?',
+      text: 'Hermes résume l\'historique (18 messages · ≈ 20.3k tokens) en une synthèse conservée en tête de session. La conversation continue, dans la même session.',
+      ok: 'Compacter', done: 'Compaction lancée' },
+    fresh: { icon: ICON_FRESH, title: 'Démarrer une nouvelle session ?',
+      text: 'Le contexte repart à zéro : instructions système, mémoire projet, skills et outils MCP sont rechargés. La conversation actuelle reste dans l\'historique du projet.',
+      ok: 'Nouvelle session', done: 'Session créée' }
+  });
+  wireCtxStage('stageE', 'compactE', 'freshE', {
+    compact: { icon: ICON_COMPACT, title: 'Compacter le contexte ?',
+      text: 'Hermes résume l\'historique (54 messages · ≈ 94k tokens). Le contexte repasse sous le seuil d\'alerte et la session continue.',
+      ok: 'Compacter', done: 'Compaction lancée' },
+    fresh: { icon: ICON_FRESH, title: 'Démarrer une nouvelle session ?',
+      text: 'Le contexte repart à zéro : instructions système, mémoire projet, skills et outils MCP sont rechargés. La conversation actuelle reste dans l\'historique du projet.',
+      ok: 'Nouvelle session', done: 'Session créée' }
+  });
+
+  // ── Scène D : permissions ──
+  var permBtn = document.getElementById('permBtnD');
+  var dialog = document.getElementById('permDialog');
+  var banner = document.getElementById('armedBanner');
+  var composerD = document.getElementById('composerD');
+  permBtn.addEventListener('click', function(){
+    if(permBtn.classList.contains('on')){
+      disarm();
+    } else {
+      dialog.hidden = false;
+    }
+  });
+  function disarm(){
+    permBtn.classList.remove('on');
+    composerD.classList.remove('armed');
+    banner.hidden = true;
+  }
+  document.getElementById('permCancel').addEventListener('click', function(){ dialog.hidden = true; });
+  document.getElementById('permOk').addEventListener('click', function(){
+    dialog.hidden = true;
+    permBtn.classList.add('on');
+    composerD.classList.add('armed');
+    banner.hidden = false;
+  });
+  document.getElementById('permOff').addEventListener('click', disarm);
+})();
+</script>
+</body>
+</html>

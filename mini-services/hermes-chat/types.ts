@@ -32,6 +32,12 @@ export interface ModelOption {
   provider: string;
   description?: string;
   badge?: string;
+  /** Échelle d'effort portée par le modèle (repli générique off·low·medium·high·max). */
+  efforts?: string[];
+  /** Libellé de l'échelle (ex. « Nous Portal », « OpenAI »). */
+  effortLabel?: string;
+  /** Fenêtre de contexte en tokens (absente = 128k estimé). */
+  contextWindow?: number;
 }
 
 export interface ModelsResult {
@@ -149,10 +155,28 @@ export interface SearchHit {
 
 export type GatewayMode = "gateway" | "demo";
 
+/** Réglages additifs envoyés dans api_turn_v1.settings (ignorés sans dommage). */
+export interface TurnSettings {
+  /** Échelle d'effort du fournisseur (off, low, medium, high, max, standard, élevé…). */
+  reasoningEffort?: string;
+  /** ask : confirmation avant chaque action · auto : tout exécuter. */
+  permissionsMode?: "ask" | "auto";
+}
+
+/** État de compaction d'une conversation (résumé conservé en tête de session). */
+export interface CompactInfo {
+  at: string;
+  untilMessageId: string;
+  summaryChars: number;
+  summarizedCount: number;
+}
+
 export interface ServerHello {
   app: string;
   version: string;
   mode: GatewayMode;
   model: string;
   gatewayUrl: string | null;
+  /** Taille des instructions système (estimation honnête de la jauge). */
+  systemPromptChars?: number | null;
 }

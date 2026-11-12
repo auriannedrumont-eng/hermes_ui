@@ -31,7 +31,16 @@ export interface ModelOption {
   provider: string;
   description?: string;
   badge?: string;
+  /** Échelle d'effort portée par le modèle (repli générique off·low·medium·high·max). */
+  efforts?: string[];
+  /** Libellé de l'échelle (ex. « Nous Portal », « OpenAI »). */
+  effortLabel?: string;
+  /** Fenêtre de contexte en tokens (absente = 128k estimé). */
+  contextWindow?: number;
 }
+
+/** Échelle d'effort générique quand le fournisseur n'en expose pas. */
+export const GENERIC_EFFORTS = ["off", "low", "medium", "high", "max"];
 
 export interface ModelsResult {
   models: ModelOption[];
@@ -88,12 +97,29 @@ export interface SearchHit {
 
 export type GatewayMode = "gateway" | "demo";
 
+/** Mode d'autorisation de l'agent (reset sur « ask » à chaque session). */
+export type PermissionsMode = "ask" | "auto";
+
 export interface ServerHello {
   app: string;
   version: string;
   mode: GatewayMode;
   model: string;
   gatewayUrl: string | null;
+  /** Taille des instructions système (estimation honnête de la jauge). */
+  systemPromptChars?: number | null;
+}
+
+/** État de compaction d'une conversation (résumé conservé en tête de session). */
+export interface CompactInfo {
+  /** Date de la compaction (ISO). */
+  at: string;
+  /** Dernier message couvert par le résumé (les suivants partent en clair). */
+  untilMessageId: string;
+  /** Taille du résumé en caractères (comptage de la jauge). */
+  summaryChars: number;
+  /** Nombre de messages résumés. */
+  summarizedCount: number;
 }
 
 // Message en cours de streaming côté assistant

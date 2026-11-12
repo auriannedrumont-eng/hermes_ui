@@ -272,6 +272,17 @@ export default function HermesWebPage() {
             mode={chat.mode}
             selectedModel={chat.selectedModel}
             onSelectModel={chat.setSelectedModel}
+            effort={chat.effort}
+            onEffortChange={chat.setEffort}
+            permissionsMode={chat.permissionsMode}
+            onPermissionsChange={chat.setPermissionsMode}
+            contextBase={chat.contextBase}
+            canCompact={chat.canCompact}
+            compactRunning={chat.compacting}
+            onCompact={chat.compactConversation}
+            onNewSession={() => {
+              void chat.startNewSession();
+            }}
             onSend={(text, attachments) => chat.sendMessage(text, attachments)}
             onStop={chat.stopGeneration}
             onUploadFile={chat.uploadAttachment}

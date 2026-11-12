@@ -36,14 +36,32 @@ function parseModelOptions(data: any): ModelOption[] {
     const id = typeof m === "string" ? m : (m?.id ?? m?.name ?? m?.model);
     if (!id || typeof id !== "string") return;
     if (out.some((x) => x.id === id)) return;
+    if (typeof m === "string") {
+      out.push({ id, label: id, provider: provider ?? "Gateway" });
+      return;
+    }
+    // Échelle d'effort : tableau de crans (off, low…), booléen (budget) ou rien
+    let efforts: string[] | undefined;
+    const rawEfforts = m?.efforts ?? m?.effort_options ?? m?.reasoning_efforts;
+    if (Array.isArray(rawEfforts) && rawEfforts.length > 0) {
+      efforts = rawEfforts.map(String);
+    } else if (rawEfforts === true) {
+      efforts = ["off", "on"];
+      // étiquette « budget » quand le provider expose un simple interrupteur
+      m = { ...m, effortLabel: m?.effortLabel ?? "budget" };
+    }
+    // Fenêtre de contexte si exposée
+    const rawWindow = m?.context_window ?? m?.contextWindow ?? m?.context_length;
+    const contextWindow =
+      typeof rawWindow === "number" && rawWindow > 0 ? rawWindow : undefined;
     out.push({
       id,
-      label: typeof m === "string" ? id : (m?.label ?? m?.display_name ?? id),
-      provider: (typeof m === "string" ? undefined : m?.provider) ?? provider ?? "Gateway",
-      description:
-        typeof m === "string"
-          ? undefined
-          : (m?.description ?? (m?.configured === false ? "Non configuré" : undefined)),
+      label: m?.label ?? m?.display_name ?? id,
+      provider: m?.provider ?? provider ?? "Gateway",
+      description: m?.description ?? (m?.configured === false ? "Non configuré" : undefined),
+      efforts,
+      effortLabel: m?.effortLabel ?? m?.effort_label ?? undefined,
+      contextWindow,
     });
   };
   const providers = data?.providers ?? data?.result?.providers;
@@ -168,6 +186,13 @@ export class HermesConnector {
     return { ...result, model: label };
   }
 
+  /** Synthèse de compaction (moteur intégré, gateway sans état pour ce faire). */
+  async summarize(
+    history: { role: "user" | "assistant"; content: string }[]
+  ): Promise<string> {
+    return this.demo.summarize(history);
+  }
+
   // Protocole de tour Hermes (cf. gateway/session_api_turn.py) :
   //   -> {"text": "...", "api_turn_v1": {"history": [...], "settings": {...},
   //        "attachments": [...]}}
@@ -213,12 +238,25 @@ export class HermesConnector {
         const attachments: Attachment[] | undefined = req.attachments?.length
           ? req.attachments
           : undefined;
+        // Réglages additifs : requested_model + effort + permissions.
+        // L'échelle d'effort et les clés permissions sont portées par le modèle /
+        // la gateway — ignorées sans dommage si non supportées (clés à valider
+        // contre la gateway, cf. chantier « Composer v2 »).
+        const settings: Record<string, unknown> = {
+          ...(req.modelId ? { requested_model: req.modelId } : {}),
+          ...(req.settings?.reasoningEffort
+            ? { reasoning_effort: req.settings.reasoningEffort }
+            : {}),
+          ...(req.settings?.permissionsMode
+            ? { permissions: req.settings.permissionsMode }
+            : {}),
+        };
         ws.send(
           JSON.stringify({
             text: req.content,
             api_turn_v1: {
               history: req.history,
-              settings: req.modelId ? { requested_model: req.modelId } : {},
+              settings,
               ...(attachments ? { attachments } : {}),
             },
           })

@@ -25,6 +25,7 @@ import { Store, type ArtifactRow } from "./store";
 import { HermesConnector } from "./hermes-connector";
 import { modelLabel } from "./models";
 import { transcribeAudioBase64 } from "./asr";
+import { SYSTEM_PROMPT_CHARS } from "./demo-engine";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   deleteAttachmentFiles,
@@ -39,7 +40,7 @@ import {
   toWireArtifact,
 } from "./artifacts";
 import { chromeRenderer } from "./render";
-import type { Artifact, Attachment, ChatMessage, ToolEvent } from "./types";
+import type { Artifact, Attachment, ChatMessage, CompactInfo, ToolEvent, TurnSettings } from "./types";
 
 const PORT = 3003;
 const FILES_PORT = 3004; // service HTTP dédié aux pièces jointes
@@ -349,11 +350,56 @@ function titleFrom(text: string, attachments?: Attachment[]): string {
 function helloPayload() {
   return {
     app: "hermes-web",
-    version: "1.1.0",
+    version: "1.2.0",
     mode: connector.mode,
     model: connector.model,
     gatewayUrl: connector.gatewayUrl,
+    // Taille réelle des instructions système du moteur démo ; la gateway
+    // garde les siennes (le client retombe sur son estimation).
+    systemPromptChars: connector.mode === "demo" ? SYSTEM_PROMPT_CHARS : null,
   };
+}
+
+// ── Compaction : résumé conservé en tête de session ────────────────────
+// Stocké dans la table settings (aucune migration SQLite) sous la clé
+// `compact:<conversationId>` — l'affichage de la conversation reste intact,
+// seul ce qui part au modèle change (résumé + messages postérieurs).
+
+function compactKey(conversationId: string): string {
+  return `compact:${conversationId}`;
+}
+
+function readCompact(conversationId: string): (CompactInfo & { summary: string }) | null {
+  const raw = store.getSetting(compactKey(conversationId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed.summary === "string" &&
+      typeof parsed.untilMessageId === "string" &&
+      typeof parsed.at === "string"
+    ) {
+      return {
+        summary: parsed.summary,
+        at: parsed.at,
+        untilMessageId: parsed.untilMessageId,
+        summaryChars: parsed.summary.length,
+        summarizedCount: typeof parsed.summarizedCount === "number" ? parsed.summarizedCount : 0,
+      };
+    }
+  } catch {
+    /* réglage illisible : ignoré */
+  }
+  return null;
+}
+
+/** Vue « wire » de la compaction pour le client (sans le résumé lui-même). */
+function compactInfoWire(conversationId: string): CompactInfo | null {
+  const c = readCompact(conversationId);
+  if (!c) return null;
+  const { summary: _s, ...info } = c;
+  return info;
 }
 
 io.on("connection", (socket) => {
@@ -485,8 +531,9 @@ io.on("connection", (socket) => {
     if (!id) return;
     const messages = store.getMessages(id);
     attachArtifactCards(id, messages);
-    if (typeof cb === "function") cb({ conversationId: id, messages });
-    else socket.emit("conversations:messages", { conversationId: id, messages });
+    const compact = compactInfoWire(id);
+    if (typeof cb === "function") cb({ conversationId: id, messages, compact });
+    else socket.emit("conversations:messages", { conversationId: id, messages, compact });
   });
 
   // ── Artefacts ─────────────────────────────────────────────────────────
@@ -716,7 +763,12 @@ io.on("connection", (socket) => {
    */
   const runAssistantTurn = async (
     conversationId: string,
-    opts: { content: string; attachments?: Attachment[]; modelId?: string | null }
+    opts: {
+      content: string;
+      attachments?: Attachment[];
+      modelId?: string | null;
+      settings?: TurnSettings;
+    }
   ) => {
     // Un seul tour actif par conversation
     running.get(conversationId)?.abort();
@@ -731,7 +783,9 @@ io.on("connection", (socket) => {
     const messageId = crypto.randomUUID();
     socket.emit("stream:start", { conversationId, messageId, model });
 
-    // Historique : tout ce qui précède le dernier message utilisateur
+    // Historique : tout ce qui précède le dernier message utilisateur.
+    // Si la conversation est compactée, le résumé remplace les messages
+    // couverts ; seuls les messages postérieurs partent en clair.
     const existing = store.getMessages(conversationId);
     let lastUserIdx = -1;
     for (let i = existing.length - 1; i >= 0; i--) {
@@ -740,10 +794,26 @@ io.on("connection", (socket) => {
         break;
       }
     }
-    const history = existing
-      .slice(0, lastUserIdx >= 0 ? lastUserIdx : existing.length)
-      .slice(-MAX_HISTORY)
-      .map((m: ChatMessage) => ({ role: m.role, content: m.content }));
+    const cut = lastUserIdx >= 0 ? lastUserIdx : existing.length;
+    let history: { role: "user" | "assistant"; content: string }[];
+    const compact = readCompact(conversationId);
+    if (compact) {
+      const untilIdx = existing.findIndex((m) => m.id === compact.untilMessageId);
+      const after = existing.slice(untilIdx >= 0 ? untilIdx + 1 : 0, cut);
+      history = [
+        {
+          role: "user" as const,
+          content:
+            `[Résumé des ${compact.summarizedCount} premiers messages de cette conversation — compaction du ${new Date(compact.at).toLocaleString("fr-FR")}]\n\n${compact.summary}`,
+        },
+        ...after.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+      ].slice(-MAX_HISTORY);
+    } else {
+      history = existing
+        .slice(0, cut)
+        .slice(-MAX_HISTORY)
+        .map((m: ChatMessage) => ({ role: m.role, content: m.content }));
+    }
 
     const toolEvents: ToolEvent[] = [];
     let contentAcc = "";
@@ -777,6 +847,7 @@ io.on("connection", (socket) => {
           model,
           modelId: opts.modelId,
           attachments,
+          settings: opts.settings,
         },
         {
           signal: controller.signal,
@@ -884,6 +955,8 @@ io.on("connection", (socket) => {
       content?: string;
       model?: string;
       attachments?: Attachment[];
+      effort?: string;
+      permissionsMode?: "ask" | "auto";
     }) => {
       const conversationId = payload?.conversationId;
       const content = (payload?.content ?? "").trim();
@@ -908,11 +981,15 @@ io.on("connection", (socket) => {
       // Notifie le client (remplace le message optimiste par l'id réel)
       socket.emit("message:appended", { conversationId, message: userMessage });
 
-      // 2. Lance le tour assistant
+      // 2. Lance le tour assistant (réglages additifs du chantier Composer v2)
       await runAssistantTurn(conversationId, {
         content,
         attachments: attachments.length ? attachments : undefined,
         modelId: payload?.model ?? null,
+        settings: {
+          reasoningEffort: payload?.effort || undefined,
+          permissionsMode: payload?.permissionsMode || undefined,
+        },
       });
     }
   );
@@ -921,7 +998,15 @@ io.on("connection", (socket) => {
   // et relance un tour à partir du dernier message utilisateur.
   socket.on(
     "chat:regenerate",
-    async (payload: { conversationId?: string; model?: string }, cb?: (data: unknown) => void) => {
+    async (
+      payload: {
+        conversationId?: string;
+        model?: string;
+        effort?: string;
+        permissionsMode?: "ask" | "auto";
+      },
+      cb?: (data: unknown) => void
+    ) => {
       const conversationId = payload?.conversationId;
       if (!conversationId) return;
       const { lastUser, removedIds, removedAttachments } =
@@ -939,6 +1024,10 @@ io.on("connection", (socket) => {
         content: lastUser.content,
         attachments: lastUser.attachments,
         modelId: payload?.model ?? null,
+        settings: {
+          reasoningEffort: payload?.effort || undefined,
+          permissionsMode: payload?.permissionsMode || undefined,
+        },
       });
     }
   );
@@ -947,7 +1036,14 @@ io.on("connection", (socket) => {
   socket.on(
     "message:edit",
     async (
-      payload: { conversationId?: string; messageId?: string; content?: string; model?: string },
+      payload: {
+        conversationId?: string;
+        messageId?: string;
+        content?: string;
+        model?: string;
+        effort?: string;
+        permissionsMode?: "ask" | "auto";
+      },
       cb?: (data: unknown) => void
     ) => {
       const conversationId = payload?.conversationId;
@@ -974,6 +1070,10 @@ io.on("connection", (socket) => {
         content,
         attachments: result.message.attachments,
         modelId: payload?.model ?? null,
+        settings: {
+          reasoningEffort: payload?.effort || undefined,
+          permissionsMode: payload?.permissionsMode || undefined,
+        },
       });
     }
   );
@@ -1008,6 +1108,60 @@ io.on("connection", (socket) => {
       socket.emit("stream:status", { conversationId: id, messageId: null, status: "Génération interrompue" });
     }
   });
+
+  // ── Compaction du contexte (chantier « Composer v2 ») ─────────────────
+  // Résume l'historique de la conversation et conserve la synthèse en tête
+  // de session : l'affichage reste intact, seul ce qui part au modèle change.
+  // Aucune troncature silencieuse — le client ne déclenche que sur demande
+  // explicite (bouton « Compacter » du popover de contexte).
+  socket.on(
+    "conversation:compact",
+    async (
+      payload: { conversationId?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId) {
+        if (typeof cb === "function") cb({ error: "Paramètres manquants" });
+        return;
+      }
+      if (running.has(conversationId)) {
+        if (typeof cb === "function") cb({ error: "Un tour est en cours — attendez la fin de la génération" });
+        return;
+      }
+      const messages = store.getMessages(conversationId);
+      if (messages.length < 2) {
+        if (typeof cb === "function") cb({ error: "Rien à compacter : la conversation est trop courte" });
+        return;
+      }
+      if (typeof cb === "function") cb({ ok: true, started: true });
+      try {
+        const history = messages.map((m) => ({ role: m.role, content: m.content }));
+        const summary = await connector.summarize(history);
+        const untilMessageId = messages[messages.length - 1].id;
+        store.setSetting(
+          compactKey(conversationId),
+          JSON.stringify({
+            summary,
+            at: new Date().toISOString(),
+            untilMessageId,
+            summarizedCount: messages.length,
+          })
+        );
+        const compact = compactInfoWire(conversationId);
+        io.emit("conversation:compacted", { conversationId, compact });
+      } catch (err) {
+        console.warn(
+          "[hermes-chat] compaction impossible :",
+          err instanceof Error ? err.message : err
+        );
+        socket.emit("stream:error", {
+          conversationId,
+          error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,
+        });
+      }
+    }
+  );
 
   socket.on("disconnect", () => {
     console.log(`[hermes-chat] client déconnecté : ${socket.id}`);
