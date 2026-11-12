@@ -222,23 +222,115 @@ affichées (k + %, seuils ambre 50 % / rouge 80 %).
 
 ### 7.4 En chantier — page de paramètres
 
-- Décisions validées le 2026-11-13 : **Sheet overlay 460px** glissant depuis la droite (le chat
-  reste visible — la conversation reste le chef d'orchestre), contenu = **les deux registres
-  seuls** (§6, aucune section gateway/données en v1), **application immédiate** via un
-  CustomEvent `hermes-ui:settings-changed` émis par `writeClientSetting()` + badge
-  « au rechargement » là où le consommateur lit au montage (seul `fork.projects.sort` en v1),
-  **entrée unique** = engrenage dans la carte de statut de la sidebar (palette et raccourci
-  clavier refusés volontairement en v1).
-- Maquette de validation : **`design/maquette-parametres.html`** (scènes A-E : entrée,
-  section « Agent Hermes », section « Cette interface », bus d'événements et états, mobile ;
-  spec des clés + fichiers en fin de planche) — **en attente de validation avant
-  implémentation**.
+**Décisions validées le 2026-11-13 (v1)** : **Sheet overlay 460px** glissant depuis la droite (le chat
+reste visible — la conversation reste le chef d'orchestre), contenu = **les deux registres
+seuls** (§6), **application immédiate** via un CustomEvent `hermes-ui:settings-changed` émis par
+`writeClientSetting()` + badge « au rechargement » là où le consommateur lit au montage (seul
+`fork.projects.sort` en v1), **entrée unique** = engrenage dans la carte de statut de la sidebar
+(palette et raccourci clavier refusés volontairement en v1).
+
+**Retour utilisatrice + décisions v2 (2026-11-13, deuxième session)** — « globalement le design
+me convient » + demandes intégrées :
+
+- **Tooltips « ? »** : les `description` du registre quittent la ligne (trop d'informations
+  visibles) et deviennent le contenu du « ? » — bouton focusable, survol/focus clavier,
+  tap = popover sur mobile, 2-3 phrases max. La ligne visible = libellé + contrôle.
+- **Carte de statut promue barre de santé** : ses trois états existent déjà dans le code
+  (`Hors ligne` / `Gateway Hermes connectée` / `Mode démo`) ; une fois la gateway branchée, la
+  ligne `HERMES_GATEWAY_URL` cède la place à version du moteur · fournisseur · clé active
+  (cliquable → fournisseurs). Elle garde son double rôle : porte des paramètres + signal
+  honnête « réponses simulées » en démo.
+- **Drill-down « Paramètres moteur »** : la porte (pointillés hermes) vit en bas du sheet, les
+  registres restent la page d'accueil — 460px inchangé, pas d'onglets. Huit catégories :
+  Fournisseurs & clés, Connecteurs, Outils, Skills, MCP, Profils, Fichiers .md, Système &
+  mises à jour. Le contenu de cet étage est **piloté par un schéma découvert**
+  (`settings:schema`) : le moteur déclare sa surface éditable, la page rend ce qu'il déclare ;
+  en mode démo le mini-service simule la surface complète.
+- **Fournisseurs & clés (porte-clés)** : plusieurs clés par fournisseur, l'ordre = priorité ;
+  « Tester » = appel minimal (liste des modèles) **réel dès le mode démo** (exécuté par le
+  mini-service) ; 429/quota → clé marquée *épuisée*, bascule sur la suivante sans couper le
+  tour (réactivation manuelle v1, cooldown automatique plus tard). Tables additives
+  `providers` / `provider_keys`, événements `providers:*`. **Clés jamais en localStorage,
+  jamais renvoyées en clair au navigateur** (masquage type `sk-••••3f7a`, champ à écriture
+  seule) ; chiffrement au repos noté pour plus tard. La catégorie inclut les **services
+  d'API** hébergés (Tavily, Exa) : rien à importer, mêmes porte-clés / test / relai — leurs
+  clés vivent dans les mêmes tables.
+- **Connecteurs = les projets GitHub importés** (redéfinition validée, 3ᵉ session) : outils,
+  skills, serveurs MCP clonés côté moteur — chaque import suit une source (`owner/projet`),
+  un canal (branche ou tag) et un commit exact. Cycle des mises à jour : **Vérifier** (diff
+  local ↔ distant), **Mettre à jour** (rapatrie et relance le composant), **Épingler** (fige
+  le commit, saute les vérifications), retour à la version précédente en un clic. Effet
+  selon le type : outil = prochain tour, skill = rechargement, MCP = redémarrage averti.
+  Tavily et Exa **ne sont pas des connecteurs** (services hébergés à clé → services d'API,
+  ci-dessus) ; la grille d'outils affiche la dépendance (« via Tavily » = service, « via
+  dev-browser » = connecteur importé) et ne s'allume pas si ce qui la sert manque.
+  `chrome-headless-shell` / `ffmpeg` = dépendances de **l'interface** (Système · fork).
+- **Modes d'application** : `apply: "live" | "next-turn" | "reload" | "restart"` remplace
+  `requiresRestart` — seuls *reload* et *restart* portent un badge (les deux premiers sont
+  silencieux). Outils = prochain tour, fichiers .md = prochain tour, skills = rechargement,
+  MCP / mise à jour moteur = redémarrage (sessions averties, jamais de coupure silencieuse).
+  Champ `control` étendu (`keypool`, `list`, `file`, `action`…) + `secret?: boolean`.
+- **Profils** : presets du fork en v1 (modèle + effort + permissions, écrits via le bus
+  client — effet immédiat, zéro dépendance moteur) ; réconciliation avec d'éventuels profils
+  amont plus tard.
+- **Mises à jour** : connecteurs = vérifier / mettre à jour / épingler depuis GitHub (effet
+  selon le type, ci-dessus) ; moteur = amont (vérification/action seulement si la gateway
+  l'expose, sinon « non exposé ») ; interface = recette git §10, pas d'auto-update.
+
+Maquette de validation : **`design/maquette-parametres.html` v2** (scènes A-K : entrée &
+carte promue, registre hermes, registre fork + porte moteur, drill-down, fournisseurs &
+clés + services d'API, connecteurs (imports GitHub & mises à jour), outils & skills, MCP &
+.md, profils & système, bus v2 + états du « ? », mobile ; spec deux étages + taxonomie +
+fichiers + phasage en fin de planche) — **en attente de validation avant implémentation**.
+Phasage : v2.1 = 8 réglages client (plan v1 inchangé, tooltips inclus) · v2.2 = fournisseurs
++ services d'API (porte-clés, test, relai) + connecteurs (imports GitHub : vérifier, mettre
+à jour, épingler — scope serveur réel, fonctionnel en démo) · v2.3 = découverte gateway
+(outils, skills, MCP, .md) · v2.4 = système & mises à jour.
+
+**Retour utilisatrice + décisions v3 (2026-11-13, quatrième session)** — sections séparées,
+maquette interactive :
+
+- **Sections à part entière** : Skills, Outils, MCP, Mémoire, Profils et Système ne sont
+  plus fusionnés (v2 regroupait Outils+Skills, MCP+.md, Profils+Système). L'étage moteur
+  compte **10 catégories** : Modèle & raisonnement (nouveau — défauts moteur), 
+  Fournisseurs & clés, Connecteurs, Outils, Skills, Serveurs MCP, Mémoire (nouveau),
+  Fichiers .md, Profils, Système.
+- **Détails réduits** : les explications vivent uniquement dans les tooltips « ? », aucune
+  note inline ; deux signaux discrets en pied de sheet — « Mode démo » (tooltip : rôle
+  post-gateway) et compteur « N en attente » (modifications moteur pas encore appliquées).
+- **Éditabilité** : chaque skill et chaque fichier .md s'ouvre en **éditeur dans le sheet**
+  (SOUL.md, AGENTS.md, AGENTS.override.md, CLAUDE.md ; MEMORY.md et USER.md côté Mémoire)
+  — Enregistrer → badge d'effet (prochain tour / rechargement).
+- **Outils — modèle ou service associé** : sélecteur directement sur la ligne de l'outil
+  (web → Tavily/Exa/DuckDuckGo ; navigateur → connecteurs importés dev-browser/scrapling ;
+  image_gen → FAL.ai/OpenAI/xAI ; vidéo → xAI/FAL ; vision → modèle vision). Outil coupé =
+  sélecteur désactivé.
+- **Éditeur de profils** : nom, **modèle par défaut**, effort, permissions et
+  **sélection de skills** (puces cochables) ; Appliquer / Dupliquer.
+- **Paramètres activables supplémentaires, ancrés dans la doc amont hermes-agent**
+  (`github.com/NousResearch/hermes-agent` + `hermes-agent.nousresearch.com/docs`,
+  consultés le 2026-11-13) : toolsets réels (browser, web, image_gen, video_gen, vision,
+  tts, x_search, terminal, file, code_execution, memory, skills, session_search, cronjob,
+  delegation, computer_use…) ; **pools d'identifiants natifs du moteur** (stratégies
+  `fill_first`/`round_robin`/`least_used`/`random`, 429 → un essai puis relai, cooldown
+  1 h, 401 → refresh OAuth, `fallback_model` en bout de chaîne) — notre porte-clés
+  s'appuie dessus plutôt que de le réinventer ; mémoire (`memory_enabled`,
+  `user_profile_enabled`, `write_approval`, limites en caractères) ; fichiers de contexte
+  (priorité `.hermes.md` → `AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md`, `SOUL.md`
+  toujours chargé) ; exécution (backend terminal local/docker/ssh, timeout commande,
+  sandbox réseau isolé) ; mises à jour (`pre_update_backup` : snapshot rapide / complète /
+  off).
+- **Maquette v3 = application interactive** : `design/maquette-parametres-v3.html`
+  (16 vues cliquables, 460px, données représentatives — la page **est** le produit, plus
+  une planche à scènes ; la v2 reste archivée pour référence). Captures de contrôle :
+  `download/maquette-parametres-v3/`.
 
 ### 7.5 Plus tard
 
 - **Browsing agent** (étape 6 de la vision artefacts) : chip de statut discrète près du champ
   de saisie (favicon + titre), résultats en citations cliquables repliables
-  « Pages consultées (n) », jamais de panneau dédié. Branché sur le daemon dev-browser.
+  « Pages consultées (n) », jamais de panneau dédié. Branché sur dev-browser (connecteur
+  importé, scène F — ses mises à jour s'y gèrent).
 
 ## 8. Dettes techniques et pièges
 
@@ -270,6 +362,9 @@ affichées (k + %, seuils ambre 50 % / rouge 80 %).
 | 2026-11-13 | **Composer v2 livré** (cf. §7.3) d'après la maquette validée, versionnée au passage dans `design/maquette-composer.html`. 5 erreurs TypeScript introduites par le chantier corrigées avant publication (props `onUploadFile`/`onTranscribe` du composer, `TurnRequest` `string \| null`, `@ts-expect-error` obsolète du démo-engine) ; `bunx tsc --noEmit` ne remonte plus que les 10 erreurs préexistantes hors périmètre (API Bun vues par le tsc racine, outillage du bac à sable). Artefacts de publication régénérés : `publish` passe à 2 commits propres (base + Composer v2), bundle et zip à jour. |
 | 2026-11-13 | **Repo GitHub passé en privé** et publication depuis le bac à sable : `publish` (2 commits propres) poussé sur `main` distant via PAT fine-grained fourni dans le chat — utilisé en helper d'identification **jetable** (jamais écrit dans `.git/config`, `~/.git-credentials` ni aucun fichier ; bac à sable audité après coup). Le PAT étant à expiration illimitée, le régénérer reste conseillé en cas de doute. |
 | 2026-11-13 | **Chantier paramètres démarré** : forme = Sheet overlay 460px depuis la droite (chat visible derrière), contenu = les deux registres seuls (§6), application = immédiate via CustomEvent `hermes-ui:settings-changed` émis par `writeClientSetting()` + badge « au rechargement » (seul `fork.projects.sort`, lu au montage par la sidebar), entrée unique = engrenage de la carte de statut de la sidebar (palette/raccourci refusés en v1). Maquette `design/maquette-parametres.html` produite (scènes A-E + spec des clés/fichiers) — en attente de validation avant implémentation. |
+| 2026-11-13 (2) | **Paramètres v2 — retour utilisatrice intégré** (design globalement validé, puis : tooltips, moins d'infos visibles, carte de statut post-gateway, paramètres moteur complets) : descriptions du registre → tooltips « ? » focusables (tap = popover mobile) ; carte de statut promue barre de santé (3 états, ligne version/fournisseur/clé active une fois la gateway branchée) ; **drill-down « Paramètres moteur »** en bas du sheet (460px inchangé) — 8 catégories dont **Fournisseurs & clés** (porte-clés multi-clés, ordre = priorité, test réel dès la démo, relai sur 429/quota, tables additives `providers`/`provider_keys`, clés jamais en clair côté client) et **Connecteurs** (services à clé : Tavily, Exa — héritent du porte-clés ; daemons locaux : dev-browser, Scrapling — statut/version/ping ; distincts des fournisseurs et des outils) ; `apply` live/next-turn/reload/restart remplace `requiresRestart` (badges seulement pour reload/restart) ; étage moteur piloté par schéma découvert `settings:schema`, simulé en démo. Maquette v2 produite (scènes A-K + spec deux étages + taxonomie + phasage v2.1→v2.4) — en attente de validation. |
+| 2026-11-13 (3) | **Connecteurs redéfinis** (retour utilisatrice) : un connecteur = un **projet GitHub importé** (outil, skill, serveur MCP) — source, canal (branche/tag) et commit exact suivis ; cycle **Vérifier / Mettre à jour / Épingler** + retour arrière (l'historique local garde la version précédente) ; effet selon le type (outil = prochain tour, skill = rechargement, MCP = redémarrage averti). **Tavily et Exa quittent les connecteurs** : services hébergés à clé → **services d'API** au sein de Fournisseurs & clés (porte-clés, test et relai partagés). Maquette v2 corrigée en conséquence : scène E élargie (services d'API avec porte-clés), scène F = gestionnaire d'imports GitHub (formulaire d'import, « Tout vérifier », changelog de commits, épinglage, échec de vérif), grille d'outils / MCP / spec revues ; table additive `connectors` + événements `connectors:check` / `connectors:update`. |
+| 2026-11-13 (4) | **Paramètres v3 — sections séparées + maquette interactive** (retour utilisatrice : sections à part entière pour skills/tools/mcp/mémoire/profil/système, moins de détails, skills et .md éditables, modèle ou service associé par outil, profils avec skills + modèle par défaut, chercher d'autres paramètres activables) : étage moteur à **10 catégories** (ajout Modèle & raisonnement ; Mémoire séparée) ; **éditeurs in-sheet** pour skills et fichiers .md (SOUL/AGENTS/AGENTS.override/CLAUDE + MEMORY/USER) ; sélecteur **modèle/service associé** sur les lignes d'outils ; éditeur de profils avec **sélection de skills** et modèle par défaut ; paramètres activables **ancrés dans la doc amont hermes-agent** (toolsets réels, credential pools natifs — stratégies et cooldowns, réglages mémoire, priorité des fichiers de contexte, `pre_update_backup`, backends terminal) ; pied de sheet = « Mode démo » + compteur « N en attente ». Maquette **interactive** `design/maquette-parametres-v3.html` (16 vues cliquables, QA par captures) remplace la planche v2 comme référence de validation — v2 archivée. |
 
 ## 10. Synchronisation git et passation
 

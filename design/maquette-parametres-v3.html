@@ -1,0 +1,2355 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette v3 — Paramètres · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --amber:oklch(0.72 0.16 70);
+    --amber-soft:oklch(0.72 0.16 70 / 0.12);
+    --red:oklch(0.577 0.245 27.325);
+    --red-soft:oklch(0.577 0.245 27.325 / 0.10);
+    --green:oklch(0.62 0.13 150);
+    --green-soft:oklch(0.62 0.13 150 / 0.12);
+    --radius:0.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    font-size:15px;line-height:1.5;overflow:hidden;
+  }
+
+  /* ═════════ SCÈNE : l'application + le sheet ═════════ */
+  .app{position:fixed;inset:0;display:flex}
+  .ghost{flex:1;min-width:0;display:flex;gap:12px;padding:16px;opacity:.5;
+    filter:grayscale(.3) blur(.3px);transition:opacity .25s,filter .25s;overflow:hidden}
+  .app.closed .ghost{opacity:1;filter:none}
+  .g-side{flex:0 0 248px;background:var(--card);border:1px solid var(--border);border-radius:16px;
+    padding:10px;display:flex;flex-direction:column;gap:10px}
+  .side-top{display:flex;align-items:center;gap:8px;padding:4px 4px 0}
+  .side-top .logo{width:22px;height:22px;border-radius:7px;background:var(--hermes);
+    display:flex;align-items:center;justify-content:center;color:var(--hermes-foreground)}
+  .side-top .name{font-size:13px;font-weight:600}
+  .side-top .plus{margin-left:auto;width:24px;height:24px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card);color:var(--muted-foreground);display:flex;align-items:center;justify-content:center}
+  .side-search{display:flex;align-items:center;gap:7px;height:30px;border:1px solid var(--border);
+    border-radius:9px;background:var(--background);padding:0 9px;color:var(--muted-foreground);font-size:12px}
+  .side-lines{display:flex;flex-direction:column;gap:7px;padding:6px 4px}
+  .side-lines i{display:block;height:8px;border-radius:4px;background:var(--muted)}
+  .side-lines i.w1{width:64%}.side-lines i.w2{width:82%}.side-lines i.w3{width:47%}
+  .side-lines i.w4{width:71%}.side-lines .gap{height:6px}
+  .status-card{margin-top:auto;background:var(--muted);border-radius:12px;padding:10px 12px}
+  .status-line{display:flex;align-items:center;gap:8px;min-width:0}
+  .status-line .dot{flex:none;width:8px;height:8px;border-radius:999px;background:var(--amber)}
+  .status-line .mode{font-size:12.5px;font-weight:500;line-height:1.1;white-space:nowrap}
+  .status-sub{margin-top:6px;font-size:11.5px;line-height:1.45;color:var(--muted-foreground)}
+  .gear-btn{flex:none;margin-left:auto;width:27px;height:27px;border-radius:8px;border:none;
+    background:transparent;color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:background .15s,color .15s;position:relative;z-index:5}
+  .gear-btn:hover{background:var(--card);color:var(--foreground);box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.12)}
+  .g-main{flex:1;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:58px 16px 16px;
+    display:flex;flex-direction:column;gap:10px;min-width:0;position:relative}
+  .g-bubble{width:58%;height:32px;border-radius:12px;background:var(--muted)}
+  .g-bubble.b{align-self:flex-end;background:var(--hermes-soft)}
+  .g-composer{margin-top:auto;height:56px;border-radius:18px;border:1px solid var(--border);
+    background:var(--background)}
+
+  /* ═════════ LE SHEET ═════════ */
+  .sheet{flex:none;width:460px;max-width:100%;background:var(--card);
+    border:1px solid var(--border);border-left:none;border-radius:22px 0 0 22px;
+    display:flex;flex-direction:column;overflow:hidden;
+    box-shadow:-24px 0 70px oklch(0.19 0.004 60 / 0.18);animation:slidein .22s ease-out}
+  @keyframes slidein{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+  .app.closed .sheet{display:none}
+  .sheet-head{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--border)}
+  .sheet-head .gear-badge{flex:none;width:30px;height:30px;border-radius:10px;background:var(--hermes-soft);
+    color:var(--hermes);display:flex;align-items:center;justify-content:center}
+  .sheet-head .tt{min-width:0;flex:1}
+  .sheet-head .tt h2{font-size:15.5px;font-weight:600;letter-spacing:-0.01em}
+  .sheet-head .tt p{font-size:11px;color:var(--muted-foreground);margin-top:1px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .x-btn{margin-left:auto;flex:none;width:30px;height:30px;border-radius:9px;border:none;background:transparent;
+    color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .15s,color .15s}
+  .x-btn:hover{background:var(--muted);color:var(--foreground)}
+  .sheet-body{flex:1;overflow-y:auto;padding:2px 0 10px;overscroll-behavior:contain}
+  .sheet-body::-webkit-scrollbar{width:8px}
+  .sheet-body::-webkit-scrollbar-thumb{background:var(--muted);border-radius:999px}
+  .back-btn{flex:none;display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 9px 0 6px;
+    border:none;border-radius:9px;background:transparent;color:var(--muted-foreground);
+    font:inherit;font-size:12px;font-weight:500;cursor:pointer;transition:background .14s,color .14s;
+    white-space:nowrap}
+  .back-btn:hover{background:var(--muted);color:var(--foreground)}
+  .sheet-head.no-back .back-btn{display:none}
+
+  /* Pied de sheet : état démo + modifications en attente */
+  .sheet-foot{flex:none;display:flex;align-items:center;gap:10px;padding:9px 16px;
+    border-top:1px solid var(--border);background:var(--background)}
+  .foot-state{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted-foreground);min-width:0}
+  .foot-state .dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--amber)}
+  .pend{flex:none;margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+    border-radius:999px;background:var(--hermes-soft);color:var(--hermes);font-size:11px;font-weight:600;
+    cursor:help}
+  .pend[hidden]{display:none}
+
+  /* ═════════ VUES ═════════ */
+  .view{display:none}
+  .view.on{display:block;animation:fade .16s ease-out}
+  @keyframes fade{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:none}}
+
+  /* En-têtes de section dans les vues */
+  .sec{display:flex;align-items:center;gap:9px;padding:15px 16px 7px}
+  .sec .ico{flex:none;width:23px;height:23px;border-radius:8px;background:var(--hermes-soft);color:var(--hermes);
+    display:flex;align-items:center;justify-content:center}
+  .sec .ico.fork{background:var(--green-soft);color:var(--green)}
+  .sec h3{font-size:13px;font-weight:600;letter-spacing:-0.01em}
+  .sec .cnt{flex:none;font-size:10px;font-weight:600;color:var(--muted-foreground);
+    background:var(--muted);border-radius:999px;padding:2px 8px}
+  .subsec{display:flex;align-items:center;gap:8px;padding:12px 16px 4px;font-size:10.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:0.06em;color:var(--muted-foreground)}
+  .subsec::after{content:"";flex:1;height:1px;background:var(--border)}
+
+  /* Ligne de réglage */
+  .row{padding:9px 16px;transition:background .12s}
+  .row:hover{background:oklch(0.955 0.003 75 / 0.55)}
+  .row-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .row-top .lbl{flex:1;min-width:0;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .row.dim{opacity:.55}
+  .row.dim:hover{opacity:1}
+
+  /* Badges application */
+  .bdg{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;
+    padding:2.5px 8px;border-radius:999px;white-space:nowrap}
+  .bdg.reload{background:var(--amber-soft);color:var(--amber)}
+  .bdg.next{background:var(--hermes-soft);color:var(--hermes)}
+  .bdg.restart{background:var(--red-soft);color:var(--red)}
+  .bdg.ok{background:var(--green-soft);color:var(--green)}
+  .bdg.new{background:var(--amber-soft);color:var(--amber)}
+
+  /* Switch */
+  .switch{flex:none;width:38px;height:22px;border-radius:999px;background:var(--muted);
+    border:1px solid var(--border);position:relative;cursor:pointer;transition:background .16s,border-color .16s}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:999px;
+    background:var(--card);box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.25);transition:transform .17s}
+  .switch.on{background:var(--hermes);border-color:var(--hermes)}
+  .switch.on::after{transform:translateX(16px)}
+  .switch:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+
+  /* Segment */
+  .seg{flex:none;display:flex;background:var(--muted);border-radius:9px;padding:2.5px;gap:2px}
+  .seg button{flex:1;border:none;background:transparent;font:inherit;font-size:11px;font-weight:500;
+    color:var(--muted-foreground);padding:5px 9px;border-radius:7px;cursor:pointer;transition:all .12s;
+    white-space:nowrap}
+  .seg button:hover{color:var(--foreground)}
+  .seg button.on{background:var(--card);color:var(--hermes);font-weight:600;
+    box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.12)}
+  .seg button:focus-visible{outline:2px solid var(--hermes);outline-offset:-2px}
+
+  /* Select personnalisé */
+  .sel-wrap{position:relative;flex:none}
+  .sel-btn{display:flex;align-items:center;gap:9px;height:32px;padding:0 11px;max-width:230px;
+    border:1px solid var(--border);border-radius:10px;background:var(--background);font:inherit;
+    font-size:12.5px;font-weight:500;cursor:pointer;transition:border-color .14s,box-shadow .14s}
+  .sel-btn:hover{border-color:var(--hermes)}
+  .sel-btn:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  .sel-btn .chev{color:var(--muted-foreground);flex:none}
+  .sel-btn .sv{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sel-list{position:absolute;top:calc(100% + 7px);right:0;width:252px;background:var(--card);
+    border:1px solid var(--border);border-radius:13px;box-shadow:0 12px 40px oklch(0.19 0.004 60 / 0.16);
+    padding:5px;z-index:60;animation:pop .14s ease-out;max-height:280px;overflow-y:auto}
+  @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .sel-list[hidden]{display:none}
+  .sel-item{display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;border:none;
+    background:transparent;font:inherit;padding:7px 8px;border-radius:9px;cursor:pointer}
+  .sel-item:hover{background:var(--muted)}
+  .sel-item .check{flex:none;width:15px;height:15px;margin-top:2px;display:flex;align-items:center;justify-content:center}
+  .sel-item .m-name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .sel-item .m-id{font-size:10.5px;color:var(--muted-foreground);font-family:ui-monospace,monospace;margin-top:1px}
+  .badge-flag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;
+    padding:1px 7px;border-radius:999px;background:var(--hermes-soft);color:var(--hermes)}
+  .badge-flag.gray{background:var(--muted);color:var(--muted-foreground)}
+  .badge-flag.warn{background:var(--amber-soft);color:var(--amber)}
+
+  /* Slider */
+  .slider-row{flex:none;display:flex;align-items:center;gap:10px;width:196px}
+  .slider-row input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;
+    border-radius:999px;background:var(--muted);outline:none;cursor:pointer}
+  .slider-row input[type=range]:focus-visible{outline:2px solid var(--hermes);outline-offset:3px;border-radius:999px}
+  .slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;
+    border-radius:999px;background:var(--hermes);border:2.5px solid var(--card);
+    box-shadow:0 1px 4px oklch(0.19 0.004 60 / 0.25);cursor:grab}
+  .slider-row input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:999px;
+    background:var(--hermes);border:2.5px solid var(--card);cursor:grab}
+  .slider-val{flex:none;width:38px;text-align:right;font-size:11.5px;font-weight:600;
+    font-variant-numeric:tabular-nums;color:var(--hermes)}
+
+  /* Lecture seule */
+  .ro{flex:none;font-size:11.5px;color:var(--muted-foreground);background:var(--muted);
+    border-radius:8px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px;
+    font-family:ui-monospace,monospace}
+  .ro .okdot{width:6px;height:6px;border-radius:999px;background:var(--green);flex:none}
+
+  /* Champ nombre */
+  .num{flex:none;width:96px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:10px;
+    background:var(--background);font:inherit;font-size:12.5px;font-weight:600;color:var(--foreground);
+    font-variant-numeric:tabular-nums;text-align:right}
+  .num:focus{outline:2px solid var(--hermes);outline-offset:1px;border-color:var(--hermes)}
+
+  /* ═════════ TOOLTIP « ? » ═════════ */
+  .tip{flex:none;position:relative;display:inline-flex;align-items:center;justify-content:center;
+    width:16px;height:16px;border-radius:999px;border:1px solid var(--border);background:var(--card);
+    color:var(--muted-foreground);font-size:10px;font-weight:700;line-height:1;cursor:help;user-select:none;
+    transition:border-color .13s,color .13s;vertical-align:middle}
+  .tip:hover,.tip:focus-visible,.tip.open{border-color:var(--hermes);color:var(--hermes)}
+  .tip:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  .tip-pop{position:absolute;left:50%;bottom:calc(100% + 9px);transform:translateX(-50%) translateY(4px);
+    width:max-content;max-width:250px;background:oklch(0.24 0.01 60);color:oklch(0.97 0.002 80);
+    font-size:11px;font-weight:400;line-height:1.5;text-align:left;padding:8px 11px;border-radius:10px;
+    box-shadow:0 8px 26px oklch(0.19 0.004 60 / 0.35);opacity:0;pointer-events:none;
+    transition:opacity .14s,transform .14s;z-index:70}
+  .tip:hover .tip-pop,.tip:focus-visible .tip-pop,.tip.open .tip-pop{
+    opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .tip-pop::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:5px solid transparent;border-top-color:oklch(0.24 0.01 60)}
+  .tip-below .tip-pop{bottom:auto;top:calc(100% + 9px);transform:translateX(-50%) translateY(-4px)}
+  .tip-below .tip-pop::after{top:auto;bottom:100%;border-top-color:transparent;
+    border-bottom-color:oklch(0.24 0.01 60)}
+  .tip-below:hover .tip-pop,.tip-below:focus-visible .tip-pop,.tip-below.open .tip-pop{
+    transform:translateX(-50%) translateY(0)}
+  .tip-pop code{font-family:ui-monospace,monospace;font-size:10px;background:oklch(0.97 0.002 80 / 0.16);
+    border-radius:4px;padding:0 4px}
+
+  /* ═════════ DRILL-DOWN ═════════ */
+  .drill-entry{display:flex;align-items:center;gap:10px;margin:14px 16px 8px;padding:12px 13px;
+    border:1.5px dashed oklch(0.63 0.17 42 / .5);border-radius:14px;cursor:pointer;
+    transition:background .13s,border-color .13s}
+  .drill-entry:hover{background:var(--hermes-soft);border-color:var(--hermes)}
+  .drill-entry .de-ico{flex:none;width:28px;height:28px;border-radius:10px;background:var(--muted);
+    display:flex;align-items:center;justify-content:center;color:var(--foreground)}
+  .drill-entry .de-tt{flex:1;min-width:0}
+  .drill-entry .de-tt b{font-size:13px;font-weight:600;display:block}
+  .drill-entry .de-tt span{font-size:10.5px;color:var(--muted-foreground);display:block;margin-top:1px;line-height:1.4}
+  .drill-row{display:flex;align-items:center;gap:11px;padding:11px 16px;cursor:pointer;transition:background .12s}
+  .drill-row:hover{background:oklch(0.955 0.003 75 / .55)}
+  .drill-row + .drill-row{border-top:1px solid oklch(0.915 0.004 75 / .6)}
+  .drill-row .d-ico{flex:none;width:27px;height:27px;border-radius:9px;background:var(--muted);
+    display:flex;align-items:center;justify-content:center;color:var(--foreground)}
+  .drill-row .d-tt{flex:1;min-width:0}
+  .drill-row .d-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .drill-row .d-sub{font-size:11px;color:var(--muted-foreground);margin-top:1px}
+  .drill-row .chev-r{flex:none;color:var(--muted-foreground);transition:color .12s}
+  .drill-row:hover .chev-r{color:var(--hermes)}
+  .badge-dot{flex:none;min-width:16px;height:16px;border-radius:999px;background:var(--amber);
+    color:var(--hermes-foreground);font-size:9.5px;font-weight:700;display:inline-flex;
+    align-items:center;justify-content:center;padding:0 4px}
+
+  /* ═════════ FOURNISSEURS & CLÉS ═════════ */
+  .prov{margin:8px 16px;padding:12px 13px;border:1px solid var(--border);border-radius:14px;background:var(--background)}
+  .prov-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;cursor:pointer}
+  .prov-head .p-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .prov-head small{font-weight:400;color:var(--muted-foreground);font-size:11px}
+  .prov-head .p-meta{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .prov-body{margin-top:10px;display:none}
+  .prov.open .prov-body{display:block}
+  .prov.open .prov-head .chev-r{transform:rotate(90deg)}
+  .prov-head .chev-r{transition:transform .16s;flex:none;color:var(--muted-foreground)}
+  .prov-url{margin-top:2px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted-foreground);
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}
+  .keys-head{display:flex;align-items:center;gap:6px;margin:10px 0 6px;font-size:10.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground)}
+  .key-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);
+    border-radius:11px;background:var(--card);margin-bottom:6px;flex-wrap:wrap}
+  .key-row .k-lbl{flex:1;min-width:130px}
+  .key-row .k-name{font-size:12px;font-weight:600}
+  .key-row .k-val{display:block;font-family:ui-monospace,monospace;font-size:10.5px;
+    color:var(--muted-foreground);margin-top:1px}
+  .key-row .k-err{display:block;font-size:10px;color:var(--amber);margin-top:2px}
+  .k-ord{flex:none;width:17px;height:17px;border-radius:999px;background:var(--muted);
+    color:var(--muted-foreground);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .kst{flex:none;font-size:9.5px;font-weight:700;padding:2.5px 8px;border-radius:999px;
+    white-space:nowrap;letter-spacing:.02em}
+  .kst.on{background:var(--green-soft);color:var(--green)}
+  .kst.testing{background:var(--muted);color:var(--muted-foreground)}
+  .kst.dead{background:var(--amber-soft);color:var(--amber)}
+  .kst.bad{background:var(--red-soft);color:var(--red)}
+  .mini-btn{flex:none;display:inline-flex;align-items:center;gap:4px;height:25px;padding:0 10px;
+    border:1px solid var(--border);border-radius:8px;background:var(--card);font:inherit;
+    font-size:11px;font-weight:500;color:var(--foreground);cursor:pointer;white-space:nowrap;
+    transition:border-color .12s,color .12s}
+  .mini-btn:hover{border-color:var(--hermes);color:var(--hermes)}
+  .mini-btn.ghost{border-color:transparent;background:transparent;color:var(--muted-foreground)}
+  .mini-btn.ghost:hover{color:var(--hermes)}
+  .mini-btn.primary{background:var(--hermes);border-color:var(--hermes);color:var(--hermes-foreground)}
+  .mini-btn.primary:hover{color:var(--hermes-foreground);filter:brightness(1.07)}
+  .mini-btn.danger:hover{border-color:var(--red);color:var(--red)}
+  .ord-btn{flex:none;width:22px;height:22px;border:none;border-radius:7px;background:transparent;
+    color:var(--muted-foreground);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .12s,color .12s}
+  .ord-btn:hover{background:var(--muted);color:var(--foreground)}
+  .key-form{margin:8px 0 2px;padding:10px 11px;border:1px dashed var(--border);border-radius:12px;
+    background:var(--card);display:flex;flex-direction:column;gap:7px}
+  .key-form input{height:30px;padding:0 10px;border:1px solid var(--border);border-radius:9px;
+    background:var(--background);font:inherit;font-size:12px;color:var(--foreground);width:100%}
+  .key-form input.mono{font-family:ui-monospace,monospace;font-size:11px}
+  .key-form input:focus{outline:2px solid var(--hermes);outline-offset:1px;border-color:var(--hermes)}
+  .kf-foot{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .kf-note{flex:1;min-width:150px;font-size:10.5px;color:var(--muted-foreground);line-height:1.4}
+  .add-row{display:flex;align-items:center;gap:8px;margin:6px 16px;padding:9px 12px;
+    border:1.5px dashed var(--border);border-radius:12px;color:var(--muted-foreground);
+    font-size:12px;font-weight:500;cursor:pointer;transition:color .13s,border-color .13s;background:transparent;
+    width:calc(100% - 32px)}
+  .add-row:hover{color:var(--hermes);border-color:var(--hermes)}
+  .kpool-note{margin:10px 16px 4px;padding:9px 12px;border-radius:11px;background:var(--muted);
+    font-size:11px;line-height:1.55;color:var(--muted-foreground)}
+  .kpool-note b{color:var(--foreground);font-weight:600}
+
+  /* ═════════ CONNECTEURS ═════════ */
+  .c-src{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted-foreground);
+    margin-top:3px;overflow-wrap:anywhere;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .c-src svg{flex:none;opacity:.75}
+  .prov .c-acts{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .type-chip{display:inline-flex;align-items:center;font-size:9.5px;font-weight:600;padding:1.5px 7px;
+    border-radius:999px;background:var(--muted);color:var(--muted-foreground);white-space:nowrap}
+  .conn-log{margin:9px 0 0;border:1px solid var(--border);border-radius:10px;background:var(--card);
+    padding:8px 11px;font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.95;
+    color:var(--muted-foreground)}
+  .conn-log .hash{color:var(--hermes);font-weight:600}
+  .conn-log .when{float:right;font-size:9.5px;opacity:.85;margin-left:12px}
+  .upd-avail{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;
+    color:var(--amber)}
+
+  /* ═════════ OUTILS ═════════ */
+  .tool-row{display:flex;align-items:center;gap:10px;padding:10px 16px;transition:background .12s;
+    flex-wrap:wrap}
+  .tool-row:hover{background:oklch(0.955 0.003 75 / .55)}
+  .tool-row + .tool-row{border-top:1px solid oklch(0.915 0.004 75 / .5)}
+  .tool-row .t-lbl{flex:1;min-width:150px;font-size:12.5px;font-weight:500;display:flex;
+    align-items:center;gap:7px;flex-wrap:wrap}
+  .tool-row .t-asso{flex:none;display:flex;align-items:center;gap:7px}
+  .tool-row .t-asso .albl{font-size:10px;font-weight:600;color:var(--muted-foreground);
+    text-transform:uppercase;letter-spacing:.04em}
+  .tool-row.off{opacity:.6}
+  .tool-row.off .sel-btn{pointer-events:none;opacity:.5}
+  .via-chip{display:inline-flex;align-items:center;font-size:9.5px;font-weight:600;padding:1.5px 7px;
+    border-radius:999px;background:var(--muted);color:var(--muted-foreground);white-space:nowrap}
+
+  /* ═════════ SKILLS ═════════ */
+  .skill-row{display:flex;align-items:center;gap:10px;padding:10px 16px;transition:background .12s;cursor:pointer}
+  .skill-row:hover{background:oklch(0.955 0.003 75 / .55)}
+  .skill-row + .skill-row{border-top:1px solid oklch(0.915 0.004 75 / .5)}
+  .skill-row .s-tt{flex:1;min-width:0}
+  .skill-row .s-name{font-size:12.5px;font-weight:600;display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
+  .skill-row .s-ver{font-size:10px;color:var(--muted-foreground);font-family:ui-monospace,monospace}
+  .skill-row .s-desc{font-size:11px;color:var(--muted-foreground);margin-top:1px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .edited-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--amber)}
+
+  /* ═════════ ÉDITEURS (.md) ═════════ */
+  .ed-meta{display:flex;align-items:center;gap:8px;padding:10px 16px 6px;flex-wrap:wrap;
+    font-size:11px;color:var(--muted-foreground)}
+  .ed-meta .fname{font-family:ui-monospace,monospace;font-size:11px;color:var(--foreground);
+    background:var(--muted);border-radius:7px;padding:3px 8px;font-weight:600}
+  .ed-area{display:block;width:calc(100% - 32px);margin:4px 16px 8px;height:300px;resize:vertical;
+    border:1px solid var(--border);border-radius:12px;background:var(--background);
+    font-family:ui-monospace,"Geist Mono",monospace;font-size:11.5px;line-height:1.7;
+    padding:12px 14px;color:var(--foreground)}
+  .ed-area:focus{outline:2px solid var(--hermes);outline-offset:1px;border-color:var(--hermes)}
+  .ed-name{width:100%;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:10px;
+    background:var(--background);font:inherit;font-size:13px;font-weight:600;color:var(--foreground)}
+  .ed-name:focus{outline:2px solid var(--hermes);outline-offset:1px;border-color:var(--hermes)}
+  .ed-foot{display:flex;align-items:center;gap:8px;padding:2px 16px 8px;flex-wrap:wrap}
+  .ed-ok{font-size:11px;color:var(--green);display:inline-flex;align-items:center;gap:5px;
+    opacity:0;transition:opacity .2s}
+  .ed-ok.show{opacity:1}
+
+  /* ═════════ MÉMOIRE ═════════ */
+  .mem-row{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .12s;
+    flex-wrap:wrap}
+  .mem-row:hover{background:oklch(0.955 0.003 75 / .55)}
+  .mem-row .m-tt{flex:1;min-width:170px}
+  .mem-row .m-name{font-size:12.5px;font-weight:600;font-family:ui-monospace,monospace;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mem-row .m-sub{font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+  .mem-bar{flex:none;width:110px;height:5px;border-radius:999px;background:var(--muted);overflow:hidden}
+  .mem-bar i{display:block;height:100%;border-radius:999px;background:var(--hermes)}
+  .mem-bar.warn i{background:var(--amber)}
+  .mem-pct{flex:none;width:56px;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;
+    color:var(--muted-foreground)}
+
+  /* ═════════ MCP ═════════ */
+  .mcp-row{margin:6px 16px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;
+    background:var(--background);display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .mcp-tt{flex:1;min-width:200px}
+  .mcp-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mcp-name{font-size:12.5px;font-weight:600}
+  .tr-chip{flex:none;font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;
+    background:var(--muted);color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.05em}
+  .st-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--muted-foreground)}
+  .st-dot.on{background:var(--green)}
+  .mcp-cmd{margin-top:6px;font-family:ui-monospace,monospace;font-size:10.5px;
+    color:var(--muted-foreground);overflow-wrap:anywhere;background:var(--muted);border-radius:7px;padding:5px 8px}
+  .mcp-tools{font-size:10.5px;color:var(--muted-foreground);margin-top:5px}
+
+  /* ═════════ PROFILS ═════════ */
+  .prof-card{display:flex;align-items:center;gap:10px;margin:5px 16px;padding:10px 12px;
+    border:1px solid var(--border);border-radius:12px;background:var(--background);cursor:pointer;
+    transition:border-color .13s,background .13s}
+  .prof-card:hover{border-color:var(--hermes);background:var(--hermes-soft)}
+  .prof-card .pf-star{flex:none;color:var(--amber)}
+  .prof-card .pf-tt{flex:1;min-width:0}
+  .prof-card .pf-name{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .prof-card .pf-sub{font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+  .pf-applied{flex:none;font-size:9.5px;font-weight:700;padding:2.5px 8px;border-radius:999px;
+    background:var(--hermes-soft);color:var(--hermes)}
+  .skill-pick{display:flex;flex-wrap:wrap;gap:7px;padding:6px 16px 10px}
+  .sp-chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
+    border:1px solid var(--border);border-radius:999px;background:var(--background);
+    font-size:12px;font-weight:500;cursor:pointer;transition:all .13s;user-select:none}
+  .sp-chip:hover{border-color:var(--hermes)}
+  .sp-chip.on{background:var(--hermes-soft);border-color:var(--hermes);color:var(--hermes);font-weight:600}
+  .sp-chip .ck{width:13px;height:13px;border-radius:4px;border:1.5px solid var(--border);
+    display:inline-flex;align-items:center;justify-content:center;background:var(--card)}
+  .sp-chip.on .ck{border-color:var(--hermes);background:var(--hermes);color:var(--hermes-foreground)}
+
+  /* ═════════ SYSTÈME ═════════ */
+  .sys-row{display:flex;align-items:center;gap:10px;padding:9px 16px;flex-wrap:wrap}
+  .sys-row .sy-lbl{flex:1;min-width:190px;font-size:12.5px;font-weight:500;
+    display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .upd{margin:8px 16px;padding:11px 13px;border:1px solid oklch(0.72 0.16 70 / .35);
+    background:var(--amber-soft);border-radius:12px}
+  .upd .u-ttl{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .upd .u-sub{font-size:11px;color:var(--muted-foreground);margin-top:4px;line-height:1.5}
+  .upd .u-log{margin-top:8px;padding:8px 10px;background:var(--card);border-radius:9px;
+    font-size:11px;line-height:1.7;color:var(--muted-foreground)}
+  .upd .u-log li{padding:1px 0 1px 16px;position:relative;list-style:none}
+  .upd .u-log li::before{content:"";position:absolute;left:2px;top:8px;width:5px;height:5px;
+    border-radius:999px;background:var(--amber)}
+  .upd.done{border-color:oklch(0.62 0.13 150 / .4);background:var(--green-soft)}
+  .prog-line{margin-top:8px;height:5px;border-radius:999px;background:var(--card);overflow:hidden}
+  .prog-line i{display:block;height:100%;width:0;background:var(--amber);border-radius:999px;
+    transition:width 1.1s ease}
+  .confirm-strip{margin:6px 16px;padding:9px 12px;border-radius:11px;background:var(--red-soft);
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11.5px;color:var(--foreground)}
+  .confirm-strip[hidden]{display:none}
+
+  /* Flash de confirmation générique */
+  .flash{flex:none;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+    color:var(--green);opacity:0;transition:opacity .2s}
+  .flash.show{opacity:1}
+
+  /* Champ nombre + unité */
+  .row-top small{display:inline-flex;align-items:center;min-height:32px;
+    font-size:10.5px;color:var(--muted-foreground)}
+
+  /* Pastille « maquette » — suit le bord du sheet */
+  .pill{position:fixed;top:28px;right:492px;z-index:80;display:inline-flex;align-items:center;gap:7px;
+    height:30px;padding:0 13px;border-radius:999px;background:var(--card);border:1px solid var(--border);
+    box-shadow:0 4px 18px oklch(0.19 0.004 60 / 0.12);font-size:11.5px;font-weight:500;
+    color:var(--muted-foreground);cursor:pointer;transition:color .13s,border-color .13s,right .25s ease,
+    opacity .3s,transform .3s}
+  .app.closed + .pill{right:28px}
+  .pill:hover{color:var(--hermes);border-color:var(--hermes)}
+  .pill .pdot{width:7px;height:7px;border-radius:999px;background:var(--hermes)}
+
+  /* Responsive */
+  @media (max-width:900px){
+    .ghost{display:none}
+    .sheet{width:100%;border-radius:0;border:none}
+    .pill{display:none}
+  }
+</style>
+</head>
+<body>
+<style>.m-body{display:flex;flex-direction:column;min-width:0;flex:1}
+.m-body .m-id{margin-top:1px}</style>
+
+<div class="app" id="app">
+
+  <!-- Application derrière le sheet -->
+  <div class="ghost" aria-hidden="true">
+    <div class="g-side">
+      <div class="side-top">
+        <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+        <span class="name">Hermes Web</span>
+        <span class="plus"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="side-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> Rechercher</div>
+      <div class="side-lines">
+        <i class="w1"></i><i class="w2"></i><i class="gap"></i><i class="w3"></i><i class="w4"></i><i class="gap"></i><i class="w1"></i><i class="w3"></i>
+      </div>
+      <div class="status-card">
+        <div class="status-line">
+          <span class="dot"></span>
+          <span class="mode">Mode démo</span>
+          <button class="gear-btn" id="gearBtn" title="Paramètres" aria-label="Ouvrir les paramètres">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+        <div class="status-sub">réponses simulées — moteur non exposé</div>
+      </div>
+    </div>
+    <div class="g-main">
+      <div class="g-bubble"></div><div class="g-bubble b"></div>
+      <div class="g-bubble" style="width:44%"></div><div class="g-bubble b" style="width:36%"></div>
+      <div class="g-bubble" style="width:52%"></div>
+      <div class="g-composer"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════ LE SHEET ════════════════ -->
+  <div class="sheet" role="dialog" aria-label="Paramètres">
+
+    <div class="sheet-head" id="sheetHead">
+      <button class="back-btn" id="backBtn" aria-label="Retour">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        <span id="backLbl">Paramètres</span>
+      </button>
+      <div class="tt">
+        <h2 id="viewTitle">Paramètres</h2>
+        <p id="viewSub">cette interface · effet immédiat</p>
+      </div>
+      <button class="x-btn" id="closeBtn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="sheet-body" id="sheetBody">
+
+      <!-- ══════ VUE : ACCUEIL ══════ -->
+      <section class="view on" id="v-accueil" data-title="Paramètres" data-sub="cette interface · effet immédiat" data-noback>
+        <div class="sec">
+          <span class="ico fork"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h3l2-6 2 6h3"/></svg></span>
+          <h3>Cette interface</h3>
+          <span class="cnt">7</span>
+          <span class="tip tip-below">?<span class="tip-pop">Réglages du navigateur, stockés localement (<code>hermes-ui:</code>) — appliqués dès le clic, sans redémarrage.</span></span>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Modèle du chat</span>
+            <div class="sel-wrap" data-sel data-scope="client">
+              <button class="sel-btn" type="button"><span class="sv">GLM-4.6</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="GLM-4.6"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">GLM-4.6</span><span class="m-id">z.ai</span></span></button>
+                <button class="sel-item" type="button" data-v="GLM-4.5-Air"><span class="check"></span><span class="m-body"><span class="m-name">GLM-4.5-Air</span><span class="m-id">z.ai</span></span></button>
+                <button class="sel-item" type="button" data-v="Claude Opus 4.7"><span class="check"></span><span class="m-body"><span class="m-name">Claude Opus 4.7</span><span class="m-id">Anthropic</span></span></button>
+                <button class="sel-item" type="button" data-v="Gemini 3 Flash"><span class="check"></span><span class="m-body"><span class="m-name">Gemini 3 Flash</span><span class="m-id">Google</span></span></button>
+                <button class="sel-item" type="button" data-v="qwen3.5:27b"><span class="check"></span><span class="m-body"><span class="m-name">qwen3.5:27b</span><span class="m-id">Ollama · local</span></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Effort de raisonnement</span>
+            <div class="seg" data-scope="client">
+              <button type="button">Léger</button><button type="button" class="on">Moyen</button><button type="button">Élevé</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Permissions d'actions
+              <span class="tip">?<span class="tip-pop"><b>Demander</b> : chaque commande sensible demande confirmation. <b>Auto</b> : approbation automatique — remis sur «&nbsp;Demander&nbsp;» à chaque session.</span></span>
+            </span>
+            <div class="seg" data-scope="client">
+              <button type="button" class="on">Demander</button><button type="button">Auto</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Largeur de la sidebar</span>
+            <div class="slider-row"><input type="range" min="12" max="30" value="19" id="wSlider" data-scope="client"><span class="slider-val" id="wVal">19 %</span></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Tri des projets</span>
+            <div class="sel-wrap" data-sel data-scope="client">
+              <button class="sel-btn" type="button"><span class="sv">Récents</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="Récents"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Récents</span></span></button>
+                <button class="sel-item" type="button" data-v="Nom"><span class="check"></span><span class="m-body"><span class="m-name">Nom</span></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Dossiers de projet repliés</span>
+            <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Dossiers repliés" data-scope="client"></button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Jauge de contexte
+              <span class="tip">?<span class="tip-pop">L'anneau dans le composer — usage de la fenêtre (k et %).</span></span>
+            </span>
+            <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Jauge de contexte" data-scope="client"></button>
+          </div>
+        </div>
+
+        <div class="drill-entry" data-goto="v-moteur" role="button" tabindex="0">
+          <span class="de-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span>
+          <span class="de-tt">
+            <b>Paramètres moteur</b>
+            <span>gérés par la gateway · 10 sections</span>
+          </span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : MOTEUR (catégories) ══════ -->
+      <section class="view" id="v-moteur" data-title="Paramètres moteur" data-sub="10 sections · appliquées par la gateway" data-back="Paramètres">
+        <div class="drill-row" data-goto="v-modele" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Modèle &amp; raisonnement</span>
+            <span class="d-sub">glm-4.6 · fenêtre 128 000 · secours glm-4.5-air</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-fournisseurs" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.777 5.5 5.5 0 0 1 7.777-7.777Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Fournisseurs &amp; clés
+              <span class="tip">?<span class="tip-pop">Modèles de langage et services d'API (Tavily, Exa…). Plusieurs clés par fournisseur&nbsp;: la relève prend le relai si l'une s'épuise.</span></span>
+            </span>
+            <span class="d-sub">4 fournisseurs · 4 services · 11 clés</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-connecteurs" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Connecteurs
+              <span class="tip">?<span class="tip-pop">Les projets GitHub importés dans le moteur — outils, skills, serveurs MCP. Version installée, mises à jour, épinglage.</span></span>
+            </span>
+            <span class="d-sub">3 importés · 1 mise à jour disponible</span>
+          </span>
+          <span class="badge-dot">1</span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-outils" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Outils</span>
+            <span class="d-sub">15 actifs sur 22 · web, navigateur, images…</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-skills" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Skills</span>
+            <span class="d-sub">6 installés · 2 créés par l'agent · tous éditables</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-mcp" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Serveurs MCP</span>
+            <span class="d-sub">3 serveurs · 2 connectés · 19 outils</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-memoire" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Mémoire</span>
+            <span class="d-sub">MEMORY.md · 68 % · USER.md · 31 %</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-fichiers" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Fichiers .md
+              <span class="tip">?<span class="tip-pop">Fichiers de contexte lus par le moteur&nbsp;: <code>SOUL.md</code> (personnalité), <code>AGENTS.md</code> (conventions du projet)… tous éditables ici.</span></span>
+            </span>
+            <span class="d-sub">SOUL.md · AGENTS.md · 2 autres</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-profils" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Profils</span>
+            <span class="d-sub">3 profils · « Défaut » appliqué</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="drill-row" data-goto="v-systeme" role="button" tabindex="0">
+          <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>
+          <span class="d-tt">
+            <span class="d-name">Système</span>
+            <span class="d-sub">moteur v2.4.1 · interface à jour</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : MODÈLE & RAISONNEMENT ══════ -->
+      <section class="view" id="v-modele" data-title="Modèle &amp; raisonnement" data-sub="moteur · défauts hors profil" data-back="Paramètres moteur">
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Modèle par défaut
+              <span class="tip">?<span class="tip-pop"><code>model.default</code> — utilisé quand aucun profil n'impose le sien.</span></span>
+            </span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button"><span class="sv">glm-4.6</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="glm-4.6"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.6</span><span class="m-id">z.ai</span></span></button>
+                <button class="sel-item" type="button" data-v="glm-4.5-air"><span class="check"></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai</span></span></button>
+                <button class="sel-item" type="button" data-v="claude-opus-4.7"><span class="check"></span><span class="m-body"><span class="m-name">claude-opus-4.7</span><span class="m-id">Anthropic</span></span></button>
+                <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google</span></span></button>
+                <button class="sel-item" type="button" data-v="qwen3.5:27b"><span class="check"></span><span class="m-body"><span class="m-name">qwen3.5:27b</span><span class="m-id">Ollama · local</span></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Fenêtre de contexte
+              <span class="tip">?<span class="tip-pop"><code>context_length</code> — doit correspondre à la fenêtre réelle du modèle, sinon la compaction déclenche trop tôt (ou trop tard).</span></span>
+            </span>
+            <input class="num" type="number" value="128000" step="1000" min="6000" data-scope="moteur" aria-label="Fenêtre de contexte en jetons">
+            <small style="font-size:10.5px;color:var(--muted-foreground)">jetons</small>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Modèle de secours
+              <span class="tip">?<span class="tip-pop"><code>fallback</code> — activé quand toutes les clés du fournisseur principal échouent.</span></span>
+            </span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button"><span class="sv">glm-4.5-air</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item" type="button" data-v="aucun"><span class="check"></span><span class="m-body"><span class="m-name">Aucun</span></span></button>
+                <button class="sel-item on" type="button" data-v="glm-4.5-air"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai</span></span></button>
+                <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google</span></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Effort de raisonnement</span>
+            <div class="seg" data-scope="moteur">
+              <button type="button">Léger</button><button type="button" class="on">Moyen</button><button type="button">Élevé</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Raisonnement étendu
+              <span class="tip">?<span class="tip-pop">Affiche la chaîne de raisonnement du modèle avant chaque réponse.</span></span>
+            </span>
+            <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Raisonnement étendu" data-scope="moteur"></button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Auto-compaction
+              <span class="tip">?<span class="tip-pop">Quand la conversation approche de la fenêtre, le moteur la résume et continue — jamais de troncature silencieuse.</span></span>
+            </span>
+            <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Auto-compaction" data-scope="moteur"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : FOURNISSEURS & CLÉS ══════ -->
+      <section class="view" id="v-fournisseurs" data-title="Fournisseurs &amp; clés" data-sub="moteur · clés jamais dans le navigateur" data-back="Paramètres moteur">
+        <div class="subsec">Modèles de langage</div>
+
+        <div class="prov open">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="true">
+            <span class="p-name">GLM <small>z.ai</small></span>
+            <span class="p-meta"><span class="kst on">1 clé active</span><span class="kst dead">1 épuisée</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="prov-url"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>https://api.z.ai/v1</div>
+            <div class="row" style="padding:8px 0 0">
+              <div class="row-top">
+                <span class="lbl" style="font-size:12.5px">Stratégie de relai
+                  <span class="tip">?<span class="tip-pop">Ordre d'utilisation des clés du pool&nbsp;: première saine, tournante, la moins utilisée, ou aléatoire.</span></span>
+                </span>
+                <div class="sel-wrap" data-sel data-scope="moteur">
+                  <button class="sel-btn" type="button" style="height:28px"><span class="sv">Première saine</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="Première saine"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Première saine</span><span class="m-id">fill_first</span></span></button>
+                    <button class="sel-item" type="button" data-v="Tournante"><span class="check"></span><span class="m-body"><span class="m-name">Tournante</span><span class="m-id">round_robin</span></span></button>
+                    <button class="sel-item" type="button" data-v="La moins utilisée"><span class="check"></span><span class="m-body"><span class="m-name">La moins utilisée</span><span class="m-id">least_used</span></span></button>
+                    <button class="sel-item" type="button" data-v="Aléatoire"><span class="check"></span><span class="m-body"><span class="m-name">Aléatoire</span><span class="m-id">random</span></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="keys-head">Clés — l'ordre = priorité
+              <span class="tip">?<span class="tip-pop">Au 429 ou 402, la clé suivante prend le relai sans couper le tour. Cooldown d'une heure avant remise en service.</span></span>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Perso</span><span class="k-val">sk-••••••••7f3a</span></span>
+              <span class="kst on">active</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+              <button class="ord-btn" type="button" title="Descendre" aria-label="Descendre"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">2</span>
+              <span class="k-lbl"><span class="k-name">Secours</span><span class="k-val">sk-••••••••c21b</span></span>
+              <span class="kst testing">à tester</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+              <button class="ord-btn" type="button" title="Monter" aria-label="Monter"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
+              <button class="ord-btn" type="button" title="Supprimer" aria-label="Supprimer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">3</span>
+              <span class="k-lbl"><span class="k-name">Compte pro</span><span class="k-val">sk-••••••••9d04</span>
+                <span class="k-err">429 — quota atteint · relai automatique depuis le 12/11</span></span>
+              <span class="kst dead">épuisée</span>
+              <button class="mini-btn" type="button" data-test="fail">Tester</button>
+              <button class="ord-btn" type="button" title="Monter" aria-label="Monter"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
+              <button class="ord-btn" type="button" title="Supprimer" aria-label="Supprimer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé (ex. « Compte perso »)">
+              <input type="text" class="mono" placeholder="sk-… (clé API — jamais renvoyée en clair)">
+              <div class="kf-foot">
+                <span class="kf-note">Ajoutée comme priorité suivante — statut « à tester ».</span>
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="false">
+            <span class="p-name">OpenRouter <small>agrégateur · 300+ modèles</small></span>
+            <span class="p-meta"><span class="kst on">1 clé active</span><span class="kst testing">1 à tester</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="prov-url"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>https://openrouter.ai/api/v1</div>
+            <div class="keys-head">Clés — l'ordre = priorité</div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Principale</span><span class="k-val">sk-or-••••44e1</span></span>
+              <span class="kst on">active</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">2</span>
+              <span class="k-lbl"><span class="k-name">Backup</span><span class="k-val">sk-or-••••90bc</span></span>
+              <span class="kst testing">à tester</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé">
+              <input type="text" class="mono" placeholder="sk-or-…">
+              <div class="kf-foot">
+                <span class="kf-note">Ajoutée comme priorité suivante.</span>
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="false">
+            <span class="p-name">Anthropic <small>Claude</small></span>
+            <span class="p-meta"><span class="kst bad">1 clé invalide</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="prov-url"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>https://api.anthropic.com</div>
+            <div class="keys-head">Clés</div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Ancienne clé</span><span class="k-val">sk-ant-••••02d7</span>
+                <span class="k-err">401 — clé expirée, à remplacer</span></span>
+              <span class="kst bad">invalide</span>
+              <button class="mini-btn" type="button" data-test="fail">Tester</button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé">
+              <input type="text" class="mono" placeholder="sk-ant-…">
+              <div class="kf-foot">
+                <span class="kf-note">Remplace la clé invalide en priorité 1.</span>
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" style="cursor:default">
+            <span class="p-name">Ollama <small>local</small></span>
+            <span class="p-meta"><span class="ro"><span class="okdot"></span>localhost:11434 — sans clé</span></span>
+          </div>
+        </div>
+
+        <div class="subsec">Services d'API</div>
+
+        <div class="prov open">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="true">
+            <span class="p-name">Tavily <small>recherche web</small></span>
+            <span class="p-meta"><span class="kst on">1 clé active</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="keys-head">Clés</div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Principale</span><span class="k-val">tvly-••••••••e9c2</span></span>
+              <span class="kst on">active</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé">
+              <input type="text" class="mono" placeholder="tvly-…">
+              <div class="kf-foot">
+                <span class="kf-note">Sert l'outil « Recherche web ».</span>
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="false">
+            <span class="p-name">Exa <small>recherche web</small></span>
+            <span class="p-meta"><span class="kst testing">1 à tester</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="keys-head">Clés</div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Essai</span><span class="k-val">exa-••••••••6b34</span></span>
+              <span class="kst testing">à tester</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé">
+              <input type="text" class="mono" placeholder="exa-…">
+              <div class="kf-foot">
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="false">
+            <span class="p-name">FAL.ai <small>génération d'images</small></span>
+            <span class="p-meta"><span class="kst on">1 clé active</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="keys-head">Clés</div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Principale</span><span class="k-val">fal_••••••••11f8</span></span>
+              <span class="kst on">active</span>
+              <button class="mini-btn" type="button" data-test="ok">Tester</button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé">
+              <input type="text" class="mono" placeholder="fal_…">
+              <div class="kf-foot">
+                <span class="kf-note">Sert l'outil « Génération d'images ».</span>
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="false">
+            <span class="p-name">xAI <small>vidéo · recherche X</small></span>
+            <span class="p-meta"><span class="kst dead">1 épuisée</span></span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+          <div class="prov-body">
+            <div class="keys-head">Clés</div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl"><span class="k-name">Grok Imagine</span><span class="k-val">xai-••••••••77aa</span>
+                <span class="k-err">402 — crédit épuisé</span></span>
+              <span class="kst dead">épuisée</span>
+              <button class="mini-btn" type="button" data-test="fail">Tester</button>
+            </div>
+            <form class="key-form" data-keyform>
+              <input type="text" placeholder="Libellé">
+              <input type="text" class="mono" placeholder="xai-…">
+              <div class="kf-foot">
+                <button class="mini-btn primary" type="submit">Ajouter la clé</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <button class="add-row" type="button" data-addprov>+ Ajouter un fournisseur</button>
+
+        <div class="kpool-note"><b>Relai automatique</b> — au 429 ou 402, la clé suivante prend le relai sans couper le tour&nbsp;;
+        remise en service après 1&nbsp;h. Les clés sont stockées par le moteur, jamais dans le navigateur.</div>
+      </section>
+
+      <!-- ══════ VUE : CONNECTEURS ══════ -->
+      <section class="view" id="v-connecteurs" data-title="Connecteurs" data-sub="projets GitHub importés dans le moteur" data-back="Paramètres moteur">
+        <div class="prov">
+          <div class="prov-head" style="cursor:default">
+            <span class="p-name">dev-browser <small>v0.9.1</small></span>
+            <span class="p-meta"><span class="upd-avail">v0.9.2 disponible</span></span>
+          </div>
+          <div class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>hermes-community/dev-browser · branche main</div>
+          <div class="c-acts">
+            <span class="type-chip">outil</span>
+            <span class="type-chip">2 skills</span>
+            <span style="flex:1"></span>
+            <button class="mini-btn" type="button" data-check>Vérifier</button>
+            <button class="mini-btn primary" type="button" data-update="dev-browser" data-new="v0.9.2">Mettre à jour</button>
+            <button class="mini-btn ghost" type="button" data-pin>Épingler</button>
+          </div>
+          <div class="conn-log">
+            <span class="when">il y a 3 j</span>
+            <span class="hash">e7a1f42</span> fix: reconnexion CDP après veille
+            <span class="when">il y a 6 j</span>
+            <span class="hash">b3c08dd</span> feat: mode headless --remote
+            <span class="more">… 4 autres commits — <a href="#" onclick="return false" style="color:var(--hermes)">journal complet</a></span>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" style="cursor:default">
+            <span class="p-name">scrapling <small>v1.2.4</small></span>
+            <span class="p-meta"><span class="kst on">à jour</span></span>
+          </div>
+          <div class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>D4Vinci/Scrapling · tag v1.2.4</div>
+          <div class="c-acts">
+            <span class="type-chip">outil</span>
+            <span style="flex:1"></span>
+            <button class="mini-btn" type="button" data-check>Vérifier</button>
+            <button class="mini-btn ghost" type="button" data-pin>Épingler</button>
+          </div>
+        </div>
+
+        <div class="prov">
+          <div class="prov-head" style="cursor:default">
+            <span class="p-name">browser-tools-mcp <small>@a3f9c2e</small></span>
+            <span class="p-meta"><span class="type-chip" style="background:var(--amber-soft);color:var(--amber)">épinglé</span></span>
+          </div>
+          <div class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>AgentDesk/browser-tools-mcp · commit figé</div>
+          <div class="c-acts">
+            <span class="type-chip">serveur MCP · 3 outils</span>
+            <span style="flex:1"></span>
+            <button class="mini-btn" type="button" data-check>Vérifier</button>
+            <button class="mini-btn ghost" type="button" data-unpin>Retirer l'épingle</button>
+            <button class="mini-btn ghost" type="button" data-rollback title="Revenir au commit précédent">⟲ Retour arrière</button>
+          </div>
+        </div>
+
+        <form class="key-form" style="margin-top:12px" data-importform>
+          <input type="text" placeholder="owner/projet — dépôt GitHub à importer">
+          <div class="kf-foot">
+            <span class="kf-note">Le moteur clonera le dépôt et détectera ce qu'il apporte (outils, skills, MCP).</span>
+            <button class="mini-btn primary" type="submit">Importer</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ══════ VUE : OUTILS ══════ -->
+      <section class="view" id="v-outils" data-title="Outils" data-sub="toolsets du moteur · effet au tour suivant" data-back="Paramètres moteur">
+        <div class="subsec">Recherche &amp; navigation</div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Recherche &amp; extraction web <span class="via-chip">web</span></span>
+          <span class="t-asso">
+            <span class="albl">Service</span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button" style="height:28px"><span class="sv">Tavily</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="Tavily"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Tavily</span><span class="m-id">clé active</span></span></button>
+                <button class="sel-item" type="button" data-v="Exa"><span class="check"></span><span class="m-body"><span class="m-name">Exa</span><span class="m-id">à tester</span></span></button>
+                <button class="sel-item" type="button" data-v="DuckDuckGo"><span class="check"></span><span class="m-body"><span class="m-name">DuckDuckGo</span><span class="m-id">sans clé · gratuit</span></span></button>
+              </div>
+            </div>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Recherche et extraction web" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Navigateur <span class="via-chip">browser</span></span>
+          <span class="t-asso">
+            <span class="albl">Outil</span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button" style="height:28px"><span class="sv">dev-browser v0.9.1</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="dev-browser v0.9.1"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">dev-browser v0.9.1</span><span class="m-id">connecteur importé</span></span></button>
+                <button class="sel-item" type="button" data-v="scrapling v1.2.4"><span class="check"></span><span class="m-body"><span class="m-name">scrapling v1.2.4</span><span class="m-id">connecteur importé</span></span></button>
+                <button class="sel-item" type="button" data-v="CDP intégré"><span class="check"></span><span class="m-body"><span class="m-name">CDP intégré</span><span class="m-id">moteur · Chrome local</span></span></button>
+              </div>
+            </div>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Navigateur" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row off" data-tool>
+          <span class="t-lbl">Recherche X
+            <span class="tip">?<span class="tip-pop">Publications X via xAI — désactivé par défaut, nécessite une clé xAI.</span></span>
+            <span class="via-chip">x_search</span>
+          </span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Recherche X" data-scope="moteur"></button>
+        </div>
+
+        <div class="subsec">Génération &amp; médias</div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Génération d'images <span class="via-chip">image_gen</span></span>
+          <span class="t-asso">
+            <span class="albl">Service</span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button" style="height:28px"><span class="sv">FAL.ai</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="FAL.ai"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">FAL.ai</span><span class="m-id">clé active</span></span></button>
+                <button class="sel-item" type="button" data-v="OpenAI"><span class="check"></span><span class="m-body"><span class="m-name">OpenAI</span><span class="m-id">opt-in</span></span></button>
+                <button class="sel-item" type="button" data-v="xAI"><span class="check"></span><span class="m-body"><span class="m-name">xAI</span><span class="m-id">clé épuisée</span></span></button>
+              </div>
+            </div>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Génération d'images" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Génération vidéo <span class="via-chip">video_gen</span></span>
+          <span class="t-asso">
+            <span class="albl">Service</span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button" style="height:28px"><span class="sv">FAL.ai · Veo 3.1</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="FAL.ai · Veo 3.1"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">FAL.ai · Veo 3.1</span><span class="m-id">clé active</span></span></button>
+                <button class="sel-item" type="button" data-v="xAI · Grok Imagine"><span class="check"></span><span class="m-body"><span class="m-name">xAI · Grok Imagine</span><span class="m-id">clé épuisée</span></span></button>
+                <button class="sel-item" type="button" data-v="FAL.ai · Kling 3.0"><span class="check"></span><span class="m-body"><span class="m-name">FAL.ai · Kling 3.0</span><span class="m-id">clé active</span></span></button>
+              </div>
+            </div>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Génération vidéo" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Analyse d'images <span class="via-chip">vision</span></span>
+          <span class="t-asso">
+            <span class="albl">Modèle</span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button" style="height:28px"><span class="sv">glm-4.6v</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="glm-4.6v"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.6v</span><span class="m-id">z.ai · vision</span></span></button>
+                <button class="sel-item" type="button" data-v="claude-opus-4.7"><span class="check"></span><span class="m-body"><span class="m-name">claude-opus-4.7</span><span class="m-id">Anthropic · vision</span></span></button>
+                <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google · vision</span></span></button>
+              </div>
+            </div>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Analyse d'images" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row off" data-tool>
+          <span class="t-lbl">Analyse vidéo
+            <span class="tip">?<span class="tip-pop">Comprend des vidéos jointes — opt-in, pas dans le jeu par défaut.</span></span>
+            <span class="via-chip">video</span>
+          </span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Analyse vidéo" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Synthèse vocale <span class="via-chip">tts</span></span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Synthèse vocale" data-scope="moteur"></button>
+        </div>
+
+        <div class="subsec">Exécution &amp; fichiers</div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Terminal <span class="via-chip">terminal</span></span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Terminal" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Fichiers <span class="via-chip">file</span></span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Fichiers" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Exécution de code
+            <span class="tip">?<span class="tip-pop">Python appelant les outils du moteur — s'exécute dans le sandbox configuré dans <b>Système</b>.</span></span>
+            <span class="via-chip">code_execution</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Exécution de code" data-scope="moteur"></button>
+        </div>
+
+        <div class="subsec">Mémoire &amp; organisation</div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Mémoire
+            <span class="tip">?<span class="tip-pop">Lecture/écriture des faits — contenu réglé dans la section <b>Mémoire</b>.</span></span>
+            <span class="via-chip">memory</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Mémoire" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Skills <span class="via-chip">skills</span></span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Skills" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Historique des sessions <span class="via-chip">session_search</span></span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Historique des sessions" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row" data-tool>
+          <span class="t-lbl">Tâches planifiées <span class="via-chip">cronjob</span></span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Tâches planifiées" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row off" data-tool>
+          <span class="t-lbl">Délégation (sous-agents) <span class="via-chip">delegation</span></span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Délégation" data-scope="moteur"></button>
+        </div>
+
+        <div class="tool-row off" data-tool>
+          <span class="t-lbl">Contrôle de l'ordinateur
+            <span class="tip">?<span class="tip-pop">Pilotage de l'écran en arrière-plan — nécessite <code>cua-driver</code> sur la machine.</span></span>
+            <span class="via-chip">computer_use</span>
+          </span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Contrôle de l'ordinateur" data-scope="moteur"></button>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : SKILLS ══════ -->
+      <section class="view" id="v-skills" data-title="Skills" data-sub="procédures .md · effet au rechargement" data-back="Paramètres moteur">
+        <div class="skill-row" data-goto="v-skill-edit" data-skill="rapport-hebdo" role="button" tabindex="0">
+          <span class="edited-dot" title="Modifié localement"></span>
+          <span class="s-tt">
+            <span class="s-name">rapport-hebdo <span class="s-ver">v3 · modifié</span> <span class="type-chip">créé par l'agent</span></span>
+            <span class="s-desc">Résume les conversations de la semaine en rapport .md</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer rapport-hebdo" data-scope="moteur"></button>
+        </div>
+        <div class="skill-row" data-goto="v-skill-edit" data-skill="veille-techno" role="button" tabindex="0">
+          <span class="s-tt">
+            <span class="s-name">veille-techno <span class="s-ver">v1</span> <span class="type-chip">créé par l'agent</span></span>
+            <span class="s-desc">Veille hebdo sur l'écosystème des agents</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer veille-techno" data-scope="moteur"></button>
+        </div>
+        <div class="skill-row" data-goto="v-skill-edit" data-skill="citation-web" role="button" tabindex="0">
+          <span class="s-tt">
+            <span class="s-name">citation-web <span class="s-ver">v4</span> <span class="type-chip">créé par l'agent</span></span>
+            <span class="s-desc">Cite ses sources en notes de bas de page</span>
+          </span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer citation-web" data-scope="moteur"></button>
+        </div>
+        <div class="skill-row" data-goto="v-skill-edit" data-skill="csv-to-chart" role="button" tabindex="0">
+          <span class="s-tt">
+            <span class="s-name">csv-to-chart <span class="s-ver">v2</span> <span class="type-chip">moteur</span></span>
+            <span class="s-desc">Transforme un CSV en graphique propre</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer csv-to-chart" data-scope="moteur"></button>
+        </div>
+        <div class="skill-row" data-goto="v-skill-edit" data-skill="web-reader" role="button" tabindex="0">
+          <span class="s-tt">
+            <span class="s-name">web-reader <span class="s-ver">v1</span> <span class="type-chip">moteur</span></span>
+            <span class="s-desc">Lit une page web et en extrait l'essentiel</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer web-reader" data-scope="moteur"></button>
+        </div>
+        <div class="skill-row" data-goto="v-skill-edit" data-skill="export-pdf" role="button" tabindex="0">
+          <span class="s-tt">
+            <span class="s-name">export-pdf <span class="s-ver">v1</span> <span class="type-chip">via dev-browser</span></span>
+            <span class="s-desc">Imprime un artefact HTML en PDF vectoriel</span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer export-pdf" data-scope="moteur"></button>
+        </div>
+        <button class="add-row" type="button" id="newSkill">+ Créer un skill</button>
+      </section>
+
+      <!-- ══════ VUE : ÉDITEUR DE SKILL ══════ -->
+      <section class="view" id="v-skill-edit" data-title="Skill" data-sub="SKILL.md · effet au rechargement" data-back="Skills">
+        <div class="ed-meta">
+          <span class="fname" id="skFname">rapport-hebdo</span>
+          <span class="type-chip" id="skSrc">créé par l'agent</span>
+          <span class="bdg reload">au rechargement</span>
+          <span class="flash" id="skFlash"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>enregistré</span>
+        </div>
+        <div class="row" style="padding:4px 16px 8px">
+          <input class="ed-name" type="text" value="rapport-hebdo" id="skName" aria-label="Nom du skill">
+        </div>
+        <div class="row" style="padding:0 16px 6px">
+          <div class="row-top">
+            <span class="lbl" style="font-size:12.5px">Skill activé</span>
+            <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Skill activé" data-scope="moteur"></button>
+          </div>
+        </div>
+        <textarea class="ed-area" id="skArea" spellcheck="false" aria-label="Contenu du skill"></textarea>
+        <div class="ed-foot">
+          <button class="mini-btn primary" type="button" id="skSave">Enregistrer</button>
+          <button class="mini-btn ghost" type="button" id="skReset">Réinitialiser</button>
+          <span style="flex:1"></span>
+          <button class="mini-btn danger" type="button" id="skDel">Supprimer</button>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : MCP ══════ -->
+      <section class="view" id="v-mcp" data-title="Serveurs MCP" data-sub="outils externes · redémarrage requis" data-back="Paramètres moteur">
+        <div class="mcp-row">
+          <div class="mcp-tt">
+            <div class="mcp-head">
+              <span class="st-dot on"></span>
+              <span class="mcp-name">filesystem</span>
+              <span class="tr-chip">stdio</span>
+              <span class="bdg ok">connecté</span>
+            </div>
+            <div class="mcp-cmd">npx -y @modelcontextprotocol/server-filesystem ~/projets</div>
+            <div class="mcp-tools">4 outils · lecture, écriture, recherche</div>
+          </div>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Serveur filesystem" data-scope="moteur"></button>
+        </div>
+
+        <div class="mcp-row">
+          <div class="mcp-tt">
+            <div class="mcp-head">
+              <span class="st-dot on"></span>
+              <span class="mcp-name">github</span>
+              <span class="tr-chip">http</span>
+              <span class="bdg ok">connecté</span>
+            </div>
+            <div class="mcp-cmd">https://api.mcp.github.com — dépôts, PR, issues</div>
+            <div class="mcp-tools">12 outils · filtrage include/exclude actif</div>
+          </div>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Serveur github" data-scope="moteur"></button>
+        </div>
+
+        <div class="mcp-row" style="opacity:.72">
+          <div class="mcp-tt">
+            <div class="mcp-head">
+              <span class="st-dot"></span>
+              <span class="mcp-name">browser-tools</span>
+              <span class="tr-chip">stdio</span>
+              <span class="type-chip">arrêté</span>
+            </div>
+            <div class="mcp-cmd">npx -y @agentdesk/browser-tools-mcp</div>
+            <div class="mcp-tools">3 outils · débogage du navigateur</div>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Serveur browser-tools" data-scope="moteur"></button>
+        </div>
+
+        <button class="add-row" type="button">+ Ajouter un serveur MCP</button>
+        <div class="kpool-note"><b>Redémarrage requis</b> pour activer ou désactiver un serveur — les sessions en cours sont averties, jamais coupées en silence.</div>
+      </section>
+
+      <!-- ══════ VUE : MÉMOIRE ══════ -->
+      <section class="view" id="v-memoire" data-title="Mémoire" data-sub="faits persistants entre les sessions" data-back="Paramètres moteur">
+        <div class="mem-row" data-goto="v-memoire-edit" data-mem="MEMORY" role="button" tabindex="0">
+          <span class="m-tt">
+            <span class="m-name">MEMORY.md</span>
+            <span class="m-sub">notes de l'agent — 1 496 / 2 200 car.</span>
+          </span>
+          <span class="mem-bar"><i style="width:68%"></i></span>
+          <span class="mem-pct">68 %</span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="mem-row" data-goto="v-memoire-edit" data-mem="USER" role="button" tabindex="0">
+          <span class="m-tt">
+            <span class="m-name">USER.md</span>
+            <span class="m-sub">profil de l'utilisatrice — 428 / 1 375 car.</span>
+          </span>
+          <span class="mem-bar"><i style="width:31%"></i></span>
+          <span class="mem-pct">31 %</span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+
+        <div class="subsec">Réglages</div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Mémoire activée
+              <span class="tip">?<span class="tip-pop"><code>memory.memory_enabled</code> — coupe l'injection et l'écriture des faits.</span></span>
+            </span>
+            <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Mémoire activée" data-scope="moteur"></button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Profil utilisateur
+              <span class="tip">?<span class="tip-pop">Injecte <code>USER.md</code> (préférences, style attendu) dans le prompt système.</span></span>
+            </span>
+            <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Profil utilisateur" data-scope="moteur"></button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Approbation des écritures
+              <span class="tip">?<span class="tip-pop">L'agent propose ses souvenirs avant de les enregistrer — approbation un par un.</span></span>
+            </span>
+            <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Approbation des écritures" data-scope="moteur"></button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Rappel externe
+              <span class="tip">?<span class="tip-pop">Rappelle des faits au-delà de la limite — reste inactif tant que non activé.</span></span>
+            </span>
+            <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Rappel externe" data-scope="moteur"></button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Limite — MEMORY.md</span>
+            <input class="num" type="number" value="2200" step="50" min="500" data-scope="moteur" aria-label="Limite MEMORY.md en caractères">
+            <small style="font-size:10.5px;color:var(--muted-foreground)">car.</small>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Limite — USER.md</span>
+            <input class="num" type="number" value="1375" step="25" min="250" data-scope="moteur" aria-label="Limite USER.md en caractères">
+            <small style="font-size:10.5px;color:var(--muted-foreground)">car.</small>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : ÉDITEUR MÉMOIRE ══════ -->
+      <section class="view" id="v-memoire-edit" data-title="Mémoire" data-sub="injected au prochain tour" data-back="Mémoire">
+        <div class="ed-meta">
+          <span class="fname" id="memFname">MEMORY.md</span>
+          <span id="memSub">1 496 / 2 200 car.</span>
+          <span class="bdg next">au prochain tour</span>
+          <span class="flash" id="memFlash"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>enregistré</span>
+        </div>
+        <textarea class="ed-area" id="memArea" spellcheck="false" aria-label="Contenu du fichier mémoire"></textarea>
+        <div class="ed-foot">
+          <button class="mini-btn primary" type="button" id="memSave">Enregistrer</button>
+          <button class="mini-btn ghost" type="button" id="memReset">Réinitialiser</button>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : FICHIERS .MD ══════ -->
+      <section class="view" id="v-fichiers" data-title="Fichiers .md" data-sub="contexte lu par le moteur · éditables" data-back="Paramètres moteur">
+        <div class="mem-row" data-goto="v-md-edit" data-md="SOUL" role="button" tabindex="0">
+          <span class="m-tt">
+            <span class="m-name">SOUL.md</span>
+            <span class="m-sub">personnalité de l'instance · toujours chargé</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="mem-row" data-goto="v-md-edit" data-md="AGENTS" role="button" tabindex="0">
+          <span class="m-tt">
+            <span class="m-name">AGENTS.md</span>
+            <span class="m-sub">conventions du projet · chargé</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="mem-row" data-goto="v-md-edit" data-md="OVERRIDE" role="button" tabindex="0">
+          <span class="m-tt">
+            <span class="m-name">AGENTS.override.md</span>
+            <span class="m-sub">remplacements personnels · gitignoré</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="mem-row" style="opacity:.6" data-goto="v-md-edit" data-md="CLAUDE" role="button" tabindex="0">
+          <span class="m-tt">
+            <span class="m-name">CLAUDE.md</span>
+            <span class="m-sub">détecté · masqué par AGENTS.md</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="kpool-note"><b>Priorité de projet</b>&nbsp;: <code style="font-family:ui-monospace,monospace">.hermes.md → AGENTS.override.md → AGENTS.md → CLAUDE.md</code> — seul le premier trouvé est chargé. SOUL.md est toujours chargé, indépendamment.</div>
+      </section>
+
+      <!-- ══════ VUE : ÉDITEUR FICHIER .MD ══════ -->
+      <section class="view" id="v-md-edit" data-title="Fichier .md" data-sub="injected au prochain tour" data-back="Fichiers .md">
+        <div class="ed-meta">
+          <span class="fname" id="mdFname">SOUL.md</span>
+          <span id="mdPath" style="font-family:ui-monospace,monospace">~/.hermes/SOUL.md</span>
+          <span class="bdg next">au prochain tour</span>
+          <span class="flash" id="mdFlash"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>enregistré</span>
+        </div>
+        <textarea class="ed-area" id="mdArea" spellcheck="false" aria-label="Contenu du fichier"></textarea>
+        <div class="ed-foot">
+          <button class="mini-btn primary" type="button" id="mdSave">Enregistrer</button>
+          <button class="mini-btn ghost" type="button" id="mdReset">Réinitialiser</button>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : PROFILS ══════ -->
+      <section class="view" id="v-profils" data-title="Profils" data-sub="presets appliqués en un clic" data-back="Paramètres moteur">
+        <div class="prof-card" data-goto="v-profil-edit" data-profil="defaut" role="button" tabindex="0">
+          <span class="pf-star"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14 2 9.27l6.91-1.01z"/></svg></span>
+          <span class="pf-tt">
+            <span class="pf-name">Défaut <span class="pf-applied">appliqué</span></span>
+            <span class="pf-sub">glm-4.6 · effort élevé · 4 skills · tous outils</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="prof-card" data-goto="v-profil-edit" data-profil="analyse" role="button" tabindex="0">
+          <span class="pf-tt">
+            <span class="pf-name">Analyse</span>
+            <span class="pf-sub">glm-4.6 · effort élevé · 2 skills · sans terminal</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="prof-card" data-goto="v-profil-edit" data-profil="veille" role="button" tabindex="0">
+          <span class="pf-tt">
+            <span class="pf-name">Veille</span>
+            <span class="pf-sub">glm-4.5-air · effort léger · 3 skills · web</span>
+          </span>
+          <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <button class="add-row" type="button" id="newProfil">+ Nouveau profil</button>
+      </section>
+
+      <!-- ══════ VUE : ÉDITEUR DE PROFIL ══════ -->
+      <section class="view" id="v-profil-edit" data-title="Profil" data-sub="appliqué en un clic · effet immédiat" data-back="Profils">
+        <div class="row" style="padding:10px 16px 4px">
+          <input class="ed-name" type="text" value="Défaut" id="prName" aria-label="Nom du profil">
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Modèle par défaut</span>
+            <div class="sel-wrap" data-sel data-scope="moteur" id="prModel">
+              <button class="sel-btn" type="button"><span class="sv">glm-4.6</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="glm-4.6"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.6</span><span class="m-id">z.ai</span></span></button>
+                <button class="sel-item" type="button" data-v="glm-4.5-air"><span class="check"></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai · rapide</span></span></button>
+                <button class="sel-item" type="button" data-v="claude-opus-4.7"><span class="check"></span><span class="m-body"><span class="m-name">claude-opus-4.7</span><span class="m-id">Anthropic</span></span></button>
+                <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google</span></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Effort de raisonnement</span>
+            <div class="seg" id="prEffort" data-scope="moteur">
+              <button type="button">Léger</button><button type="button">Moyen</button><button type="button" class="on">Élevé</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-top">
+            <span class="lbl">Permissions d'actions</span>
+            <div class="seg" id="prPerms" data-scope="moteur">
+              <button type="button" class="on">Demander</button><button type="button">Auto</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsec">Skills du profil</div>
+        <div class="skill-pick" id="prSkills">
+          <span class="sp-chip on" data-sk><span class="ck"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>rapport-hebdo</span>
+          <span class="sp-chip on" data-sk><span class="ck"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>veille-techno</span>
+          <span class="sp-chip" data-sk><span class="ck"></span>citation-web</span>
+          <span class="sp-chip on" data-sk><span class="ck"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>csv-to-chart</span>
+          <span class="sp-chip on" data-sk><span class="ck"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>web-reader</span>
+          <span class="sp-chip" data-sk><span class="ck"></span>export-pdf</span>
+        </div>
+
+        <div class="ed-foot" style="padding-top:8px">
+          <button class="mini-btn primary" type="button" id="prApply">Appliquer</button>
+          <button class="mini-btn ghost" type="button" id="prDup">Dupliquer</button>
+          <span class="flash" id="prFlash"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>profil appliqué</span>
+          <span style="flex:1"></span>
+          <button class="mini-btn danger" type="button" id="prDel">Supprimer</button>
+        </div>
+      </section>
+
+      <!-- ══════ VUE : SYSTÈME ══════ -->
+      <section class="view" id="v-systeme" data-title="Système" data-sub="moteur, interface, exécution" data-back="Paramètres moteur">
+        <div class="subsec">Moteur Hermes</div>
+
+        <div class="sys-row">
+          <span class="sy-lbl">Version</span>
+          <span class="ro">v2.4.1</span>
+          <button class="mini-btn" type="button" id="updCheck">Vérifier les mises à jour</button>
+        </div>
+
+        <div class="upd" id="updBox" hidden>
+          <div class="u-ttl">Hermes v2.5.0 disponible</div>
+          <div class="u-sub">publié il y a 3 jours · compatible avec votre configuration</div>
+          <ul class="u-log">
+            <li>Nouveau moteur de compaction — sessions longues 40 % plus légères</li>
+            <li>Toolset vidéo stabilisé (Veo 3.1, Kling 3.0)</li>
+            <li>Corrections MCP : reconnexion http, filtrage include/exclude</li>
+          </ul>
+          <div class="sys-row" style="padding:10px 0 0">
+            <span class="sy-lbl" style="min-width:0">Sauvegarde avant mise à jour
+              <span class="tip">?<span class="tip-pop">Snapshot de l'état avant l'update — restaurable en un clic si besoin.</span></span>
+            </span>
+            <div class="sel-wrap" data-sel data-scope="moteur">
+              <button class="sel-btn" type="button" style="height:28px"><span class="sv">Snapshot rapide</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="Snapshot rapide"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Snapshot rapide</span></span></button>
+                <button class="sel-item" type="button" data-v="Complète"><span class="check"></span><span class="m-body"><span class="m-name">Complète</span><span class="m-id">état + archive du dossier</span></span></button>
+                <button class="sel-item" type="button" data-v="Désactivée"><span class="check"></span><span class="m-body"><span class="m-name">Désactivée</span></span></button>
+              </div>
+            </div>
+          </div>
+          <div class="prog-line" id="updProg" hidden><i></i></div>
+          <div class="c-acts">
+            <button class="mini-btn primary" type="button" id="updGo">Mettre à jour</button>
+            <button class="mini-btn ghost" type="button" id="updLater">Plus tard</button>
+            <span class="flash" id="updFlash"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>mis à jour — redémarrage en cours</span>
+          </div>
+        </div>
+
+        <div class="subsec">Cette interface (fork)</div>
+
+        <div class="sys-row">
+          <span class="sy-lbl">Révision</span>
+          <span class="ro">1680b5e</span>
+          <span class="bdg ok">à jour</span>
+        </div>
+        <div class="sys-row">
+          <span class="sy-lbl">Dépendances</span>
+          <span class="ro"><span class="okdot"></span>chrome-headless-shell</span>
+          <span class="ro"><span class="okdot"></span>ffmpeg</span>
+        </div>
+
+        <div class="subsec">Exécution</div>
+
+        <div class="sys-row">
+          <span class="sy-lbl">Backend du terminal
+            <span class="tip">?<span class="tip-pop">Où s'exécutent les commandes — machine locale, conteneur docker ou hôte ssh.</span></span>
+          </span>
+          <div class="sel-wrap" data-sel data-scope="moteur">
+            <button class="sel-btn" type="button" style="height:28px"><span class="sv">local</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="sel-list" hidden>
+              <button class="sel-item on" type="button" data-v="local"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">local</span></span></button>
+              <button class="sel-item" type="button" data-v="docker"><span class="check"></span><span class="m-body"><span class="m-name">docker</span><span class="m-id">conteneur sandbox</span></span></button>
+              <button class="sel-item" type="button" data-v="ssh"><span class="check"></span><span class="m-body"><span class="m-name">ssh</span><span class="m-id">hôte distant</span></span></button>
+            </div>
+          </div>
+        </div>
+        <div class="sys-row">
+          <span class="sy-lbl">Timeout par commande</span>
+          <input class="num" type="number" value="180" step="10" min="10" data-scope="moteur" aria-label="Timeout en secondes">
+          <small style="font-size:10.5px;color:var(--muted-foreground)">s</small>
+        </div>
+        <div class="sys-row">
+          <span class="sy-lbl">Sandbox réseau isolé
+            <span class="tip">?<span class="tip-pop">Conteneur sans réseau (<code>--network=none</code>) — utile pour les exécutions non sûres.</span></span>
+          </span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Sandbox réseau isolé" data-scope="moteur"></button>
+        </div>
+        <div class="sys-row">
+          <span class="sy-lbl">Auto-source <code style="font-family:ui-monospace,monospace;font-size:10.5px">~/.bashrc</code>
+            <span class="tip">?<span class="tip-pop">Complète le PATH des commandes avec vos installs utilisateur (nvm, cargo…).</span></span>
+          </span>
+          <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Auto-source bashrc" data-scope="moteur"></button>
+        </div>
+
+        <div class="subsec">Journaux &amp; données</div>
+
+        <div class="sys-row">
+          <span class="sy-lbl">Journalisation détaillée
+            <span class="tip">?<span class="tip-pop">Trace chaque tour dans <code>logs/agent.log</code> — utile au débogage, coûteux en écriture disque.</span></span>
+          </span>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Journalisation détaillée" data-scope="moteur"></button>
+        </div>
+        <div class="sys-row">
+          <span class="sy-lbl">Télémétrie</span>
+          <span class="ro">aucune — tout reste local</span>
+        </div>
+
+        <div class="subsec">Actions</div>
+
+        <div class="sys-row">
+          <span class="sy-lbl">Redémarrer le moteur
+            <span class="bdg restart">sessions averties</span>
+          </span>
+          <button class="mini-btn danger" type="button" id="restartBtn">Redémarrer</button>
+        </div>
+        <div class="confirm-strip" id="restartConfirm" hidden>
+          <span style="flex:1">Les sessions en cours seront averties avant l'arrêt.</span>
+          <button class="mini-btn ghost" type="button" id="restartNo" style="color:var(--foreground)">Annuler</button>
+          <button class="mini-btn danger" type="button" id="restartYes">Confirmer</button>
+        </div>
+        <div class="sys-row">
+          <span class="sy-lbl">Vider le cache des rendus</span>
+          <button class="mini-btn" type="button" id="cacheBtn">Vider</button>
+          <span class="flash" id="cacheFlash"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>cache vidé</span>
+        </div>
+      </section>
+
+    </div><!-- /sheet-body -->
+
+    <div class="sheet-foot">
+      <span class="foot-state">
+        <span class="dot"></span>Mode démo
+        <span class="tip tip-below">?<span class="tip-pop">Réponses simulées par le mini-service local. Une fois la gateway branchée, cette ligne devient l'état du moteur — version, fournisseur actif, clé en cours — et un raccourci vers Fournisseurs &amp; clés.</span></span>
+      </span>
+      <span class="pend" id="pendChip" hidden>
+        <span id="pendN">0</span>&nbsp;en attente
+        <span class="tip tip-below">?<span class="tip-pop">Réglages moteur modifiés mais pas encore appliqués — au prochain tour, au rechargement, ou après redémarrage selon le cas. En mode démo, tout est simulé.</span></span>
+      </span>
+    </div>
+  </div><!-- /sheet -->
+
+</div><!-- /app -->
+
+<button class="pill" id="pill" type="button"><span class="pdot"></span>Maquette v3 — tout est cliquable</button>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ═══ Données de démonstration ═══ */
+  var SKILLS = {
+    "rapport-hebdo": { name:"rapport-hebdo", src:"créé par l'agent",
+      content:"---\nname: rapport-hebdo\ndescription: Résume les conversations de la semaine en rapport .md\n---\n\n# Rapport hebdomadaire\n\n1. Collecter les sessions de la semaine (session_search)\n2. Regrouper par projet\n3. Rédiger le résumé en français, ton factuel, sans emoji\n4. Livrer en artefact .md et proposer l'envoi" },
+    "veille-techno": { name:"veille-techno", src:"créé par l'agent",
+      content:"---\nname: veille-techno\ndescription: Veille hebdomadaire sur l'écosystème des agents\n---\n\n# Veille techno\n\n- Sources : GitHub trending, blogs des labos, releases majeures\n- Regrouper par thème, citer les liens\n- Format : 10 lignes max, livré le lundi" },
+    "citation-web": { name:"citation-web", src:"créé par l'agent",
+      content:"---\nname: citation-web\ndescription: Cite ses sources en notes de bas de page\n---\n\n# Citation web\n\nToute affirmation issue du web porte un [n] renvoyant à la note en fin de réponse." },
+    "csv-to-chart": { name:"csv-to-chart", src:"moteur",
+      content:"---\nname: csv-to-chart\ndescription: Transforme un CSV en graphique propre\n---\n\n# CSV → graphique\n\nDétecter les colonnes, choisir le type de graphe, rendre en artefact HTML." },
+    "web-reader": { name:"web-reader", src:"moteur",
+      content:"---\nname: web-reader\ndescription: Lit une page web et en extrait l'essentiel\n---\n\n# Web reader\n\nExtraire le corps utile, ignorer nav/footer/ads, produire un résumé structuré." },
+    "export-pdf": { name:"export-pdf", src:"via dev-browser",
+      content:"---\nname: export-pdf\ndescription: Imprime un artefact HTML en PDF vectoriel\n---\n\n# Export PDF\n\nOuvrir l'artefact dans le navigateur headless, imprimer en PDF, joindre à la réponse." }
+  };
+
+  var MEMS = {
+    "MEMORY": { file:"MEMORY.md", sub:"1 496 / 2 200 car.",
+      content:"# Mémoire\n\n## Environnement\n- MacBook Pro M3 · Python 3.14\n- Projets dans ~/projets\n\n## Préférences\n- Réponses en français, ton direct\n- Pas d'emoji\n\n## Conventions\n- Tests avant commit\n- FORK.md §9 après chaque décision structurante" },
+    "USER": { file:"USER.md", sub:"428 / 1 375 car.",
+      content:"# Utilisatrice\n\n- Développeuse — préfère les explications courtes puis le détail sur demande\n- Fuseau : Europe/Paris\n- Réponses techniques en français, identifiants de code en anglais" }
+  };
+
+  var MDS = {
+    "SOUL": { file:"SOUL.md", path:"~/.hermes/SOUL.md",
+      content:"# Âme\n\nTu es Hermes.\n\n- Direct, précis, jamais verbeux\n- Tu proposes une action plutôt qu'une liste d'options\n- Tu admets l'incertitude au lieu de deviner\n- Le français par défaut, l'anglais pour le code" },
+    "AGENTS": { file:"AGENTS.md", path:"./AGENTS.md",
+      content:"# Conventions du dépôt\n\n- Commits impératifs, en minuscules\n- Toute session met à jour FORK.md §9\n- Tests verts avant tout merge\n- Pas de dépendance ajoutée sans discussion" },
+    "OVERRIDE": { file:"AGENTS.override.md", path:"./AGENTS.override.md",
+      content:"# Priorités personnelles\n\n- Réponses en français, même dans ce dépôt\n- Priorité aux corrections silencieuses plutôt qu'aux questions" },
+    "CLAUDE": { file:"CLAUDE.md", path:"./CLAUDE.md",
+      content:"# Compat\n\n(détecté — même rôle qu'AGENTS.md, masqué car AGENTS.md est présent)" }
+  };
+
+  var PROFILS = {
+    "defaut":  { name:"Défaut",  model:"glm-4.6",     effort:2, perms:0, skills:{ "rapport-hebdo":1,"veille-techno":1,"csv-to-chart":1,"web-reader":1 } },
+    "analyse": { name:"Analyse", model:"glm-4.6",     effort:2, perms:0, skills:{ "csv-to-chart":1,"web-reader":1 } },
+    "veille":  { name:"Veille",  model:"glm-4.5-air", effort:0, perms:0, skills:{ "veille-techno":1,"citation-web":1,"web-reader":1 } }
+  };
+
+  /* ═══ Router ═══ */
+  var PARENT = {
+    "v-moteur":"v-accueil","v-modele":"v-moteur","v-fournisseurs":"v-moteur","v-connecteurs":"v-moteur",
+    "v-outils":"v-moteur","v-skills":"v-moteur","v-mcp":"v-moteur","v-memoire":"v-moteur",
+    "v-fichiers":"v-moteur","v-profils":"v-moteur","v-systeme":"v-moteur",
+    "v-skill-edit":"v-skills","v-memoire-edit":"v-memoire","v-md-edit":"v-fichiers","v-profil-edit":"v-profils"
+  };
+  var current = "v-accueil";
+  var titleEl = document.getElementById("viewTitle");
+  var subEl = document.getElementById("viewSub");
+  var backLbl = document.getElementById("backLbl");
+  var headEl = document.getElementById("sheetHead");
+  var bodyEl = document.getElementById("sheetBody");
+
+  function showView(id, titleOverride){
+    var view = document.getElementById(id);
+    if (!view) return;
+    document.querySelectorAll(".view").forEach(function(v){ v.classList.remove("on"); });
+    view.classList.add("on");
+    current = id;
+    var t = titleOverride || view.dataset.title || "Paramètres";
+    titleEl.textContent = t;
+    subEl.textContent = view.dataset.sub || "";
+    var noBack = view.hasAttribute("data-noback");
+    headEl.classList.toggle("no-back", noBack);
+    if (!noBack) backLbl.textContent = view.dataset.back || "Retour";
+    bodyEl.scrollTop = 0;
+  }
+
+  /* Navigation générique */
+  document.querySelectorAll("[data-goto]").forEach(function(el){
+    function go(e){
+      if (e.target.closest(".tip,.switch,.sel-wrap,.mini-btn,button,input")) return;
+      showView(el.dataset.goto);
+      if (el.dataset.skill) openSkill(el.dataset.skill);
+      if (el.dataset.mem) openMem(el.dataset.mem);
+      if (el.dataset.md) openMd(el.dataset.md);
+      if (el.dataset.profil) openProfil(el.dataset.profil);
+    }
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(e); }
+    });
+  });
+
+  document.getElementById("backBtn").addEventListener("click", function(){
+    showView(PARENT[current] || "v-accueil");
+  });
+
+  /* ═══ Tooltips ═══ */
+  document.querySelectorAll(".tip").forEach(function(t){
+    t.addEventListener("click", function(e){ e.stopPropagation(); t.classList.toggle("open"); });
+    t.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); t.classList.toggle("open"); }
+    });
+  });
+  document.addEventListener("click", function(){
+    document.querySelectorAll(".tip.open").forEach(function(t){ t.classList.remove("open"); });
+  });
+
+  /* ═══ Modifications en attente (étage moteur) ═══ */
+  var pend = 0, pendChip = document.getElementById("pendChip"), pendN = document.getElementById("pendN");
+  function bump(){
+    pend++; pendN.textContent = pend; pendChip.hidden = false;
+  }
+
+  /* ═══ Switches ═══ */
+  document.querySelectorAll(".switch").forEach(function(sw){
+    sw.addEventListener("click", function(e){
+      e.stopPropagation();
+      var on = sw.classList.toggle("on");
+      sw.setAttribute("aria-checked", on ? "true" : "false");
+      var toolRow = sw.closest(".tool-row");
+      if (toolRow) toolRow.classList.toggle("off", !on);
+      if (sw.dataset.scope === "moteur") bump();
+    });
+  });
+
+  /* ═══ Segments ═══ */
+  document.querySelectorAll(".seg").forEach(function(seg){
+    seg.querySelectorAll("button").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        seg.querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
+        btn.classList.add("on");
+        if (seg.dataset.scope === "moteur") bump();
+      });
+    });
+  });
+
+  /* ═══ Selects personnalisés ═══ */
+  document.querySelectorAll("[data-sel]").forEach(function(wrap){
+    var btn = wrap.querySelector(".sel-btn");
+    var list = wrap.querySelector(".sel-list");
+    var sv = wrap.querySelector(".sv");
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      document.querySelectorAll(".sel-list").forEach(function(l){ if (l !== list) l.hidden = true; });
+      list.hidden = !list.hidden;
+    });
+    list.querySelectorAll(".sel-item").forEach(function(item){
+      item.addEventListener("click", function(e){
+        e.stopPropagation();
+        list.querySelectorAll(".sel-item").forEach(function(x){
+          x.classList.remove("on");
+          var c = x.querySelector(".check"); if (c) c.innerHTML = "";
+        });
+        item.classList.add("on");
+        var c = item.querySelector(".check");
+        if (c) c.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+        if (sv) sv.textContent = item.dataset.v;
+        list.hidden = true;
+        if (wrap.dataset.scope === "moteur") bump();
+      });
+    });
+  });
+  document.addEventListener("click", function(){
+    document.querySelectorAll(".sel-list").forEach(function(l){ l.hidden = true; });
+  });
+
+  /* ═══ Slider largeur ═══ */
+  var wS = document.getElementById("wSlider"), wV = document.getElementById("wVal");
+  if (wS) wS.addEventListener("input", function(){ wV.textContent = wS.value + " %"; });
+
+  /* ═══ Boutons « Tester » ═══ */
+  document.querySelectorAll("[data-test]").forEach(function(btn){
+    if (btn.tagName !== "BUTTON") return;
+    var original = btn.textContent;
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = "1";
+      btn.textContent = "…";
+      setTimeout(function(){
+        var ok = btn.dataset.test === "ok";
+        btn.textContent = ok ? "✓ 235 ms" : "✗ erreur 401";
+        btn.style.color = ok ? "var(--green)" : "var(--red)";
+        if (ok){
+          var row = btn.closest(".key-row");
+          var st = row && row.querySelector(".kst.testing");
+          if (st){ st.classList.remove("testing"); st.classList.add("on"); st.textContent = "active"; }
+        }
+        setTimeout(function(){
+          btn.textContent = original; btn.style.color = ""; delete btn.dataset.busy;
+        }, 1600);
+      }, 700);
+    });
+  });
+
+  /* ═══ Fournisseurs : plier/déplier ═══ */
+  document.querySelectorAll("[data-prov]").forEach(function(head){
+    head.addEventListener("click", function(e){
+      if (e.target.closest(".tip,.sel-wrap,button")) return;
+      var prov = head.closest(".prov");
+      var open = prov.classList.toggle("open");
+      head.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    head.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        var prov = head.closest(".prov");
+        var open = prov.classList.toggle("open");
+        head.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    });
+  });
+
+  /* ═══ Clés : ajout, retrait, ordre ═══ */
+  function renumber(scope){
+    scope.querySelectorAll(".key-row .k-ord").forEach(function(o, i){ o.textContent = i + 1; });
+  }
+  document.querySelectorAll("[data-keyform]").forEach(function(form){
+    form.addEventListener("submit", function(e){
+      e.preventDefault();
+      var lbl = form.querySelector('input[type="text"]:not(.mono)');
+      var key = form.querySelector("input.mono");
+      var holder = form.parentNode;
+      var row = document.createElement("div");
+      row.className = "key-row";
+      row.innerHTML =
+        '<span class="k-ord">0</span>' +
+        '<span class="k-lbl"><span class="k-name">' +
+        (lbl && lbl.value ? lbl.value.replace(/[<>&]/g, "") : "Sans libellé") +
+        '</span><span class="k-val">' +
+        (key && key.value ? key.value.slice(0,3) + "-••••••••" + key.value.slice(-4).replace(/[<>&]/g, "") : "••••••••••••") +
+        '</span></span>' +
+        '<span class="kst testing">à tester</span>' +
+        '<button class="mini-btn" type="button" data-test="ok">Tester</button>' +
+        '<button class="ord-btn" type="button" title="Monter" aria-label="Monter"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>' +
+        '<button class="ord-btn" type="button" title="Supprimer" aria-label="Supprimer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>';
+      form.parentNode.insertBefore(row, form);
+      form.reset();
+      renumber(holder);
+      bindTester(row.querySelector("[data-test]"));
+      bump();
+    });
+  });
+  function bindTester(btn){
+    if (!btn) return;
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = "1"; btn.textContent = "…";
+      setTimeout(function(){
+        btn.textContent = "✓ 235 ms"; btn.style.color = "var(--green)";
+        var row = btn.closest(".key-row");
+        var st = row && row.querySelector(".kst.testing");
+        if (st){ st.classList.remove("testing"); st.classList.add("on"); st.textContent = "active"; }
+        setTimeout(function(){ btn.textContent = "Tester"; btn.style.color = ""; delete btn.dataset.busy; }, 1600);
+      }, 700);
+    });
+  }
+  /* Délégation : supprimer / monter / descendre une clé */
+  bodyEl.addEventListener("click", function(e){
+    var ord = e.target.closest(".ord-btn");
+    if (!ord) return;
+    var row = ord.closest(".key-row");
+    if (!row) return;
+    if (ord.getAttribute("title") === "Supprimer"){
+      row.remove();
+    } else if (ord.getAttribute("title") === "Monter"){
+      var prev = row.previousElementSibling;
+      if (prev && prev.classList.contains("key-row")) row.parentNode.insertBefore(row, prev);
+    } else {
+      var next = row.nextElementSibling;
+      if (next && next.classList.contains("key-row")) row.parentNode.insertBefore(next, row);
+    }
+    renumber(row.closest(".prov") || bodyEl);
+    bump();
+  });
+
+  /* ═══ Connecteurs ═══ */
+  document.querySelectorAll("[data-check]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = "1"; btn.textContent = "…";
+      setTimeout(function(){
+        btn.textContent = "✓ à jour"; btn.style.color = "var(--green)";
+        setTimeout(function(){ btn.textContent = "Vérifier"; btn.style.color = ""; delete btn.dataset.busy; }, 1600);
+      }, 800);
+    });
+  });
+  document.querySelectorAll("[data-update]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = "1"; btn.textContent = "Import…";
+      setTimeout(function(){
+        var card = btn.closest(".prov");
+        var small = card.querySelector(".p-name small");
+        if (small) small.textContent = btn.dataset.new || "";
+        var avail = card.querySelector(".upd-avail");
+        if (avail) avail.outerHTML = '<span class="kst on">à jour</span>';
+        btn.textContent = "✓ " + (btn.dataset.new || "mis à jour");
+        btn.classList.remove("primary"); btn.style.color = "var(--green)";
+        setTimeout(function(){ btn.textContent = "À jour"; delete btn.dataset.busy; }, 2000);
+        bump();
+      }, 1200);
+    });
+  });
+  document.querySelectorAll("[data-pin]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var pinned = btn.textContent.indexOf("Épinglé") === 0;
+      btn.textContent = pinned ? "Épingler" : "Épinglé ✓";
+      if (!pinned) btn.style.color = "var(--amber)";
+      else btn.style.color = "";
+      bump();
+    });
+  });
+  document.querySelectorAll("[data-unpin]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var card = btn.closest(".prov");
+      var chip = card.querySelector('.p-meta .type-chip');
+      if (chip){ chip.textContent = "à jour"; chip.style.background = "var(--green-soft)"; chip.style.color = "var(--green)"; }
+      btn.textContent = "Épingle retirée";
+      bump();
+    });
+  });
+  document.querySelectorAll("[data-rollback]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      btn.textContent = "✓ retour effectué"; btn.style.color = "var(--green)";
+      bump();
+    });
+  });
+  var importForm = document.querySelector("[data-importform]");
+  if (importForm){
+    importForm.addEventListener("submit", function(e){
+      e.preventDefault();
+      var note = importForm.querySelector(".kf-note");
+      if (note) note.innerHTML = "<b>Import planifié</b> — le moteur clonera le dépôt au prochain tour.";
+      importForm.reset();
+      bump();
+    });
+  }
+
+  /* ═══ Éditeurs : skills ═══ */
+  var skKey = null;
+  function openSkill(key){
+    var d = SKILLS[key];
+    if (!d) return;
+    skKey = key;
+    document.getElementById("skFname").textContent = d.name;
+    document.getElementById("skSrc").textContent = d.src;
+    document.getElementById("skName").value = d.name;
+    document.getElementById("skArea").value = d.content;
+    showView("v-skill-edit", d.name);
+  }
+  function flash(id){
+    var f = document.getElementById(id);
+    if (!f) return;
+    f.classList.add("show");
+    setTimeout(function(){ f.classList.remove("show"); }, 2200);
+  }
+  document.getElementById("skSave").addEventListener("click", function(){
+    var d = SKILLS[skKey];
+    if (d){ d.name = document.getElementById("skName").value || d.name; d.content = document.getElementById("skArea").value; }
+    flash("skFlash"); bump();
+  });
+  document.getElementById("skReset").addEventListener("click", function(){ if (skKey) openSkill(skKey); });
+  document.getElementById("skDel").addEventListener("click", function(){
+    flash("skFlash");
+    setTimeout(function(){ showView("v-skills"); }, 700);
+  });
+  document.getElementById("newSkill").addEventListener("click", function(){
+    var key = "nouveau-skill";
+    SKILLS[key] = { name:"nouveau-skill", src:"en création",
+      content:"---\nname: nouveau-skill\ndescription: À compléter\n---\n\n# Nouveau skill\n\nDécrire la procédure ici." };
+    openSkill(key);
+  });
+
+  /* ═══ Éditeurs : mémoire ═══ */
+  function openMem(key){
+    var d = MEMS[key];
+    if (!d) return;
+    document.getElementById("memFname").textContent = d.file;
+    document.getElementById("memSub").textContent = d.sub;
+    document.getElementById("memArea").value = d.content;
+    showView("v-memoire-edit", d.file);
+  }
+  document.getElementById("memSave").addEventListener("click", function(){
+    MEMS[current === "v-memoire-edit" ? document.getElementById("memFname").textContent.indexOf("USER") === 0 ? "USER" : "MEMORY" : "MEMORY"].content =
+      document.getElementById("memArea").value;
+    flash("memFlash"); bump();
+  });
+  document.getElementById("memReset").addEventListener("click", function(){ showView("v-memoire"); });
+
+  /* ═══ Éditeurs : fichiers .md ═══ */
+  function openMd(key){
+    var d = MDS[key];
+    if (!d) return;
+    document.getElementById("mdFname").textContent = d.file;
+    document.getElementById("mdPath").textContent = d.path;
+    document.getElementById("mdArea").value = d.content;
+    showView("v-md-edit", d.file);
+  }
+  var MDKEY = { "SOUL.md":"SOUL","AGENTS.md":"AGENTS","AGENTS.override.md":"OVERRIDE","CLAUDE.md":"CLAUDE" };
+  document.getElementById("mdSave").addEventListener("click", function(){
+    var k = MDKEY[document.getElementById("mdFname").textContent] || "SOUL";
+    MDS[k].content = document.getElementById("mdArea").value;
+    flash("mdFlash"); bump();
+  });
+  document.getElementById("mdReset").addEventListener("click", function(){ showView("v-fichiers"); });
+
+  /* ═══ Profils ═══ */
+  function openProfil(key){
+    var d = PROFILS[key];
+    if (!d) return;
+    document.getElementById("prName").value = d.name;
+    var wrap = document.getElementById("prModel");
+    wrap.querySelector(".sv").textContent = d.model;
+    wrap.querySelectorAll(".sel-item").forEach(function(it){
+      it.classList.toggle("on", it.dataset.v === d.model);
+      var c = it.querySelector(".check");
+      c.innerHTML = it.dataset.v === d.model
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : "";
+    });
+    var eff = document.getElementById("prEffort").querySelectorAll("button");
+    eff.forEach(function(b, i){ b.classList.toggle("on", i === d.effort); });
+    var pm = document.getElementById("prPerms").querySelectorAll("button");
+    pm.forEach(function(b, i){ b.classList.toggle("on", i === d.perms); });
+    document.querySelectorAll("#prSkills .sp-chip").forEach(function(ch){
+      var name = ch.textContent.trim();
+      ch.classList.toggle("on", !!d.skills[name]);
+    });
+    showView("v-profil-edit", d.name);
+  }
+  document.getElementById("prApply").addEventListener("click", function(){
+    flash("prFlash"); bump();
+    var key = document.getElementById("prName").value.toLowerCase();
+    if (PROFILS[key]){
+      PROFILS[key].name = document.getElementById("prName").value;
+      PROFILS[key].model = document.querySelector("#prModel .sv").textContent;
+    }
+  });
+  document.getElementById("prDup").addEventListener("click", function(){
+    flash("prFlash");
+    setTimeout(function(){
+      var name = document.getElementById("prName").value + " (copie)";
+      PROFILS[name.toLowerCase()] = { name:name, model:document.querySelector("#prModel .sv").textContent,
+        effort:1, perms:0, skills:{} };
+      document.getElementById("prName").value = name;
+    }, 300);
+  });
+  document.getElementById("prDel").addEventListener("click", function(){
+    flash("prFlash");
+    setTimeout(function(){ showView("v-profils"); }, 700);
+  });
+  document.querySelectorAll("#prSkills .sp-chip").forEach(function(ch){
+    ch.addEventListener("click", function(){
+      ch.classList.toggle("on");
+      var ck = ch.querySelector(".ck");
+      ck.innerHTML = ch.classList.contains("on")
+        ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : "";
+      bump();
+    });
+  });
+  document.getElementById("newProfil").addEventListener("click", function(){
+    var name = "Nouveau profil";
+    PROFILS[name.toLowerCase()] = { name:name, model:"glm-4.6", effort:1, perms:0, skills:{} };
+    openProfil(name.toLowerCase());
+  });
+
+  /* ═══ Système : mises à jour ═══ */
+  var updBox = document.getElementById("updBox");
+  document.getElementById("updCheck").addEventListener("click", function(){
+    var btn = this;
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = "1"; btn.textContent = "…";
+    setTimeout(function(){
+      updBox.hidden = false;
+      btn.textContent = "Re-vérifier";
+      btn.style.color = "var(--amber)";
+      delete btn.dataset.busy;
+    }, 900);
+  });
+  document.getElementById("updGo").addEventListener("click", function(){
+    var btn = this, prog = document.getElementById("updProg");
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = "1"; btn.textContent = "Mise à jour…";
+    prog.hidden = false;
+    requestAnimationFrame(function(){ prog.querySelector("i").style.width = "100%"; });
+    setTimeout(function(){
+      updBox.classList.add("done");
+      updBox.querySelector(".u-ttl").textContent = "✓ Mis à jour — Hermes v2.5.0";
+      updBox.querySelector(".u-sub").textContent = "le moteur redémarre, les sessions sont averties";
+      btn.style.display = "none";
+      document.getElementById("updLater").style.display = "none";
+      flash("updFlash");
+      var v = document.querySelector("#v-systeme .ro");
+      if (v) v.textContent = "v2.5.0";
+      bump();
+    }, 1400);
+  });
+  document.getElementById("updLater").addEventListener("click", function(){ updBox.hidden = true; });
+
+  /* ═══ Système : redémarrage ═══ */
+  var rc = document.getElementById("restartConfirm");
+  document.getElementById("restartBtn").addEventListener("click", function(){ rc.hidden = false; });
+  document.getElementById("restartNo").addEventListener("click", function(){ rc.hidden = true; });
+  document.getElementById("restartYes").addEventListener("click", function(){
+    rc.hidden = true;
+    var lbl = document.querySelector("#restartBtn");
+    lbl.textContent = "✓ planifié";
+    lbl.style.color = "var(--green)";
+    setTimeout(function(){ lbl.textContent = "Redémarrer"; lbl.style.color = ""; }, 2200);
+    bump();
+  });
+  document.getElementById("cacheBtn").addEventListener("click", function(){
+    flash("cacheFlash");
+  });
+
+  /* ═══ Ajouts génériques ═══ */
+  var addProv = document.querySelector("[data-addprov]");
+  if (addProv){
+    addProv.addEventListener("click", function(){
+      var form = document.createElement("form");
+      form.className = "key-form";
+      form.setAttribute("data-keyform","");
+      form.innerHTML =
+        '<input type="text" placeholder="Nom du fournisseur">' +
+        '<input type="text" class="mono" placeholder="https://…/v1 — URL de base">' +
+        '<div class="kf-foot"><span class="kf-note">Les clés s\'ajoutent une fois le fournisseur créé.</span>' +
+        '<button class="mini-btn primary" type="submit">Créer</button></div>';
+      addProv.parentNode.insertBefore(form, addProv);
+      addProv.remove();
+      form.addEventListener("submit", function(e){
+        e.preventDefault();
+        var name = form.querySelector('input:not(.mono)').value || "Nouveau fournisseur";
+        var prov = document.createElement("div");
+        prov.className = "prov open";
+        prov.innerHTML =
+          '<div class="prov-head" data-prov role="button" tabindex="0" aria-expanded="true">' +
+          '<span class="p-name">' + name.replace(/[<>&]/g, "") + ' <small>à configurer</small></span>' +
+          '<span class="p-meta"><span class="kst testing">sans clé</span></span>' +
+          '<svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>' +
+          '<div class="prov-body"><div class="keys-head">Clés</div>' +
+          '<form class="key-form" data-keyform>' +
+          '<input type="text" placeholder="Libellé"><input type="text" class="mono" placeholder="sk-…">' +
+          '<div class="kf-foot"><button class="mini-btn primary" type="submit">Ajouter la clé</button></div></form></div>';
+        form.replaceWith(prov);
+        var head = prov.querySelector("[data-prov]");
+        head.addEventListener("click", function(ev){
+          if (ev.target.closest(".tip,.sel-wrap,button")) return;
+          var o = prov.classList.toggle("open");
+          head.setAttribute("aria-expanded", o ? "true" : "false");
+        });
+        var kf = prov.querySelector("[data-keyform]");
+        kf.addEventListener("submit", function(ev){
+          ev.preventDefault();
+          renumber(prov); bump();
+        });
+        bump();
+      });
+    });
+  }
+  document.querySelectorAll("#v-mcp .add-row").forEach(function(add){
+    add.addEventListener("click", function(){
+      var form = document.createElement("form");
+      form.className = "key-form";
+      form.style.margin = "6px 16px";
+      form.innerHTML =
+        '<input type="text" class="mono" placeholder="npx -y @exemple/serveur — commande ou URL">' +
+        '<div class="kf-foot"><span class="kf-note">Le serveur démarre au prochain redémarrage du moteur.</span>' +
+        '<button class="mini-btn primary" type="submit">Ajouter</button></div>';
+      add.parentNode.insertBefore(form, add);
+      add.remove();
+      form.addEventListener("submit", function(e){
+        e.preventDefault();
+        var row = document.createElement("div");
+        row.className = "mcp-row";
+        row.innerHTML =
+          '<div class="mcp-tt"><div class="mcp-head"><span class="st-dot"></span>' +
+          '<span class="mcp-name">nouveau-serveur</span><span class="tr-chip">stdio</span>' +
+          '<span class="type-chip">arrêté</span></div>' +
+          '<div class="mcp-cmd">' + (form.querySelector("input").value || "commande…").replace(/[<>&]/g, "") + '</div></div>' +
+          '<button class="switch" type="button" role="switch" aria-checked="false" aria-label="nouveau-serveur" data-scope="moteur"></button>';
+        form.replaceWith(row);
+        bump();
+      });
+    });
+  });
+
+  /* ═══ Sheet : ouverture / fermeture ═══ */
+  var app = document.getElementById("app");
+  document.getElementById("closeBtn").addEventListener("click", function(){ app.classList.add("closed"); });
+  document.getElementById("gearBtn").addEventListener("click", function(){
+    app.classList.remove("closed");
+    showView("v-accueil");
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape"){
+      var openTip = document.querySelector(".tip.open");
+      var openList = document.querySelector(".sel-list:not([hidden])");
+      if (openTip){ openTip.classList.remove("open"); return; }
+      if (openList){ openList.hidden = true; return; }
+      app.classList.add("closed");
+    }
+  });
+
+  /* Pastille maquette */
+  var pill = document.getElementById("pill");
+  pill.addEventListener("click", function(){
+    pill.style.transition = "opacity .3s, transform .3s";
+    pill.style.opacity = "0"; pill.style.transform = "translateY(8px)";
+    setTimeout(function(){ pill.remove(); }, 320);
+  });
+
+  showView("v-accueil");
+})();
+</script>
+</body>
+</html>

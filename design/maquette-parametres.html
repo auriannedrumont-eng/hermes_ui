@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Maquette — Page de paramètres · Hermes Web</title>
+<title>Maquette v2 — Page de paramètres · Hermes Web</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -35,7 +35,7 @@
 
   /* ── En-tête de planche ─────────────────────────────── */
   .page-head h1{font-size:26px;font-weight:700;letter-spacing:-0.02em}
-  .page-head .sub{color:var(--muted-foreground);margin-top:6px;max-width:60ch}
+  .page-head .sub{color:var(--muted-foreground);margin-top:6px;max-width:62ch}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
   .chip{font-size:12px;font-weight:500;padding:4px 11px;border-radius:999px;
     background:var(--card);border:1px solid var(--border);color:var(--muted-foreground)}
@@ -60,8 +60,9 @@
     border-radius:5px;background:var(--muted);color:var(--card);font-size:9.5px;font-weight:700;
     display:flex;align-items:center;justify-content:center}
   .notes li b{color:var(--foreground);font-weight:600}
-  .notes code, .desc code, .why code{font-family:ui-monospace,monospace;font-size:11px;
-    background:var(--muted);border-radius:4px;padding:0 4px}
+  .notes code, .desc code, .why code, .tip-pop code{font-family:ui-monospace,monospace;font-size:11px;
+    background:oklch(0.97 0.002 80 / 0.14);border-radius:4px;padding:0 4px}
+  .notes code{background:var(--muted)}
 
   /* Avant / après */
   .compare-label{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;
@@ -69,6 +70,7 @@
   .compare-label .tag{font-size:9.5px;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:0.04em}
   .compare-label.before .tag{background:var(--muted);color:var(--muted-foreground)}
   .compare-label.after .tag{background:var(--hermes-soft);color:var(--hermes)}
+  .compare-label.gateway .tag{background:var(--green-soft);color:var(--green)}
   .stage .compare-label:first-child{margin-top:0}
   .dim{opacity:.9}
   .spotlight{position:relative;display:inline-flex;gap:7px;padding:3px 5px;
@@ -107,9 +109,9 @@
     cursor:pointer;transition:background .15s,color .15s}
   .gear-btn:hover{background:var(--card);color:var(--foreground);box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.12)}
 
-  /* ── Application derrière le sheet (scènes B / C) ────── */
+  /* ── Application derrière le sheet ──────────────────── */
   .overlay-stage{display:flex;justify-content:flex-end;padding:20px 16px}
-  .ghost{position:absolute;top:16px;bottom:16px;left:16px;right:16px;display:flex;gap:10px;
+  .ghost{position:absolute;top:16px;bottom:16px;left:16px;right:490px;display:flex;gap:10px;
     opacity:.42;filter:grayscale(.35) blur(.4px);border-radius:14px;overflow:hidden}
   .ghost .g-side{flex:0 0 21%;background:var(--muted);border-radius:12px;padding:10px;
     display:flex;flex-direction:column;gap:9px}
@@ -131,7 +133,7 @@
   .sheet-head{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--border)}
   .sheet-head .gear-badge{flex:none;width:30px;height:30px;border-radius:10px;background:var(--hermes-soft);
     color:var(--hermes);display:flex;align-items:center;justify-content:center}
-  .sheet-head .tt{min-width:0}
+  .sheet-head .tt{min-width:0;flex:1}
   .sheet-head .tt h2{font-size:15.5px;font-weight:600;letter-spacing:-0.01em}
   .sheet-head .tt p{font-size:11px;color:var(--muted-foreground);margin-top:1px}
   .x-btn{margin-left:auto;flex:none;width:30px;height:30px;border-radius:9px;border:none;background:transparent;
@@ -141,6 +143,11 @@
   .sheet-body{padding:2px 0 12px;max-height:566px;overflow-y:auto}
   .sheet-body::-webkit-scrollbar{width:8px}
   .sheet-body::-webkit-scrollbar-thumb{background:var(--muted);border-radius:999px}
+  .back-btn{flex:none;display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 9px 0 6px;
+    border:none;border-radius:9px;background:transparent;color:var(--muted-foreground);
+    font:inherit;font-size:12px;font-weight:500;cursor:pointer;transition:background .14s,color .14s;
+    white-space:nowrap}
+  .back-btn:hover{background:var(--muted);color:var(--foreground)}
 
   /* Sections = registres */
   .sec{display:flex;align-items:center;gap:9px;padding:15px 16px 7px}
@@ -159,9 +166,8 @@
   /* Ligne de réglage */
   .row{padding:9px 16px;transition:background .12s}
   .row:hover{background:oklch(0.955 0.003 75 / 0.55)}
-  .row-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .row-top .lbl{flex:1;min-width:0;font-size:13px;font-weight:500}
-  .row-top .lbl .val{display:block;font-size:10.5px;color:var(--muted-foreground);font-weight:400;margin-top:1px}
+  .row-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .row-top .lbl{flex:1;min-width:0;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .desc{font-size:11.5px;color:var(--muted-foreground);line-height:1.5;margin-top:3px;max-width:52ch}
 
   /* Badges application */
@@ -169,6 +175,8 @@
     padding:2.5px 8px;border-radius:999px;white-space:nowrap}
   .bdg.live{background:var(--green-soft);color:var(--green)}
   .bdg.reload{background:var(--amber-soft);color:var(--amber)}
+  .bdg.next{background:var(--hermes-soft);color:var(--hermes)}
+  .bdg.restart{background:var(--red-soft);color:var(--red)}
 
   /* Switch */
   .switch{flex:none;width:38px;height:22px;border-radius:999px;background:var(--muted);
@@ -244,8 +252,188 @@
   .ro{flex:none;font-size:11.5px;color:var(--muted-foreground);background:var(--muted);
     border-radius:8px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px}
 
-  /* ── Scène D : légende + flux ────────────────────────── */
+  /* ═════════ v2 — TOOLTIP « ? » ═════════ */
+  .tip{flex:none;position:relative;display:inline-flex;align-items:center;justify-content:center;
+    width:16px;height:16px;border-radius:999px;border:1px solid var(--border);background:var(--card);
+    color:var(--muted-foreground);font-size:10px;font-weight:700;line-height:1;cursor:help;user-select:none;
+    transition:border-color .13s,color .13s;vertical-align:middle}
+  .tip:hover,.tip:focus-visible,.tip.open{border-color:var(--hermes);color:var(--hermes)}
+  .tip:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  .tip-pop{position:absolute;left:50%;bottom:calc(100% + 9px);transform:translateX(-50%) translateY(4px);
+    width:max-content;max-width:250px;background:oklch(0.24 0.01 60);color:oklch(0.97 0.002 80);
+    font-size:11px;font-weight:400;line-height:1.5;text-align:left;padding:8px 11px;border-radius:10px;
+    box-shadow:0 8px 26px oklch(0.19 0.004 60 / 0.35);opacity:0;pointer-events:none;
+    transition:opacity .14s,transform .14s;z-index:40}
+  .tip:hover .tip-pop,.tip:focus-visible .tip-pop,.tip.open .tip-pop{
+    opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .tip-pop::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:5px solid transparent;border-top-color:oklch(0.24 0.01 60)}
+  .tip-below .tip-pop{bottom:auto;top:calc(100% + 9px);transform:translateX(-50%) translateY(-4px)}
+  .tip-below .tip-pop::after{top:auto;bottom:100%;border-top-color:transparent;
+    border-bottom-color:oklch(0.24 0.01 60)}
+  .tip-below:hover .tip-pop,.tip-below:focus-visible .tip-pop,.tip-below.open .tip-pop{
+    transform:translateX(-50%) translateY(0)}
+  .tip-left .tip-pop{left:-4px;transform:translateY(4px);max-width:210px}
+  .tip-left:hover .tip-pop,.tip-left:focus-visible .tip-pop,.tip-left.open .tip-pop{
+    transform:translateY(0)}
+  .tip-left .tip-pop::after{left:12px;transform:none}
+  .tip-left.tip-below .tip-pop{transform:translateY(-4px)}
+  .tip-left.tip-below:hover .tip-pop,.tip-left.tip-below:focus-visible .tip-pop,
+  .tip-left.tip-below.open .tip-pop{transform:translateY(0)}
+
+  /* ═════════ v2 — DRILL-DOWN MOTEUR ═════════ */
+  .drill-entry{display:flex;align-items:center;gap:10px;margin:16px 16px 8px;padding:12px 13px;
+    border:1.5px dashed oklch(0.63 0.17 42 / .5);border-radius:14px;cursor:pointer;
+    transition:background .13s,border-color .13s}
+  .drill-entry:hover{background:var(--hermes-soft);border-color:var(--hermes)}
+  .drill-entry .de-ico{flex:none;width:28px;height:28px;border-radius:10px;background:var(--muted);
+    display:flex;align-items:center;justify-content:center;color:var(--foreground)}
+  .drill-entry .de-tt{flex:1;min-width:0}
+  .drill-entry .de-tt b{font-size:13px;font-weight:600;display:block}
+  .drill-entry .de-tt span{font-size:10.5px;color:var(--muted-foreground);display:block;margin-top:1px;line-height:1.4}
+  .drill-row{display:flex;align-items:center;gap:11px;padding:11px 16px;cursor:pointer;transition:background .12s}
+  .drill-row:hover{background:oklch(0.955 0.003 75 / .55)}
+  .drill-row + .drill-row{border-top:1px solid oklch(0.915 0.004 75 / .6)}
+  .drill-row .d-ico{flex:none;width:27px;height:27px;border-radius:9px;background:var(--muted);
+    display:flex;align-items:center;justify-content:center;color:var(--foreground)}
+  .drill-row .d-tt{flex:1;min-width:0}
+  .drill-row .d-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .drill-row .d-sub{font-size:11px;color:var(--muted-foreground);margin-top:1px}
+  .drill-row .chev-r{flex:none;color:var(--muted-foreground);transition:color .12s}
+  .drill-row:hover .chev-r{color:var(--hermes)}
+  .schema-note{margin:12px 16px 4px;padding:8px 11px;border-radius:10px;background:var(--muted);
+    font-size:10.5px;line-height:1.5;color:var(--muted-foreground)}
+  .schema-note code{font-family:ui-monospace,monospace;font-size:10px;background:oklch(1 0 0 / .6);
+    border-radius:4px;padding:0 4px}
+
+  /* ═════════ v2 — FOURNISSEURS & CLÉS ═════════ */
+  .prov{margin:8px 16px;padding:12px 13px;border:1px solid var(--border);border-radius:14px;background:var(--background)}
+  .prov-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .prov-head .p-name{font-size:13px;font-weight:600}
+  .prov-head small{font-weight:400;color:var(--muted-foreground);font-size:11px}
+  .prov-head .p-meta{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .prov-url{margin-top:6px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted-foreground);
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}
+  .keys-head{display:flex;align-items:center;gap:6px;margin:10px 0 6px;font-size:10.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground)}
+  .key-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);
+    border-radius:11px;background:var(--card);margin-bottom:6px;flex-wrap:wrap}
+  .key-row .k-lbl{flex:1;min-width:140px}
+  .key-row .k-name{font-size:12px;font-weight:600}
+  .key-row .k-val{display:block;font-family:ui-monospace,monospace;font-size:10.5px;
+    color:var(--muted-foreground);margin-top:1px}
+  .key-row .k-err{display:block;font-size:10px;color:var(--amber);margin-top:2px}
+  .k-ord{flex:none;width:17px;height:17px;border-radius:999px;background:var(--muted);
+    color:var(--muted-foreground);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .kst{flex:none;font-size:9.5px;font-weight:700;padding:2.5px 8px;border-radius:999px;
+    white-space:nowrap;letter-spacing:.02em}
+  .kst.on{background:var(--green-soft);color:var(--green)}
+  .kst.testing{background:var(--muted);color:var(--muted-foreground)}
+  .kst.dead{background:var(--amber-soft);color:var(--amber)}
+  .kst.bad{background:var(--red-soft);color:var(--red)}
+  .mini-btn{flex:none;display:inline-flex;align-items:center;gap:4px;height:25px;padding:0 10px;
+    border:1px solid var(--border);border-radius:8px;background:var(--card);font:inherit;
+    font-size:11px;font-weight:500;color:var(--foreground);cursor:pointer;white-space:nowrap;
+    transition:border-color .12s,color .12s}
+  .mini-btn:hover{border-color:var(--hermes);color:var(--hermes)}
+  .mini-btn.ghost{border-color:transparent;background:transparent;color:var(--muted-foreground)}
+  .mini-btn.ghost:hover{color:var(--hermes)}
+  .mini-btn.primary{background:var(--hermes);border-color:var(--hermes);color:var(--hermes-foreground)}
+  .mini-btn.primary:hover{color:var(--hermes-foreground);filter:brightness(1.07)}
+  .ord-btn{flex:none;width:22px;height:22px;border:none;border-radius:7px;background:transparent;
+    color:var(--muted-foreground);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .12s,color .12s}
+  .ord-btn:hover{background:var(--muted);color:var(--foreground)}
+  .key-form{margin:8px 0 2px;padding:10px 11px;border:1px dashed var(--border);border-radius:12px;
+    background:var(--card);display:flex;flex-direction:column;gap:7px}
+  .key-form input{height:30px;padding:0 10px;border:1px solid var(--border);border-radius:9px;
+    background:var(--background);font:inherit;font-size:12px;color:var(--foreground)}
+  .key-form input.mono{font-family:ui-monospace,monospace;font-size:11px}
+  .key-form input:focus{outline:2px solid var(--hermes);outline-offset:1px;border-color:var(--hermes)}
+  .kf-foot{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .kf-note{flex:1;min-width:160px;font-size:10.5px;color:var(--muted-foreground);line-height:1.4}
+  .add-row{display:flex;align-items:center;gap:8px;margin:6px 16px;padding:9px 12px;
+    border:1.5px dashed var(--border);border-radius:12px;color:var(--muted-foreground);
+    font-size:12px;font-weight:500;cursor:pointer;transition:color .13s,border-color .13s;background:transparent}
+  .add-row:hover{color:var(--hermes);border-color:var(--hermes)}
+  .kpool-note{margin:10px 16px 4px;padding:9px 12px;border-radius:11px;background:var(--muted);
+    font-size:11px;line-height:1.55;color:var(--muted-foreground)}
+  .kpool-note b{color:var(--foreground);font-weight:600}
+
+  /* ═════════ v2 (revue connecteurs) — IMPORTS GITHUB ═════════ */
+  .c-src{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted-foreground);
+    margin-top:3px;overflow-wrap:anywhere;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .c-src svg{flex:none;opacity:.75}
+  .c-desc{font-size:10.5px;color:var(--muted-foreground);margin-top:2px;line-height:1.5}
+  .prov .p-desc{font-size:11px;color:var(--muted-foreground);margin-top:4px;line-height:1.5;max-width:52ch}
+  .prov .upd{margin:10px 0 0}
+  .sheet-body > .key-form{margin:8px 16px 2px}
+  .conn-log{margin:9px 0 0;border:1px solid var(--border);border-radius:10px;background:var(--card);
+    padding:8px 11px;font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.95;
+    color:var(--muted-foreground)}
+  .conn-log .hash{color:var(--hermes);font-weight:600}
+  .conn-log .when{float:right;font-size:9.5px;opacity:.85;margin-left:12px}
+  .conn-log .more{display:block;margin-top:4px;padding-top:5px;border-top:1px dashed var(--border);
+    font-family:"Geist",system-ui,sans-serif;font-size:10px}
+  .p-note{margin:10px 16px 4px;padding:9px 12px;border-radius:11px;background:var(--muted);
+    font-size:11px;line-height:1.5;color:var(--muted-foreground);display:flex;gap:8px;align-items:flex-start}
+  .p-note svg{flex:none;margin-top:1px}
+  .p-note b{color:var(--foreground);font-weight:600}
+
+  /* ═════════ v2 — OUTILS & SKILLS ═════════ */
+  .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;padding:2px 16px 6px}
+  .tool-item{display:flex;align-items:center;gap:9px;padding:8px 2px;min-width:0}
+  .tool-item .t-lbl{flex:1;min-width:0;font-size:12.5px;font-weight:500;display:flex;
+    align-items:center;gap:6px;flex-wrap:wrap}
+  .via-chip{display:inline-flex;align-items:center;font-size:9.5px;font-weight:600;padding:1.5px 7px;
+    border-radius:999px;background:var(--muted);color:var(--muted-foreground);white-space:nowrap}
+  .skill-row{display:flex;align-items:center;gap:10px;padding:10px 16px;transition:background .12s}
+  .skill-row:hover{background:oklch(0.955 0.003 75 / .55)}
+  .skill-row .s-tt{flex:1;min-width:0}
+  .skill-row .s-name{font-size:12.5px;font-weight:600;display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
+  .skill-row .s-ver{font-size:10px;color:var(--muted-foreground);font-family:ui-monospace,monospace}
+  .skill-row .s-desc{font-size:11px;color:var(--muted-foreground);margin-top:1px}
+
+  /* ═════════ v2 — MCP & FICHIERS .MD ═════════ */
+  .mcp-row{margin:6px 16px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;
+    background:var(--background)}
+  .mcp-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mcp-name{font-size:12.5px;font-weight:600}
+  .tr-chip{flex:none;font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;
+    background:var(--muted);color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.05em}
+  .mcp-cmd{margin-top:6px;font-family:ui-monospace,monospace;font-size:10.5px;
+    color:var(--muted-foreground);word-break:break-all;background:var(--muted);border-radius:7px;padding:5px 8px}
+  .md-row{display:flex;align-items:center;gap:10px;padding:9px 16px}
+  .md-row .m-tt{flex:1;min-width:0}
+  .md-row .m-name{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .md-row .m-sub{font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+  .md-edit{margin:4px 16px 8px;border:1px solid var(--border);border-radius:12px;background:var(--background);
+    font-family:ui-monospace,monospace;font-size:11px;line-height:1.7;padding:11px 13px;
+    white-space:pre-wrap;color:var(--foreground)}
+  .md-edit .c{color:var(--muted-foreground)}
+  .md-foot{display:flex;align-items:center;gap:8px;padding:0 16px 6px;flex-wrap:wrap}
+  .md-ok{font-size:10.5px;color:var(--green);display:inline-flex;align-items:center;gap:4px}
+
+  /* ═════════ v2 — PROFILS & SYSTÈME ═════════ */
+  .prof-card{display:flex;align-items:center;gap:10px;margin:5px 16px;padding:10px 12px;
+    border:1px solid var(--border);border-radius:12px;background:var(--background)}
+  .prof-card .pf-star{flex:none;color:var(--amber)}
+  .prof-card .pf-tt{flex:1;min-width:0}
+  .prof-card .pf-name{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .prof-card .pf-sub{font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+  .pf-applied{flex:none;font-size:9.5px;font-weight:700;padding:2.5px 8px;border-radius:999px;
+    background:var(--hermes-soft);color:var(--hermes)}
+  .sys-row{display:flex;align-items:center;gap:10px;padding:9px 16px;flex-wrap:wrap}
+  .sys-row .sy-lbl{flex:1;min-width:210px;font-size:12.5px;font-weight:500}
+  .sys-row .sy-lbl small{display:block;font-weight:400;font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+  .upd{margin:8px 16px;padding:11px 13px;border:1px solid oklch(0.72 0.16 70 / .35);
+    background:var(--amber-soft);border-radius:12px}
+  .upd .u-ttl{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .upd .u-sub{font-size:11px;color:var(--muted-foreground);margin-top:4px;line-height:1.5}
+
+  /* ── Scène J : légende + flux ────────────────────────── */
   .legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 2px 4px}
+  .legend .lg-txt{font-size:12px;color:var(--muted-foreground)}
   .flow{display:flex;align-items:stretch;gap:14px;flex-wrap:wrap;margin:20px 0 4px}
   .fbox{flex:1;min-width:170px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
   .fbox h4{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
@@ -253,7 +441,8 @@
   .fbox .frow{display:flex;align-items:center;gap:7px;font-size:12px;padding:3.5px 0;flex-wrap:wrap}
   .fbox .frow code{font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);
     border-radius:4px;padding:1px 5px}
-  .fbox .frow .who{color:var(--muted-foreground);font-size:10.5px;white-space:nowrap}
+  .fbox .frow .who{color:var(--muted-foreground);font-size:10.5px}
+  .fbox .fsub{font-size:10.5px;color:var(--muted-foreground);margin-top:5px;line-height:1.45}
   .arrow{align-self:center;flex:none;color:var(--muted-foreground)}
   .states{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
   .state-card{border:1px solid var(--border);border-radius:14px;padding:14px 14px 12px;background:var(--card)}
@@ -261,7 +450,7 @@
   .state-card .demo{display:flex;align-items:center;gap:10px;min-height:34px}
   .state-card .demo .r{width:76px;height:8px;border-radius:4px;background:var(--muted)}
 
-  /* ── Scène E : mobile ────────────────────────────────── */
+  /* ── Scène K : mobile ────────────────────────────────── */
   .phone{width:288px;margin:6px auto 0;border:1.5px solid oklch(0.19 0.004 60 / 0.28);border-radius:38px;
     padding:10px;background:var(--background);box-shadow:0 16px 50px oklch(0.19 0.004 60 / 0.16)}
   .phone .notch{width:88px;height:5px;border-radius:999px;background:var(--border);margin:2px auto 10px}
@@ -271,6 +460,7 @@
   /* ── Tableau de spec ────────────────────────────────── */
   .spec{margin-top:26px}
   .spec h2{font-size:17px;font-weight:600;margin-bottom:4px}
+  .spec h3{font-size:13px;font-weight:600;margin:20px 0 6px}
   .spec .sub{color:var(--muted-foreground);font-size:13.5px;margin-bottom:16px}
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
@@ -282,6 +472,9 @@
   .spec .files{margin-top:16px;font-size:12.5px;color:var(--muted-foreground);line-height:1.6}
   .spec .files code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
     border-radius:5px;padding:1px 6px}
+  .spec .taxo{margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;
+    background:var(--background);font-size:12.5px;line-height:1.6;color:var(--muted-foreground)}
+  .spec .taxo b{color:var(--foreground)}
 
   .page-foot{margin-top:30px;text-align:center;font-size:11.5px;color:var(--muted-foreground)}
 </style>
@@ -290,16 +483,19 @@
 <div class="wrap">
 
   <header class="page-head">
-    <h1>Maquette interactive — Page de paramètres</h1>
-    <p class="sub">Hermes Web · chantier « paramètres ». La page rend les deux registres du §6 du FORK.md
-    en deux sections — aucune logique métier dedans. Cette planche est cliquable&nbsp;: engrenages, switches,
-    segments, listes et slider réagissent.</p>
+    <h1>Maquette interactive v2 — Page de paramètres</h1>
+    <p class="sub">Hermes Web · chantier « paramètres ». v2 sur la base validée&nbsp;: les explications passent
+    dans des tooltips «&nbsp;?&nbsp;» (la ligne reste sobre), le sheet gagne une porte «&nbsp;Paramètres moteur&nbsp;»
+    en drill-down — fournisseurs &amp; clés (services d&apos;API compris), connecteurs GitHub et leurs
+    mises à jour, outils, skills, MCP, profils, fichiers .md, mises à jour du moteur.
+    La carte de statut devient la barre de santé permanente. Cette planche est cliquable.</p>
     <div class="chips">
       <span class="chip">Forme&nbsp;: <b>Sheet overlay · 460px</b></span>
-      <span class="chip">Sections&nbsp;: <b>hermes.* / fork.*</b></span>
-      <span class="chip">Application&nbsp;: <b>immédiat + badge rechargement</b></span>
-      <span class="chip">Entrée&nbsp;: <b>engrenage · carte de statut</b></span>
-      <span class="chip"><b>Zéro logique métier</b> (§6)</span>
+      <span class="chip">v2&nbsp;: <b>tooltips « ?» · drill-down moteur</b></span>
+      <span class="chip">Deux étages&nbsp;: <b>client (immédiat) + moteur (schéma découvert)</b></span>
+      <span class="chip">Clés&nbsp;: <b>porte-clés multi-clés · relai automatique</b></span>
+      <span class="chip">Services d&apos;API&nbsp;: <b>Tavily · Exa — porte-clés partagé</b></span>
+      <span class="chip">Connecteurs&nbsp;: <b>imports GitHub · versions &amp; mises à jour</b></span>
     </div>
   </header>
 
@@ -307,12 +503,13 @@
   <section class="scene">
     <div class="scene-head">
       <span class="scene-num">A</span>
-      <h2>Point d&apos;entrée — l&apos;engrenage de la carte de statut</h2>
-      <p class="why">La carte en bas de la sidebar ne change ni de place ni de contenu&nbsp;:
-      l&apos;engrenage s&apos;ajoute à droite de la ligne d&apos;état. Cliquez-le — la planche défile au sheet.</p>
+      <h2>Point d&apos;entrée — la carte de statut, promue barre de santé</h2>
+      <p class="why">Toujours en bas de la sidebar, toujours l&apos;engrenage à droite. Ce qui change en v2&nbsp;:
+      une fois la gateway branchée, la ligne «&nbsp;Définissez HERMES_GATEWAY_URL…&nbsp;» cède la place à des
+      informations réelles — version du moteur, fournisseur et clé en cours.</p>
     </div>
     <div class="stage dim-stage">
-      <div class="compare-label before"><span class="tag">Aujourd'hui</span> carte de statut actuelle (sidebar.tsx)</div>
+      <div class="compare-label before"><span class="tag">Aujourd&apos;hui</span> carte de statut actuelle (sidebar.tsx)</div>
       <div class="side-frag dim">
         <div class="side-top">
           <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
@@ -339,7 +536,7 @@
         </div>
       </div>
 
-      <div class="compare-label after"><span class="tag">Après le chantier</span> même carte, engrenage à droite de la ligne d&apos;état</div>
+      <div class="compare-label after"><span class="tag">Après le chantier</span> démo — engrenage, ligne inchangée</div>
       <div class="side-frag">
         <div class="side-top">
           <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
@@ -365,18 +562,49 @@
             </span>
           </div>
           <p class="status-sub">
-            GLM-4.6 · Définissez
-            <code>HERMES_GATEWAY_URL</code>
-            pour brancher l&apos;agent Hermes.
+            GLM-4.6 · réponses simulées —
+            <span class="tip tip-below" tabindex="0" role="button" aria-label="Que signifie le mode démo ?">?<span class="tip-pop">Tant qu&apos;aucune <code>HERMES_GATEWAY_URL</code> n&apos;est définie, les tours sont simulés par le LLM intégré au mini-service. La carte de statut reste le signal honnête de cet état — l&apos;engrenage ouvre les paramètres moteur pour brancher une gateway.</span></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="compare-label gateway"><span class="tag">Gateway branchée</span> la même carte devient la barre de santé</div>
+      <div class="side-frag">
+        <div class="side-top">
+          <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
+          <span class="name">Hermes</span>
+          <span class="plus"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+        </div>
+        <div class="side-search">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          Rechercher…
+        </div>
+        <div class="side-lines">
+          <i class="w1"></i><i class="w2"></i><span class="gap"></span><i class="w3"></i><i class="w4"></i>
+        </div>
+        <div class="status-card">
+          <div class="status-line">
+            <span class="dot" style="background:var(--green)"></span>
+            <p class="mode">Gateway Hermes connectée</p>
+            <span class="spotlight">
+              <button class="gear-btn goto-sheet" title="Paramètres" aria-label="Ouvrir les paramètres" style="border:none;background:transparent">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </span>
+          </div>
+          <p class="status-sub">
+            moteur v2.4.1 · OpenAI-compatible ·
+            <b style="font-weight:600;color:var(--foreground)">clé n°1 active</b>
+            <span class="tip tip-below" tabindex="0" role="button" aria-label="Clé active ?">?<span class="tip-pop">Première clé <b>active</b> du porte-clés du fournisseur (scène E) — si son quota s&apos;épuise, la suivante prend le relais sans couper le tour.</span></span>
           </p>
         </div>
       </div>
     </div>
     <ul class="notes">
-      <li data-n="1">L&apos;engrenage vit dans la carte de statut existante (27px, tooltip «&nbsp;Paramètres&nbsp;») — aucun nouvel élément flottant dans la sidebar, aucune retouche du layout au-dessus.</li>
-      <li data-n="2">Même entrée sur mobile&nbsp;: la sidebar mobile est un Sheet gauche, sa carte de statut porte le même engrenage (scène E).</li>
-      <li data-n="3">Échap referme le sheet&nbsp;; le chat reste lisible derrière. <b>Cmd/Ctrl+K</b> reste actif pendant l&apos;ouverture (l&apos;overlay ne capture pas les raccourcis globaux).</li>
-      <li data-n="4">Palette de commandes et raccourci clavier refusés volontairement en v1 — un seul point d&apos;entrée, celui qu&apos;on voit.</li>
+      <li data-n="1">L&apos;engrenage vit dans la carte de statut existante (27px, tooltip «&nbsp;Paramètres&nbsp;») — aucun nouvel élément flottant, aucune retouche du layout au-dessus.</li>
+      <li data-n="2"><b>La carte ne disparaît pas une fois la gateway branchée&nbsp;: elle est promue.</b> La ligne HERMES_GATEWAY_URL cède la place à&nbsp;: version du moteur, fournisseur, clé en cours (cliquable → scène E). Elle reste le double signal&nbsp;: porte des paramètres + santé du moteur.</li>
+      <li data-n="3">Les trois états existent déjà dans le code (<code>Hors ligne</code> / <code>Gateway Hermes connectée</code> / <code>Mode démo</code>) — le chantier ne fait qu&apos;enrichir la troisième ligne, jamais la structure.</li>
+      <li data-n="4">Échap referme le sheet, le chat reste lisible derrière. Entrée unique conservée en v2 (palette et raccourci toujours refusés).</li>
     </ul>
   </section>
 
@@ -384,9 +612,10 @@
   <section class="scene">
     <div class="scene-head">
       <span class="scene-num">B</span>
-      <h2>Le sheet, section « Agent Hermes » — registre amont</h2>
-      <p class="why">Sheet de 460px glissant depuis la droite, chat assombri derrière. Le select des modèles
-      s&apos;ouvre, les favoris se retirent, l&apos;effort et les autorisations réagissent.</p>
+      <h2>Le sheet v2 — registre « Agent Hermes », explications en « ? »</h2>
+      <p class="why">Même sheet, mêmes sections que la v1 validée — ce qui change&nbsp;: les descriptions quittent la
+      ligne et deviennent des tooltips «&nbsp;?&nbsp;». La ligne visible = libellé + contrôle, rien d&apos;autre.
+      Survolez ou cliquez un «&nbsp;?&nbsp;» pour voir la bulle s&apos;ouvrir (états spécifiés en scène J).</p>
     </div>
     <div class="stage wide overlay-stage" id="sceneB">
       <div class="ghost" aria-hidden="true">
@@ -416,91 +645,61 @@
         <div class="sheet-body">
 
           <div class="sec">
-            <span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
+            <span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg></span>
             <h3>Agent Hermes</h3>
             <span class="cnt">4 réglages</span>
-            <span class="ns">amont · hermes.*</span>
+            <span class="ns">hermes.*</span>
           </div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Modèle par défaut</span>
+              <span class="lbl">Modèle par défaut
+                <span class="tip" tabindex="0" role="button" aria-label="À propos du modèle par défaut">?<span class="tip-pop">Le modèle des nouveaux tours — le picker du composer écrit ici. Sans valeur, le défaut du serveur s&apos;applique.</span></span>
+              </span>
               <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
               <span class="sel-wrap">
-                <button class="sel-btn" id="modelSelBtn">
+                <button class="sel-btn" id="modelSelBtn" aria-haspopup="listbox">
                   <span id="modelSelLabel">Hermes 4 70B</span>
                   <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
-                <div class="sel-list" id="modelSelList" hidden>
-                  <button class="sel-item" data-name="Hermes 4 405B">
-                    <span class="check"></span>
-                    <span>
-                      <span class="m-name">Hermes 4 405B
-                        <span class="badge-flag"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>Flagship</span>
-                      </span>
-                      <span class="m-id">hermes-4-405b · Nous Research</span>
-                    </span>
-                  </button>
-                  <button class="sel-item on" data-name="Hermes 4 70B">
-                    <span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-                    <span>
-                      <span class="m-name">Hermes 4 70B
-                        <span class="badge-flag gray">Défaut</span>
-                      </span>
-                      <span class="m-id">hermes-4-70b · Nous Research</span>
-                    </span>
-                  </button>
-                  <button class="sel-item" data-name="Hermes 4 14B">
-                    <span class="check"></span>
-                    <span><span class="m-name">Hermes 4 14B</span><span class="m-id">hermes-4-14b · Nous Research</span></span>
-                  </button>
-                  <button class="sel-item" data-name="Hermes 3 405B">
-                    <span class="check"></span>
-                    <span><span class="m-name">Hermes 3 405B</span><span class="m-id">hermes-3-405b · Nous Research</span></span>
-                  </button>
-                  <button class="sel-item" data-name="Hermes 3 8B">
-                    <span class="check"></span>
-                    <span><span class="m-name">Hermes 3 8B</span><span class="m-id">hermes-3-8b · Nous Research</span></span>
-                  </button>
+                <div class="sel-list" id="modelSelList" role="listbox" hidden>
+                  <button class="sel-item" role="option" data-name="Hermes 4 405B"><span class="check"></span><span><span class="m-name">Hermes 4 405B<span class="badge-flag">Flagship</span></span><span class="m-id">Hermes-4-405B</span></span></button>
+                  <button class="sel-item on" role="option" data-name="Hermes 4 70B"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span><span class="m-name">Hermes 4 70B<span class="badge-flag gray">Défaut</span></span><span class="m-id">Hermes-4-70B</span></span></button>
+                  <button class="sel-item" role="option" data-name="Hermes 4 14B"><span class="check"></span><span><span class="m-name">Hermes 4 14B</span><span class="m-id">Hermes-4-14B</span></span></button>
+                  <button class="sel-item" role="option" data-name="Hermes 3 405B"><span class="check"></span><span><span class="m-name">Hermes 3 405B</span><span class="m-id">Hermes-3-405B</span></span></button>
+                  <button class="sel-item" role="option" data-name="Hermes 3 8B"><span class="check"></span><span><span class="m-name">Hermes 3 8B</span><span class="m-id">Hermes-3-8B</span></span></button>
                 </div>
               </span>
             </div>
-            <p class="desc">Modèle sélectionné pour les nouveaux tours de chat — même source que le picker
-            (gateway ou catalogue). La pilule du composer suit immédiatement.</p>
           </div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Modèles favoris</span>
-              <span class="ro"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>2 / 5 épinglés</span>
+              <span class="lbl">Modèles favoris
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des favoris">?<span class="tip-pop">Ids épinglés en tête du picker (JSON). Le picker relit à chaque ouverture — gérable ici ou depuis le picker lui-même.</span></span>
+              </span>
+              <span class="bdg next"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>prochaine ouverture du picker</span>
             </div>
             <div class="fav-zone" id="favZone">
               <span class="fav-chip">
                 <svg class="star" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
                 Hermes 4 405B
-                <button class="rm" title="Retirer des favoris" aria-label="Retirer Hermes 4 405B des favoris">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
+                <button class="rm" title="Retirer des favoris" aria-label="Retirer Hermes 4 405B des favoris"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
               </span>
               <span class="fav-chip">
                 <svg class="star" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
                 Hermes 4 14B
-                <button class="rm" title="Retirer des favoris" aria-label="Retirer Hermes 4 14B des favoris">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
+                <button class="rm" title="Retirer des favoris" aria-label="Retirer Hermes 4 14B des favoris"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
               </span>
-              <button class="add-btn" id="favAddBtn">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                Ajouter
-              </button>
+              <button class="add-btn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Ajouter</button>
             </div>
-            <p class="desc">Épinglés en tête du sélecteur de modèles, retirés d&apos;un clic — le picker relit
-            la liste à chaque ouverture (aucun badge&nbsp;: pas de rechargement à prévoir).</p>
           </div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Effort de raisonnement</span>
+              <span class="lbl">Effort de raisonnement
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;effort de raisonnement">?<span class="tip-pop" style="max-width:200px">Échelle brute du fournisseur (off / standard / élevé) — ignorée sans dommage si non supportée. En démo, «&nbsp;off&nbsp;» coupe le raisonnement.</span></span>
+              </span>
               <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
               <span class="seg" role="radiogroup" aria-label="Effort de raisonnement" id="effortSeg">
                 <button type="button">Off</button>
@@ -508,29 +707,26 @@
                 <button type="button">Élevé</button>
               </span>
             </div>
-            <p class="desc">Envoyé dans <code>api_turn_v1.settings</code> — ignoré sans dommage si le fournisseur
-            ne le supporte pas. L&apos;échelle suit le modèle sélectionné (ici&nbsp;: Nous Portal).</p>
           </div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Autorisations de l&apos;agent</span>
+              <span class="lbl">Autorisations de l&apos;agent
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des autorisations">?<span class="tip-pop">ask&nbsp;: confirmation avant chaque action · auto&nbsp;: tout exécuter. Réinitialisé sur «&nbsp;ask&nbsp;» à chaque session.</span></span>
+              </span>
               <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
-              <button class="switch" role="switch" aria-checked="false" aria-label="Autorisations automatiques" title="ask : confirmation avant chaque action · auto : tout exécuter"></button>
+              <button class="switch" role="switch" aria-checked="false" aria-label="Autorisations automatiques"></button>
             </div>
-            <p class="desc">ask&nbsp;: confirmation avant chaque action · auto&nbsp;: tout exécuter.
-            Réinitialisé sur «&nbsp;ask&nbsp;» à chaque session — le bouclier du composer suit.</p>
           </div>
 
         </div>
       </div>
     </div>
     <ul class="notes">
-      <li data-n="1">Sheet de <b>460px</b> depuis la droite (shadcn Sheet), chat assombri derrière — la conversation reste le chef d&apos;orchestre, on ne quitte jamais le chat.</li>
-      <li data-n="2">Section «&nbsp;Agent Hermes&nbsp;» = rendu de <code>HERMES_SETTINGS</code> (§6). Aucune logique métier&nbsp;: chaque ligne lit et écrit son réglage du registre, point.</li>
-      <li data-n="3">Pas de bouton «&nbsp;Enregistrer&nbsp;» — tout s&apos;applique en place, le badge vert signale ce qui prend effet immédiatement (bus d&apos;événements, scène D).</li>
-      <li data-n="4">Le select partage la source du picker (gateway en mode connecté, catalogue en repli) — ids disparus ignorés silencieusement, comme partout.</li>
-      <li data-n="5">Favoris&nbsp;: c&apos;est ici qu&apos;ils se gèrent (le picker les relit à chaque ouverture — comportement déjà en place, zéro retouche du picker).</li>
+      <li data-n="1"><b>Transformation v2&nbsp;: zéro description visible.</b> Le champ <code>description</code> du registre devient le contenu du tooltip — une seule source de vérité, rien à doubler. La ligne respire&nbsp;: libellé + «&nbsp;?&nbsp;» + badge + contrôle.</li>
+      <li data-n="2">Le «&nbsp;?&nbsp;» est un bouton focusable (<code>tabindex</code>, <code>aria-label</code>) — survol, focus clavier, et <b>tap sur mobile</b> (scène K)&nbsp;; celui qui sait n&apos;ouvre rien, celui qui doute ouvre.</li>
+      <li data-n="3">Garde-fou rédactionnel&nbsp;: 2-3 phrases maximum dans un tooltip. Les explications longues sont découpées ou déplacées dans la documentation.</li>
+      <li data-n="4">Les libellés restent en français, les identifiants en anglais (R7) — le sheet rend le registre, aucune logique métier (§6).</li>
     </ul>
   </section>
 
@@ -538,11 +734,12 @@
   <section class="scene">
     <div class="scene-head">
       <span class="scene-num">C</span>
-      <h2>Le sheet, section « Cette interface » — registre du fork</h2>
-      <p class="why">Même sheet, déroulé d&apos;un cran&nbsp;: les 4 réglages du fork, groupés par catégorie
-      (Interface, Projets). Le slider redimensionne la sidebar en direct dans la maquette.</p>
+      <h2>Registre « Cette interface » + la porte « Paramètres moteur »</h2>
+      <p class="why">Même section que la v1 validée (descriptions → «&nbsp;?&nbsp;»). Le seul ajout structurel&nbsp;:
+      tout en bas du sheet, la porte du drill-down moteur — les deux registres restent la page d&apos;accueil,
+      le moteur est un second étage.</p>
     </div>
-    <div class="stage wide overlay-stage">
+    <div class="stage wide overlay-stage" id="sceneC">
       <div class="ghost" aria-hidden="true">
         <div class="g-side">
           <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
@@ -567,7 +764,7 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
-        <div class="sheet-body">
+        <div class="sheet-body" style="max-height:none">
 
           <div class="sec">
             <span class="ico fork"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
@@ -578,32 +775,34 @@
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Jauge de contexte</span>
+              <span class="lbl">Jauge de contexte
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de la jauge">?<span class="tip-pop">Anneau de consommation de tokens dans le footer du composer — apparaît ou disparaît sans rechargement.</span></span>
+              </span>
               <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
               <button class="switch on" role="switch" aria-checked="true" aria-label="Afficher la jauge de contexte"></button>
             </div>
-            <p class="desc">Affiche la jauge de consommation de tokens dans le composer — l&apos;anneau
-            apparaît ou disparaît sans rechargement.</p>
           </div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Largeur de la sidebar</span>
+              <span class="lbl">Largeur de la sidebar
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de la largeur">?<span class="tip-pop">Pourcentage de la largeur d&apos;écran (12 à 34) — la sidebar se redimensionne pendant le glissement, même geste que la poignée.</span></span>
+              </span>
               <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
               <span class="slider-row">
                 <input type="range" min="12" max="34" value="19" step="1" aria-label="Largeur de la sidebar en pourcentage" id="widthSlider">
                 <span class="slider-val" id="widthVal">19%</span>
               </span>
             </div>
-            <p class="desc">Pourcentage de la largeur d&apos;écran (12 à 34) — la sidebar se redimensionne
-            pendant le glissement, même geste que la poignée.</p>
           </div>
 
           <div class="subsec">Projets</div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Tri des conversations</span>
+              <span class="lbl">Tri des conversations
+                <span class="tip" tabindex="0" role="button" aria-label="À propos du tri">?<span class="tip-pop">Ordre des conversations à l&apos;intérieur d&apos;un projet. La sidebar lit ce réglage au montage — d&apos;où le badge honnête.</span></span>
+              </span>
               <span class="bdg reload">
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                 au rechargement
@@ -614,30 +813,38 @@
                 <button type="button">Titre</button>
               </span>
             </div>
-            <p class="desc">Ordre des conversations à l&apos;intérieur d&apos;un projet — la sidebar lit ce
-            réglage au montage, d&apos;où le badge honnête.</p>
           </div>
 
           <div class="row">
             <div class="row-top">
-              <span class="lbl">Projets repliés</span>
+              <span class="lbl">Projets repliés
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des projets repliés">?<span class="tip-pop">État interne de la sidebar (JSON d&apos;ids), piloté par les chevrons des groupes — lecture seule ici.</span></span>
+              </span>
               <span class="ro">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 15l3-3-3-3"/></svg>
                 2 / 5 repliés
               </span>
             </div>
-            <p class="desc">État interne de la sidebar (JSON d&apos;ids), piloté par les chevrons des groupes
-            — lecture seule ici, rien à régler.</p>
+          </div>
+
+          <div class="drill-entry goto" data-goto="sceneD" role="button" tabindex="0" aria-label="Ouvrir les paramètres moteur">
+            <span class="de-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+            <span class="de-tt">
+              <b>Paramètres moteur</b>
+              <span>Fournisseurs &amp; clés · connecteurs · outils · skills · MCP · profils · fichiers .md · mises à jour</span>
+            </span>
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des paramètres moteur">?<span class="tip-pop">Réglages profonds du moteur Hermes — portée serveur, surface déclarée par la gateway (schéma découvert). En mode démo, le mini-service simule tout&nbsp;: même écran, même comportement.</span></span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:var(--muted-foreground)"><path d="m9 18 6-6-6-6"/></svg>
           </div>
 
         </div>
       </div>
     </div>
     <ul class="notes">
-      <li data-n="1">Section «&nbsp;Cette interface&nbsp;» = rendu de <code>FORK_SETTINGS</code>, sous-groupes par <code>category</code> du registre («&nbsp;Projets&nbsp;» ici) — le jour où une catégorie nouvelle apparaît, la page la rend sans retouche.</li>
-      <li data-n="2">Jauge et largeur&nbsp;: immédiats (le composer et la page écoutent le bus d&apos;événements, scène D). Tri&nbsp;: au rechargement — la sidebar lit au montage, on assume plutôt que de mentir.</li>
-      <li data-n="3">«&nbsp;Projets repliés&nbsp;» rendu en lecture seule&nbsp;: c&apos;est la sidebar qui écrit ce réglage (chevrons des groupes) — la page affiche l&apos;état, elle ne le manipule pas.</li>
-      <li data-n="4">Les réglages de portée serveur (<code>scope: "server"</code>) rejoindront ces sections le jour où ils existeront — aucun aujourd&apos;hui, la table <code>settings</code> du mini-service n&apos;a pas besoin d&apos;être touchée.</li>
+      <li data-n="1">Section «&nbsp;Cette interface&nbsp;» = rendu de <code>FORK_SETTINGS</code>, sous-groupes par <code>category</code> — le jour où une catégorie nouvelle apparaît dans le registre, la page la rend sans retouche.</li>
+      <li data-n="2"><b>Drill-down plutôt qu&apos;élargir le sheet.</b> La décision 460px reste&nbsp;: les registres tiennent en un écran, le moteur est un second étage atteint par la porte en pointillés — fréquent à 1 clic, administration à 2, le chat reste visible derrière.</li>
+      <li data-n="3">La porte n&apos;est pas une section registre&nbsp;: c&apos;est un bouton. Elle n&apos;apparaîtrait pas si la gateway ne déclare aucune surface moteur — en démo, elle est toujours là (surface simulée).</li>
+      <li data-n="4">«&nbsp;Projets repliés&nbsp;» reste en lecture seule — la sidebar écrit ce réglage, la page l&apos;affiche, rien à régler.</li>
     </ul>
   </section>
 
@@ -645,52 +852,935 @@
   <section class="scene">
     <div class="scene-head">
       <span class="scene-num">D</span>
-      <h2>Immédiat ou au rechargement — le bus d&apos;événements</h2>
-      <p class="why">Deux badges, un mécanisme&nbsp;: le registre émet, les composants qui veulent réagir écoutent.
-      Les états focus / hover des contrôles sont spécifiés à droite.</p>
+      <h2>Drill-down — l&apos;accueil « Paramètres moteur »</h2>
+      <p class="why">Le second étage&nbsp;: une catégorie par rangée, résumé à droite, retour en haut à gauche.
+      Chaque rangée mène à sa scène sur cette planche — cliquez, la planche défile.</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneD">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="back-btn goto" data-goto="sceneC" aria-label="Retour aux paramètres">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Paramètres
+          </button>
+          <div class="tt">
+            <h2>Paramètres moteur</h2>
+            <p>portée serveur · déclarés par le moteur, simulés en démo</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body" style="max-height:none">
+
+          <div class="drill-row goto" data-goto="sceneE" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.777 5.5 5.5 0 0 1 7.777-7.777Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Fournisseurs &amp; clés
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des fournisseurs">?<span class="tip-pop">Qui génère les tokens — et les services d&apos;API à clé (Tavily, Exa) que consomment les outils. Porte-clés partout&nbsp;: plusieurs clés par fournisseur ou service, la relève prend le relais si l&apos;une s&apos;épuise.</span></span>
+              </span>
+              <span class="d-sub">3 fournisseurs · 5 clés · 2 services d&apos;API</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneF" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Connecteurs
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des connecteurs">?<span class="tip-pop">Les projets GitHub importés dans le moteur — outils, skills, serveurs MCP. Version installée, mises à jour disponibles, épinglage&nbsp;: tout se pilote ici, import par import.</span></span>
+              </span>
+              <span class="d-sub">4 importés · 1 mise à jour · 1 épinglé</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneG" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Outils
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des outils">?<span class="tip-pop">Interrupteurs transmis dans les settings du tour — un outil coupé disparaît de l&apos;admission suivante. Certains exigent la gateway.</span></span>
+              </span>
+              <span class="d-sub">6 outils actifs sur 9</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneG" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Skills
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des skills">?<span class="tip-pop">Paquets d&apos;instructions installés sur le moteur — installation / désinstallation / mise à jour, effet au rechargement.</span></span>
+              </span>
+              <span class="d-sub">3 installés · 1 disponible</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneH" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Serveurs MCP
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des serveurs MCP">?<span class="tip-pop">Serveurs d&apos;outils externes (Model Context Protocol) — transport stdio ou http, statut de connexion, reconnexion. Activer ou désactiver un serveur redémarre le moteur.</span></span>
+              </span>
+              <span class="d-sub">2 serveurs · 1 connecté</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneI" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Profils
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des profils">?<span class="tip-pop">Presets nommés du fork — appliquer un profil écrit les réglages client en place (modèle, effort, permissions). Zéro dépendance moteur en v1.</span></span>
+              </span>
+              <span class="d-sub">3 profils · « Défaut » appliqué</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneH" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Fichiers .md
+                <span class="tip" tabindex="0" role="button" aria-label="À propos des fichiers .md">?<span class="tip-pop">Mémoire du moteur (AGENTS.md, mémoire projet…) — éditable ici, injectée au tour suivant.</span></span>
+              </span>
+              <span class="d-sub">AGENTS.md · mémoire projet</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <div class="drill-row goto" data-goto="sceneI" role="button" tabindex="0">
+            <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>
+            <span class="d-tt">
+              <span class="d-name">Système &amp; mises à jour
+                <span class="tip" tabindex="0" role="button" aria-label="À propos du système">?<span class="tip-pop">Version et canal du moteur Hermes, vérification et application des mises à jour — et l&apos;état des dépendances de l&apos;interface.</span></span>
+              </span>
+              <span class="d-sub">moteur v2.4.1 · à jour</span>
+            </span>
+            <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          <p class="schema-note">Le contenu de cet étage est piloté par un schéma découvert
+          (<code>settings:schema</code>)&nbsp;: le moteur déclare sa surface éditable, la page rend ce
+          qu&apos;il déclare. En mode démo, le mini-service simule la surface complète.</p>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1"><b>Huit catégories, un seul étage secondaire.</b> La page ne s&apos;élargit pas (460px) ni ne se transforme en onglets&nbsp;: bouton retour en tête de sheet, liste verticale, entrée dans la catégorie — le drill-down du pattern Sheet, déjà utilisé par la sidebar mobile du fork.</li>
+      <li data-n="2">Le résumé de chaque rangée (compte de clés, connecteurs actifs, serveurs) vient du schéma découvert — aucune valeur codée en dur dans la page.</li>
+      <li data-n="3">Si la gateway ne déclare rien&nbsp;: la porte de la scène C reste masquée et le moteur est «&nbsp;non exposé&nbsp;» — l&apos;honnêteté d&apos;abord. En mode démo la surface est toujours là (simulée).</li>
+      <li data-n="4">Profils exceptés, tout cet étage est de <b>portée serveur</b> — SQLite additive côté mini-service, jamais de localStorage pour ces valeurs (règle d&apos;or des clés&nbsp;: jamais dans le navigateur).</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE E ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">E</span>
+      <h2>Fournisseurs, clés &amp; services d&apos;API — le porte-clés avec relai</h2>
+      <p class="why">Le cœur de la demande&nbsp;: plusieurs clés par fournisseur, testées dès l&apos;ajout,
+      prenant le relais quand l&apos;une s&apos;épuise. La valeur d&apos;une clé n&apos;est jamais réaffichée
+      après enregistrement — masquée, testable, réordonnable. Les services d&apos;API hébergés
+      (Tavily, Exa) partagent le même porte-clés — ils alimentent les outils de recherche.</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneE">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="back-btn goto" data-goto="sceneD" aria-label="Retour aux paramètres moteur">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Moteur
+          </button>
+          <div class="tt">
+            <h2>Fournisseurs &amp; clés</h2>
+            <p>modèles &amp; services d&apos;API · porte-clés à relai automatique</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body" style="max-height:none">
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">OpenAI-compatible</span>
+              <span class="p-meta">
+                <button class="mini-btn" data-test="1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>Tester tout</button>
+                <button class="mini-btn ghost" aria-label="Actions du fournisseur"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="prov-url">https://api.openai.com/v1
+              <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;URL de base">?<span class="tip-pop">URL de base des appels — tout fournisseur compatible OpenAI passe ici (OpenRouter, Together, point d&apos;accès privé…).</span></span>
+              · 12 modèles liés
+              <span class="tip" tabindex="0" role="button" aria-label="À propos des modèles liés">?<span class="tip-pop">Catalogue demandé au fournisseur au moment du test — alimente le sélecteur de modèles, la fenêtre de contexte en dérive.</span></span>
+            </p>
+
+            <div class="keys-head">Clés
+              <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;ordre des clés">?<span class="tip-pop">L&apos;ordre de la liste est la priorité&nbsp;: chaque tour part avec la première clé active. Remonter une clé la rend prioritaire.</span></span>
+            </div>
+
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl">
+                <span class="k-name">Principale</span>
+                <span class="k-val">sk-••••••••••••3f7a</span>
+              </span>
+              <span class="kst on">active</span>
+              <button class="mini-btn" data-test="1">Tester</button>
+              <span class="ord-btn" title="Réordonner"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/><path d="m6 9 6 6 6-6"/></svg></span>
+            </div>
+
+            <div class="key-row">
+              <span class="k-ord">2</span>
+              <span class="k-lbl">
+                <span class="k-name">Secours</span>
+                <span class="k-val">sk-••••••••••••9b21</span>
+                <span class="k-err">quota dépassé (429) · hier 23:41</span>
+              </span>
+              <span class="kst dead">épuisée</span>
+              <button class="mini-btn" title="Remettre la clé en service">Réactiver</button>
+              <span class="ord-btn" title="Réordonner"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/><path d="m6 9 6 6 6-6"/></svg></span>
+            </div>
+
+            <div class="key-row">
+              <span class="k-ord">3</span>
+              <span class="k-lbl">
+                <span class="k-name">Clé perso</span>
+                <span class="k-val">sk-••••••••••••c1ee</span>
+              </span>
+              <span class="kst testing">à tester</span>
+              <button class="mini-btn" data-test="1">Tester</button>
+              <span class="ord-btn" title="Réordonner"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/><path d="m6 9 6 6 6-6"/></svg></span>
+            </div>
+
+            <div class="key-form" aria-label="Formulaire d&apos;ajout de clé">
+              <input placeholder="Libellé — « Clé de secours »" aria-label="Libellé de la clé">
+              <input class="mono" type="password" placeholder="sk-…" aria-label="Valeur de la clé">
+              <div class="kf-foot">
+                <span class="kf-note">Stockée côté mini-service (SQLite) — <b>jamais</b> en localStorage,
+                jamais renvoyée en clair au navigateur.</span>
+                <button class="mini-btn primary">Enregistrer</button>
+                <button class="mini-btn ghost">Annuler</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">Z-ai <small>· LLM du mode démo</small></span>
+              <span class="p-meta"><span class="kst testing">sans clé</span></span>
+            </div>
+            <p class="prov-url">intégrée au mini-service — utilisée quand la gateway est absente</p>
+          </div>
+
+          <button class="add-row" aria-label="Ajouter un fournisseur">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Ajouter un fournisseur
+            <span class="tip tip-below" style="margin-left:auto" tabindex="0" role="button" aria-label="Quels fournisseurs ?">?<span class="tip-pop">Type (openai-compatible, Nous, anthropique, personnalisé), URL de base si besoin — la première clé se rattache aussitôt, le test part à l&apos;enregistrement.</span></span>
+          </button>
+
+          <div class="subsec">Services d&apos;API
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des services d&apos;API">?<span class="tip-pop">APIs hébergées à clé, consommées par les outils du moteur (recherche, extraction) — pas des projets GitHub à importer&nbsp;: elles vivent ici avec les clés, distinct des connecteurs (scène F).</span></span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">Tavily <small>· recherche web</small></span>
+              <span class="p-meta">
+                <span class="kst on">connectée</span>
+                <button class="mini-btn" data-test="1">Tester</button>
+                <button class="mini-btn ghost" aria-label="Actions Tavily"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="p-desc">Recherche web optimisée LLM — alimente l&apos;outil «&nbsp;Recherche web&nbsp;» (scène G).</p>
+            <div class="keys-head">Clés
+              <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;ordre des clés">?<span class="tip-pop">Même règle que les fournisseurs&nbsp;: l&apos;ordre est la priorité, le relai bascule sur quota.</span></span>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl">
+                <span class="k-name">Principale</span>
+                <span class="k-val">tvly-••••••8d2</span>
+              </span>
+              <span class="kst on">active</span>
+              <button class="mini-btn" data-test="1">Tester</button>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">2</span>
+              <span class="k-lbl">
+                <span class="k-name">Secours</span>
+                <span class="k-val">tvly-••••••c31</span>
+                <span class="k-err">quota mensuel atteint · hier 23:41</span>
+              </span>
+              <span class="kst dead">épuisée</span>
+              <button class="mini-btn" title="Remettre la clé en service">Réactiver</button>
+            </div>
+            <button class="mini-btn ghost" style="margin-top:2px">+ Ajouter une clé</button>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">Exa <small>· recherche sémantique</small></span>
+              <span class="p-meta">
+                <span class="kst testing">à tester</span>
+                <button class="mini-btn" data-test="1">Tester</button>
+                <button class="mini-btn ghost" aria-label="Actions Exa"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="p-desc">Résultats denses «&nbsp;trouver des pages comme…&nbsp;» — même consommation par l&apos;outil recherche.</p>
+            <div class="keys-head">Clés
+              <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;ordre des clés">?<span class="tip-pop">Une clé suffit pour commencer — le porte-clés accepte les clés de relai quand le quota s&apos;épuise.</span></span>
+            </div>
+            <div class="key-row">
+              <span class="k-ord">1</span>
+              <span class="k-lbl">
+                <span class="k-name">Principale</span>
+                <span class="k-val">exa-••••••1f4</span>
+              </span>
+              <span class="kst testing">à tester</span>
+              <button class="mini-btn" data-test="1">Tester</button>
+            </div>
+            <button class="mini-btn ghost" style="margin-top:2px">+ Ajouter une clé</button>
+          </div>
+
+          <button class="add-row" aria-label="Ajouter un service d&apos;API">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Ajouter un service d&apos;API
+            <span class="tip tip-below" style="margin-left:auto" tabindex="0" role="button" aria-label="Quels services ?">?<span class="tip-pop">Brave, Serper, Jina… selon ce que le moteur sait consommer — la liste vient du schéma découvert.</span></span>
+          </button>
+
+          <p class="kpool-note"><b>Relai&nbsp;:</b> chaque tour part avec la première clé active&nbsp;;
+          quota ou 429 → la clé est marquée <i>épuisée</i> et le tour repart sur la suivante — sans couper
+          la conversation. Réactivation manuelle en v1&nbsp;; réveil automatique après cooldown plus tard.
+          Le relai vaut aussi pour les services d&apos;API&nbsp;: chaque requête de recherche part avec la
+          première clé active du service.</p>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1"><b>« Les API répondent une fois les clés ajoutées »</b>&nbsp;: le bouton <i>Tester</i> fait un appel minimal (liste des modèles du fournisseur) depuis le mini-service — réel dès le mode démo, indépendant de la gateway. Le résultat devient le statut de la clé&nbsp;: active / à tester / épuisée / invalide.</li>
+      <li data-n="2"><b>Le relai à plusieurs clés</b>&nbsp;: l&apos;ordre de la liste est la priorité, la rotation marque la clé épuisée et bascule. À terme la rotation s&apos;exécute côté moteur (le <code>hermes-connector</code> passe le porte-clés dans les settings du tour)&nbsp;; en démo, le mini-service l&apos;applique déjà pour son propre LLM — et la même mécanique sert les services d&apos;API.</li>
+      <li data-n="3">Sécurité&nbsp;: les clés — fournisseurs comme services d&apos;API — vivent dans une table SQLite du mini-service, champ à écriture seule — le serveur ne renvoie que la forme masquée <code>sk-••••3f7a</code>. Migration additive (<code>providers</code>, <code>provider_keys</code> — les services d&apos;API y rangent leurs clés), événements <code>providers:*</code>. Chiffrement au repos&nbsp;: noté pour plus tard, pas en v1.</li>
+      <li data-n="4">Le fournisseur Z-ai (démo) est listé mais non éditable — l&apos;écran sert les deux moteurs, comme le reste du fork.</li>
+      <li data-n="5"><b>Tavily et Exa ne sont pas des connecteurs</b> (scène F)&nbsp;: services hébergés à clé, rien à importer — ils vivent ici avec les clés. Les dépendances du fork (chrome-headless-shell, ffmpeg) restent dans Système · Interface (scène I).</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE F ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">F</span>
+      <h2>Connecteurs — les projets GitHub importés, et leurs mises à jour</h2>
+      <p class="why">Ce que vous importez depuis GitHub&nbsp;: outils, skills, serveurs MCP — clonés côté
+      moteur. Chaque import connaît sa source, son canal et son commit&nbsp;; vérifier, mettre à
+      jour, épingler, revenir en arrière — la relève se pilote ici, import par import.</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneF">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="back-btn goto" data-goto="sceneD" aria-label="Retour aux paramètres moteur">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Moteur
+          </button>
+          <div class="tt">
+            <h2>Connecteurs</h2>
+            <p>imports GitHub · versions, mises à jour, épinglage</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body" style="max-height:none">
+
+          <div class="sys-row">
+            <span class="sy-lbl">Vérification des sources<small>compare les commits locaux aux distants — n&apos;applique rien</small></span>
+            <button class="mini-btn" data-check="all">Tout vérifier</button>
+          </div>
+
+          <div class="subsec">Import GitHub
+            <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;import GitHub">?<span class="tip-pop">Adresse d&apos;un dépôt (owner/projet ou URL) — le type (outil, skill, serveur MCP) est détecté à l&apos;installation, la version initiale proposée à épingler.</span></span>
+          </div>
+
+          <div class="key-form" aria-label="Formulaire d&apos;import GitHub">
+            <input class="mono" placeholder="github.com/owner/projet — ou owner/projet" aria-label="Dépôt GitHub à importer">
+            <div class="kf-foot">
+              <span class="kf-note">Cloné côté moteur — jamais dans le navigateur. Branche ou tag suivi, commit épinglable.</span>
+              <button class="mini-btn primary">Importer</button>
+              <button class="mini-btn ghost">Annuler</button>
+            </div>
+          </div>
+
+          <div class="subsec">Installés — 4
+            <span class="bdg next" style="margin-left:auto;text-transform:none;letter-spacing:0">mise à jour&nbsp;: effet selon le type</span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">dev-browser <span class="tr-chip">outil</span></span>
+              <span class="p-meta">
+                <span class="kst dead">mise à jour dispo.</span>
+                <button class="mini-btn" data-check="1">Vérifier</button>
+                <button class="mini-btn ghost" aria-label="Actions dev-browser"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.53-1.36-1.29-1.72-1.29-1.72-1.05-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.92 1.27 3.63.97.11-.75.41-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12v3.14c0 .3.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>github.com/hermes-tools/dev-browser · branche main</p>
+            <p class="c-desc">v0.4.1 · commit a41f9c2 · vérifié il y a 2 h — navigateur piloté, l&apos;agent de navigation (§7.5) s&apos;y branche</p>
+            <div class="upd">
+              <div class="u-ttl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--amber)"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                v0.5.0 disponible · 7 commits
+                <span class="bdg next">prochain tour</span>
+              </div>
+              <p class="u-sub">Protocole CDP v2 (remplace le polling) · mode headless repensé · correctif fuite mémoire.</p>
+              <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
+                <button class="mini-btn primary" data-update="1">Mettre à jour</button>
+                <button class="mini-btn ghost" data-pin="1">Épingler en v0.4.1</button>
+                <button class="mini-btn ghost" data-log="1">Masquer les changements</button>
+              </div>
+            </div>
+            <div class="conn-log">
+              <span class="hash">e7b2d54</span> protocole CDP v2, polling retiré<span class="when">il y a 3 j</span><br>
+              <span class="hash">4c8f1a6</span> headless=new par défaut<span class="when">il y a 5 j</span><br>
+              <span class="hash">b9e3f2e</span> correctif&nbsp;: fuite mémoire, onglets longs<span class="when">il y a 8 j</span>
+              <span class="more">…et 4 autres commits — «&nbsp;Mettre à jour&nbsp;» rapatrie tout&nbsp;; l&apos;historique local garde v0.4.1 (retour arrière en un clic).</span>
+            </div>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">Scrapling <span class="tr-chip">outil</span></span>
+              <span class="p-meta">
+                <span class="kst on">à jour</span>
+                <button class="mini-btn" data-check="1">Vérifier</button>
+                <button class="mini-btn ghost" data-pin="1">Épingler</button>
+                <button class="mini-btn ghost" aria-label="Actions Scrapling"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.53-1.36-1.29-1.72-1.29-1.72-1.05-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.92 1.27 3.63.97.11-.75.41-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12v3.14c0 .3.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>github.com/D4Vinci/Scrapling · tag v0.3.7</p>
+            <p class="c-desc">v0.3.7 · commit 8b21af0 · vérifié il y a 2 h — extraction de pages rendues (contournement anti-bot)</p>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">redaction-technique <span class="tr-chip">skill</span></span>
+              <span class="p-meta">
+                <span class="kst testing">épinglé</span>
+                <button class="mini-btn ghost" data-pin="1">Désépingler</button>
+                <button class="mini-btn ghost" aria-label="Actions redaction-technique"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.53-1.36-1.29-1.72-1.29-1.72-1.05-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.92 1.27 3.63.97.11-.75.41-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12v3.14c0 .3.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>github.com/hermes-skills/redaction-technique · v1.2</p>
+            <p class="c-desc">v1.2 · commit 5d10cc7 · figé sur ce commit — «&nbsp;Tout vérifier&nbsp;» saute les imports épinglés</p>
+          </div>
+
+          <div class="prov">
+            <div class="prov-head">
+              <span class="p-name">mcp-filesystem <span class="tr-chip">MCP</span></span>
+              <span class="p-meta">
+                <span class="kst bad">vérif. échouée</span>
+                <button class="mini-btn" data-check="1">Réessayer</button>
+                <button class="mini-btn ghost" aria-label="Actions mcp-filesystem"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </span>
+            </div>
+            <p class="c-src"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.53-1.36-1.29-1.72-1.29-1.72-1.05-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.92 1.27 3.63.97.11-.75.41-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12v3.14c0 .3.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>github.com/modelcontextprotocol/servers · server-filesystem</p>
+            <p class="c-desc">v2025.7 · commit 3c9d1e8 — réseau indisponible hier 23:12&nbsp;; la version installée reste servie</p>
+          </div>
+
+          <p class="p-note">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8h.01"/><path d="M11 12h1v4h1"/><circle cx="12" cy="12" r="10"/></svg>
+            <span><b>Tavily et Exa ne sont pas des connecteurs</b>&nbsp;: services hébergés à clé, rien à
+            importer — ils vivent dans <b>Fournisseurs &amp; clés · services d&apos;API</b> (scène E).
+            Ici, uniquement ce qui s&apos;importe depuis GitHub et se met à jour — les dépendances du
+            fork (chrome-headless-shell, ffmpeg) restent dans Système&nbsp;· Interface (scène I).</span>
+          </p>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1"><b>Un connecteur = un projet GitHub importé</b> (définition validée par l&apos;utilisatrice)&nbsp;: outil (dev-browser, Scrapling), skill, serveur MCP — cloné côté moteur, suivi par branche ou tag, commit exact connu. Tavily et Exa, services hébergés à clé, vivent avec les clés (scène E)&nbsp;; les dépendances du fork restent dans Système (scène I).</li>
+      <li data-n="2"><b>Le cycle des mises à jour</b>&nbsp;: «&nbsp;Vérifier&nbsp;» compare le commit local au distant du canal suivi, «&nbsp;Mettre à jour&nbsp;» rapatrie et relance le composant, «&nbsp;Épingler&nbsp;» fige le commit — un import épinglé saute les vérifications. L&apos;historique local garde la version précédente&nbsp;: retour arrière en un clic.</li>
+      <li data-n="3"><b>Effet selon le type</b>&nbsp;: outil = prochain tour, skill = rechargement, serveur MCP = redémarrage averti (badge rouge). La mise à jour affiche le même badge que l&apos;installation — jamais de coupure silencieuse, cohérent avec la mise à jour moteur (scène I).</li>
+      <li data-n="4">En démo, le mini-service simule le registre complet (sources, versions, commits, vérifications)&nbsp;: même écran, même comportement. La vraie liste vient du schéma découvert + git côté gateway&nbsp;; les sources affichées sur cette planche sont simulées.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE G ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">G</span>
+      <h2>Outils &amp; Skills — la grille du moteur</h2>
+      <p class="why">Les interrupteurs d&apos;outils partent dans les settings du tour (effectif au tour
+      suivant). Les skills sont des paquets installés sur le moteur — installation, mise à jour,
+      désinstallation.</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneG">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="back-btn goto" data-goto="sceneD" aria-label="Retour aux paramètres moteur">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Moteur
+          </button>
+          <div class="tt">
+            <h2>Outils &amp; Skills</h2>
+            <p>grille d&apos;interrupteurs · paquets installés</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body" style="max-height:none">
+
+          <div class="subsec">Outils
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des outils">?<span class="tip-pop">La grille part dans les settings du tour (<code>api_turn_v1</code>) — un outil coupé disparaît de l&apos;admission suivante, sans rechargement.</span></span>
+            <span class="bdg next" style="margin-left:auto;text-transform:none;letter-spacing:0">prochain tour</span>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-item">
+              <span class="t-lbl">Recherche web
+                <span class="via-chip">via Tavily</span>
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de la recherche web">?<span class="tip-pop">Recherche + lecture de pages — consomme le service d&apos;API Tavily (ou Exa)&nbsp;: clé gérée dans Fournisseurs &amp; clés (scène E).</span></span>
+              </span>
+              <button class="switch on" role="switch" aria-checked="true" aria-label="Outil recherche web"></button>
+            </div>
+            <div class="tool-item">
+              <span class="t-lbl">Navigation web
+                <span class="via-chip">via dev-browser</span>
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de la navigation web">?<span class="tip-pop">Consulter des pages rendues (JS exécuté) — consomme dev-browser (connecteur importé, scène F), complété par Scrapling.</span></span>
+              </span>
+              <button class="switch on" role="switch" aria-checked="true" aria-label="Outil navigation web"></button>
+            </div>
+            <div class="tool-item">
+              <span class="t-lbl">Terminal
+                <span class="via-chip">gateway</span>
+                <span class="tip" tabindex="0" role="button" aria-label="À propos du terminal">?<span class="tip-pop">Exécution de commandes — actif uniquement derrière la gateway&nbsp;: sans moteur réel, il reste coupé et expliqué.</span></span>
+              </span>
+              <button class="switch" role="switch" aria-checked="false" aria-label="Outil terminal" disabled style="opacity:.55;cursor:not-allowed"></button>
+            </div>
+            <div class="tool-item">
+              <span class="t-lbl">Fichiers
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;outil fichiers">?<span class="tip-pop">Lecture / écriture dans le périmètre autorisé du moteur (workspace du projet courant).</span></span>
+              </span>
+              <button class="switch on" role="switch" aria-checked="true" aria-label="Outil fichiers"></button>
+            </div>
+            <div class="tool-item">
+              <span class="t-lbl">Python
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;outil python">?<span class="tip-pop">Bac d&apos;exécution Python du moteur (pandas, matplotlib disponibles côté démo).</span></span>
+              </span>
+              <button class="switch on" role="switch" aria-checked="true" aria-label="Outil python"></button>
+            </div>
+            <div class="tool-item">
+              <span class="t-lbl">Vision
+                <span class="tip" tabindex="0" role="button" aria-label="À propos de l&apos;outil vision">?<span class="tip-pop">Analyse d&apos;images et de captures — dépend du modèle sélectionné.</span></span>
+              </span>
+              <button class="switch" role="switch" aria-checked="false" aria-label="Outil vision"></button>
+            </div>
+          </div>
+
+          <div class="subsec">Skills
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des skills">?<span class="tip-pop">Paquets d&apos;instructions installés sur le moteur (disque) — installer ou désinstaller prend effet au rechargement du moteur.</span></span>
+            <span class="bdg reload" style="margin-left:auto;text-transform:none;letter-spacing:0">rechargement</span>
+          </div>
+
+          <div class="skill-row">
+            <span class="s-tt">
+              <span class="s-name">Rédaction technique <span class="s-ver">v1.2</span> <span class="via-chip">import · Connecteurs</span></span>
+              <span class="s-desc">Structure, tableaux, exports propres — style Hermes Web.</span>
+            </span>
+            <span class="kst on">installé</span>
+            <button class="mini-btn ghost">Détails</button>
+          </div>
+          <div class="skill-row">
+            <span class="s-tt">
+              <span class="s-name">Analyse de données <span class="s-ver">v0.9</span></span>
+              <span class="s-desc">CSV, séries temporelles, graphiques matplotlib.</span>
+            </span>
+            <span class="kst on">installé</span>
+            <button class="mini-btn ghost">Détails</button>
+          </div>
+          <div class="skill-row">
+            <span class="s-tt">
+              <span class="s-name">Veille web <span class="s-ver">v1.0</span></span>
+              <span class="s-desc">Recherche → synthèse sourcée, citations cliquables.</span>
+            </span>
+            <span class="kst testing">disponible</span>
+            <button class="mini-btn">Installer</button>
+          </div>
+
+          <button class="add-row" aria-label="Parcourir le catalogue des skills">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Parcourir le catalogue
+          </button>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1"><b>Deux niveaux d&apos;honnêteté</b>&nbsp;: un outil peut être coupé (choix) ou inactif (Terminal sans gateway, connecteur manquant) — la grille distingue les deux, jamais un interrupteur mort sans raison.</li>
+      <li data-n="2">Les chips «&nbsp;via&nbsp;…&nbsp;» relient la grille à ce qui la sert&nbsp;: «&nbsp;via Tavily&nbsp;» ouvre le service d&apos;API (clé, scène E), «&nbsp;via dev-browser&nbsp;» ouvre le connecteur importé (scène F) — la dépendance est visible là où elle se règle.</li>
+      <li data-n="3">Outils&nbsp;: effectif au <b>prochain tour</b> (settings d&apos;admission) — Skills&nbsp;: au <b>rechargement</b> (fichiers sur disque du moteur). Les deux badges viennent du schéma découvert, pas d&apos;une table codée en dur.</li>
+      <li data-n="4">En mode démo, la grille est simulée par le mini-service — les interrupteurs répondent, les états «&nbsp;gateway&nbsp;» restent grisés&nbsp;: même écran pour tester l&apos;interaction.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE H ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">H</span>
+      <h2>Serveurs MCP &amp; fichiers .md — la mémoire du moteur</h2>
+      <p class="why">Les serveurs d&apos;outils externes (transport stdio ou http, reconnexion) d&apos;un côté&nbsp;;
+      la mémoire vivante de l&apos;agent (AGENTS.md, mémoire projet) de l&apos;autre — éditable ici,
+      injectée au tour suivant.</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneH">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="back-btn goto" data-goto="sceneD" aria-label="Retour aux paramètres moteur">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Moteur
+          </button>
+          <div class="tt">
+            <h2>MCP &amp; mémoire</h2>
+            <p>serveurs d&apos;outils externes · fichiers .md</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body" style="max-height:none">
+
+          <div class="subsec">Serveurs MCP
+            <span class="tip" tabindex="0" role="button" aria-label="À propos de MCP">?<span class="tip-pop">Model Context Protocol&nbsp;: chaque serveur ajoute ses outils au moteur. Transport stdio (processus local) ou http (point d&apos;accès distant).</span></span>
+            <span class="bdg restart" style="margin-left:auto;text-transform:none;letter-spacing:0">redémarrage moteur</span>
+          </div>
+
+          <div class="mcp-row">
+            <div class="mcp-head">
+              <span class="mcp-name">filesystem</span>
+              <span class="tr-chip">stdio</span>
+              <span class="via-chip">import · Connecteurs</span>
+              <span class="kst on" style="margin-left:auto">connecté</span>
+              <button class="mini-btn ghost" aria-label="Actions filesystem"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+            </div>
+            <p class="mcp-cmd">npx -y @modelcontextprotocol/server-filesystem ~/projets</p>
+          </div>
+
+          <div class="mcp-row">
+            <div class="mcp-head">
+              <span class="mcp-name">github</span>
+              <span class="tr-chip">http</span>
+              <span class="kst bad" style="margin-left:auto">erreur 401</span>
+              <button class="mini-btn" title="Relancer la connexion">Reconnecter</button>
+              <button class="mini-btn ghost" aria-label="Actions github"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+            </div>
+            <p class="mcp-cmd">https://mcp.github.com/sse — jeton expiré depuis hier 18:02</p>
+          </div>
+
+          <button class="add-row" aria-label="Ajouter un serveur MCP">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Ajouter un serveur
+            <span class="tip tip-below" style="margin-left:auto" tabindex="0" role="button" aria-label="Champs d&apos;un serveur MCP">?<span class="tip-pop">Nom · transport (stdio | http) · commande ou URL · variables d&apos;environnement. Le test de connexion part à l&apos;enregistrement.</span></span>
+          </button>
+
+          <div class="subsec">Fichiers .md
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des fichiers .md">?<span class="tip-pop">Mémoire injectée dans le contexte du moteur — le contenu sauvegardé part au tour suivant, sans rechargement.</span></span>
+            <span class="bdg next" style="margin-left:auto;text-transform:none;letter-spacing:0">prochain tour</span>
+          </div>
+
+          <div class="md-row">
+            <span class="m-tt">
+              <span class="m-name">AGENTS.md <span class="bdg next" style="padding:1.5px 7px">prochain tour</span></span>
+              <span class="m-sub">mémoire globale · 2,1 ko · modifié il y a 3 jours</span>
+            </span>
+            <button class="mini-btn ghost">Masquer</button>
+          </div>
+
+          <div class="md-edit"><span class="c"># Mémoire de l&apos;agent</span>
+- Répondre en français, ton direct, exemples concrets.
+- Préférer les artefacts HTML aux impressions de code brut.
+- Projets : hermes_ui (interface), mini-services (socket.io).</div>
+
+          <div class="md-foot">
+            <button class="mini-btn primary">Sauvegarder</button>
+            <span class="md-ok"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>sauvegardé · injecté au prochain tour</span>
+          </div>
+
+          <div class="md-row">
+            <span class="m-tt">
+              <span class="m-name">projet/AGENTS.md <span class="tip" tabindex="0" role="button" aria-label="À propos de la mémoire projet">?<span class="tip-pop">Mémoire propre au projet actif — le moteur la charge quand une conversation du projet est ouverte.</span></span></span>
+              <span class="m-sub">mémoire du projet actif · 480 o</span>
+            </span>
+            <button class="mini-btn ghost">Éditer</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1"><b>MCP = le chantier le plus lourd côté moteur</b>&nbsp;: activer, désactiver ou reconfigurer un serveur redémarre le moteur (badge rouge assumé). Les sessions en cours sont averties avant le redémarrage — jamais de coupure silencieuse.</li>
+      <li data-n="2">Le statut de connexion est vivant (connecté / erreur avec détail, comme le 401 github)&nbsp;; «&nbsp;Reconnecter&nbsp;» relance le handshake sans redémarrage complet quand il est possible.</li>
+      <li data-n="3">Les fichiers .md suivent le <b>pattern des artefacts</b>&nbsp;: source d&apos;abord, effet ensuite (prochain tour). L&apos;éditeur est un champ texte sobre — pas d&apos;aperçu rendu ici, la page de chat rend déjà le markdown ailleurs.</li>
+      <li data-n="4">Variables d&apos;environnement des serveurs MCP&nbsp;: même règle que les clés — stockées côté service, masquées au navigateur.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE I ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">I</span>
+      <h2>Profils &amp; Système — presets, versions, mises à jour</h2>
+      <p class="why">Les profils appliquent des paquets de réglages d&apos;un clic (v1&nbsp;: presets du
+      fork, zéro dépendance moteur). Le système sépare honnêtement moteur Hermes (amont) et
+      interface (fork).</p>
+    </div>
+    <div class="stage wide overlay-stage" id="sceneI">
+      <div class="ghost" aria-hidden="true">
+        <div class="g-side">
+          <i class="g-line w30"></i><i class="g-line w80"></i><i class="g-line w55"></i>
+          <div class="g-status"><i class="g-line w80"></i></div>
+        </div>
+        <div class="g-main">
+          <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble"></div>
+          <div class="g-composer"></div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="back-btn goto" data-goto="sceneD" aria-label="Retour aux paramètres moteur">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Moteur
+          </button>
+          <div class="tt">
+            <h2>Profils &amp; Système</h2>
+            <p>presets de réglages · versions et mises à jour</p>
+          </div>
+          <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body" style="max-height:none">
+
+          <div class="subsec">Profils
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des profils">?<span class="tip-pop">Presets nommés du fork — appliquer écrit les réglages client en place (modèle, effort, permissions) via le bus d&apos;événements, effet immédiat. Zéro dépendance moteur en v1.</span></span>
+          </div>
+
+          <div class="prof-card">
+            <svg class="pf-star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+            <span class="pf-tt">
+              <span class="pf-name">Défaut</span>
+              <span class="pf-sub">Hermes 4 70B · effort standard · ask</span>
+            </span>
+            <span class="pf-applied">appliqué</span>
+          </div>
+          <div class="prof-card">
+            <span class="pf-tt">
+              <span class="pf-name">Code rapide</span>
+              <span class="pf-sub">Hermes 4 14B · effort standard · auto</span>
+            </span>
+            <button class="mini-btn">Appliquer</button>
+          </div>
+          <div class="prof-card">
+            <span class="pf-tt">
+              <span class="pf-name">Recherche profonde</span>
+              <span class="pf-sub">Hermes 4 405B · effort élevé · ask · Tavily + Exa</span>
+            </span>
+            <button class="mini-btn">Appliquer</button>
+          </div>
+
+          <button class="add-row" aria-label="Créer un profil depuis les réglages actuels">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Nouveau profil depuis les réglages actuels
+          </button>
+
+          <div class="subsec">Système — moteur Hermes
+            <span class="tip" tabindex="0" role="button" aria-label="À propos des mises à jour moteur">?<span class="tip-pop">Amont Nous Research&nbsp;: la vérification ne s&apos;active que si la gateway expose un canal de mises à jour — sinon «&nbsp;non exposé&nbsp;», sans faux bouton.</span></span>
+          </div>
+
+          <div class="sys-row">
+            <span class="sy-lbl">Version installée<small>moteur v2.4.1 · canal stable</small></span>
+            <button class="mini-btn" data-test="1">Vérifier les mises à jour</button>
+          </div>
+
+          <div class="upd">
+            <div class="u-ttl">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--amber)"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+              v2.5.0 disponible
+              <span class="bdg restart">redémarrage moteur</span>
+            </div>
+            <p class="u-sub">Outils parallèles · skills sans rechargement · correctif MCP http.
+            Les sessions en cours sont averties avant le redémarrage du moteur.</p>
+            <div style="display:flex;gap:7px;margin-top:8px">
+              <button class="mini-btn primary">Mettre à jour</button>
+              <button class="mini-btn ghost">Voir le journal des versions</button>
+            </div>
+          </div>
+
+          <div class="subsec">Système — interface (fork)</div>
+
+          <div class="sys-row">
+            <span class="sy-lbl">Hermes Web<small>chantiers §7 du FORK.md · pas d&apos;auto-update</small></span>
+            <span class="kst on">à jour</span>
+          </div>
+          <div class="sys-row">
+            <span class="sy-lbl">Dépendances du fork<small>rendu des artefacts · transcription audio</small></span>
+            <span class="via-chip" style="height:auto;padding:3px 9px;font-size:10px">chrome-headless-shell ✓</span>
+            <span class="via-chip" style="height:auto;padding:3px 9px;font-size:10px">ffmpeg ✓</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1"><b>Profils en v1 = presets du fork</b>&nbsp;: ils n&apos;écrivent que des réglages client (modèle, effort, permissions) — effet immédiat, aucune attente de la gateway. Si l&apos;amont livre un jour ses propres profils, la réconciliation se fera là (clés préfixées <code>fork.</code>, aucun collision).</li>
+      <li data-n="2"><b>Mises à jour moteur&nbsp;: le seul chantier qui touche l&apos;amont.</b> Vérifier / appliquer n&apos;existe que si la gateway l&apos;expose. «&nbsp;Mettre à jour&nbsp;» avertit les sessions en cours avant de redémarrer le moteur — cohérent avec la philosophie jamais-de-coupure-silencieuse du fork.</li>
+      <li data-n="3"><b>Interface&nbsp;: rien à construire</b> — la mise à jour du fork suit la recette git du §10 (main + publish, PAT jetable). La carte affiche l&apos;état des dépendances locales (chrome-headless-shell pour le rendu d&apos;artefacts, ffmpeg pour l&apos;ASR) — dev-browser, aujourd&apos;hui connecteur moteur importé (scène F), vivrait ici si l&apos;agent de navigation passait côté interface.</li>
+      <li data-n="4">«&nbsp;Vérifier les mises à jour&nbsp;» est un bouton d&apos;action (<code>control: "action"</code>) — il ne persiste rien, il interroge&nbsp;; le registre prévoit ce type pour Tester, Reconnecter, Mettre à jour.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE J ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">J</span>
+      <h2>Deux étages, quatre modes d&apos;application — le bus v2</h2>
+      <p class="why">Le client suit le mécanisme validé en v1 (CustomEvent). Le moteur ajoute le chemin
+      serveur (socket → SQLite → broadcast) et la rotation de clés au moment du tour. Les états
+      du «&nbsp;?&nbsp;» sont spécifiés à droite.</p>
     </div>
     <div class="stage wide dim-stage">
       <div class="legend">
         <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
-        <span style="font-size:12.5px;color:var(--muted-foreground)">le composant concerné écoute et réagit en place</span>
+        <span class="lg-txt">le composant écoute et réagit en place</span>
+        <span class="bdg next">prochain tour</span>
+        <span class="lg-txt">parti dans les settings d&apos;admission</span>
         <span class="bdg reload"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>au rechargement</span>
-        <span style="font-size:12.5px;color:var(--muted-foreground)">la valeur sert au prochain montage — comportement actuel</span>
+        <span class="lg-txt">sert au prochain montage</span>
+        <span class="bdg restart">redémarrage moteur</span>
+        <span class="lg-txt">MCP, mise à jour — sessions averties</span>
       </div>
 
       <div class="flow">
         <div class="fbox">
           <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Écriture</h4>
           <div class="frow"><code>writeClientSetting(key, value)</code></div>
-          <div class="frow" style="color:var(--muted-foreground);font-size:11px">le sheet — ou n&apos;importe quel contrôle</div>
           <div class="frow"><code>localStorage</code><span class="who">hermes-ui:&lt;clé&gt;</span></div>
+          <div class="frow" style="margin-top:7px"><code>emit("settings:set")</code></div>
+          <div class="frow"><code>SQLite settings</code><span class="who">côté mini-service</span></div>
+          <p class="fsub">Étage client = réglages d&apos;interface · étage serveur = fournisseurs,
+          connecteurs, outils, MCP, fichiers .md.</p>
         </div>
         <span class="arrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
         <div class="fbox">
           <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Annonce</h4>
           <div class="frow"><code>hermes-ui:settings-changed</code></div>
-          <div class="frow" style="color:var(--muted-foreground);font-size:11px">CustomEvent — <code>{key, value}</code> — sur window</div>
-          <div class="frow" style="color:var(--muted-foreground);font-size:11px">émis depuis <code>settings.ts</code> uniquement</div>
+          <div class="frow"><span class="who">CustomEvent {key, value} — window</span></div>
+          <div class="frow"><span class="who">auditeurs : composer · page · sidebar · use-hermes-chat</span></div>
+          <div class="frow" style="margin-top:7px"><code>settings:changed</code></div>
+          <div class="frow"><span class="who">broadcast socket — autres onglets</span></div>
         </div>
         <span class="arrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
         <div class="fbox">
-          <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>Auditeurs v1</h4>
-          <div class="frow"><code>fork.context.gauge</code><span class="who">composer</span></div>
-          <div class="frow"><code>hermes.model · effort · permissions</code></div>
-          <div class="frow" style="margin-top:-4px"><span class="who" style="margin-left:2px">use-hermes-chat</span></div>
-          <div class="frow"><code>fork.ui.sidebar.width</code><span class="who">page → resize</span></div>
+          <h4><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>Au tour</h4>
+          <div class="frow"><code>api_turn_v1 {history, settings}</code></div>
+          <div class="frow"><span class="who">grille d&apos;outils · fichiers .md · effort</span></div>
+          <div class="frow" style="margin-top:7px"><code>porte-clés → 1ʳᵉ clé active</code></div>
+          <div class="frow"><span class="who">429 / quota → marquée épuisée → relai</span></div>
+          <p class="fsub">La rotation vit côté moteur&nbsp;; en démo, le mini-service l&apos;applique
+          pour son propre LLM — même écran, même comportement.</p>
         </div>
       </div>
 
       <div class="states">
         <div class="state-card">
-          <div class="state-ttl">Switch — focus visible</div>
-          <div class="demo">
-            <span class="r"></span>
-            <button class="switch on" role="switch" aria-checked="true" aria-label="Démo focus" id="focusSwitch"></button>
+          <div class="state-ttl">« ? » — survol / ouvert</div>
+          <div class="demo" style="flex-direction:column;align-items:flex-start;gap:14px;padding-bottom:72px">
+            <span style="font-size:12.5px;font-weight:500">Effort de raisonnement</span>
+            <span class="tip open tip-left tip-below" tabindex="0" role="button" aria-label="Démo tooltip ouvert">?<span class="tip-pop" style="max-width:185px">Échelle brute du fournisseur — ignorée sans dommage.</span></span>
           </div>
         </div>
         <div class="state-card">
-          <div class="state-ttl">Segment — cran actif / hover</div>
+          <div class="state-ttl">« ? » — focus clavier</div>
+          <div class="demo" style="flex-direction:column;align-items:flex-start;gap:14px;padding-bottom:72px">
+            <span style="font-size:12.5px;font-weight:500">Autorisations de l&apos;agent</span>
+            <span class="tip open tip-left tip-below" tabindex="0" role="button" aria-label="Démo tooltip au clavier" style="outline:2px solid var(--hermes);outline-offset:2px">?<span class="tip-pop" style="max-width:185px">Ouvert au clavier comme au pointeur — Tab / Maj+Tab.</span></span>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Popover mobile — tap</div>
+          <div class="demo" style="flex-direction:column;align-items:flex-start;gap:14px;padding-bottom:72px">
+            <span style="font-size:12.5px;font-weight:500">Fournisseurs &amp; clés</span>
+            <span class="tip open tip-left tip-below" tabindex="0" role="button" aria-label="Démo popover mobile">?<span class="tip-pop" style="max-width:185px">Au doigt, le tooltip devient popover&nbsp;: un tap ouvre.</span></span>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Switch — focus visible</div>
+          <div class="demo">
+            <span class="r"></span>
+            <button class="switch on" role="switch" aria-checked="true" aria-label="Démo focus"></button>
+          </div>
+        </div>
+        <div class="state-card">
+          <div class="state-ttl">Segment — cran actif</div>
           <div class="demo">
             <span class="seg"><button type="button">Off</button><button type="button" class="on">Standard</button><button type="button">Élevé</button></span>
           </div>
@@ -705,179 +1795,228 @@
             </span>
           </div>
         </div>
-        <div class="state-card">
-          <div class="state-ttl">Select — liste ouverte</div>
-          <div class="demo">
-            <span class="sel-wrap">
-              <button class="sel-btn">Hermes 4 70B
-                <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
-              <span class="sel-list" style="position:static;display:block;width:210px;animation:none">
-                <span class="sel-item" style="cursor:default"><span class="check"></span><span><span class="m-name">Hermes 4 405B</span></span></span>
-                <span class="sel-item on" style="cursor:default"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span><span class="m-name">Hermes 4 70B</span></span></span>
-              </span>
-            </span>
-          </div>
-        </div>
-        <div class="state-card">
-          <div class="state-ttl">Ligne — survol discret</div>
-          <div class="demo" style="background:oklch(0.955 0.003 75 / 0.55);border-radius:10px;padding:9px 12px">
-            <span class="r" style="width:110px"></span>
-            <button class="switch on" role="switch" aria-checked="true" aria-label="Démo"></button>
-          </div>
-        </div>
-        <div class="state-card">
-          <div class="state-ttl">Slider — pouce hermes</div>
-          <div class="demo">
-            <span class="slider-row" style="width:150px">
-              <input type="range" min="12" max="34" value="24" aria-label="Démo slider">
-              <span class="slider-val">24%</span>
-            </span>
-          </div>
-        </div>
       </div>
     </div>
     <ul class="notes">
-      <li data-n="1">Le bus est un <b>CustomEvent</b> <code>hermes-ui:settings-changed</code> émis par <code>writeClientSetting()</code> — les seules API du registre restent lecture / écriture, aucune dépendance injectée dans les composants.</li>
-      <li data-n="2">Personne n&apos;est obligé d&apos;écouter&nbsp;: sans auditeur, la valeur sert au prochain montage — c&apos;est exactement le comportement actuel des composants.</li>
-      <li data-n="3">Tous les contrôles restent focusables au clavier (focus visible couleur hermes, Tab / Maj+Tab), Échap ferme le sheet sans modifier la valeur en cours.</li>
-      <li data-n="4">Un seul badge «&nbsp;au rechargement&nbsp;» en v1 (tri des conversations) — le tableau de spec recense la portée de chaque clé.</li>
+      <li data-n="1"><b>Aucun badge pour «&nbsp;immédiat&nbsp;» et «&nbsp;prochain tour&nbsp;» sur les lignes du sheet</b>&nbsp;: le premier est le comportement par défaut, le second est invisible pour l&apos;utilisatrice (le tour suivant partira avec la nouvelle valeur, rien à annoncer). Les badges n&apos;affichent que ce qui <b>contraint</b>&nbsp;: rechargement, redémarrage.</li>
+      <li data-n="2">Le CustomEvent v1 est inchangé — le moteur n&apos;ajoute <b>aucune</b> dépendance côté client&nbsp;: le chemin serveur passe par les événements socket existants (<code>settings:set</code> → broadcast <code>settings:changed</code>), déjà posés par le chantier projets.</li>
+      <li data-n="3">Le champ <code>apply</code> du registre (live / next-turn / reload / restart) décide du badge — la page lit, elle ne devine pas.</li>
+      <li data-n="4">Le «&nbsp;?&nbsp;» répond au clavier comme au pointeur&nbsp;: <code>tabindex</code>, focus visible couleur hermes, Échap referme le popover avant le sheet.</li>
     </ul>
   </section>
 
-  <!-- ══════════ SCÈNE E ══════════ -->
+  <!-- ══════════ SCÈNE K ══════════ -->
   <section class="scene">
     <div class="scene-head">
-      <span class="scene-num">E</span>
-      <h2>Mobile — plein écran depuis la droite</h2>
-      <p class="why">Sous 768px, le sheet prend toute la largeur (shadcn Sheet responsive), mêmes sections,
-      contrôles étirés. L&apos;entrée reste l&apos;engrenage de la carte de statut — dans la sidebar mobile.</p>
+      <span class="scene-num">K</span>
+      <h2>Mobile — plein écran, drill-down, popovers au tap</h2>
+      <p class="why">Sous 768px le sheet prend toute la largeur (Sheet responsive shadcn). Le drill-down
+      garde son bouton retour&nbsp;; le «&nbsp;?&nbsp;» devient un popover ouvert au tap —
+      démonstration ouverte sur la première rangée.</p>
     </div>
     <div class="stage dim-stage" style="padding-bottom:20px">
       <div class="phone">
         <div class="notch"></div>
         <div class="sheet sheet-mobile">
           <div class="sheet-head">
-            <span class="gear-badge">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-            </span>
+            <button class="back-btn" aria-label="Retour aux paramètres">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              Paramètres
+            </button>
             <div class="tt">
-              <h2>Paramètres</h2>
-              <p>L&apos;agent Hermes · cette interface</p>
+              <h2>Paramètres moteur</h2>
+              <p>simulés en démo</p>
             </div>
             <button class="x-btn" title="Fermer" aria-label="Fermer les paramètres">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
           <div class="sheet-body">
-            <div class="sec">
-              <span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg></span>
-              <h3>Agent Hermes</h3>
-              <span class="cnt">4</span>
-              <span class="ns">hermes.*</span>
+            <div class="drill-row" style="padding:12px 14px">
+              <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.777 5.5 5.5 0 0 1 7.777-7.777Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+              <span class="d-tt">
+                <span class="d-name">Fournisseurs &amp; clés</span>
+                <span class="d-sub">3 fournisseurs · 5 clés (1 épuisée)
+                  <span class="tip open tip-left tip-below" tabindex="0" role="button" aria-label="À propos des fournisseurs">?<span class="tip-pop" style="max-width:170px">Porte-clés multi-clés, relai automatique.</span></span>
+                </span>
+              </span>
+              <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </div>
-            <div class="row">
-              <div class="row-top">
-                <span class="lbl">Modèle par défaut</span>
-                <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
-              </div>
-              <div class="demo-mobile" style="margin-top:7px">
-                <button class="sel-btn" style="width:100%;justify-content:space-between">
-                  <span>Hermes 4 70B</span>
-                  <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-              </div>
+            <div class="drill-row" style="padding:12px 14px">
+              <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+              <span class="d-tt">
+                <span class="d-name">Connecteurs</span>
+                <span class="d-sub">4 projets · 1 mise à jour</span>
+              </span>
+              <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </div>
-            <div class="row">
-              <div class="row-top">
-                <span class="lbl">Effort de raisonnement</span>
-                <span class="bdg live"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-8z"/></svg>immédiat</span>
-              </div>
-              <div style="margin-top:7px">
-                <span class="seg" style="display:flex;width:100%"><button type="button">Off</button><button type="button" class="on">Standard</button><button type="button">Élevé</button></span>
-              </div>
+            <div class="drill-row" style="padding:12px 14px">
+              <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg></span>
+              <span class="d-tt">
+                <span class="d-name">Outils</span>
+                <span class="d-sub">6 outils actifs sur 9</span>
+              </span>
+              <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </div>
-            <div class="row">
-              <div class="row-top">
-                <span class="lbl">Autorisations de l&apos;agent</span>
-                <button class="switch" role="switch" aria-checked="false" aria-label="Autorisations automatiques"></button>
-              </div>
-              <p class="desc">ask&nbsp;: confirmation avant chaque action · auto&nbsp;: tout exécuter.</p>
+            <div class="drill-row" style="padding:12px 14px">
+              <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+              <span class="d-tt">
+                <span class="d-name">Skills</span>
+                <span class="d-sub">3 installés · 1 disponible</span>
+              </span>
+              <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </div>
-            <div class="sec">
-              <span class="ico fork"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
-              <h3>Cette interface</h3>
-              <span class="cnt">4</span>
-              <span class="ns">fork.*</span>
-            </div>
-            <div class="row">
-              <div class="row-top">
-                <span class="lbl">Jauge de contexte</span>
-                <button class="switch on" role="switch" aria-checked="true" aria-label="Afficher la jauge de contexte"></button>
-              </div>
+            <div class="drill-row" style="padding:12px 14px">
+              <span class="d-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></span>
+              <span class="d-tt">
+                <span class="d-name">Serveurs MCP</span>
+                <span class="d-sub">2 serveurs · 1 connecté</span>
+              </span>
+              <svg class="chev-r" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </div>
           </div>
         </div>
       </div>
     </div>
     <ul class="notes">
-      <li data-n="1">Le sheet mobile garde l&apos;en-tête et la structure des sections — les badges et descriptions restent, les libellés passent au-dessus des contrôles quand la place manque.</li>
-      <li data-n="2">L&apos;engrenage vit dans la carte de statut de la <b>sidebar mobile</b> (Sheet gauche) — même composant, même réglage, aucune dérive de comportement.</li>
-      <li data-n="3">La fermeture se fait au X ou au geste de glissement depuis le bord (shadcn Sheet) — le chat n&apos;a jamais bougé derrière.</li>
+      <li data-n="1">L&apos;engrenage vit dans la carte de statut de la <b>sidebar mobile</b> (Sheet gauche) — même composant, même réglage, aucune dérive.</li>
+      <li data-n="2"><b>Au doigt, le tooltip devient popover</b>&nbsp;: le survol n&apos;existe pas, un tap sur le «&nbsp;?&nbsp;» ouvre la bulle (positionnée sous le point d&apos;ancre si la place manque au-dessus), un tap ailleurs la referme.</li>
+      <li data-n="3">Le drill-down garde son bouton retour en tête — le geste de bord (glissement) referme le sheet entier, pas la navigation interne.</li>
+      <li data-n="4">Les rangées du moteur passent la largeur complète&nbsp;; le résumé se serre sur une ligne, jamais tronqué au milieu d&apos;un mot.</li>
     </ul>
   </section>
 
   <!-- ══════════ SPÉC ══════════ -->
   <section class="scene spec">
-    <h2>Clés rendues par la page (registre §6 — R7)</h2>
-    <p class="sub">Toutes de portée client en v1&nbsp;: aucun changement de schéma SQLite, aucune migration,
-    la table <code>settings</code> du mini-service n&apos;est pas touchée.</p>
+    <h2>Clés rendues par la page — v2&nbsp;: deux étages</h2>
+    <p class="sub">Étage client (v1 validée, inchangée — localStorage, CustomEvent) et étage moteur
+    (v2 — portée serveur, schéma découvert, simulé en démo par le mini-service).</p>
+
+    <h3>Étage client — registres §6</h3>
     <table>
-      <thead><tr><th>Clé</th><th>Type</th><th>Défaut</th><th>Contrôle dans le sheet</th><th>Application</th></tr></thead>
+      <thead><tr><th>Clé</th><th>Type</th><th>Défaut</th><th>Contrôle</th><th>Application</th></tr></thead>
       <tbody>
-        <tr><td><code>hermes.model</code></td><td>string</td><td>—</td><td>Select (source du picker)</td><td>immédiate</td></tr>
+        <tr><td><code>hermes.model</code></td><td>string</td><td>—</td><td>Select + «&nbsp;?&nbsp;»</td><td>immédiate</td></tr>
         <tr><td><code>hermes.models.favorites</code></td><td>JSON</td><td><code>[]</code></td><td>Chips + Ajouter</td><td>prochaine ouverture du picker</td></tr>
-        <tr><td><code>hermes.reasoning.effort</code></td><td>string</td><td><code>"medium"</code></td><td>Segment (échelle du modèle)</td><td>immédiate</td></tr>
+        <tr><td><code>hermes.reasoning.effort</code></td><td>string</td><td><code>"medium"</code></td><td>Segment + «&nbsp;?&nbsp;»</td><td>immédiate</td></tr>
         <tr><td><code>hermes.permissions.mode</code></td><td>enum</td><td><code>ask</code></td><td>Switch ask | auto</td><td>immédiate</td></tr>
         <tr><td><code>fork.ui.sidebar.width</code></td><td>number</td><td><code>19</code></td><td>Slider 12–34</td><td>immédiate (resize)</td></tr>
         <tr><td><code>fork.projects.sort</code></td><td>enum</td><td><code>updated</code></td><td>Segment 3 modes</td><td><b>au rechargement</b></td></tr>
         <tr><td><code>fork.projects.collapsed</code></td><td>JSON</td><td><code>[]</code></td><td>Lecture seule</td><td>— (écrite par la sidebar)</td></tr>
         <tr><td><code>fork.context.gauge</code></td><td>boolean</td><td><code>true</code></td><td>Switch</td><td>immédiate</td></tr>
+        <tr><td><code>fork.profiles</code> <span style="color:var(--hermes);font-size:10px">v2</span></td><td>JSON</td><td><code>[]</code></td><td>Cartes de profils (scène I)</td><td>immédiate (écrit les clés ci-dessus)</td></tr>
       </tbody>
     </table>
-    <p class="files">Fichiers&nbsp;: nouveaux <code>src/components/settings/settings-sheet.tsx</code> (sheet + rendu des
-    deux registres) et <code>src/components/settings/setting-row.tsx</code> (ligne label + contrôle + description) ·
-    retouches chirurgicales&nbsp;: <code>settings.ts</code> (émission du CustomEvent
-    <code>hermes-ui:settings-changed</code> dans writeClientSetting), <code>sidebar.tsx</code> (engrenage + prop
-    <code>onOpenSettings</code>), <code>page.tsx</code> (état d&apos;ouverture, rendu du Sheet, écoute de la largeur),
-    <code>composer.tsx</code> (écoute live de la jauge), <code>use-hermes-chat.ts</code> (écoute live modèle / effort /
-    permissions). Le picker, le connecteur et le mini-service ne bougent pas.</p>
+
+    <h3>Étage moteur — v2 (portée serveur, SQLite additive + clés chiffrables à terme)</h3>
+    <table>
+      <thead><tr><th>Clé</th><th>Type</th><th>Défaut</th><th>Contrôle</th><th>Application</th></tr></thead>
+      <tbody>
+        <tr><td><code>hermes.providers</code></td><td>JSON</td><td><code>[]</code></td><td>Cartes fournisseur + clé</td><td>persisté serveur · visible carte de statut</td></tr>
+        <tr><td><code>hermes.providers.[id].keys</code></td><td>JSON <b>secret</b></td><td>—</td><td>Porte-clés (scène E) — masqué</td><td>rotation au tour (429 → relai)</td></tr>
+        <tr><td><code>hermes.services.tavily.keys</code></td><td>JSON <b>secret</b></td><td>—</td><td>Porte-clés service d&apos;API (scène E)</td><td>test immédiat · relai sur quota</td></tr>
+        <tr><td><code>hermes.services.exa.keys</code></td><td>JSON <b>secret</b></td><td>—</td><td>Porte-clés service d&apos;API (scène E)</td><td>test immédiat · relai sur quota</td></tr>
+        <tr><td><code>hermes.connectors</code></td><td>JSON</td><td><code>[]</code></td><td>Cartes import + mises à jour (scène F)</td><td>source · canal · commit · épinglé</td></tr>
+        <tr><td><code>hermes.connectors.check</code></td><td>action</td><td>—</td><td>«&nbsp;Vérifier&nbsp;» / «&nbsp;Tout vérifier&nbsp;»</td><td>interroge les distants — n&apos;applique rien</td></tr>
+        <tr><td><code>hermes.tools.enabled</code></td><td>JSON</td><td>déclaré moteur</td><td>Grille d&apos;interrupteurs</td><td><b>prochain tour</b></td></tr>
+        <tr><td><code>hermes.skills.enabled</code></td><td>JSON</td><td>déclaré moteur</td><td>Lignes install / détails</td><td><b>au rechargement</b></td></tr>
+        <tr><td><code>hermes.mcp.servers</code></td><td>JSON</td><td><code>[]</code></td><td>Cartes serveur + reconnect</td><td><b>redémarrage moteur</b></td></tr>
+        <tr><td><code>hermes.files.md.*</code></td><td>text</td><td>—</td><td>Éditeur .md</td><td><b>prochain tour</b></td></tr>
+        <tr><td><code>hermes.engine.update.channel</code></td><td>enum</td><td><code>"stable"</code></td><td>Système (action)</td><td>vérification puis <b>redémarrage</b></td></tr>
+      </tbody>
+    </table>
+
+    <div class="taxo">
+      <b>Taxonomie v2 (revue connecteurs) — où vit chaque chose&nbsp;:</b><br>
+      · <b>Fournisseurs &amp; services d&apos;API</b> = tout ce qui s&apos;ouvre avec une clé — génération
+      (OpenAI-compatible, Nous, Z-ai démo) et recherche/extraction (<b>Tavily, Exa</b>)&nbsp;:
+      porte-clés, test, relai.<br>
+      · <b>Connecteurs</b> = les <b>projets GitHub importés</b> (dev-browser, Scrapling, skills,
+      serveurs MCP)&nbsp;: source, canal, commit, <b>mises à jour</b> — vérifier · mettre à jour ·
+      épingler · retour arrière.<br>
+      · <b>Outils</b> = interrupteurs du moteur («&nbsp;Recherche web&nbsp;» consomme Tavily/Exa,
+      «&nbsp;Navigation&nbsp;» consomme dev-browser).<br>
+      · <b>Dépendances du fork</b> (chrome-headless-shell, ffmpeg) = Système&nbsp;· Interface,
+      jamais dans les connecteurs moteur.
+    </div>
+
+    <p class="files"><b>Extension du registre</b> (<code>src/lib/settings.ts</code>)&nbsp;:
+    <code>apply: "live" | "next-turn" | "reload" | "restart"</code> (décide du badge),
+    <code>control: "select" | "switch" | "slider" | "segment" | "chips" | "readonly" | "keypool" | "list" | "file" | "action"</code>,
+    <code>secret?: boolean</code> (jamais renvoyé en clair au client).<br><br>
+    <b>Fichiers v2</b>&nbsp;: nouveaux <code>src/components/settings/</code> —
+    <code>settings-sheet.tsx</code>, <code>setting-row.tsx</code>, <code>info-tip.tsx</code> (le «&nbsp;?&nbsp;»),
+    <code>engine-home.tsx</code> (drill-down), <code>providers-panel.tsx</code> (fournisseurs +
+    services d&apos;API), <code>connectors-panel.tsx</code> (imports GitHub, versions, mises à jour),
+    <code>tools-skills-panel.tsx</code>, <code>mcp-files-panel.tsx</code>, <code>profiles-panel.tsx</code>,
+    <code>system-panel.tsx</code> · côté mini-service&nbsp;: <code>providers.ts</code> (rotation du
+    porte-clés — fournisseurs et services d&apos;API), migrations additives <code>providers</code> /
+    <code>provider_keys</code> / <code>connectors</code> (source, canal, commit, épinglé, dernière
+    vérif), événements <code>providers:*</code>, <code>services:*</code>,
+    <code>connectors:check</code> / <code>connectors:update</code>, <code>engine:schema</code> ·
+    <code>hermes-connector.ts</code>&nbsp;: passage du porte-clés et de la grille dans les settings du tour ·
+    retouches chirurgicales&nbsp;: <code>settings.ts</code> (émission CustomEvent + champs v2),
+    <code>sidebar.tsx</code> (engrenage), <code>page.tsx</code> (état du sheet), <code>composer.tsx</code>,
+    <code>use-hermes-chat.ts</code>.<br><br>
+    <b>Phasage</b>&nbsp;: v2.1 — les 8 réglages client (plan v1 inchangé, tooltips inclus) ·
+    v2.2 — fournisseurs &amp; services d&apos;API (porte-clés, test, relai) et connecteurs (imports
+    GitHub&nbsp;: vérifier, mettre à jour, épingler — scope serveur réel, fonctionnel en démo) ·
+    v2.3 — découverte de la surface gateway, branchement outils / skills / MCP / fichiers .md ·
+    v2.4 — système &amp; mises à jour. FORK.md §6-§7-§9 suivent chaque étape.</p>
   </section>
 
   <footer class="page-foot">
-    Maquette de travail — validation avant implémentation (convention du repo) · palette officielle Hermes Web (blanc chaud + terracotta) · Geist
+    Maquette de travail v2 — validation avant implémentation (convention du repo) ·
+    palette officielle Hermes Web (blanc chaud + terracotta) · Geist · 2026-11-13
   </footer>
 </div>
 
 <script>
 (function(){
-  // ── Scène A : l'engrenage défile vers le sheet ──────────
+  // ── Navigation de planche : engrenages + drill-down ────
+  function goTo(id){
+    var t = document.getElementById(id);
+    if (t) t.scrollIntoView({behavior:'smooth', block:'center'});
+  }
   document.querySelectorAll('.goto-sheet').forEach(function(b){
-    b.addEventListener('click', function(){
-      var t = document.getElementById('sceneB');
-      if (t) t.scrollIntoView({behavior:'smooth', block:'center'});
+    b.addEventListener('click', function(){ goTo('sceneB'); });
+  });
+  document.querySelectorAll('.goto').forEach(function(el){
+    el.addEventListener('click', function(e){
+      if (e.target.closest('.tip')) return; // le « ? » ne déclenche pas la navigation
+      var id = el.getAttribute('data-goto');
+      if (id) goTo(id);
+    });
+    el.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        var id = el.getAttribute('data-goto');
+        if (id) goTo(id);
+      }
     });
   });
 
-  // ── Switches (toutes scènes) ────────────────────────────
+  // ── Tooltips « ? » : tap / clic bascule (mobile + souris) ──
+  document.querySelectorAll('.tip').forEach(function(t){
+    t.addEventListener('click', function(e){ e.stopPropagation(); t.classList.toggle('open'); });
+  });
+  document.addEventListener('click', function(){
+    document.querySelectorAll('.tip.open').forEach(function(t){
+      // n'éteint pas les états de démonstration forcés
+      if (!t.closest('.state-card') && !t.closest('.phone')) t.classList.remove('open');
+    });
+  });
+
+  // ── Switches ───────────────────────────────────────────
   document.querySelectorAll('.switch').forEach(function(sw){
+    if (sw.disabled) return;
     sw.addEventListener('click', function(){
       var on = sw.classList.toggle('on');
       sw.setAttribute('aria-checked', on ? 'true' : 'false');
     });
   });
 
-  // ── Segments (effort, tri, démo) ────────────────────────
+  // ── Segments ───────────────────────────────────────────
   document.querySelectorAll('.seg').forEach(function(seg){
     seg.querySelectorAll('button').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -887,7 +2026,7 @@
     });
   });
 
-  // ── Select modèle (scène B) ─────────────────────────────
+  // ── Select modèle (scène B) ────────────────────────────
   var selBtn = document.getElementById('modelSelBtn');
   var selList = document.getElementById('modelSelList');
   var selLabel = document.getElementById('modelSelLabel');
@@ -912,7 +2051,7 @@
     document.addEventListener('click', function(){ selList.hidden = true; });
   }
 
-  // ── Favoris : retrait d'une puce ────────────────────────
+  // ── Favoris : retrait d'une puce ───────────────────────
   document.querySelectorAll('#favZone .fav-chip .rm').forEach(function(rm){
     rm.addEventListener('click', function(e){
       e.stopPropagation();
@@ -923,7 +2062,7 @@
     });
   });
 
-  // ── Slider largeur (scène C) ────────────────────────────
+  // ── Slider largeur (scène C) ───────────────────────────
   var slider = document.getElementById('widthSlider');
   var widthVal = document.getElementById('widthVal');
   if (slider && widthVal) {
@@ -931,6 +2070,116 @@
       widthVal.textContent = slider.value + '%';
     });
   }
+
+  // ── Boutons « Tester » : petit état animé ──────────────
+  document.querySelectorAll('[data-test]').forEach(function(btn){
+    if (btn.tagName !== 'BUTTON') return;
+    var original = btn.textContent;
+    btn.addEventListener('click', function(){
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = '1';
+      btn.textContent = '…';
+      setTimeout(function(){
+        btn.textContent = '✓ 235 ms';
+        btn.style.color = 'var(--green)';
+        setTimeout(function(){
+          btn.textContent = original;
+          btn.style.color = '';
+          delete btn.dataset.busy;
+        }, 1400);
+      }, 700);
+    });
+  });
+
+  // ── Connecteurs : vérifier / mettre à jour / épingler ──
+  document.querySelectorAll('[data-check]').forEach(function(btn){
+    if (btn.tagName !== 'BUTTON') return;
+    var msg = btn.getAttribute('data-check') === 'all' ? '✓ 4 sources vérifiées' : '✓ vérifié';
+    var original = btn.textContent;
+    btn.addEventListener('click', function(){
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = '1';
+      btn.textContent = '…';
+      setTimeout(function(){
+        var card = btn.closest('.prov');
+        if (card){
+          var k = card.querySelector('.kst');
+          if (k && k.classList.contains('bad')){ k.className = 'kst on'; k.textContent = 'à jour'; }
+        }
+        btn.textContent = msg;
+        btn.style.color = 'var(--green)';
+        setTimeout(function(){
+          btn.textContent = original;
+          btn.style.color = '';
+          delete btn.dataset.busy;
+        }, 1400);
+      }, 700);
+    });
+  });
+
+  document.querySelectorAll('[data-update]').forEach(function(btn){
+    if (btn.tagName !== 'BUTTON') return;
+    btn.addEventListener('click', function(){
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = '1';
+      btn.textContent = '…';
+      setTimeout(function(){
+        var card = btn.closest('.prov');
+        if (card){
+          var k = card.querySelector('.kst');
+          if (k){ k.className = 'kst on'; k.textContent = 'à jour'; }
+          var d = card.querySelector('.c-desc');
+          if (d){ d.textContent = 'v0.5.0 · commit e7b2d54 · mis à jour à l\'instant — navigateur piloté, l\'agent de navigation (§7.5) s\'y branche'; }
+          var u = card.querySelector('.upd');
+          if (u){ u.style.display = 'none'; }
+          var l = card.querySelector('.conn-log');
+          if (l){ l.style.display = 'none'; }
+        }
+        btn.textContent = '✓ v0.5.0';
+        btn.style.color = 'var(--green)';
+        setTimeout(function(){
+          btn.textContent = 'mis à jour';
+          btn.style.color = '';
+          delete btn.dataset.busy;
+        }, 1400);
+      }, 900);
+    });
+  });
+
+  document.querySelectorAll('[data-log]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var card = btn.closest('.prov');
+      var log = card ? card.querySelector('.conn-log') : null;
+      if (!log) return;
+      var hidden = log.style.display === 'none';
+      log.style.display = hidden ? '' : 'none';
+      btn.textContent = hidden ? 'Masquer les changements' : 'Voir les changements';
+    });
+  });
+
+  document.querySelectorAll('[data-pin]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var isUnpin = btn.textContent.trim().charAt(0) === 'D';
+      var card = btn.closest('.prov');
+      if (isUnpin){
+        btn.textContent = 'Épingler';
+        if (card){
+          var k = card.querySelector('.kst');
+          if (k){ k.className = 'kst on'; k.textContent = 'à jour'; }
+        }
+      } else {
+        btn.textContent = 'Désépingler';
+        if (card){
+          var k2 = card.querySelector('.kst');
+          if (k2){ k2.className = 'kst testing'; k2.textContent = 'épinglé'; }
+          var u = card.querySelector('.upd');
+          if (u){ u.style.display = 'none'; }
+          var l = card.querySelector('.conn-log');
+          if (l){ l.style.display = 'none'; }
+        }
+      }
+    });
+  });
 })();
 </script>
 </body>
