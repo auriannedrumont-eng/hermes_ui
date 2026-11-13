@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useProviders } from "@/hooks/use-providers";
 import { useSystemPrompts } from "@/hooks/use-system-prompts";
+import { useMemory } from "@/hooks/use-memory";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getSocket } from "@/lib/socket";
 import { Sidebar } from "@/components/chat/sidebar";
@@ -40,6 +41,8 @@ export default function HermesWebPage() {
   // la jauge de contexte du composer (poste « Prompt de conversation »).
   const chat = useHermesChat();
   const promptsApi = useSystemPrompts(chat.activeId);
+  // Mémoire utilisateur (F-18) — section Hermes du volet Paramètres.
+  const memoryApi = useMemory();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -480,6 +483,7 @@ export default function HermesWebPage() {
         projects={chat.projects}
         api={providersApi}
         promptsApi={promptsApi}
+        memoryApi={memoryApi}
         serverVersion={chat.serverVersion}
       />
 

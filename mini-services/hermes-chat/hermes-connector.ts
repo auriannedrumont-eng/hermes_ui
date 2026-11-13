@@ -252,6 +252,15 @@ export class HermesConnector {
             ? { permissions: req.settings.permissionsMode }
             : {}),
           ...(req.systemPrompt ? { system_prompt: req.systemPrompt } : {}),
+          // Mémoire utilisateur (F-18) : notes actives + apprentissage
+          // automatique — clés à valider contre la gateway (même convention
+          // que Composer v2 : ignorées sans dommage si non supportées).
+          ...(req.settings?.memoryNotes
+            ? { memory_notes: req.settings.memoryNotes }
+            : {}),
+          ...(req.settings?.memoryAutoLearn !== undefined
+            ? { memory_auto_learn: req.settings.memoryAutoLearn }
+            : {}),
         };
         ws.send(
           JSON.stringify({

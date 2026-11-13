@@ -54,7 +54,7 @@
 |----|---------|----------|--------|----------------|
 | F-16 | **Voix** | Dictée STT + lecture TTS | **Terminé** (cœur) | Dictée `use-dictation.ts` + `asr.ts` ; TTS « Écouter » par message (`useSpeech`). Reste optionnel : lecture en continu pendant le stream |
 | F-17 | **Comparaison modèles** | 2 modèles côte à côte | À faire | — |
-| F-18 | **Mémoire utilisateur** | Consultable, éditable, effaçable | À faire | Prévu section « Hermes » des paramètres v4 (MEMORY.md / USER.md éditables) — F-11/F-19 livrés, la mémoire suit |
+| F-18 | **Mémoire utilisateur** | Consultable, éditable, effaçable | **Terminé** | Livré le 2026-11-13 : carte « Mémoire » de la section Hermes du volet (toggle activer/désactiver, apprentissage automatique, éditeur 12 000 car., effacement) ; clés `hermes.memory.{enabled,autoLearn,notes}` (table `settings`, fallback actif), événements `memory:*` + broadcast ; composition des instructions du tour par le service (démo : section « Mémoire de l'utilisateur » ; gateway : `memory_notes`/`memory_auto_learn` dans `api_turn_v1.settings`, clés à valider) ; `hello.memoryChars` honnête. |
 | F-19 | **Instructions personnalisées** | Globales | **Terminé** | Livré le 2026-11-13 avec F-11 (même chantier) : instructions globales persistées côté service (`hermes.instructions.custom`, table `settings`), éditeur dans la section Hermes du volet, appliquées à toutes les conversations, transmises dans `api_turn_v1.settings` en gateway |
 | F-20 | **Projets/dossiers** | Contexte par groupe | **Terminé** | UI projets (FORK.md §7.2) — rangement seul ; le contexte persistant par projet viendra des fichiers .md moteur |
 
@@ -202,6 +202,32 @@ n'est pas modifié ; un futur chantier pourra l'exploiter côté moteur).
   `src/` ; eslint sans nouvelle erreur (une préexistante ligne 350 de
   `message-bubble.tsx`, antérieure au chantier).
 
+## Chantier du 2026-11-13 (douzième session) — F-18 « Mémoire utilisateur »
+
+Premier chantier P2 restant non bloqué (l'ordre recommandé est épuisé côté
+démo : F-09/F-12 attendent la gateway). La mémoire est **consultable,
+éditable, effaçable** — et injectée dans les instructions du tour par le
+service, jamais assemblée côté client.
+
+- **Serveur** : clés `hermes.memory.{enabled, autoLearn, notes}` dans la
+  table `settings` (fallback additif : absentes = mémoire active) ;
+  événements `memory:get/set-enabled/set-auto/set-notes` + broadcast
+  `memory:changed` ; `composeDemoSystemPrompt` gagne la section « Mémoire
+  de l'utilisateur » (entre base et instructions personnalisées) ;
+  `systemPromptSize`/`hello.memoryChars` honnêtes ; en gateway, `memory_notes`
+  + `memory_auto_learn` partent dans `api_turn_v1.settings` (clés à valider
+  contre la gateway, convention Composer v2 : ignorées sans dommage).
+- **Client** : `MemoryCard` (section Hermes du volet — interrupteur
+  activer/désactiver, apprentissage automatique honnête « nécessite le moteur
+  réel », éditeur 12 000 car. avec compteur, effacement avec confirmation du
+  retour à vide) ; hook `use-memory` (chargement, bus, actions) ; câblage
+  `page` → `settings-panel` → `hermes-section`.
+- QA : `scripts/test-memory-flow.ts` **17/17 verts** (état par défaut propre,
+  garde-fou 12 000, broadcasts des trois actions, **vérification
+  comportementale** : la démo cite la mémoire ; désactivation coupe
+  l'injection, réactivation la rétablit ; effacement complet). Re-passé une
+  seconde fois. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre.
+
 ## Ordre de démarrage recommandé (suite)
 
 1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
@@ -210,7 +236,8 @@ n'est pas modifié ; un futur chantier pourra l'exploiter côté moteur).
 2. ~~F-11 + F-19~~ **livrés le 2026-11-13** (ci-dessus).
 3. ~~F-13~~ **livré le 2026-11-13** (ci-dessus).
 4. ~~F-24~~ **livré le 2026-11-13** (ci-dessus).
-5. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
+5. ~~F-18~~ **livré le 2026-11-13** (ci-dessus).
+6. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
    à revoir une fois la gateway branchée (les clés de services sont désormais gérées
    dans le volet Paramètres).
 

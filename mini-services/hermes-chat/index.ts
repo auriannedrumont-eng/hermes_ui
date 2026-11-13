@@ -10,6 +10,7 @@
 //   extensions:list/add/toggle/remove/pin/check/update,
 //   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
 //   custom-instructions:get/set,
+//   memory:get/set-enabled/set-auto/set-notes,
 //   share:get/create/revoke, feedback:set
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
@@ -18,7 +19,8 @@
 //   artifact:created, artifact:delta, artifact:updated,
 //   settings:changed, providers:changed, extensions:changed,
 //   system-prompt:changed, system-prompts:changed, custom-instructions:changed,
-//   share:changed, feedback:changed
+//   share:changed, feedback:changed,
+//   memory:changed
 // HTTP (port 3004) :
 //   GET /uploads/<id>.<ext>            — pièces jointes multimédia
 //   GET /artifacts/<id>/raw|download|thumb|pdf
@@ -47,7 +49,11 @@ import { transcribeAudioBase64 } from "./asr";
 import {
   CUSTOM_INSTRUCTIONS_KEY,
   MAX_CUSTOM_INSTRUCTIONS_CHARS,
+  MAX_MEMORY_CHARS,
   MAX_PROMPT_CHARS,
+  MEMORY_AUTO_KEY,
+  MEMORY_ENABLED_KEY,
+  MEMORY_NOTES_KEY,
   SEED_PRESETS,
   composeDemoSystemPrompt,
   rowToPreset,
@@ -602,24 +608,31 @@ function titleFrom(text: string, attachments?: Attachment[]): string {
   return "Nouvelle conversation";
 }
 
-/** Instructions complètes du tour (mode démo) : base + F-19 + F-11. */
+/** Instructions complètes du tour (mode démo) : base + F-18 (si active) + F-19 + F-11. */
 function demoSystemPrompt(conversationId: string): string {
   return composeDemoSystemPrompt({
     base: DEMO_BASE_PROMPT,
+    memoryNotes: store.getSettingBool(MEMORY_ENABLED_KEY, true)
+      ? store.getSetting(MEMORY_NOTES_KEY)
+      : null,
     customInstructions: store.getSetting(CUSTOM_INSTRUCTIONS_KEY),
     conversationPrompt: store.getConversationPrompt(conversationId)?.content ?? null,
   });
 }
 
-/** Taille réelle des instructions système (jauge honnête) : base + F-19 +
- *  prompt de la conversation donnée (le hello envoie la base + F-19). */
+/** Taille réelle des instructions système (jauge honnête) : base + mémoire +
+ * F-19 + prompt de la conversation donnée (le hello envoie la base + F-19). */
 function systemPromptSize(conversationId?: string): number {
   const base = DEMO_BASE_PROMPT.length;
+  const memory = (store.getSettingBool(MEMORY_ENABLED_KEY, true)
+    ? store.getSetting(MEMORY_NOTES_KEY) ?? ""
+    : ""
+  ).trim().length;
   const custom = (store.getSetting(CUSTOM_INSTRUCTIONS_KEY) ?? "").trim().length;
   const conv = conversationId
     ? (store.getConversationPrompt(conversationId)?.content ?? "").trim().length
     : 0;
-  return base + custom + conv;
+  return base + memory + custom + conv;
 }
 
 function helloPayload() {
@@ -629,9 +642,13 @@ function helloPayload() {
     mode: connector.mode,
     model: connector.model,
     gatewayUrl: connector.gatewayUrl,
-    // Taille réelle des instructions système du moteur démo (base + F-19) ;
+    // Taille réelle des instructions système du moteur démo (base + F-18 + F-19) ;
     // la gateway garde les siennes (le client retombe sur son estimation).
     systemPromptChars: connector.mode === "demo" ? systemPromptSize() : null,
+    // Mémoire active (F-18) : le client affiche un état honnête.
+    memoryChars: store.getSettingBool(MEMORY_ENABLED_KEY, true)
+      ? (store.getSetting(MEMORY_NOTES_KEY) ?? "").trim().length
+      : 0,
   };
 }
 
@@ -1192,6 +1209,58 @@ io.on("connection", (socket) => {
     }
   );
 
+  // ── Mémoire utilisateur (F-18) — consultable, éditable, effaçable ───
+  // Notes persistantes injectées dans les instructions du tour tant que la
+  // mémoire est active. Jamais un mot-clé magique : la composition reste
+  // le fait du service (prompts.ts), le client n'assemble rien.
+
+  socket.on("memory:get", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function")
+      cb({
+        enabled: store.getSettingBool(MEMORY_ENABLED_KEY, true),
+        autoLearn: store.getSettingBool(MEMORY_AUTO_KEY, false),
+        notes: store.getSetting(MEMORY_NOTES_KEY) ?? "",
+        maxChars: MAX_MEMORY_CHARS,
+      });
+  });
+
+  socket.on(
+    "memory:set-enabled",
+    (payload: { enabled?: boolean }, cb?: (data: unknown) => void) => {
+      const enabled = payload?.enabled === true;
+      store.setSettingBool(MEMORY_ENABLED_KEY, enabled);
+      if (typeof cb === "function") cb({ ok: true, enabled });
+      io.emit("memory:changed", { enabled });
+    }
+  );
+
+  socket.on(
+    "memory:set-auto",
+    (payload: { autoLearn?: boolean }, cb?: (data: unknown) => void) => {
+      const autoLearn = payload?.autoLearn === true;
+      store.setSettingBool(MEMORY_AUTO_KEY, autoLearn);
+      if (typeof cb === "function") cb({ ok: true, autoLearn });
+      io.emit("memory:changed", { autoLearn });
+    }
+  );
+
+  socket.on(
+    "memory:set-notes",
+    (payload: { value?: string }, cb?: (data: unknown) => void) => {
+      const value = (payload?.value ?? "").trim();
+      if (value.length > MAX_MEMORY_CHARS) {
+        if (typeof cb === "function")
+          cb({
+            error: `Trop long (max ${MAX_MEMORY_CHARS.toLocaleString("fr-FR")} caractères)`,
+          });
+        return;
+      }
+      store.setSetting(MEMORY_NOTES_KEY, value);
+      if (typeof cb === "function") cb({ ok: true, value });
+      io.emit("memory:changed", { notes: value });
+    }
+  );
+
   // ── Partage public lecture seule (F-13) ───────────────────────────
 
   // Partage actif de la conversation (null si aucun)
@@ -1720,7 +1789,17 @@ io.on("connection", (socket) => {
           model,
           modelId: opts.modelId,
           attachments,
-          settings: opts.settings,
+          // Réglages du tour : effort/permissions du composer + mémoire
+          // utilisateur (F-18) — les notes ne partent que si la mémoire est
+          // active (mode gateway ; en démo elles vivent dans systemPrompt).
+          settings: {
+            ...opts.settings,
+            memoryNotes:
+              store.getSettingBool(MEMORY_ENABLED_KEY, true)
+                ? (store.getSetting(MEMORY_NOTES_KEY) ?? "").trim() || undefined
+                : undefined,
+            memoryAutoLearn: store.getSettingBool(MEMORY_AUTO_KEY, false),
+          },
           // Instructions système du tour (F-11/F-19) : composées par le
           // service en mode démo ; en mode gateway, le prompt de conversation
           // part seul (la gateway garde ses instructions de base).

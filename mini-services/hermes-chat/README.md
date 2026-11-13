@@ -263,6 +263,30 @@ chaque création/révocation). Script de test E2E :
 `scripts/test-share-flow.ts` (24 contrôles : 404/410, remplacement,
 isolation, PNG Chrome).
 
+## Mémoire utilisateur (F-18)
+
+Mémoire **consultable, éditable, effaçable** : notes persistantes injectées
+dans les instructions du tour tant que la mémoire est active. Clés du
+registre `settings` : `hermes.memory.enabled` ("1"/"0", absente = active),
+`hermes.memory.autoLearn` ("1"/"0"), `hermes.memory.notes` (≤ 12 000 car.).
+En mode démo, la section « Mémoire de l'utilisateur » est composée par le
+service (entre la base et les instructions personnalisées) ; en mode
+gateway, `memory_notes` + `memory_auto_learn` partent dans
+`api_turn_v1.settings` (clés à valider contre la gateway). Le `hello`
+expose `memoryChars` (taille réelle, 0 si mémoire coupée).
+
+| Événement | Charge utile | Réponse (ack) |
+| --- | --- | --- |
+| `memory:get` | — | `{enabled, autoLearn, notes, maxChars}` |
+| `memory:set-enabled` | `{enabled}` | `{ok, enabled}` |
+| `memory:set-auto` | `{autoLearn}` | `{ok, autoLearn}` |
+| `memory:set-notes` | `{value}` | `{ok, value}` ou `{error}` (> 12 000 refusé) |
+
+Serveur → client : `memory:changed {notes?|enabled?|autoLearn?}` (broadcast,
+charge partielle). Script de test E2E : `scripts/test-memory-flow.ts`
+(17 contrôles, dont la vérification comportementale — la démo cite la
+mémoire).
+
 ## Feedback intégré (F-24)
 
 Chaque réponse assistant peut recevoir un retour **👍/👎 + commentaire libre**

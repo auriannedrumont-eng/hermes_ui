@@ -710,6 +710,18 @@ export class Store {
     return r?.value ?? null;
   }
 
+  /** Réglage booléen : stocké "1"/"0" (lisible en base), absent = fallback. */
+  getSettingBool(key: string, fallback: boolean): boolean {
+    const raw = this.getSetting(key);
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+    return fallback;
+  }
+
+  setSettingBool(key: string, value: boolean): void {
+    this.setSetting(key, value ? "1" : "0");
+  }
+
   setSetting(key: string, value: string): void {
     const now = new Date().toISOString();
     this.db

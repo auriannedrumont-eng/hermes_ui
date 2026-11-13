@@ -288,6 +288,16 @@ export interface SystemPromptChanged {
   prompt: ConversationPrompt | null;
 }
 
+// ── Mémoire utilisateur (F-18) — consultable, éditable, effaçable ───────
+
+/** État de la mémoire servie par `memory:get` / maintenue par le bus. */
+export interface MemoryState {
+  enabled: boolean;
+  autoLearn: boolean;
+  notes: string;
+  maxChars: number;
+}
+
 // ── Partage public lecture seule (F-13) ────────────────────────────────
 // Miroir de mini-services/hermes-chat/shares.ts (vues wire uniquement).
 

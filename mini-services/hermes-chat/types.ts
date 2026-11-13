@@ -174,6 +174,11 @@ export interface TurnSettings {
   reasoningEffort?: string;
   /** ask : confirmation avant chaque action · auto : tout exécuter. */
   permissionsMode?: "ask" | "auto";
+  // ── Mémoire utilisateur (F-18) — transmis au moteur réel ───────────
+  /** Notes de mémoire actives pour ce tour (undefined si mémoire coupée). */
+  memoryNotes?: string;
+  /** Apprentissage automatique demandé au moteur. */
+  memoryAutoLearn?: boolean;
 }
 
 // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────

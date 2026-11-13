@@ -32,6 +32,17 @@ export interface SystemPromptPreset {
 /** Clé du registre serveur des instructions personnalisées (F-19). */
 export const CUSTOM_INSTRUCTIONS_KEY = "hermes.instructions.custom";
 
+// ── Mémoire utilisateur (F-18) — consultable, éditable, effaçable ──────
+// Notes persistantes injectées dans les instructions du tour tant que la
+// mémoire est active. Fallback additif : absent = actif (cohérent avec le
+// reste du fork) — une mise à jour ne coupe jamais la mémoire.
+export const MEMORY_ENABLED_KEY = "hermes.memory.enabled";
+/** Apprentissage automatique (exploité par le moteur en gateway). */
+export const MEMORY_AUTO_KEY = "hermes.memory.autoLearn";
+/** Contenu de la mémoire (notes libres). */
+export const MEMORY_NOTES_KEY = "hermes.memory.notes";
+export const MAX_MEMORY_CHARS = 12_000;
+
 /** Limite de taille d'un prompt (garde-fou, aligné sur les usages LLM). */
 export const MAX_PROMPT_CHARS = 12_000;
 
@@ -68,14 +79,22 @@ export const SEED_PRESETS: { title: string; content: string }[] = [
 ];
 
 /** Construit les instructions complètes du tour (démo) : système de base +
- * instructions personnalisées + prompt de conversation. Chaque section
- * absente est simplement omise — ordre stable, lisible dans les logs. */
+ * mémoire utilisateur (F-18) + instructions personnalisées + prompt de
+ * conversation. Chaque section absente est simplement omise — ordre
+ * stable, lisible dans les logs. */
 export function composeDemoSystemPrompt(parts: {
   base: string;
+  memoryNotes?: string | null;
   customInstructions?: string | null;
   conversationPrompt?: string | null;
 }): string {
   const sections: string[] = [parts.base];
+  const memory = (parts.memoryNotes ?? "").trim();
+  if (memory) {
+    sections.push(
+      `Mémoire de l'utilisateur (ce qu'Hermes retient des échanges) :\n${memory}`
+    );
+  }
   const custom = (parts.customInstructions ?? "").trim();
   if (custom) {
     sections.push(`Instructions personnalisées de l'utilisateur :\n${custom}`);

@@ -48,6 +48,7 @@ import {
 import {
   GENERIC_EFFORTS,
   type GatewayMode,
+  type MemoryState,
   type ModelOption,
   type Project,
   type SystemPromptPreset,
@@ -110,6 +111,13 @@ interface SettingsPanelProps {
     updatePreset: (id: string, title: string, content: string) => Promise<SystemPromptPreset | null>;
     deletePreset: (id: string) => Promise<boolean>;
     saveCustomInstructions: (value: string) => Promise<boolean>;
+  };
+  /** Mémoire utilisateur (use-memory, F-18). */
+  memoryApi: {
+    state: MemoryState | null;
+    setEnabled: (enabled: boolean) => Promise<boolean>;
+    setAuto: (autoLearn: boolean) => Promise<boolean>;
+    saveNotes: (value: string) => Promise<boolean>;
   };
   /** Version du service (hello) — pied du rail. */
   serverVersion?: string | null;
@@ -466,6 +474,7 @@ export function SettingsPanel({
   projects,
   api,
   promptsApi,
+  memoryApi,
   serverVersion,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>("interface");
@@ -506,6 +515,10 @@ export function SettingsPanel({
             onUpdatePreset={promptsApi.updatePreset}
             onDeletePreset={promptsApi.deletePreset}
             onSaveCustomInstructions={promptsApi.saveCustomInstructions}
+            memory={memoryApi.state}
+            onSetMemoryEnabled={memoryApi.setEnabled}
+            onSetMemoryAuto={memoryApi.setAuto}
+            onSaveMemoryNotes={memoryApi.saveNotes}
           />
         );
       case "outils":

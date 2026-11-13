@@ -60,7 +60,7 @@ bun run dev        # bun --hot index.ts
 | `src/lib/chat-types.ts` | Types du protocole client/service (dont artefacts) | Fork (partagé) |
 | `src/lib/tokens.ts` | Estimation de contexte du Composer v2 (heuristique car/jetons, fenêtre par modèle, seuils) | Fork |
 | `src/components/chat/` | UI du chat, dont `composer.tsx` (Composer v2), `context-gauge.tsx` (jauge + popover de contexte), `artifact-card.tsx` (cartes inline), `artifact-panel.tsx` (split view) | Fork |
-| `src/components/settings/` | Volet Paramètres v4 : `settings-panel.tsx` (volet 860 px à rail), `providers-section.tsx`, `extensions-section.tsx`, `hermes-section.tsx` (F-11/F-19), `system-prompt-panel.tsx` (prompt de conversation), `bits.tsx` (pastilles), `info-tip.tsx` (tooltips « ? ») | Fork |
+| `src/components/settings/` | Volet Paramètres v4 : `settings-panel.tsx` (volet 860 px à rail), `providers-section.tsx`, `extensions-section.tsx`, `hermes-section.tsx` (F-11/F-19/F-18), `memory-card.tsx` (mémoire utilisateur), `system-prompt-panel.tsx` (prompt de conversation), `bits.tsx` (pastilles), `info-tip.tsx` (tooltips « ? ») | Fork |
 | `src/components/shared/shared-conversation-view.tsx` + `src/app/shared/[token]/page.tsx` | Page publique de partage (F-13) : lecture seule, `noindex`, export image | Fork |
 | `design/` | Maquettes HTML autonomes de référence, validées avant implémentation (ex. `maquette-composer.html`, chantier Composer v2) | Fork (design) |
 | `docs/ROADMAP_FRONT.md` | Suivi des fonctionnalités de chat (F-xx : statuts, preuves, ordre de suite) | Fork (doc de suivi) |
@@ -446,7 +446,8 @@ Livré le 2026-11-13 (neuvième session, point 2 de l'ordre recommandé — le p
   « prompt » de l'en-tête + pastille quand un prompt est actif, presets
   applicables, « Enregistrer dans la bibliothèque… », Retirer) ; section
   **Hermes** du volet v4 livrée (`hermes-section.tsx` : instructions globales
-  + bibliothèque éditable ; mémoire / fichiers .md restent « à venir ») ;
+  + bibliothèque éditable + **mémoire F-18** — fichiers .md restent
+  « à venir ») ;
   `use-hermes-chat.ts` expose `promptInfo` (chargé au changement de
   conversation, suivi par bus) et la jauge gagne le poste « Prompt de
   conversation ».
@@ -513,6 +514,36 @@ pourra l'exploiter côté agent).
   `bunx tsc --noEmit` : 0 erreur `src/` ; eslint sans nouvelle erreur (une
   préexistante dans `message-bubble.tsx`, antérieure au chantier).
 
+### 7.10 Fait — Mémoire utilisateur (F-18)
+
+Livré le 2026-11-13 (douzième session). Mémoire **consultable, éditable,
+effaçable** : notes persistantes réutilisées à chaque conversation. La
+composition reste le fait du service (le client n'assemble rien) ; le
+fallback additif des clés fait qu'une mise à jour ne coupe jamais la mémoire.
+
+- **Serveur** : clés `hermes.memory.{enabled, autoLearn, notes}` (table
+  `settings`, aucun schéma dédié) ; événements
+  `memory:get/set-enabled/set-auto/set-notes` + broadcast `memory:changed` ;
+  `composeDemoSystemPrompt` gagne la section « Mémoire de l'utilisateur »
+  (entre la base et les instructions personnalisées) ; jauge
+  `systemPromptSize` et `hello.memoryChars` honnêtes ; en mode gateway,
+  `memory_notes` + `memory_auto_learn` partent dans `api_turn_v1.settings`
+  (clés à valider contre la gateway — même convention que Composer v2,
+  ignorées sans dommage si non supportées).
+- **Client** : `MemoryCard` de la section Hermes du volet v4 (interrupteur
+  activer/désactiver, apprentissage automatique « nécessite le moteur réel »,
+  éditeur 12 000 car. avec compteur, effacement) ; hook `use-memory`
+  (chargement, bus, actions) ; câblage `page` → `settings-panel` →
+  `hermes-section`. L'état reste honnête en toute circonstance.
+- QA : `scripts/test-memory-flow.ts` — **17/17 verts** (re-passé une seconde
+  fois) : état par défaut propre, garde-fou 12 000, broadcasts des trois
+  actions, vérification comportementale (la démo cite la mémoire), coupe
+  propre à la désactivation, réactivation, effacement complet.
+  `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre.
+- NB : MEMORY.md / USER.md du moteur ne sont PAS touchés — les notes vivent
+  dans l'UI du fork ; une fois la gateway branchée, l'apprentissage
+  automatique pourra écrire dans les fichiers du moteur côté agent.
+
 ## 8. Dettes techniques et pièges
 
 - `prisma/schema.prisma` et les scripts `db:*` de la racine sont **résiduels et inutilisés**
@@ -553,6 +584,7 @@ pourra l'exploiter côté agent).
 | 2026-11-13 (9) | **F-11 + F-19 livrés — Prompt système & instructions personnalisées** (neuvième session, point 2 de l'ordre recommandé) : le prompt **s'ajoute** aux instructions de base, jamais les remplace. Table additive `system_prompts` (scope `conversation` / `preset`, 5 presets semés), instructions globales dans `settings` (`hermes.instructions.custom`, max 4 000 car.) ; événements `system-prompt:*` / `system-prompts:*` / `custom-instructions:*` avec broadcasts ; composition côté service (démo : base + F-19 + F-11 ; gateway : `system_prompt` seul dans `api_turn_v1.settings`), `hello.systemPromptChars` honnête ; hook `use-system-prompts`, `SystemPromptPanel` (sheet 460 px, bouton « prompt » + pastille d'en-tête), section **Hermes** du volet v4 livrée (instructions globales + bibliothèque éditable — mémoire et .md restent à venir), poste « Prompt de conversation » dans la jauge. QA : `scripts/test-system-prompt-flow.ts` **24/24**, dont vérification comportementale réelle (LLM démo répond « B »), isolation entre conversations, garde-fous de longueur. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (10) | **F-13 livré — Partage public lecture seule + export image** (dixième session, point 3 de l'ordre recommandé) : le lien est un **snapshot figé** (la conversation peut continuer sans changer le lien ; révocation → 410 Gone sans toucher la source ; suppression de la conversation → liens 410 persistant). Table additive `shares` (token opaque 24 car. base62, un lien actif max par conversation — recréer révoque l'ancien) ; événements `share:get/create/revoke` + broadcast `share:changed` ; HTTP (3004) : `data.json` public sans id interne (CORS `*`) et `image.png` plein page via le pipeline chrome-headless-shell. Client : page publique `/shared/[token]` (`noindex`, Markdown réutilisé, états révoqué/introuvable) + menu « Partager » de l'en-tête (créer/copier, ouvrir la vue, révoquer). QA : `scripts/test-share-flow.ts` **24/24** (404/410, remplacement, isolation, PNG Chrome valide ~35 Ko) ; page servie et snapshot chargé vérifiés en dev ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (11) | **F-24 livré — Feedback intégré 👍/👎 + commentaire** (onzième session, point 4 de l'ordre recommandé) : retour **local, jamais envoyé au modèle** (protocole gateway inchangé). Migration additive `messages.feedback_rating`/`feedback_comment` + `setMessageFeedback` (assistant seule, troncature 2 000, `null` = efface) ; événement `feedback:set` + broadcast `feedback:changed` ; client `FeedbackControl` dans la rangée d'actions (re-clic = efface, popover commentaire, pastille italique), câblage list→page, action optimiste du hook avec retour arrière si refus. Assumé : fork repart sans retours. QA : `scripts/test-feedback-flow.ts` **15/15** (pose, inversion, troncature, garde-fous, retrait, persistance au rechargement, isolation) ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint sans nouvelle erreur. |
+| 2026-11-13 (12) | **F-18 livré — Mémoire utilisateur** (douzième session ; l'ordre recommandé était épuisé côté démo, premier P2 non bloqué) : mémoire **consultable, éditable, effaçable**. Clés `hermes.memory.{enabled,autoLearn,notes}` (table `settings`, fallback additif : absentes = actives) ; événements `memory:*` + broadcast ; `composeDemoSystemPrompt` gagne la section « Mémoire de l'utilisateur », jauge `systemPromptSize` et `hello.memoryChars` honnêtes ; en gateway `memory_notes`/`memory_auto_learn` dans `api_turn_v1.settings` (clés à valider, convention Composer v2). Client : `MemoryCard` de la section Hermes (interrupteur, apprentissage automatique honnête, éditeur 12 000 car., effacement) + hook `use-memory`. NB : MEMORY.md/USER.md du moteur non touchés — l'apprentissage réel viendra avec la gateway. QA : `scripts/test-memory-flow.ts` **17/17** re-passé (garde-fou 12 000, broadcasts, comportemental : la démo cite la mémoire, désactivation coupe l'injection) ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 
 ## 10. Synchronisation git et passation
 

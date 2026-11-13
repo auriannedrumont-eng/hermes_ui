@@ -1,24 +1,29 @@
-// Section « Hermes » du volet Paramètres v4 — F-11 / F-19 livrés :
-// bibliothèque de presets de prompt système (éditeur intégré) et
-// instructions personnalisées globales. Les autres chantiers Hermes
-// (mémoire MEMORY.md/USER.md, fichiers .md moteur, compaction) restent
-// « à venir » en bas de section — ils dépendent de la découverte moteur.
+// Section « Hermes » du volet Paramètres v4 — F-11 / F-19 / F-18 livrés :
+// bibliothèque de presets de prompt système (éditeur intégré), instructions
+// personnalisées globales et mémoire utilisateur (consultable, éditable,
+// effaçable). Les autres chantiers Hermes (fichiers .md moteur, compaction)
+// restent « à venir » en bas de section — ils dépendent de la découverte moteur.
 "use client";
 
 import { useEffect, useState } from "react";
 import { Check, Pencil, Sparkle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
-import type { SystemPromptPreset } from "@/lib/chat-types";
+import { MemoryCard } from "@/components/settings/memory-card";
+import type { MemoryState, SystemPromptPreset } from "@/lib/chat-types";
 
 interface HermesSectionProps {
   presets: SystemPromptPreset[];
   customInstructions: string | null;
   customMaxChars: number;
+  memory: MemoryState | null;
   onCreatePreset: (title: string, content: string) => Promise<SystemPromptPreset | null>;
   onUpdatePreset: (id: string, title: string, content: string) => Promise<SystemPromptPreset | null>;
   onDeletePreset: (id: string) => Promise<boolean>;
   onSaveCustomInstructions: (value: string) => Promise<boolean>;
+  onSetMemoryEnabled: (enabled: boolean) => Promise<boolean>;
+  onSetMemoryAuto: (autoLearn: boolean) => Promise<boolean>;
+  onSaveMemoryNotes: (value: string) => Promise<boolean>;
 }
 
 /** Éditeur d'un preset (création ou modification) — ligne dépliable du volet. */
@@ -78,10 +83,14 @@ export function HermesSection({
   presets,
   customInstructions,
   customMaxChars,
+  memory,
   onCreatePreset,
   onUpdatePreset,
   onDeletePreset,
   onSaveCustomInstructions,
+  onSetMemoryEnabled,
+  onSetMemoryAuto,
+  onSaveMemoryNotes,
 }: HermesSectionProps) {
   // Éditeur ouvert : preset existant (id) ou création (null)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -193,6 +202,16 @@ export function HermesSection({
         </div>
       </div>
 
+      {/* ── Mémoire utilisateur (F-18) ─────────────────────────────── */}
+      <div className="mt-4">
+        <MemoryCard
+          state={memory}
+          onSetEnabled={onSetMemoryEnabled}
+          onSetAuto={onSetMemoryAuto}
+          onSaveNotes={onSaveMemoryNotes}
+        />
+      </div>
+
       {/* ── Bibliothèque de presets (F-11) ───────────────────────────── */}
       <div className="mt-6">
         <div className="flex items-center justify-between">
@@ -283,10 +302,6 @@ export function HermesSection({
       {/* ── À venir : le reste de la section Hermes ─────────────────── */}
       <div className="mt-6 rounded-[14px] border border-dashed border-border px-4 py-1">
         {[
-          {
-            name: "Mémoire",
-            desc: "MEMORY.md, USER.md — faits persistants, consultables et effaçables",
-          },
           {
             name: "Fichiers .md",
             desc: "SOUL.md, AGENTS.md, AGENTS.override.md, CLAUDE.md — éditables",
