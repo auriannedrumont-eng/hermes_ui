@@ -175,7 +175,7 @@ export function SharedConversationView({ token }: { token: string }) {
 /** Coquille commune : barre sobre + zone centrée lisible. */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-background text-foreground">
+    <div className="min-h-app-full bg-background text-foreground">
       <div className="border-b border-border/60 bg-card/60">
         <div className="mx-auto flex h-13 max-w-3xl items-center gap-2 px-4 py-2.5">
           <Link href="/" className="flex items-center gap-2 text-[13px] font-semibold">

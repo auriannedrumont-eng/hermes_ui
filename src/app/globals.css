@@ -180,3 +180,15 @@
 .message-in {
   animation: message-in 0.24s ease-out;
 }
+
+/* Hauteur plein écran avec repli : 100vh partout, 100dvh quand le
+   navigateur le supporte (barres dynamiques mobiles). Les utilitaires
+   h-dvh / min-h-dvh de Tailwind seuls retombent à « auto » sur les
+   navigateurs sans dvh — l'app tenait alors sur la hauteur de son
+   contenu, bande vide sous le composer (constaté en QA 2026-11-14). */
+.h-app-full { height: 100vh; }
+.min-h-app-full { min-height: 100vh; }
+@supports (height: 100dvh) {
+  .h-app-full { height: 100dvh; }
+  .min-h-app-full { min-height: 100dvh; }
+}

@@ -343,7 +343,12 @@ export default function HermesWebPage() {
   );
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-dvh w-full bg-background text-foreground">
+    // Wrapper à hauteur fixe : ResizablePanelGroup pose un style inline
+    // height:100% qui écrase h-dvh — il faut un parent dimensionné, sinon
+    // l'app tient sur la hauteur de son contenu (composer non ancré en bas,
+    // bande vide sous la sidebar — constaté en QA 2026-11-14).
+    <div className="h-app-full w-full bg-background text-foreground">
+      <ResizablePanelGroup direction="horizontal" className="h-full w-full">
       {/* Sidebar bureau — largeur fluide, mémorisée */}
       {!isMobile ? (
         <>
@@ -524,6 +529,7 @@ export default function HermesWebPage() {
         onExport={handleExport}
         onSearchMessages={chat.searchMessages}
       />
-    </ResizablePanelGroup>
+      </ResizablePanelGroup>
+    </div>
   );
 }

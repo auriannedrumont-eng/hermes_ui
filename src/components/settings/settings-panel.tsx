@@ -577,7 +577,7 @@ export function SettingsPanel({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 left-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-card shadow-2xl outline-none min-[1100px]:w-[860px] min-[1100px]:rounded-r-[22px] min-[1100px]:border-r min-[1100px]:border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-left data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=closed]:duration-300 data-[state=open]:duration-300"
+          className="fixed inset-y-0 left-0 z-50 flex h-app-full w-full flex-col overflow-hidden bg-card shadow-2xl outline-none min-[1100px]:w-[860px] min-[1100px]:flex-row min-[1100px]:rounded-r-[22px] min-[1100px]:border-r min-[1100px]:border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-left data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=closed]:duration-300 data-[state=open]:duration-300"
         >
           <DialogPrimitive.Title className="sr-only">Paramètres</DialogPrimitive.Title>
 

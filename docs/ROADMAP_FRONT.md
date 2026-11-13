@@ -260,11 +260,38 @@ tirées de sondages SDK réels (consignées FORK.md §9-13) :
   non-numériques (ignorées). Reprises anti-429 espacées de 8 s.
   `bunx tsc --noEmit` : 0 erreur `src/` et service ; eslint propre.
 
+## Chantier du 2026-11-14 — Fixes layout d'après les captures de l'utilisatrice (validation volet v4)
+
+Les captures du poste Windows (accueil + volet Paramètres ouvert) révélaient deux bugs
+de layout, reproduits et mesurés en local (Chromium 1280×1080, `scripts/qa-layout.ts`) :
+
+1. **Volet Paramètres : rail empilé au-dessus du contenu** — le conteneur du volet était
+   `flex flex-col` alors que rail (208 px) et colonne de contenu sont frères : le rail se
+   rendait en bloc 208×455 en haut-gauche et le titre « Interface » partait à y≈455
+   (mesuré), × isolé en hauteur. Fix : `min-[1100px]:flex-row` (le rail redevient une
+   bande horizontale sous 1100 px, inchangé).
+2. **App tenant sur la hauteur de son contenu** (composer non ancré, ~448 px vides sous
+   le fil, sidebar stoppée net) — `ResizablePanelGroup` reçoit de la lib un style inline
+   `height:100%` qui écrase `h-dvh`, et son parent n'avait pas de hauteur. Fix : wrapper
+   racine `div.h-app-full` (nouvel utilitaire globals.css : `100vh` puis `100dvh` sous
+   `@supports` — sert aussi de repli pour les navigateurs sans `dvh`), appliqué aussi au
+   volet Paramètres, au panneau prompt système et à la vue partagée (`min-h-app-full`).
+
+Non-bug constaté : « Hermes 4 70B (démo) » (carte de statut = défaut du service,
+`DEFAULT_MODEL_ID`) vs « Hermes 4 405B » (sélecteur = sélection persistée de
+l'utilisatrice) — deux vérités distinctes, aucune correction.
+
+QA : re-mesures après correctifs (wrapper 1280×1080 ✓, rail 0→208 pleine hauteur ✓,
+contenu x=208/y=0 ✓, × à y=16 ✓, composer y≈932 ✓) + captures VLM
+`download/qa-layout-fixes/` (1280×1080 et 900×800) ; `bunx tsc --noEmit` 0 erreur
+`src/` ; eslint propre. NB poste Windows : après `git pull`, effacer `.next/` pour que
+le lanceur reconstruise le build de production au prochain double-clic.
+
 ## Ordre de démarrage recommandé (suite)
 
-1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
-   local : `bun dev` + mini-service) — retours à intégrer directement sur
-   l'implémenté.
+1. ~~Valider le volet v4 implémenté~~ **premiers retours intégrés le 2026-11-14**
+   (fixes layout ci-dessus) ; re-validation visuelle sur le poste de l'utilisatrice
+   après `git pull` + effacement de `.next/`.
 2. ~~F-11 + F-19~~ **livrés le 2026-11-13** (ci-dessus).
 3. ~~F-13~~ **livré le 2026-11-13** (ci-dessus).
 4. ~~F-24~~ **livré le 2026-11-13** (ci-dessus).

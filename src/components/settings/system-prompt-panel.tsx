@@ -72,7 +72,7 @@ export function SystemPromptPanel({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-card shadow-2xl outline-none min-[640px]:w-[460px] min-[640px]:rounded-l-[22px] min-[640px]:border-l min-[640px]:border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-300 data-[state=open]:duration-300"
+          className="fixed inset-y-0 right-0 z-50 flex h-app-full w-full flex-col overflow-hidden bg-card shadow-2xl outline-none min-[640px]:w-[460px] min-[640px]:rounded-l-[22px] min-[640px]:border-l min-[640px]:border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-300 data-[state=open]:duration-300"
         >
           <DialogPrimitive.Title className="sr-only">
             Prompt système de la conversation
@@ -146,7 +146,7 @@ function PromptPanelBody({
   );
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden">
+    <div className="flex h-app-full w-full flex-col overflow-hidden">
       {/* ── En-tête ─────────────────────────────────────────────── */}
       <div className="flex flex-none items-center gap-2.5 px-5 pt-5 min-[640px]:px-6">
         <span className="flex size-[26px] items-center justify-center rounded-[8px] bg-hermes/10 text-hermes">
