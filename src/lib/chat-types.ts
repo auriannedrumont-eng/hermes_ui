@@ -62,6 +62,11 @@ export interface ChatMessage {
   artifacts?: Artifact[];
   /** Réponse interrompue par l'utilisateur (bouton Stop) — partiel conservé. */
   stopped?: boolean;
+  // ── Feedback utilisateur (F-24) — local, jamais envoyé au modèle ──
+  /** 👍/👎 posé sur une réponse assistant (absent = pas de feedback). */
+  feedbackRating?: "up" | "down";
+  /** Commentaire libre associé au feedback (max 2 000 caractères). */
+  feedbackComment?: string;
 }
 
 export interface ConversationMeta {

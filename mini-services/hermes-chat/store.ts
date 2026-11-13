@@ -158,6 +158,17 @@ export class Store {
     } catch {
       /* colonne déjà présente */
     }
+    // Migration douce : feedback utilisateur (F-24) — 👍/👎 + commentaire
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN feedback_rating TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN feedback_comment TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
     // Migration douce : colonne des conversations épinglées
     try {
       this.db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -840,7 +851,25 @@ export class Store {
       model: r.model ?? undefined,
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
+      feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
+      feedbackComment: r.feedback_comment ?? undefined,
     }));
+  }
+
+  /** Définit le feedback d'un message assistant (F-24) — null = effacé. */
+  setMessageFeedback(
+    conversationId: string,
+    messageId: string,
+    rating: "up" | "down" | null,
+    comment?: string | null
+  ): ChatMessage | null {
+    const msg = this.getMessage(conversationId, messageId);
+    if (!msg || msg.role !== "assistant") return null;
+    const clean = typeof comment === "string" ? comment.trim().slice(0, 2000) : null;
+    this.db
+      .query("UPDATE messages SET feedback_rating = ?, feedback_comment = ? WHERE conversation_id = ? AND id = ?")
+      .run(rating, rating ? (clean ?? null) : null, conversationId, messageId);
+    return this.getMessage(conversationId, messageId);
   }
 
   appendMessage(msg: Omit<ChatMessage, "id" | "createdAt"> & { id?: string; createdAt?: string }): ChatMessage {
@@ -882,6 +911,8 @@ export class Store {
       model: r.model ?? undefined,
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
+      feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
+      feedbackComment: r.feedback_comment ?? undefined,
     };
   }
 

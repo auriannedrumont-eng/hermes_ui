@@ -1,5 +1,7 @@
 // Bulle de message : utilisateur (droite, éditable) ou assistant
 // (markdown + outils + raisonnement), avec actions au survol.
+// Les réponses assistant portent un feedback 👍/👎 + commentaire (F-24) —
+// local, conservé côté service, jamais envoyé au modèle.
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -10,10 +12,13 @@ import {
   Copy,
   GitBranch,
   Loader2,
+  MessageSquareText,
   Package,
   Pencil,
   RefreshCw,
   Square,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   Volume2,
   VolumeX,
@@ -26,6 +31,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { HermesAvatar } from "@/components/chat/hermes-logo";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AttachmentsList } from "@/components/chat/attachments";
@@ -165,6 +175,126 @@ function ActionButton({
   );
 }
 
+/** Contrôle de feedback (F-24) : 👍/👎 + commentaire optionnel.
+ *  Local — jamais envoyé au modèle ; persisté côté service sur le message. */
+function FeedbackControl({
+  message,
+  onSet,
+}: {
+  message: ChatMessage;
+  onSet: (rating: "up" | "down" | null, comment?: string | null) => void;
+}) {
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const rating = message.feedbackRating ?? null;
+
+  const setRating = (next: "up" | "down") => {
+    // Re-clic sur le même bouton = efface le retour complet
+    if (rating === next) onSet(null, null);
+    else onSet(next, message.feedbackComment ?? null);
+  };
+
+  const openComment = (open: boolean) => {
+    setCommentOpen(open);
+    if (open) setDraft(message.feedbackComment ?? "");
+  };
+
+  const saveComment = () => {
+    onSet(rating ?? "up", draft.trim() || null);
+    setCommentOpen(false);
+  };
+
+  return (
+    <div className="flex items-center gap-0.5">
+      <ActionButton
+        label={rating === "up" ? "Retirer le 👍" : "Bonne réponse"}
+        onClick={() => setRating("up")}
+        active={rating === "up"}
+        icon={
+          <ThumbsUp className={`h-3.5 w-3.5 ${rating === "up" ? "fill-hermes/15" : ""}`} />
+        }
+      />
+      <ActionButton
+        label={rating === "down" ? "Retirer le 👎" : "Réponse à améliorer"}
+        onClick={() => setRating("down")}
+        active={rating === "down"}
+        icon={
+          <ThumbsDown className={`h-3.5 w-3.5 ${rating === "down" ? "fill-hermes/15" : ""}`} />
+        }
+      />
+      <Popover open={commentOpen} onOpenChange={openComment}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Commenter ce feedback"
+            title="Commenter ce feedback"
+            className={`h-7 gap-1.5 rounded-lg px-2 text-[12px] ${
+              message.feedbackComment ? "text-hermes" : "text-muted-foreground"
+            }`}
+          >
+            <MessageSquareText className="h-3.5 w-3.5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-72 p-3" aria-describedby={undefined}>
+          <p className="mb-2 text-[12px] font-semibold leading-snug">
+            Commentaire {rating ? (rating === "up" ? "positif 👍" : "négatif 👎") : ""}
+            <span className="ml-1 font-normal text-muted-foreground">
+              — local, jamais envoyé au modèle
+            </span>
+          </p>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            aria-label="Commentaire de feedback"
+            placeholder={
+              rating === "down"
+                ? "Ce qui a manqué dans cette réponse…"
+                : "Ce qui a été utile…"
+            }
+            className="w-full resize-none rounded-lg border border-border bg-background px-2.5 py-2 text-[12.5px] leading-relaxed outline-none focus-visible:border-hermes/60"
+          />
+          <div className="mt-2 flex items-center justify-between">
+            {rating ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onSet(null, null);
+                  setCommentOpen(false);
+                }}
+                className="cursor-pointer text-[11px] font-medium text-muted-foreground transition-colors hover:text-destructive"
+              >
+                Effacer le retour
+              </button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                Posez d&apos;abord un 👍/👎
+              </span>
+            )}
+            <Button
+              size="sm"
+              onClick={saveComment}
+              disabled={!rating || (!draft.trim() && !message.feedbackComment)}
+              className="h-7 rounded-lg bg-hermes px-2.5 text-[12px] text-hermes-foreground hover:opacity-90"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Enregistrer
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      {/* Commentaire existant : visible discrètement sous la rangée */}
+      {message.feedbackComment && rating ? (
+        <span className="ml-1.5 max-w-[220px] truncate text-[10.5px] italic text-muted-foreground/80">
+          « {message.feedbackComment} »
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 interface MessageBubbleProps {
   message: ChatMessage;
   isStreaming?: boolean;
@@ -183,6 +313,8 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
   onFork?: (messageId: string) => void;
+  /** Feedback 👍/👎 + commentaire (F-24) — réponses assistant. */
+  onSetFeedback?: (messageId: string, rating: "up" | "down" | null, comment?: string | null) => void;
   onOpenArtifact?: (artifact: Artifact) => void;
   onRetryArtifact?: (artifactId: string) => void;
 }
@@ -202,6 +334,7 @@ export function MessageBubble({
   onEdit,
   onDelete,
   onFork,
+  onSetFeedback,
   onOpenArtifact,
   onRetryArtifact,
 }: MessageBubbleProps) {
@@ -488,6 +621,12 @@ export function MessageBubble({
                 label="Branche"
                 onClick={() => onFork(message.id)}
                 icon={<GitBranch className="h-3.5 w-3.5" />}
+              />
+            ) : null}
+            {onSetFeedback ? (
+              <FeedbackControl
+                message={message}
+                onSet={(rating, comment) => onSetFeedback(message.id, rating, comment)}
               />
             ) : null}
             {onDelete ? (

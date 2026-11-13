@@ -60,6 +60,17 @@ export interface ChatMessage {
   artifacts?: Artifact[];
   /** Réponse interrompue par l'utilisateur (bouton Stop) — partiel conservé. */
   stopped?: boolean;
+  // ── Feedback utilisateur (F-24) — local, jamais envoyé au modèle ──
+  /** 👍/👎 posé sur une réponse assistant (absent = pas de feedback). */
+  feedbackRating?: "up" | "down";
+  /** Commentaire libre associé au feedback (max 2 000 caractères). */
+  feedbackComment?: string;
+}
+
+/** Charge utile du bus `feedback:changed` (F-24, broadcast). */
+export interface FeedbackChangedPayload {
+  conversationId: string;
+  message: ChatMessage;
 }
 
 // ── Artefacts : fichiers générés par l'agent, objets de première classe ──

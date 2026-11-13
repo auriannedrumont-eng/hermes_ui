@@ -487,6 +487,32 @@ source ; supprimer la conversation passe les liens en 410 Gone.
   « Pages consultées (n) », jamais de panneau dédié. Branché sur dev-browser (connecteur
   importé, scène F — ses mises à jour s'y gèrent).
 
+### 7.9 Fait — Feedback intégré (F-24)
+
+Livré le 2026-11-13 (onzième session, point 4 de l'ordre recommandé). Un retour
+👍/👎 + commentaire libre sur chaque réponse assistant — **local : jamais envoyé
+au modèle** (le protocole gateway n'est pas modifié ; un chantier moteur futur
+pourra l'exploiter côté agent).
+
+- **Serveur** : migration additive `messages.feedback_rating` / `feedback_comment`
+  (R2), transportées par `getMessages`/`getMessage` ; `setMessageFeedback`
+  (assistant seule, commentaire tronqué à 2 000 caractères, `rating: null` =
+  efface le retour complet) ; événement `feedback:set` + broadcast
+  `feedback:changed`. Assumé : un fork repart sans retours (nouvelle branche =
+  nouveaux retours, `appendMessage` ne transporte pas les colonnes feedback).
+- **Client** : `FeedbackControl` dans `message-bubble.tsx` (rangée d'actions
+  assistant : boutons 👍/👎 — re-clic sur le même = efface — popover commentaire
+  avec « Effacer le retour », commentaire existant visible en italique) ;
+  `onSetFeedback` câblé `message-list` → `page` ; action `setMessageFeedback`
+  du hook (mise à jour optimiste, ack, retour arrière à l'état antérieur si
+  refus) ; bus `feedback:changed` pour les autres clients.
+- QA : `scripts/test-feedback-flow.ts` — **15/15 verts** : pose, inversion,
+  commentaire (ajout/remplacement/troncature à 2 000), garde-fous (message
+  utilisateur refusé, introuvable, commentaire sans vote), retrait complet,
+  persistance au rechargement, isolation entre conversations.
+  `bunx tsc --noEmit` : 0 erreur `src/` ; eslint sans nouvelle erreur (une
+  préexistante dans `message-bubble.tsx`, antérieure au chantier).
+
 ## 8. Dettes techniques et pièges
 
 - `prisma/schema.prisma` et les scripts `db:*` de la racine sont **résiduels et inutilisés**
@@ -526,6 +552,7 @@ source ; supprimer la conversation passe les liens en 410 Gone.
 | 2026-11-13 (8) | **Paramètres phase 2 livrée — volet v4 + Fournisseurs & clés + Extensions (v2.2)** : menée sur la maquette v4 à la demande « continue » de l'utilisatrice (validation formelle a posteriori, ajustements sur l'implémenté). Volet gauche 860 px à rail (10 sections, pastilles, plein écran < 1100 px) remplace le sheet 460 px ; Interface gagne le **Thème** (next-themes) et **Afficher le raisonnement** (`fork.ui.showReasoning`, appliqué en direct aux bulles) ; serveur : tables additives `providers`/`provider_keys`/`extensions` (colonne `applied` = effet au redémarrage, compteur « N en attente »), « Tester » = **appel réel** exécuté par le service (401 → « clé refusée », 429 → épuisée), secrets **jamais** renvoyés au navigateur (masquage `sk-••••7f3a`), imports GitHub **réels** avec **repli `git ls-remote`** quand l'API est au quota (jeton `GITHUB_TOKEN` optionnel), Vérifier / Mettre à jour / Épingler ; stratégies de porte-clés prêtes pour le moteur (`pickActiveKey`, non consommées en démo — assumé). Suppression du « commit » SQLite réservé (colonne quotée). QA : `scripts/test-providers-flow.ts` 29/29 (test clé réel → 401, import GitHub réel), 14 captures `download/qa-parametres-v2/` contrôlées par script + VLM. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (9) | **F-11 + F-19 livrés — Prompt système & instructions personnalisées** (neuvième session, point 2 de l'ordre recommandé) : le prompt **s'ajoute** aux instructions de base, jamais les remplace. Table additive `system_prompts` (scope `conversation` / `preset`, 5 presets semés), instructions globales dans `settings` (`hermes.instructions.custom`, max 4 000 car.) ; événements `system-prompt:*` / `system-prompts:*` / `custom-instructions:*` avec broadcasts ; composition côté service (démo : base + F-19 + F-11 ; gateway : `system_prompt` seul dans `api_turn_v1.settings`), `hello.systemPromptChars` honnête ; hook `use-system-prompts`, `SystemPromptPanel` (sheet 460 px, bouton « prompt » + pastille d'en-tête), section **Hermes** du volet v4 livrée (instructions globales + bibliothèque éditable — mémoire et .md restent à venir), poste « Prompt de conversation » dans la jauge. QA : `scripts/test-system-prompt-flow.ts` **24/24**, dont vérification comportementale réelle (LLM démo répond « B »), isolation entre conversations, garde-fous de longueur. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (10) | **F-13 livré — Partage public lecture seule + export image** (dixième session, point 3 de l'ordre recommandé) : le lien est un **snapshot figé** (la conversation peut continuer sans changer le lien ; révocation → 410 Gone sans toucher la source ; suppression de la conversation → liens 410 persistant). Table additive `shares` (token opaque 24 car. base62, un lien actif max par conversation — recréer révoque l'ancien) ; événements `share:get/create/revoke` + broadcast `share:changed` ; HTTP (3004) : `data.json` public sans id interne (CORS `*`) et `image.png` plein page via le pipeline chrome-headless-shell. Client : page publique `/shared/[token]` (`noindex`, Markdown réutilisé, états révoqué/introuvable) + menu « Partager » de l'en-tête (créer/copier, ouvrir la vue, révoquer). QA : `scripts/test-share-flow.ts` **24/24** (404/410, remplacement, isolation, PNG Chrome valide ~35 Ko) ; page servie et snapshot chargé vérifiés en dev ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
+| 2026-11-13 (11) | **F-24 livré — Feedback intégré 👍/👎 + commentaire** (onzième session, point 4 de l'ordre recommandé) : retour **local, jamais envoyé au modèle** (protocole gateway inchangé). Migration additive `messages.feedback_rating`/`feedback_comment` + `setMessageFeedback` (assistant seule, troncature 2 000, `null` = efface) ; événement `feedback:set` + broadcast `feedback:changed` ; client `FeedbackControl` dans la rangée d'actions (re-clic = efface, popover commentaire, pastille italique), câblage list→page, action optimiste du hook avec retour arrière si refus. Assumé : fork repart sans retours. QA : `scripts/test-feedback-flow.ts` **15/15** (pose, inversion, troncature, garde-fous, retrait, persistance au rechargement, isolation) ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint sans nouvelle erreur. |
 
 ## 10. Synchronisation git et passation
 

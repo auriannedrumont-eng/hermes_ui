@@ -65,7 +65,7 @@
 | F-21 | **Compteur tokens/coût** | Par message, repliable | Partiel | Jauge de contexte + popover par poste (`tokens.ts`, heuristique car/jetons). Manque : coût par message |
 | F-22 | **Mode expert** | Température, max tokens, seed | Partiel | Effort de raisonnement par modèle livré. Manquent : température, max tokens, seed |
 | F-23 | **Raccourcis clavier** | Nouveau chat, recherche, focus composer | **Terminé** | Cmd/Ctrl+K palette (nouveau chat, stop, régénérer, épingler, exports, modèles, recherche), Cmd/Ctrl+Maj+O nouveau chat, Échap = stop / fermer panneau |
-| F-24 | **Feedback intégré** | 👍/👎 + commentaire | À faire | — |
+| F-24 | **Feedback intégré** | 👍/👎 + commentaire | **Terminé** | Livré le 2026-11-13 : boutons 👍/👎 + popover commentaire sur chaque réponse assistant (`message-bubble.tsx`, re-clic = efface, commentaire ≤ 2 000 car.) ; colonnes additives `messages.feedback_rating`/`feedback_comment`, événement `feedback:set` + broadcast `feedback:changed`, mise à jour optimiste côté hook. **Local : jamais envoyé au modèle** (consigné §7.9). Non-transporté au fork (une branche repart sans retours) — assumé. |
 
 ### Divers
 
@@ -178,6 +178,30 @@ sans toucher la source.
   snapshot chargé côté client vérifiés en dev ; `bunx tsc --noEmit` 0 erreur
   `src/` ; eslint propre.
 
+## Chantier du 2026-11-13 (onzième session) — F-24 « Feedback intégré »
+
+Point 4 de l'ordre recommandé. Un retour 👍/👎 + commentaire sur chaque
+réponse assistant — **local, jamais envoyé au modèle** (le protocole gateway
+n'est pas modifié ; un futur chantier pourra l'exploiter côté moteur).
+
+- **Serveur** : migration additive `messages.feedback_rating` / `feedback_comment`
+  (R2), transportées par `getMessages`/`getMessage` ; `setMessageFeedback`
+  (assistant seule, commentaire tronqué à 2 000, `null` = effacé) ;
+  événement `feedback:set` + broadcast `feedback:changed`. Repli assumé :
+  un fork repart sans retours (nouvelle branche = nouveaux retours).
+- **Client** : `FeedbackControl` dans `message-bubble.tsx` (boutons 👍/👎 de la
+  rangée d'actions, re-clic sur le même = efface, popover commentaire avec
+  « Effacer le retour », pastille du commentaire visible en italique) ;
+  `onSetFeedback` câblé `message-list` → `page` ; action `setMessageFeedback`
+  du hook (optimiste, ack, retour arrière à l'état antérieur si refus) ;
+  bus `feedback:changed` (multi-clients).
+- QA : `scripts/test-feedback-flow.ts` **15/15** — pose, inversion,
+  commentaire (ajout/remplacement/troncature), garde-fous (message
+  utilisateur refusé, introuvable, commentaire sans vote), retrait complet,
+  persistance au rechargement, isolation. `bunx tsc --noEmit` : 0 erreur
+  `src/` ; eslint sans nouvelle erreur (une préexistante ligne 350 de
+  `message-bubble.tsx`, antérieure au chantier).
+
 ## Ordre de démarrage recommandé (suite)
 
 1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
@@ -185,7 +209,7 @@ sans toucher la source.
    l'implémenté.
 2. ~~F-11 + F-19~~ **livrés le 2026-11-13** (ci-dessus).
 3. ~~F-13~~ **livré le 2026-11-13** (ci-dessus).
-4. **F-24** (feedback 👍/👎) — léger, autonome.
+4. ~~F-24~~ **livré le 2026-11-13** (ci-dessus).
 5. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
    à revoir une fois la gateway branchée (les clés de services sont désormais gérées
    dans le volet Paramètres).
