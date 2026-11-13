@@ -7,13 +7,16 @@
 //   artifacts:list, artifact:versions, artifact:retry,
 //   settings:get/set,
 //   providers:list/add/remove/set-strategy/add-key/remove-key/test-key,
-//   extensions:list/add/toggle/remove/pin/check/update
+//   extensions:list/add/toggle/remove/pin/check/update,
+//   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
+//   custom-instructions:get/set
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
 //   stream:done, stream:error, message:appended, message:deleted,
 //   conversations:created, conversations:pinned,
 //   artifact:created, artifact:delta, artifact:updated,
-//   settings:changed, providers:changed, extensions:changed
+//   settings:changed, providers:changed, extensions:changed,
+//   system-prompt:changed, system-prompts:changed, custom-instructions:changed
 // HTTP (port 3004) :
 //   GET /uploads/<id>.<ext>            — pièces jointes multimédia
 //   GET /artifacts/<id>/raw|download|thumb|pdf
@@ -29,7 +32,16 @@ import { Store, type ArtifactRow, type ExtensionRow, type KeyRow, type ProviderR
 import { HermesConnector } from "./hermes-connector";
 import { modelLabel } from "./models";
 import { transcribeAudioBase64 } from "./asr";
-import { SYSTEM_PROMPT_CHARS } from "./demo-engine";
+import {
+  CUSTOM_INSTRUCTIONS_KEY,
+  MAX_CUSTOM_INSTRUCTIONS_CHARS,
+  MAX_PROMPT_CHARS,
+  SEED_PRESETS,
+  composeDemoSystemPrompt,
+  rowToPreset,
+  validatePromptText,
+} from "./prompts";
+import { DEMO_BASE_PROMPT } from "./demo-engine";
 import {
   fetchRepoSnapshot,
   maskSecret,
@@ -40,8 +52,15 @@ import {
   toKeyView,
 } from "./providers";
 import type {
+  Artifact,
+  Attachment,
+  ChatMessage,
+  CompactInfo,
+  ConversationPromptView,
   ExtensionView,
   ProviderView,
+  ToolEvent,
+  TurnSettings,
 } from "./types";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -57,7 +76,6 @@ import {
   toWireArtifact,
 } from "./artifacts";
 import { chromeRenderer } from "./render";
-import type { Artifact, Attachment, ChatMessage, CompactInfo, ToolEvent, TurnSettings } from "./types";
 
 // ── Vues « wire » fournisseurs & extensions (Paramètres v2.2) ──────────
 // Les secrets ne partent jamais : seules les vues masquées circulent.
@@ -107,6 +125,37 @@ function broadcastProviders(): void {
 
 function broadcastExtensions(): void {
   io.emit("extensions:changed", { extensions: extensionsWire() });
+}
+
+// ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────
+
+/** Vue wire du prompt d'une conversation (null si aucun). */
+function conversationPromptWire(
+  conversationId: string
+): ConversationPromptView | null {
+  const row = store.getConversationPrompt(conversationId);
+  if (!row) return null;
+  return {
+    conversationId,
+    content: row.content,
+    presetTitle: row.title || null,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** Diffuse l'état du prompt d'une conversation (F-11). */
+function broadcastSystemPrompt(conversationId: string): void {
+  io.emit("system-prompt:changed", {
+    conversationId,
+    prompt: conversationPromptWire(conversationId),
+  });
+}
+
+/** Diffuse la bibliothèque de presets (F-11). */
+function broadcastSystemPrompts(): void {
+  io.emit("system-prompts:changed", {
+    presets: store.listPromptPresets().map(rowToPreset),
+  });
 }
 
 const PORT = 3003;
@@ -403,6 +452,9 @@ const io = new Server(httpServer, {
 const store = new Store();
 const connector = new HermesConnector();
 
+// Presets de départ semés une seule fois si la bibliothèque est vide (F-11).
+store.seedPromptPresetsIfNeeded(SEED_PRESETS);
+
 // Tours en cours : conversationId -> AbortController
 const running = new Map<string, AbortController>();
 
@@ -414,6 +466,26 @@ function titleFrom(text: string, attachments?: Attachment[]): string {
   return "Nouvelle conversation";
 }
 
+/** Instructions complètes du tour (mode démo) : base + F-19 + F-11. */
+function demoSystemPrompt(conversationId: string): string {
+  return composeDemoSystemPrompt({
+    base: DEMO_BASE_PROMPT,
+    customInstructions: store.getSetting(CUSTOM_INSTRUCTIONS_KEY),
+    conversationPrompt: store.getConversationPrompt(conversationId)?.content ?? null,
+  });
+}
+
+/** Taille réelle des instructions système (jauge honnête) : base + F-19 +
+ *  prompt de la conversation donnée (le hello envoie la base + F-19). */
+function systemPromptSize(conversationId?: string): number {
+  const base = DEMO_BASE_PROMPT.length;
+  const custom = (store.getSetting(CUSTOM_INSTRUCTIONS_KEY) ?? "").trim().length;
+  const conv = conversationId
+    ? (store.getConversationPrompt(conversationId)?.content ?? "").trim().length
+    : 0;
+  return base + custom + conv;
+}
+
 function helloPayload() {
   return {
     app: "hermes-web",
@@ -421,9 +493,9 @@ function helloPayload() {
     mode: connector.mode,
     model: connector.model,
     gatewayUrl: connector.gatewayUrl,
-    // Taille réelle des instructions système du moteur démo ; la gateway
-    // garde les siennes (le client retombe sur son estimation).
-    systemPromptChars: connector.mode === "demo" ? SYSTEM_PROMPT_CHARS : null,
+    // Taille réelle des instructions système du moteur démo (base + F-19) ;
+    // la gateway garde les siennes (le client retombe sur son estimation).
+    systemPromptChars: connector.mode === "demo" ? systemPromptSize() : null,
   };
 }
 
@@ -820,6 +892,165 @@ io.on("connection", (socket) => {
       store.setSetting(key, value);
       if (typeof cb === "function") cb({ ok: true, key, value });
       io.emit("settings:changed", { key, value });
+    }
+  );
+
+  // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────
+
+  // Prompt actif d'une conversation (null si aucun)
+  socket.on(
+    "system-prompt:get",
+    (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
+      const id = payload?.conversationId;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      if (typeof cb === "function") cb({ prompt: conversationPromptWire(id) });
+    }
+  );
+
+  // Définit / remplace le prompt d'une conversation — effet au prochain tour
+  socket.on(
+    "system-prompt:set",
+    (
+      payload: { conversationId?: string; content?: string; presetTitle?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const id = payload?.conversationId;
+      const content = (payload?.content ?? "").trim();
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      const invalid = validatePromptText(content, MAX_PROMPT_CHARS);
+      if (invalid) {
+        if (typeof cb === "function") cb({ error: invalid });
+        return;
+      }
+      store.setConversationPrompt(
+        id,
+        content,
+        payload?.presetTitle ? String(payload.presetTitle).slice(0, 80) : null
+      );
+      if (typeof cb === "function") cb({ prompt: conversationPromptWire(id) });
+      broadcastSystemPrompt(id);
+    }
+  );
+
+  // Retire le prompt d'une conversation
+  socket.on(
+    "system-prompt:clear",
+    (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
+      const id = payload?.conversationId;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      store.clearConversationPrompt(id);
+      if (typeof cb === "function") cb({ ok: true, prompt: null });
+      broadcastSystemPrompt(id);
+    }
+  );
+
+  // Bibliothèque de presets réutilisables (section Hermes du volet)
+  socket.on("system-prompts:list", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function")
+      cb({ presets: store.listPromptPresets().map(rowToPreset) });
+  });
+
+  socket.on(
+    "system-prompts:create",
+    (payload: { title?: string; content?: string }, cb?: (data: unknown) => void) => {
+      const title = (payload?.title ?? "").trim();
+      const content = (payload?.content ?? "").trim();
+      if (!title) {
+        if (typeof cb === "function") cb({ error: "Titre requis" });
+        return;
+      }
+      const invalid = validatePromptText(content, MAX_PROMPT_CHARS);
+      if (invalid) {
+        if (typeof cb === "function") cb({ error: invalid });
+        return;
+      }
+      const row = store.createPromptPreset(title.slice(0, 80), content);
+      if (typeof cb === "function") cb({ preset: rowToPreset(row) });
+      broadcastSystemPrompts();
+    }
+  );
+
+  socket.on(
+    "system-prompts:update",
+    (
+      payload: { id?: string; title?: string; content?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const id = payload?.id;
+      const title = (payload?.title ?? "").trim();
+      const content = (payload?.content ?? "").trim();
+      if (!id || !title) {
+        if (typeof cb === "function") cb({ error: "id et titre requis" });
+        return;
+      }
+      const invalid = validatePromptText(content, MAX_PROMPT_CHARS);
+      if (invalid) {
+        if (typeof cb === "function") cb({ error: invalid });
+        return;
+      }
+      const row = store.updatePromptPreset(id, title.slice(0, 80), content);
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Preset introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ preset: rowToPreset(row) });
+      broadcastSystemPrompts();
+    }
+  );
+
+  socket.on(
+    "system-prompts:delete",
+    (payload: { id?: string }, cb?: (data: unknown) => void) => {
+      const id = payload?.id;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "id requis" });
+        return;
+      }
+      const ok = store.deletePromptPreset(id);
+      if (!ok) {
+        if (typeof cb === "function") cb({ error: "Preset introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ ok: true });
+      broadcastSystemPrompts();
+    }
+  );
+
+  // Instructions personnalisées globales (F-19) — registre serveur §6
+  socket.on(
+    "custom-instructions:get",
+    (cb?: (data: unknown) => void) => {
+      if (typeof cb === "function")
+        cb({
+          value: store.getSetting(CUSTOM_INSTRUCTIONS_KEY) ?? "",
+          maxChars: MAX_CUSTOM_INSTRUCTIONS_CHARS,
+        });
+    }
+  );
+
+  socket.on(
+    "custom-instructions:set",
+    (payload: { value?: string }, cb?: (data: unknown) => void) => {
+      const value = (payload?.value ?? "").trim();
+      if (value.length > MAX_CUSTOM_INSTRUCTIONS_CHARS) {
+        if (typeof cb === "function")
+          cb({
+            error: `Trop long (max ${MAX_CUSTOM_INSTRUCTIONS_CHARS.toLocaleString("fr-FR")} caractères)`,
+          });
+        return;
+      }
+      store.setSetting(CUSTOM_INSTRUCTIONS_KEY, value);
+      if (typeof cb === "function") cb({ ok: true, value });
+      io.emit("custom-instructions:changed", { value });
     }
   );
 
@@ -1250,6 +1481,13 @@ io.on("connection", (socket) => {
           modelId: opts.modelId,
           attachments,
           settings: opts.settings,
+          // Instructions système du tour (F-11/F-19) : composées par le
+          // service en mode démo ; en mode gateway, le prompt de conversation
+          // part seul (la gateway garde ses instructions de base).
+          systemPrompt:
+            connector.mode === "demo"
+              ? demoSystemPrompt(conversationId)
+              : store.getConversationPrompt(conversationId)?.content ?? null,
         },
         {
           signal: controller.signal,

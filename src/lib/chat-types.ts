@@ -255,3 +255,30 @@ export interface ExtensionView {
   updateAvailable?: string | null;
   lastCheckedAt?: string | null;
 }
+
+// ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────
+// Miroir de mini-services/hermes-chat/types.ts.
+
+/** Preset de prompt réutilisable (bibliothèque, section Hermes du volet). */
+export interface SystemPromptPreset {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Prompt système d'une conversation (F-11) — le contenu part au modèle. */
+export interface ConversationPrompt {
+  conversationId: string;
+  content: string;
+  /** Titre indicatif du preset d'origine, s'il a été appliqué. */
+  presetTitle?: string | null;
+  updatedAt: string;
+}
+
+/** Charge du bus `system-prompt:changed` (broadcast). */
+export interface SystemPromptChanged {
+  conversationId: string;
+  prompt: ConversationPrompt | null;
+}

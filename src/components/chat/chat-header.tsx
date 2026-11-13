@@ -1,7 +1,7 @@
 // En-tête : titre de conversation, export, statut de connexion, thème
 "use client";
 
-import { Download, FileJson, FileText, Moon, PanelLeft, Sun, WifiOff } from "lucide-react";
+import { Download, FileJson, FileText, Moon, PanelLeft, Sparkle, Sun, WifiOff } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { ConversationMeta, GatewayMode } from "@/lib/chat-types";
 
 function ThemeToggle() {
@@ -44,6 +45,9 @@ interface ChatHeaderProps {
   mode: GatewayMode | null;
   connected: boolean;
   hasMessages: boolean;
+  /** Prompt système actif sur cette conversation (F-11). */
+  hasPrompt?: boolean;
+  onOpenPrompt?: () => void;
   onExport: (format: ExportFormat) => void;
   onOpenSidebar: () => void;
 }
@@ -53,6 +57,8 @@ export function ChatHeader({
   mode,
   connected,
   hasMessages,
+  hasPrompt = false,
+  onOpenPrompt,
   onExport,
   onOpenSidebar,
 }: ChatHeaderProps) {
@@ -73,7 +79,46 @@ export function ChatHeader({
         <p className="truncate text-[14px] font-medium">
           {activeConversation ? activeConversation.title : "Hermes"}
         </p>
+        {/* Prompt système actif (F-11) : pastille cliquable près du titre */}
+        {hasPrompt && onOpenPrompt ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onOpenPrompt}
+                  aria-label="Prompt système de la conversation"
+                  className="inline-flex size-[22px] cursor-pointer items-center justify-center rounded-[7px] bg-hermes/10 text-hermes transition-colors hover:bg-hermes/20"
+                >
+                  <Sparkle className="size-[12px]" strokeWidth={2.2} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Prompt système actif sur cette conversation — cliquez pour l&apos;éditer
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
       </div>
+
+      {/* Prompt système (F-11) : bouton d'accès à l'éditeur */}
+      {onOpenPrompt ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-8 rounded-xl px-2.5 text-[12px] font-medium gap-1.5",
+            hasPrompt
+              ? "text-hermes hover:text-hermes"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+          onClick={onOpenPrompt}
+          aria-label="Prompt système de la conversation"
+        >
+          <Sparkle className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <span className="hidden sm:inline">prompt</span>
+        </Button>
+      ) : null}
 
       {mode === "gateway" && connected ? (
         <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400 sm:flex">

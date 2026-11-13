@@ -238,10 +238,11 @@ export class HermesConnector {
         const attachments: Attachment[] | undefined = req.attachments?.length
           ? req.attachments
           : undefined;
-        // Réglages additifs : requested_model + effort + permissions.
-        // L'échelle d'effort et les clés permissions sont portées par le modèle /
-        // la gateway — ignorées sans dommage si non supportées (clés à valider
-        // contre la gateway, cf. chantier « Composer v2 »).
+        // Réglages additifs : requested_model + effort + permissions + prompt
+        // système (F-11/F-19). L'échelle d'effort et les clés permissions sont
+        // portées par le modèle / la gateway — ignorées sans dommage si non
+        // supportées (clés à valider contre la gateway, cf. chantier
+        // « Composer v2 »).
         const settings: Record<string, unknown> = {
           ...(req.modelId ? { requested_model: req.modelId } : {}),
           ...(req.settings?.reasoningEffort
@@ -250,6 +251,7 @@ export class HermesConnector {
           ...(req.settings?.permissionsMode
             ? { permissions: req.settings.permissionsMode }
             : {}),
+          ...(req.systemPrompt ? { system_prompt: req.systemPrompt } : {}),
         };
         ws.send(
           JSON.stringify({

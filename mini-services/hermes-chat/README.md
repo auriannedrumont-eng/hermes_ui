@@ -185,6 +185,49 @@ Serveur → client : `providers:changed {providers}` et `extensions:changed
 {extensions}` (listes complètes, diffusées à tous les clients après chaque
 mutation). Script de test E2E : `scripts/test-providers-flow.ts`.
 
+## Prompt système & instructions personnalisées (F-11 / F-19)
+
+Le prompt **s'ajoute** aux instructions de base d'Hermes — il ne les remplace
+jamais. Deux étages : le prompt d'une conversation (sheet « prompt », bouton
+de l'en-tête) et les instructions personnalisées globales (section Hermes du
+volet Paramètres). Presets réutilisables dans la bibliothèque (5 semés à la
+première ouverture).
+
+Composition du tour : en mode démo, les instructions envoyées au LLM empilent
+base + instructions globales + prompt de conversation ; en mode gateway, le
+prompt de conversation part dans `api_turn_v1.settings.system_prompt`
+(ignoré sans dommage si non supporté — la gateway garde ses instructions de
+base). `hello.systemPromptChars` expose la taille réelle base + globales
+(jauge honnête du composer).
+
+Schéma SQL : table `system_prompts` (scope `conversation` = prompt actif,
+une ligne max par conversation ; scope `preset` = bibliothèque, colonne
+`conversation_id` NULL) ; instructions globales dans `settings` sous la clé
+`hermes.instructions.custom`. Garde-fous : 12 000 caractères par prompt,
+4 000 pour les instructions globales.
+
+### Événements socket prompt système
+
+Client → serveur :
+
+| Événement | Charge utile | Réponse (ack) |
+| --- | --- | --- |
+| `system-prompt:get` | `{conversationId}` | `{prompt: ConversationPromptView \| null}` |
+| `system-prompt:set` | `{conversationId, content, presetTitle?}` | `{prompt}` — effet au prochain tour |
+| `system-prompt:clear` | `{conversationId}` | `{ok, prompt: null}` |
+| `system-prompts:list` | — | `{presets: SystemPromptPresetView[]}` |
+| `system-prompts:create` | `{title, content}` | `{preset}` |
+| `system-prompts:update` | `{id, title, content}` | `{preset}` |
+| `system-prompts:delete` | `{id}` | `{ok}` (les prompts actifs ne bougent pas) |
+| `custom-instructions:get` | — | `{value, maxChars}` |
+| `custom-instructions:set` | `{value}` | `{ok, value}` — appliqué à toutes les conversations |
+
+Serveur → client : `system-prompt:changed {conversationId, prompt}`,
+`system-prompts:changed {presets}` et `custom-instructions:changed {value}`
+(diffusés à tous les clients après chaque mutation). Script de test E2E :
+`scripts/test-system-prompt-flow.ts` (24 contrôles, dont la vérification
+comportementale — le LLM démo suit le prompt).
+
 ## Protocole socket.io
 
 Client → serveur :

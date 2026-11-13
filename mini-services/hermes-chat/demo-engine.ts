@@ -4,7 +4,11 @@
 // multimodal (vision), les autres fichiers en métadonnées textuelles.
 import ZAI from "z-ai-web-dev-sdk";
 import { readAttachmentDataUrl } from "./uploads";
+import { composeDemoSystemPrompt } from "./prompts";
 import type { Attachment, TurnSettings } from "./types";
+
+// Compose les instructions du tour démo (base + custom + conversation).
+export { composeDemoSystemPrompt as composeSystemPrompt };
 
 interface VisionMessageLike {
   role: "assistant" | "user";
@@ -27,6 +31,9 @@ export interface TurnRequest {
   attachments?: Attachment[];
   /** Réglages additifs (effort, permissions) — ignorés sans dommage. */
   settings?: TurnSettings;
+  /** Instructions système complètes du tour (base + F-11 + F-19, composées
+   *  par le service) — replaces le prompt de base si fournies. */
+  systemPrompt?: string | null;
 }
 
 const SYSTEM_PROMPT = `Tu es Hermes, l'assistant au volant de l'interface web « Hermes Web » — un client de chat pour l'agent Hermes de Nous Research (https://github.com/NousResearch/hermes-agent).
@@ -48,6 +55,9 @@ Artefacts (fichiers générés) :
 - Pour modifier un artefact existant, réémet le fichier COMPLET avec le MÊME nom de fichier : il deviendra v2 du même artefact.
 - N'annote PAS les simples extraits de code illustratifs (snippets courts dans une explication) : seuls les fichiers complets deviennent des artefacts.
 - Pour le HTML : produis des documents autonomes (styles et polices intégrés ou système, aucune dépendance externe obligatoire), avec un design soigné et une mise en page professionnelle.`;
+
+/** Instructions système de base du moteur démo (composables, F-11/F-19). */
+export const DEMO_BASE_PROMPT = SYSTEM_PROMPT;
 
 /** Taille des instructions système (estimation honnête de la jauge de contexte). */
 export const SYSTEM_PROMPT_CHARS = SYSTEM_PROMPT.length;
@@ -119,7 +129,7 @@ export class DemoEngine {
     // 1. Tentative multimodale (vision) si le tour contient des images
     if (images.length > 0) {
       try {
-        const result = await this.runMultimodal(textContent, images, req.history, cb);
+        const result = await this.runMultimodal(textContent, images, req.history, cb, req.systemPrompt);
         if (result) {
           return { ...result, model: req.model || req.modelId || "glm-4-plus" };
         }
@@ -133,8 +143,12 @@ export class DemoEngine {
     }
 
     // 2. Chemin standard : streaming texte
+    // Instructions du tour : la base peut être étendue par le prompt de
+    // conversation (F-11) et les instructions personnalisées (F-19) — le
+    // service a déjà composé l'ensemble, sinon on garde la base seule.
+    const systemPrompt = req.systemPrompt ?? SYSTEM_PROMPT;
     const messages: any[] = [
-      { role: "assistant", content: SYSTEM_PROMPT },
+      { role: "assistant", content: systemPrompt },
       ...req.history.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: textContent },
     ];
@@ -224,7 +238,8 @@ export class DemoEngine {
     textContent: string,
     images: Attachment[],
     history: { role: "user" | "assistant"; content: string }[],
-    cb: TurnCallbacks
+    cb: TurnCallbacks,
+    systemPrompt?: string | null
   ): Promise<{ content: string; reasoning: string } | null> {
     const parts: any[] = [];
     const text = textContent.trim() || "Décris et analyse ces images.";
@@ -243,7 +258,7 @@ export class DemoEngine {
     const messages: VisionMessageLike[] = [
       {
         role: "assistant",
-        content: [{ type: "text", text: SYSTEM_PROMPT }],
+        content: [{ type: "text", text: systemPrompt ?? SYSTEM_PROMPT }],
       },
       ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: parts },

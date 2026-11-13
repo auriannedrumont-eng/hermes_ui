@@ -46,6 +46,20 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/** Prompt système de la conversation active (F-11) — injecté par la page
+ *  depuis le hook dédié `useSystemPrompts`, pour la jauge de contexte. */
+export interface ChatPromptInfo {
+  content: string;
+  presetTitle?: string | null;
+}
+
+/** Prompt système de la conversation active (F-11) — injecté par la page
+ *  depuis le hook dédié `useSystemPrompts`, pour la jauge de contexte. */
+export interface ChatPromptInfo {
+  content: string;
+  presetTitle?: string | null;
+}
+
 export function useHermesChat() {
   const { toast } = useToast();
   const [connected, setConnected] = useState(false);
@@ -72,6 +86,11 @@ export function useHermesChat() {
   const [compactInfo, setCompactInfo] = useState<CompactInfo | null>(null);
   /** Compaction en cours (synthèse LLM côté service). */
   const [compacting, setCompacting] = useState(false);
+  // ── Prompt système de la conversation active (F-11) ─────────────────
+  /** Prompt actif de la conversation ouverte (null si aucun) — suit le bus
+   *  `system-prompt:changed` du service ; la page lit/écrit via le hook dédié. */
+  const [promptInfo, setPromptInfo] = useState<ChatPromptInfo | null>(null);
+  const promptInfoRef = useRef<ChatPromptInfo | null>(null);
   // ── Artefacts de la conversation active + panneau dédié ──────────
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   /** Contenu source en cours de stream, par clé d'artefact (aperçu vivant). */
@@ -101,6 +120,50 @@ export function useHermesChat() {
   useEffect(() => {
     permissionsRef.current = permissionsMode;
   }, [permissionsMode]);
+
+  // ── Prompt système de la conversation active (F-11) ───────────────────
+  // Suit le bus du service ; le changement de conversation recharge l'état.
+  useEffect(() => {
+    promptInfoRef.current = promptInfo;
+  }, [promptInfo]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    const load = (id: string | null) => {
+      if (!id) {
+        setPromptInfo(null);
+        return;
+      }
+      socket.emit(
+        "system-prompt:get",
+        { conversationId: id },
+        (res: { prompt?: ChatPromptInfo | null } = {}) => {
+          if (id !== activeIdRef.current) return;
+          setPromptInfo(
+            res.prompt?.content
+              ? { content: res.prompt.content, presetTitle: res.prompt.presetTitle ?? null }
+              : null
+          );
+        }
+      );
+    };
+    const onPromptChanged = (p: {
+      conversationId: string;
+      prompt?: ChatPromptInfo | null;
+    }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setPromptInfo(
+        p.prompt?.content
+          ? { content: p.prompt.content, presetTitle: p.prompt.presetTitle ?? null }
+          : null
+      );
+    };
+    socket.on("system-prompt:changed", onPromptChanged);
+    load(activeId);
+    return () => {
+      socket.off("system-prompt:changed", onPromptChanged);
+    };
+  }, [activeId]);
 
   // Sélection persistée (registre des réglages, cf. FORK.md §6)
   useEffect(() => {
@@ -999,6 +1062,16 @@ export function useHermesChat() {
     const rows: ContextRow[] = [
       { key: "system", label: "Instructions système", tokens: systemTokens },
     ];
+    // Prompt système de la conversation (F-11) : poids séparé, honnête,
+    // issu du hook dédié — absent de la liste quand la conversation n'en a pas.
+    if (promptInfo) {
+      rows.push({
+        key: "prompt",
+        label: "Prompt de conversation",
+        sub: promptInfo.presetTitle ?? undefined,
+        tokens: Math.ceil(promptInfo.content.length / 3.5),
+      });
+    }
     if (messages.length > 0 || compactInfo) {
       rows.push({ key: "history", label: "Historique", sub: historySub, tokens: historyTokens });
     }
@@ -1010,7 +1083,7 @@ export function useHermesChat() {
       windowTokens,
       windowEstimated: estimated,
     };
-  }, [models, selectedModel, serverInfo, messages, compactInfo]);
+  }, [models, selectedModel, serverInfo, messages, compactInfo, promptInfo]);
 
   /** Peut-on compacter : conversation ouverte, ≥ 2 messages, tour au repos. */
   const canCompact = Boolean(activeId) && messages.length >= 2 && !streaming;
@@ -1089,6 +1162,8 @@ export function useHermesChat() {
     permissionsMode,
     setPermissionsMode: changePermissions,
     contextBase,
+    // ── Prompt système de la conversation active (F-11) ───────────
+    promptInfo,
     canCompact,
     compacting,
     compactConversation,

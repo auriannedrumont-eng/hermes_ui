@@ -42,7 +42,7 @@
 | ID | Feature | Critères | Statut | Preuve / écart |
 |----|---------|----------|--------|----------------|
 | F-10 | **Slash commands** | `/traduire`, `/résumer` + templates | **Terminé** | `prompt-library.ts` + suggestions `/` du composer (Tab/Entrée pour appliquer) |
-| F-11 | **Prompt système / conversation** | Panneau, presets | À faire | Prévu section « Hermes » des paramètres v4 (fichiers .md éditables) |
+| F-11 | **Prompt système / conversation** | Panneau, presets | **Terminé** | Livré le 2026-11-13 : panneau d'édition par conversation (sheet 460 px, bouton « prompt » de l'en-tête), bibliothèque de presets éditables (section Hermes du volet, 5 seeds), table additive `system_prompts`, événements `system-prompt:*` / `system-prompts:*`, effet au prochain tour (composé base + F-19 + F-11 côté service, `system_prompt` dans `api_turn_v1.settings` en gateway), jauge de contexte + pastille d'en-tête |
 | F-12 | **Citations web** | Sources cliquables | À faire | Dépend du browsing agent (FORK.md §7.5, « plus tard ») |
 | F-13 | **Partage / export** | Lien public ; export MD/PDF/image | Partiel | Export **MD/JSON/PDF** livré (`export.ts`, palette + header). Manquent : lien public lecture seule, export image |
 | F-14 | **Édition avec branchement** | Éditer crée une branche ; navigation versions | Partiel | « Brancher » duplique la conversation depuis un message (fork). L'édition modifie en place (tronque + régénère) — pas de navigation entre versions dans la même conversation |
@@ -54,8 +54,8 @@
 |----|---------|----------|--------|----------------|
 | F-16 | **Voix** | Dictée STT + lecture TTS | **Terminé** (cœur) | Dictée `use-dictation.ts` + `asr.ts` ; TTS « Écouter » par message (`useSpeech`). Reste optionnel : lecture en continu pendant le stream |
 | F-17 | **Comparaison modèles** | 2 modèles côte à côte | À faire | — |
-| F-18 | **Mémoire utilisateur** | Consultable, éditable, effaçable | À faire | Prévu section « Hermes » des paramètres v4 (MEMORY.md / USER.md éditables) |
-| F-19 | **Instructions personnalisées** | Globales | À faire | Fusionner avec F-11 lors du chantier |
+| F-18 | **Mémoire utilisateur** | Consultable, éditable, effaçable | À faire | Prévu section « Hermes » des paramètres v4 (MEMORY.md / USER.md éditables) — F-11/F-19 livrés, la mémoire suit |
+| F-19 | **Instructions personnalisées** | Globales | **Terminé** | Livré le 2026-11-13 avec F-11 (même chantier) : instructions globales persistées côté service (`hermes.instructions.custom`, table `settings`), éditeur dans la section Hermes du volet, appliquées à toutes les conversations, transmises dans `api_turn_v1.settings` en gateway |
 | F-20 | **Projets/dossiers** | Contexte par groupe | **Terminé** | UI projets (FORK.md §7.2) — rangement seul ; le contexte persistant par projet viendra des fichiers .md moteur |
 
 ### P3 — Plus tard
@@ -120,13 +120,44 @@ se feront sur l'implémenté (décision consignée FORK.md §9-8).
   GitHub réel) ; 14 captures `download/qa-parametres-v2/` (contrôle pixel + VLM) ;
   `bunx tsc --noEmit` 0 erreur `src/` ; eslint propre.
 
+## Chantier du 2026-11-13 (neuvième session) — F-11 + F-19 « Prompt système & instructions personnalisées »
+
+Conforme à l'ordre de démarrage recommandé (point 2 : F-11 + F-19 — la validation
+du volet v4 restant à l'utilisatrice, point 1). Le prompt **s'ajoute** aux
+instructions de base d'Hermes, il ne les remplace jamais.
+
+- **Serveur** (`prompts.ts` nouveau + `store.ts`/`index.ts`/`demo-engine.ts`/`hermes-connector.ts` chirurgicaux) :
+  table additive `system_prompts` (scope `conversation` = prompt actif, une ligne
+  max par conversation ; scope `preset` = bibliothèque) ; instructions globales
+  dans `settings` sous `hermes.instructions.custom` (max 4 000 car., prompt max
+  12 000) ; événements `system-prompt:get/set/clear` + `system-prompts:list/create/update/delete`
+  + `custom-instructions:get/set` ; broadcasts `system-prompt:changed`,
+  `system-prompts:changed`, `custom-instructions:changed` ; 5 presets semés à
+  la première ouverture.
+- **Composition des instructions du tour** : en démo, `composeDemoSystemPrompt`
+  empile base + instructions personnalisées + prompt de conversation (ordres
+  stables, sections absentes omises) ; en gateway, le prompt de conversation
+  part seul dans `api_turn_v1.settings.system_prompt` (la gateway garde ses
+  instructions de base). `hello.systemPromptChars` compte la base + F-19 (jauge
+  honnête), le poste « Prompt de conversation » s'ajoute à la jauge par conversation.
+- **Client** : hook `use-system-prompts.ts` (état + actions + bus) ;
+  `SystemPromptPanel` (sheet 460 px — bouton « prompt » de l'en-tête + pastille
+  quand un prompt est actif) ; section **Hermes** du volet v4 livrée
+  (instructions globales + bibliothèque de presets éditables, mémoire/fichiers
+  .md restent « à venir ») ; `use-hermes-chat.ts` expose `promptInfo` (chargé
+  au changement de conversation, suivi par bus, poids dans la jauge de contexte).
+- QA : `scripts/test-system-prompt-flow.ts` **24/24** — dont vérification
+  comportementale réelle (le LLM démo répond « B » au prompt « réponds toujours
+  par la lettre B »), isolation entre conversations, garde-fous de longueur,
+  remise à zéro des instructions. `bunx tsc --noEmit` : 0 erreur `src/` ;
+  eslint propre sur les fichiers du chantier.
+
 ## Ordre de démarrage recommandé (suite)
 
 1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
    local : `bun dev` + mini-service) — retours à intégrer directement sur
    l'implémenté.
-2. **F-11 + F-19** (prompt système / instructions personnalisées) — se greffe sur la
-   section « Hermes » du volet et les fichiers .md moteur.
+2. ~~F-11 + F-19~~ **livrés le 2026-11-13** (ci-dessus).
 3. **F-13** (lien public lecture seule) — l'export local est déjà couvert.
 4. **F-24** (feedback 👍/👎) — léger, autonome.
 5. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;

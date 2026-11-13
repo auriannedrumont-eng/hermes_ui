@@ -2,6 +2,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { SystemPromptRow } from "./prompts";
 import type {
   Artifact,
   ArtifactKind,
@@ -267,9 +268,128 @@ export class Store {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`);
+    // ── Prompt système par conversation + presets (F-11, FORK.md §7.7) ──
+    // Table additive : scope 'conversation' (une ligne par conversation au
+    // plus) et 'preset' (bibliothèque réutilisable). Les instructions
+    // globales (F-19) vivent dans `settings` (hermes.instructions.custom).
+    this.db.exec(`CREATE TABLE IF NOT EXISTS system_prompts (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      conversation_id TEXT,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`);
+    this.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_system_prompts_conversation ON system_prompts(scope, conversation_id) WHERE scope = 'conversation'"
+    );
+    this.db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_system_prompts_preset ON system_prompts(updated_at DESC) WHERE scope = 'preset'"
+    );
     // Au démarrage, l'état courant devient l'état appliqué (les toggles
     // effectués sous l'ancien process ont été pris en compte au relancement).
     this.db.exec("UPDATE extensions SET applied = enabled WHERE applied <> enabled");
+  }
+
+  // ── Prompt système & presets (F-11 / F-19) ──────────────────────────────
+
+  /** Prompt actif d'une conversation (null si aucun). */
+  getConversationPrompt(conversationId: string): SystemPromptRow | null {
+    const r = this.db
+      .query(
+        "SELECT id, scope, conversation_id, title, content, created_at, updated_at FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?"
+      )
+      .get(conversationId) as any;
+    return r ? (r as SystemPromptRow) : null;
+  }
+
+  /** Définit le prompt d'une conversation (crée ou remplace). */
+  setConversationPrompt(
+    conversationId: string,
+    content: string,
+    presetTitle?: string | null
+  ): SystemPromptRow {
+    const now = new Date().toISOString();
+    const existing = this.getConversationPrompt(conversationId);
+    if (existing) {
+      this.db
+        .query("UPDATE system_prompts SET content = ?, title = ?, updated_at = ? WHERE id = ?")
+        .run(content, presetTitle ?? existing.title, now, existing.id);
+    } else {
+      this.db
+        .query(
+          `INSERT INTO system_prompts (id, scope, conversation_id, title, content, created_at, updated_at)
+           VALUES (?, 'conversation', ?, ?, ?, ?, ?)`
+        )
+        .run(crypto.randomUUID(), conversationId, presetTitle ?? "", content, now, now);
+    }
+    return this.getConversationPrompt(conversationId)!;
+  }
+
+  /** Retire le prompt d'une conversation (les presets restent). */
+  clearConversationPrompt(conversationId: string): boolean {
+    const r = this.db
+      .query("DELETE FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?")
+      .run(conversationId);
+    return r.changes > 0;
+  }
+
+  /** Liste des presets réutilisables (plus récents d'abord). */
+  listPromptPresets(): SystemPromptRow[] {
+    return (this.db
+      .query(
+        "SELECT id, scope, conversation_id, title, content, created_at, updated_at FROM system_prompts WHERE scope = 'preset' ORDER BY updated_at DESC"
+      )
+      .all() as any[]) as SystemPromptRow[];
+  }
+
+  /** Crée un preset. */
+  createPromptPreset(title: string, content: string): SystemPromptRow {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    this.db
+      .query(
+        `INSERT INTO system_prompts (id, scope, conversation_id, title, content, created_at, updated_at)
+         VALUES (?, 'preset', NULL, ?, ?, ?, ?)`
+      )
+      .run(id, title, content, now, now);
+    return this.db
+      .query(
+        "SELECT id, scope, conversation_id, title, content, created_at, updated_at FROM system_prompts WHERE id = ?"
+      )
+      .get(id) as SystemPromptRow;
+  }
+
+  /** Met à jour un preset (renvoie null s'il n'existe pas). */
+  updatePromptPreset(id: string, title: string, content: string): SystemPromptRow | null {
+    const now = new Date().toISOString();
+    const r = this.db
+      .query("UPDATE system_prompts SET title = ?, content = ?, updated_at = ? WHERE id = ? AND scope = 'preset'")
+      .run(title, content, now, id);
+    if (r.changes === 0) return null;
+    return this.db
+      .query(
+        "SELECT id, scope, conversation_id, title, content, created_at, updated_at FROM system_prompts WHERE id = ?"
+      )
+      .get(id) as SystemPromptRow;
+  }
+
+  /** Supprime un preset (sans toucher aux prompts actifs des conversations). */
+  deletePromptPreset(id: string): boolean {
+    const r = this.db
+      .query("DELETE FROM system_prompts WHERE id = ? AND scope = 'preset'")
+      .run(id);
+    return r.changes > 0;
+  }
+
+  /** Seeds idempotents : crée les presets de départ si la table est vide. */
+  seedPromptPresetsIfNeeded(seeds: { title: string; content: string }[]): void {
+    const n = (
+      this.db.query("SELECT COUNT(*) AS n FROM system_prompts WHERE scope = 'preset'").get() as any
+    ).n;
+    if (n > 0) return;
+    for (const s of seeds) this.createPromptPreset(s.title, s.content);
   }
 
   // ── Artefacts ──────────────────────────────────────────────────────────

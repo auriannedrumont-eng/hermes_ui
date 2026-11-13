@@ -6,9 +6,11 @@
 //
 // Sections livrées : Interface (registres client, effet immédiat),
 // Modèles (catalogue vivant du service), Fournisseurs / Clés de services
-// (porte-clés, test réel) et Extensions (dépôts GitHub + serveurs).
-// Les sections moteur (Outils, Skills, Hermes, Profils, Système)
-// affichent leur structure cible sans données simulées (v2.3+).
+// (porte-clés, test réel), Extensions (dépôts GitHub + serveurs) et
+// Hermes (prompt système : bibliothèque de presets + instructions
+// personnalisées globales, F-11 / F-19). Les autres sections moteur
+// (Outils, Skills, Profils, Système) affichent leur structure cible
+// sans données simulées (v2.3+).
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -48,10 +50,12 @@ import {
   type GatewayMode,
   type ModelOption,
   type Project,
+  type SystemPromptPreset,
 } from "@/lib/chat-types";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { ProvidersSection } from "@/components/settings/providers-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
+import { HermesSection } from "@/components/settings/hermes-section";
 import { cn } from "@/lib/utils";
 
 // ── Libellés FR des valeurs brutes du registre (présentation seule) ──
@@ -97,6 +101,16 @@ interface SettingsPanelProps {
   projects: Project[];
   /** Fournisseurs & extensions (use-providers). */
   api: ProvidersApi;
+  /** Prompt système & instructions (use-system-prompts, F-11/F-19). */
+  promptsApi: {
+    presets: SystemPromptPreset[];
+    customInstructions: string | null;
+    customMaxChars: number;
+    createPreset: (title: string, content: string) => Promise<SystemPromptPreset | null>;
+    updatePreset: (id: string, title: string, content: string) => Promise<SystemPromptPreset | null>;
+    deletePreset: (id: string) => Promise<boolean>;
+    saveCustomInstructions: (value: string) => Promise<boolean>;
+  };
   /** Version du service (hello) — pied du rail. */
   serverVersion?: string | null;
 }
@@ -451,6 +465,7 @@ export function SettingsPanel({
   selectedModel,
   projects,
   api,
+  promptsApi,
   serverVersion,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>("interface");
@@ -481,6 +496,18 @@ export function SettingsPanel({
         return <ProvidersSection kind="service" api={api} />;
       case "extensions":
         return <ExtensionsSection api={api} />;
+      case "hermes":
+        return (
+          <HermesSection
+            presets={promptsApi.presets}
+            customInstructions={promptsApi.customInstructions}
+            customMaxChars={promptsApi.customMaxChars}
+            onCreatePreset={promptsApi.createPreset}
+            onUpdatePreset={promptsApi.updatePreset}
+            onDeletePreset={promptsApi.deletePreset}
+            onSaveCustomInstructions={promptsApi.saveCustomInstructions}
+          />
+        );
       case "outils":
         return (
           <SoonPane
@@ -502,18 +529,6 @@ export function SettingsPanel({
               { name: "Bibliothèque de skills", desc: "recherche, sources (dépôts importés ou locaux), activation" },
               { name: "Éditeur intégré", desc: "chaque skill s'ouvre et s'enregistre ici — effet au rechargement" },
               { name: "Contrôle qualité", desc: "dernière vérification et source, en langage clair" },
-            ]}
-          />
-        );
-      case "hermes":
-        return (
-          <SoonPane
-            title="Hermes"
-            sub="La mémoire, les fichiers de contexte et le comportement de l'agent."
-            items={[
-              { name: "Mémoire", desc: "MEMORY.md, USER.md — faits persistants, consultables et effaçables" },
-              { name: "Fichiers .md", desc: "SOUL.md, AGENTS.md, AGENTS.override.md, CLAUDE.md — éditables" },
-              { name: "Compaction & comportement", desc: "seuils de résumé, approbations d'écriture mémoire" },
             ]}
           />
         );

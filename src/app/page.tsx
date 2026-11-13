@@ -15,9 +15,11 @@ import {
 } from "@/components/ui/resizable";
 import { useToast } from "@/hooks/use-toast";
 import { useProviders } from "@/hooks/use-providers";
+import { useSystemPrompts } from "@/hooks/use-system-prompts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sidebar } from "@/components/chat/sidebar";
 import { SettingsPanel } from "@/components/settings/settings-panel";
+import { SystemPromptPanel } from "@/components/settings/system-prompt-panel";
 import { ChatHeader, type ExportFormat } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { Composer } from "@/components/chat/composer";
@@ -32,7 +34,11 @@ import type { Artifact } from "@/lib/chat-types";
 const SIDEBAR_WIDTH_KEY = "fork.ui.sidebar.width"; // registre des réglages (FORK.md §6)
 
 export default function HermesWebPage() {
+  // La page orchestre deux hooks : le chat (source de vérité) et les prompts
+  // système (F-11/F-19). Le prompt actif de la conversation est injecté dans
+  // la jauge de contexte du composer (poste « Prompt de conversation »).
   const chat = useHermesChat();
+  const promptsApi = useSystemPrompts(chat.activeId);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -41,6 +47,8 @@ export default function HermesWebPage() {
   const [viewerOpen, setViewerOpen] = useState(false);
   /** Sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Sheet « Prompt système de la conversation » (F-11). */
+  const [promptOpen, setPromptOpen] = useState(false);
   const providersApi = useProviders();
   const sidebarRef = useRef<ImperativePanelHandle>(null);
 
@@ -272,6 +280,8 @@ export default function HermesWebPage() {
             mode={chat.mode}
             connected={chat.connected}
             hasMessages={chat.messages.length > 0}
+            hasPrompt={chat.promptInfo !== null}
+            onOpenPrompt={() => setPromptOpen(true)}
             onExport={handleExport}
             onOpenSidebar={() => setMobileOpen(true)}
           />
@@ -367,7 +377,7 @@ export default function HermesWebPage() {
       />
 
       {/* Volet Paramètres v4 (860 px, rail) — Interface, Modèles,
-          Fournisseurs, Clés de services, Extensions… */}
+          Fournisseurs, Clés de services, Extensions, Hermes… */}
       <SettingsPanel
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -377,7 +387,24 @@ export default function HermesWebPage() {
         selectedModel={chat.selectedModel}
         projects={chat.projects}
         api={providersApi}
+        promptsApi={promptsApi}
         serverVersion={chat.serverVersion}
+      />
+
+      {/* Sheet « Prompt système de la conversation » (F-11) */}
+      <SystemPromptPanel
+        open={promptOpen}
+        onOpenChange={setPromptOpen}
+        prompt={promptsApi.prompt}
+        presets={promptsApi.presets}
+        conversationTitle={activeConversation?.title ?? null}
+        onSave={(content, presetTitle) => {
+          void promptsApi.savePrompt(content, presetTitle);
+        }}
+        onClear={() => {
+          void promptsApi.clearPrompt();
+        }}
+        onCreatePreset={promptsApi.createPreset}
       />
 
       {/* Palette de commandes (Cmd/Ctrl+K) */}

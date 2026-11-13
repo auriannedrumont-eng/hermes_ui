@@ -165,7 +165,31 @@ export interface TurnSettings {
   permissionsMode?: "ask" | "auto";
 }
 
-/** État de compaction d'une conversation (résumé conservé en tête de session). */
+// ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────
+
+/** Preset de prompt réutilisable (bibliothèque, section Hermes du volet). */
+export interface SystemPromptPresetView {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Prompt système d'une conversation (F-11) — le contenu part au modèle. */
+export interface ConversationPromptView {
+  conversationId: string;
+  content: string;
+  /** Titre indicatif du preset d'origine, s'il a été appliqué. */
+  presetTitle?: string | null;
+  updatedAt: string;
+}
+
+/** Charge du bus `system-prompt:changed` (broadcast). */
+export interface SystemPromptChangedPayload {
+  conversationId: string;
+  prompt: ConversationPromptView | null;
+}/** État de compaction d'une conversation (résumé conservé en tête de session). */
 export interface CompactInfo {
   at: string;
   untilMessageId: string;
