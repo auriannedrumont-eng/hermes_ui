@@ -60,3 +60,5 @@ server.log
 /download/
 /.zscripts/
 /db-test-*/
+desktop/runtime/
+desktop/logs/

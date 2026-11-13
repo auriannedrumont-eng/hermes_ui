@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Hermes Web
+GenericName=Assistant Hermes
+Comment=Démarre la pile Hermes (service + interface) et ouvre le navigateur. Fermer la fenêtre du lanceur arrête tout proprement.
+Exec=__ROOT__/desktop/hermes-ui.sh start
+Icon=__ROOT__/public/icon-512.png
+Terminal=true
+Categories=Chat;Network;Office;
+Keywords=hermes;chat;assistant;ia;
+StartupNotify=true

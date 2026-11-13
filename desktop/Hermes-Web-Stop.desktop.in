@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Hermes Web — Arrêter
+GenericName=Arrêt propre d'Hermes
+Comment=Arrête l'interface, la passerelle et le mini-service (checkpoint de la base inclus). N'arrête que ce qu'Hermes a démarré.
+Exec=__ROOT__/desktop/hermes-ui.sh stop
+Icon=__ROOT__/public/icon-512.png
+Terminal=true
+Categories=Chat;Network;Office;
+Keywords=hermes;stop;arrêt;
