@@ -1,83 +1,86 @@
-# Hermes Web — Raccourci bureau
+# Hermes Web — Raccourcis bureau (Windows et Linux)
 
 Un double-clic démarre toute la pile (mini-service chat, interface Next.js,
 passerelle Caddy) puis ouvre le navigateur. La fermeture propre est garantie
-à chaque chemin de sortie.
+à chaque chemin de sortie. **Aucune ligne de commande à taper.**
 
-## Installation
+---
+
+## Windows (installation en 2 double-clics)
+
+1. **`Installer-Hermes.bat`** (double-clic) → crée les raccourcis
+   **« Hermes Web »** et **« Hermes Web — Arret »** sur le **Bureau** et dans
+   le **menu Démarrer**, avec l'icône de l'application. Il vérifie aussi les
+   dépendances et affiche quoi installer le cas échéant :
+   - `winget install Oven-sh.Bun`
+   - `winget install OpenJS.NodeJS`
+   - `winget install CaddyServer.Caddy`
+   - dans le dossier du projet : `npm install` puis `bun install` dans
+     `mini-services\hermes-chat` (une seule fois)
+2. **« Hermes Web »** sur le Bureau (double-clic) → la pile démarre, le
+   navigateur s'ouvre.
+
+**Retrait des raccourcis** : `Installer-Hermes.bat --remove`.
+
+### Fermeture — tous les cas couverts
+
+| Comment tu fermes | Ce qui se passe |
+|---|---|
+| Ctrl-C dans la fenêtre du lanceur | arrêt ordonné : passerelle → interface → mini-service |
+| Fermeture de la fenêtre du lanceur | **Job Object noyau** (`KILL_ON_JOB_CLOSE`) : Windows tue l'arbre entier, zéro orphelin garanti par le noyau |
+| Déconnexion / arrêt du PC / taskkill | idem — le Job Object suit le lanceur dans tous les cas |
+| Fermer l'onglet du navigateur seulement | la pile reste disponible (retour instantané) |
+| « Hermes Web — Arret » | arrêt ordonné explicite |
+
+Sur arrêt brutal, la base est quand même sûre : SQLite est en mode WAL,
+**récupéré automatiquement au démarrage suivant** — aucune donnée perdue.
+
+### Ouverture — tous les cas couverts
+
+- Dépendance manquante → message explicite (avec commande winget), rien n'est
+  démarré à moitié.
+- Double-clic alors qu'Hermes tourne déjà → simplement une nouvelle fenêtre
+  navigateur, aucune pile dupliquée.
+- Session précédente plantée (verrou périmé) → nettoyage puis démarrage.
+- Demi-pile (service vivant, interface morte…) → composants sains adoptés,
+  manquants démarrés ; l'arrêt ne touche que ce qu'Hermes a lancé.
+- Ports 81/3000 occupés par autre chose → repli automatique (8081/8181…,
+  3001/3002…). Ports 3003/3004 (codés dans le client) occupés sans servir
+  Hermes → refus explicite avec la commande de diagnostic.
+- Composant qui plante en cours de session → relance automatique (3 essais),
+  puis arrêt général propre si ça persiste.
+- Aucun processus hors du projet n'est jamais tué : chaque cible est validée
+  par le chemin du projet dans sa ligne de commande.
+
+---
+
+## Linux
 
 ```bash
 cd hermes_ui/desktop
-./install.sh            # installe « Hermes Web » + « Hermes Web — Arrêter »
-./install.sh --remove   # retire les raccourcis
+./install.sh            # « Hermes Web » + « Hermes Web — Arrêter » (menu + bureau)
+./install.sh --remove   # retrait
 ```
 
-Les entrées sont copiées dans `~/.local/share/applications` (menu) et sur le
-Bureau s'il existe. Les chemins sont absolus : si vous déplacez le dossier
-`hermes_ui`, relancez `./install.sh`.
+Mêmes garanties que Windows ; l'arrêt par fermeture de fenêtre passe par
+SIGHUP, l'arrêt ordonné du mini-service déclenche en plus son checkpoint
+WAL (correctif F-09).
 
-## Utilisation
-
-| Raccourci / commande | Effet |
-|---|---|
-| **Hermes Web** (double-clic) | démarre la pile, ouvre le navigateur, puis **surveille** |
-| **Hermes Web — Arrêter** | arrêt propre : données sauvegardées (checkpoint SQLite) |
-| `desktop/hermes-ui.sh status` | état + derniers logs |
-| `desktop/hermes-ui.sh restart` | arrêt propre puis redémarrage |
-
-Une petite fenêtre de terminal reste ouverte tant qu'Hermes tourne : **la
-fermer (ou Ctrl-C) arrête tout proprement**. C'est voulu — c'est le seul
-signal fiable pour « je ferme l'application » ; fermer seulement l'onglet du
-navigateur laisse la pile disponible (retour instantané, zéro rechargement).
-
-## Ce qui se passe à l'ouverture
-
-1. Vérification des dépendances (`bun`, `node`, `node_modules`, caddy si
-   nécessaire) → message d'erreur explicite sinon, rien n'est démarré à moitié.
-2. Détection d'une pile **déjà lancée** : le second double-clic n'installe
-   RIEN, il ouvre simplement le navigateur.
-3. Nettoyage d'un **verrou périmé** (session précédente plantée) avant de
-   repartir proprement.
-4. Choix des ports : passerelle `81` (sinon `8081/8181/18081`), interface
-   `3000` (sinon `3001/3002/3005`) — si un port est pris par un autre
-   programme, le suivant est essayé automatiquement. Les ports `3003/3004`
-   sont imposés par le client : s'ils sont occupés sans servir Hermes,
-   le lanceur **refuse** de démarrer et explique quoi faire.
-5. Démarrage dans l'ordre : mini-service → interface → passerelle, chacun
-   attendu sur son endpoint HTTP avant de continuer. Composant déjà sain
-   (démarré ailleurs) → adopté, pas dupliqué.
-6. Ouverture du navigateur **après** vérification que l'URL répond (jamais
-   de page « connexion impossible »). Sans navigateur détecté, l'URL
-   s'affiche dans le terminal.
-
-Interface en **build production** si `.next/standalone` existe (faites
-`npm run build` une fois pour y passer), sinon en mode développement.
-
-## Ce qui se passe à la fermeture
-
-- Ordre garanti : passerelle → interface → **mini-service en dernier**
-  (son handler SIGTERM fait le checkpoint WAL — correctif F-09 : la base
-  est intégralement écrite dans le fichier SQLite principal).
-- Signaux couverts : Ctrl-C (INT), fermeture de la fenêtre (HUP), arrêt
-  système / `pkill` (TERM). Filet de sécurité : SIGKILL après 8 s pour un
-  processus qui refuserait de sortir, puis nettoyage du verrou.
-- **Sélectivité** : seuls les processus réellement lancés par ce lanceur
-  sont arrêtés (PID vérifié + ligne de commande contrôlée avant chaque
-  signal — jamais de kill au hasard si l'OS a réutilisé un PID). Un
-  composant adopté (déjà actif avant le lancement) reste en vie.
-- Composant qui **plante en cours de session** : relancé automatiquement
-  (3 tentatives), puis arrêt général propre si ça persiste.
+---
 
 ## Dépannage
 
 | Symptôme | Où regarder |
 |---|---|
-| « n'a pas démarré » | `desktop/logs/launcher.log` (cause en clair) |
-| Interface blanche / erreur | `desktop/logs/interface.log` |
-| Chat ne répond pas | `desktop/logs/mini-service.log` |
-| Page inaccessible | `desktop/logs/passerelle.log` + `hermes-ui.sh status` |
-| Ports 3003/3004 occupés | `ss -tlnp | grep -E '3003|3004'` puis libérez-les |
+| « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
+| Page blanche / erreur | `desktop\logs\interface-err.log` |
+| Chat ne répond pas | `desktop\logs\mini-service-err.log` |
+| Page inaccessible | `desktop\logs\passerelle-err.log` |
+| État de la pile | double-clic `Hermes-Web.bat` affiche l'état si déjà lancé ; Linux : `hermes-ui.sh status` |
+| Ports 3003/3004 occupés | `netstat -ano | findstr "3003 3004"` (Windows) / `ss -tlnp` (Linux) puis libérez-les |
 
-Tout l'état de session vit dans `desktop/runtime/` (verrou, PIDs, Caddyfile
-généré) et les journaux dans `desktop/logs/` — ces deux dossiers sont
-ignorés par git.
+Interface en **build production** si `.next\standalone` existe (faites
+`npm run build` une fois pour y passer), sinon mode développement.
+
+L'état de session vit dans `desktop\runtime\` (verrou, PIDs, Caddyfile
+généré) et les journaux dans `desktop\logs\` — ignorés par git.
