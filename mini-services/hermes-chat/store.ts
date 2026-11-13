@@ -1,4 +1,6 @@
 // Persistance SQLite (bun:sqlite) : conversations + messages + artefacts
+// Le chemin est surchargeable par HERMES_CHAT_DB (tests d'intégration —
+// sinon la base de dev du service).
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,7 +18,9 @@ import type {
   ToolEvent,
 } from "./types";
 
-const DB_PATH = join(import.meta.dir, "..", "..", "db", "hermes-chat.sqlite");
+const DB_PATH =
+  process.env.HERMES_CHAT_DB ??
+  join(import.meta.dir, "..", "..", "db", "hermes-chat.sqlite");
 
 /** Ligne interne d'artefact (une par version, contenu source inclus). */
 export interface ArtifactRow {
@@ -125,11 +129,17 @@ function rowToProject(r: ProjectRow): Project {
 
 export class Store {
   private db: Database;
+  /** Checkpointeur périodique du WAL (dette revue 2026-11-13 : sans lui,
+   *  le -wal croît sans borne entre les redémarrages ; SQLite ne fait un
+   *  checkpoint automatique qu'au franchissement du seuil ~1000 pages
+   *  en pleine écriture, jamais sur un service majoritairement en lecture). */
+  private walTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     mkdirSync(dirname(DB_PATH), { recursive: true });
     this.db = new Database(DB_PATH, { create: true });
     this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA wal_autocheckpoint = 0;"); // checkpoint géré ici, en zone calme
     this.db.exec(`CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -443,7 +453,8 @@ export class Store {
   }
 
   /** Crée (ou recrée) le partage d'une conversation : un seul lien actif,
-   *  l'ancien est révoqué silencieusement (le snapshot est remplacé). */
+   *  l'ancien est révoqué silencieusement (snapshot purgé — même dette
+   *  revue 2026-11-13 que revokeShareByConversation). */
   createShare(
     conversationId: string,
     title: string,
@@ -453,7 +464,10 @@ export class Store {
   ): ShareRow {
     const now = new Date().toISOString();
     this.db
-      .query("UPDATE shares SET revoked_at = ? WHERE conversation_id = ? AND revoked_at IS NULL")
+      .query(
+        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0
+         WHERE conversation_id = ? AND revoked_at IS NULL`
+      )
       .run(now, conversationId);
     const id = crypto.randomUUID();
     this.db
@@ -467,17 +481,29 @@ export class Store {
 
   /** Révoque le partage actif d'une conversation (le lien devient 410). */
   revokeShareByConversation(conversationId: string): boolean {
+    const now = new Date().toISOString();
+    // Dette revue 2026-11-13 : la révocation PURGE le snapshot — marquer
+    // revoked_at laissait le JSON complet (messages, donc données
+    // personnelles) en base, lisible par tout accès direct au fichier.
     const r = this.db
-      .query("UPDATE shares SET revoked_at = ? WHERE conversation_id = ? AND revoked_at IS NULL")
-      .run(new Date().toISOString(), conversationId);
+      .query(
+        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0
+         WHERE conversation_id = ? AND revoked_at IS NULL`
+      )
+      .run(now, conversationId);
     return r.changes > 0;
   }
 
-  /** Supprime les partages d'une conversation supprimée ( liens 410 ). */
+  /** Supprime les partages d'une conversation supprimée ( liens 410 ).
+   *  Même purge du snapshot que revokeShareByConversation. */
   revokeSharesOfConversation(conversationId: string): void {
+    const now = new Date().toISOString();
     this.db
-      .query("UPDATE shares SET revoked_at = ? WHERE conversation_id = ? AND revoked_at IS NULL")
-      .run(new Date().toISOString(), conversationId);
+      .query(
+        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0
+         WHERE conversation_id = ? AND revoked_at IS NULL`
+      )
+      .run(now, conversationId);
   }
 
   // ── Artefacts ──────────────────────────────────────────────────────────
@@ -1260,4 +1286,44 @@ export class Store {
     }
     return out;
   }
+
+  // ── Checkpoint WAL (dette revue 2026-11-13) ─────────────────────────
+
+  /** Démarre le checkpointeur périodique : PRAGMA wal_checkpoint(TRUNCATE)
+   *  toutes les CHECKPOINT_INTERVAL_MS en zone calme (aucune requête en
+   *  vol n'est bloquée — SQLite sert les lecteurs depuis le WAL). */
+  startWalCheckpoint(): void {
+    if (this.walTimer) return;
+    this.walTimer = setInterval(() => this.walCheckpointNow(), CHECKPOINT_INTERVAL_MS);
+    // Le timer ne doit pas garder le processus vivant seul
+    if (typeof this.walTimer.unref === "function") this.walTimer.unref();
+  }
+
+  /** Checkpoint immédiat (appelé aussi à l'arrêt) : TRUNCATE ramène le
+   *  -wal à zéro octet et intègre les pages dans la base principale. */
+  walCheckpointNow(): void {
+    try {
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+    } catch {
+      /* un lecteur actif peut différer le checkpoint — réessayé au tick suivant */
+    }
+  }
+
+  /** Fermeture propre : checkpoint final + fermeture de la connexion. */
+  close(): void {
+    this.walCheckpointNow();
+    if (this.walTimer) {
+      clearInterval(this.walTimer);
+      this.walTimer = null;
+    }
+    try {
+      this.db.close();
+    } catch {
+      /* déjà fermée */
+    }
+  }
 }
+
+/** Intervalle du checkpoint périodique (5 min en zone calme par défaut,
+ *  tunable par HERMES_WAL_CHECKPOINT_MS pour les tests). */
+const CHECKPOINT_INTERVAL_MS = Number(process.env.HERMES_WAL_CHECKPOINT_MS ?? 300_000);

@@ -29,6 +29,7 @@
 //   GET /share/<token>/image.png       — capture Chrome du fil partagé (F-13)
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { Server } from "socket.io";
+import { timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -177,8 +178,15 @@ function broadcastSystemPrompts(): void {
   });
 }
 
-const PORT = 3003;
-const FILES_PORT = 3004; // service HTTP dédié aux pièces jointes
+// Jeton de service (revue 2026-11-13) : quand HERMES_SERVICE_TOKEN est défini,
+// toute connexion socket.io et toute route HTTP du 3004 (sauf les liens de
+// partage publics /share/...) doit le présenter — sinon le mini-service,
+// exposé via Caddy, est lisible/écrivable par n'importe quelle page visitée
+// par l'utilisateur (DNS rebinding compris). Absent → mode dev inchangé.
+const SERVICE_TOKEN = process.env.HERMES_SERVICE_TOKEN ?? null;
+
+const PORT = Number(process.env.HERMES_CHAT_PORT ?? 3003);
+const FILES_PORT = Number(process.env.HERMES_CHAT_FILES_PORT ?? 3004); // service HTTP dédié aux pièces jointes
 const MAX_HISTORY = 30;
 
 mkdirSync(ARTIFACTS_DIR, { recursive: true });
@@ -273,6 +281,15 @@ function deleteArtifactFiles(rows: ArtifactRow[]): void {
   }
 }
 
+/** Autorisation HTTP : Authorization: Bearer <jeton> ou ?token=<jeton>. */
+function httpAuthorized(req: IncomingMessage, u: URL): boolean {
+  const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  const q = u.searchParams.get("token");
+  const presented =
+    (typeof bearer === "string" && bearer) || (typeof q === "string" && q) || "";
+  return timingSafeEqualStr(presented, SERVICE_TOKEN!);
+}
+
 // ── Service HTTP : pièces jointes + artefacts (port 3004) ────────────────
 const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => {
   if (req.method !== "GET" || !req.url) {
@@ -281,6 +298,18 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
     return;
   }
   const u = new URL(req.url, "http://localhost");
+
+  // Jeton de service (revue 2026-11-13) : les routes HTTP du 3004 servent
+  // les pièces jointes et artefacts de l'utilisateur — protégées par le même
+  // jeton que la socket, via Authorization: Bearer ou ?token=. EXCEPTION :
+  // /share/<token>/(data.json|image.png) reste public (le destinataire du
+  // lien n'a pas de session — F-13).
+  const isShareRoute = u.pathname.startsWith("/share/");
+  if (SERVICE_TOKEN && !isShareRoute && !httpAuthorized(req, u)) {
+    res.writeHead(401, { "Content-Type": "text/plain", "WWW-Authenticate": "Bearer" });
+    res.end("Jeton de service requis");
+    return;
+  }
 
   // /uploads/<id>.<ext> — pièces jointes multimédia
   const served = resolveUploadFile(u.pathname);
@@ -590,6 +619,44 @@ const io = new Server(httpServer, {
   pingInterval: 25000,
   // Les pièces jointes montent en base64 (≈ +33 % de taille) : 25 Mo de marge
   maxHttpBufferSize: 25e6,
+});
+
+// Jeton de service : refus AVANT tout gestionnaire — une socket non
+// authentifiée ne reçoit aucun événement applicatif. La comparaison est
+// en temps constant (fuite d'information par chronométrage sinon).
+function socketAuthorized(socket: { handshake: { auth?: unknown; query?: unknown; headers?: Record<string, string | undefined> } }): boolean {
+  if (!SERVICE_TOKEN) return true; // mode dev : pas de jeton configuré
+  const bearer = socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, "");
+  const auth = socket.handshake.auth as { token?: unknown } | null;
+  const fromQuery = (socket.handshake.query as Record<string, unknown> | null)?.token;
+  const presented =
+    (typeof auth?.token === "string" && auth.token) ||
+    (typeof fromQuery === "string" && fromQuery) ||
+    (typeof bearer === "string" && bearer) ||
+    "";
+  return timingSafeEqualStr(presented, SERVICE_TOKEN);
+}
+
+/** Comparaison en temps constant de deux chaînes (anti-chronométrage). */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // Compare quand même pour uniformiser le temps, puis rejette
+    timingSafeEqualImpl(Buffer.from(a), Buffer.from(b));
+    return false;
+  }
+  return timingSafeEqualImpl(Buffer.from(a), Buffer.from(b));
+}
+function timingSafeEqualImpl(a: Buffer, b: Buffer): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+io.use((socket, next) => {
+  if (!socketAuthorized(socket as never)) {
+    next(new Error("Jeton de service invalide ou manquant"));
+    return;
+  }
+  next();
 });
 
 const store = new Store();
@@ -1713,8 +1780,14 @@ io.on("connection", (socket) => {
       settings?: TurnSettings;
     }
   ) => {
-    // Un seul tour actif par conversation
-    running.get(conversationId)?.abort();
+    // Un seul tour actif par conversation. L'ANCIEN tour est aborté, mais
+    // son finally ne doit JAMAIS retirer le contrôleur du NOUVEAU (course
+    // critique : le finally du tour précédent exécutait running.delete()
+    // après coup, supprimant le contrôleur remplaçant → chat:stop devenait
+    // inopérant et deux tours s'entrelacaient). Chaque tour ne retire que
+    // SA propre entrée.
+    const previous = running.get(conversationId);
+    previous?.abort();
     const controller = new AbortController();
     running.set(conversationId, controller);
 
@@ -1949,30 +2022,52 @@ io.on("connection", (socket) => {
         });
       }
     } finally {
-      running.delete(conversationId);
+      // Ne retire que SI c'est encore CE tour qui occupe la conversation :
+      // un tour plus récent a pu prendre la place entre-temps (chat:send
+      // pendant la génération — cf. ack ci-dessous) ; le retirer ici
+      // casserait le chat:stop du tour actif.
+      if (running.get(conversationId) === controller) {
+        running.delete(conversationId);
+      }
     }
   };
 
   socket.on(
     "chat:send",
-    async (payload: {
-      conversationId?: string;
-      content?: string;
-      model?: string;
-      attachments?: Attachment[];
-      effort?: string;
-      permissionsMode?: "ask" | "auto";
-      // Mode expert (F-22) — assaini avant l'envoi au moteur
-      temperature?: unknown;
-      maxTokens?: unknown;
-      seed?: unknown;
-    }) => {
+    async (
+      payload: {
+        conversationId?: string;
+        content?: string;
+        model?: string;
+        attachments?: Attachment[];
+        effort?: string;
+        permissionsMode?: "ask" | "auto";
+        // Mode expert (F-22) — assaini avant l'envoi au moteur
+        temperature?: unknown;
+        maxTokens?: unknown;
+        seed?: unknown;
+      },
+      cb?: (data: unknown) => void
+    ) => {
       const conversationId = payload?.conversationId;
       const content = (payload?.content ?? "").trim();
       const attachments = Array.isArray(payload?.attachments)
         ? payload!.attachments!.slice(0, MAX_ATTACHMENTS_PER_MESSAGE)
         : [];
-      if (!conversationId || (!content && attachments.length === 0)) return;
+      if (!conversationId || (!content && attachments.length === 0)) {
+        if (typeof cb === "function") cb({ error: "Paramètres manquants" });
+        return;
+      }
+
+      // Ack (revue 2026-11-13) : un tour en vol sur CETTE conversation → refus
+      // PROPRE avec accusé d'erreur, au lieu d'aborter silencieusement le
+      // tour en cours et d'entrelacer deux streams sur le même fil. Le
+      // client reste maître : il peut arrêter (chat:stop) puis renvoyer.
+      if (running.has(conversationId)) {
+        if (typeof cb === "function")
+          cb({ error: "Un tour est déjà en cours dans cette conversation" });
+        return;
+      }
 
       // 1. Persiste le message utilisateur (avec ses pièces jointes)
       const existing = store.getMessages(conversationId);
@@ -1990,7 +2085,10 @@ io.on("connection", (socket) => {
       // Notifie le client (remplace le message optimiste par l'id réel)
       socket.emit("message:appended", { conversationId, message: userMessage });
 
-      // 2. Lance le tour assistant (réglages additifs du chantier Composer v2)
+      // 2. Lance le tour assistant (réglages additifs du chantier Composer v2).
+      //    Ack positif AVANT le lancement : le tour tourne en arrière-plan,
+      //    les streams suivent par les événements stream:*.
+      if (typeof cb === "function") cb({ ok: true, message: userMessage });
       await runAssistantTurn(conversationId, {
         content,
         attachments: attachments.length ? attachments : undefined,
@@ -2195,6 +2293,9 @@ io.on("connection", (socket) => {
 connector
   .init()
   .then(async () => {
+    // Checkpoint WAL périodique (dette revue 2026-11-13) : le -wal ne croît
+    // plus sans borne ; checkpoint TRUNCATE en zone calme + arrêt propre.
+    store.startWalCheckpoint();
     // Pré-charge la liste des modèles (gateway ou catalogue)
     try {
       const result = await connector.listModels();
@@ -2232,9 +2333,11 @@ process.on("SIGTERM", () => {
   chromeRenderer.shutdown();
   httpServer.close(() => process.exit(0));
   filesServer.close();
+  store.close(); // checkpoint WAL final + fermeture SQLite propre
 });
 process.on("SIGINT", () => {
   chromeRenderer.shutdown();
   httpServer.close(() => process.exit(0));
   filesServer.close();
+  store.close();
 });

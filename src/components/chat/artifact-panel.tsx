@@ -52,6 +52,7 @@ import {
   downloadArtifact,
   parseCsv,
 } from "@/lib/artifact-utils";
+import { serviceFetchInit } from "@/lib/service";
 
 // ── Chargement du source (cache module partagé panneau / visionneuse) ───
 
@@ -67,7 +68,7 @@ function useArtifactSource(artifact: Artifact | null): string | null {
     if (!artifactId || !rawUrl || binaryKind) return;
     if (sourceCache.has(artifactId)) return;
     let cancelled = false;
-    fetch(artifactUrl(rawUrl))
+    fetch(artifactUrl(rawUrl), serviceFetchInit())
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
       .then((text) => {
         sourceCache.set(artifactId, text);
@@ -336,7 +337,7 @@ function ArtifactBody({
   useEffect(() => {
     if (!diff || !prevArtifact) return;
     let cancelled = false;
-    fetch(artifactUrl(prevArtifact.rawUrl))
+    fetch(artifactUrl(prevArtifact.rawUrl), serviceFetchInit())
       .then((r) => (r.ok ? r.text() : ""))
       .then((t) => {
         if (!cancelled) setPrevSource(t);

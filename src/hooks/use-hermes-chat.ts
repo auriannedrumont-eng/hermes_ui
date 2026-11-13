@@ -826,15 +826,27 @@ export function useHermesChat() {
       setMessages((prev) => [...prev, optimistic]);
 
       const socket = getSocket();
-      socket.emit("chat:send", {
-        conversationId,
-        content,
-        model: selectedModelRef.current ?? undefined,
-        attachments: attachments.length ? attachments : undefined,
-        effort: effortRef.current ?? undefined,
-        permissionsMode: permissionsRef.current,
-        ...expertRef.current,
-      });
+      socket.emit(
+        "chat:send",
+        {
+          conversationId,
+          content,
+          model: selectedModelRef.current ?? undefined,
+          attachments: attachments.length ? attachments : undefined,
+          effort: effortRef.current ?? undefined,
+          permissionsMode: permissionsRef.current,
+          ...expertRef.current,
+        },
+        // Ack (revue 2026-11-13) : refus propre si un tour est déjà en vol
+        // sur cette conversation (le serveur n'entrelace plus deux streams).
+        // Le message optimiste est retiré, une erreur claire s'affiche.
+        (res: { error?: string } | null) => {
+          if (res?.error) {
+            setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+            setTurnError({ messageId: optimistic.id, error: res.error });
+          }
+        }
+      );
     },
     [newConversation, streaming]
   );

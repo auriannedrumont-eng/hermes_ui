@@ -7,11 +7,36 @@ export const SERVICE_PORT = 3003;
 /** Port du service HTTP des pièces jointes (socket.io avec path "/" intercepte tout). */
 export const FILES_PORT = 3004;
 
+/**
+ * Jeton de service (revue 2026-11-13) : même jeton que HERMES_SERVICE_TOKEN
+ * côté mini-service. Public par conception (le client tourne dans le
+ * navigateur de l'utilisateur, qui peut de toute façon le lire) — le jeton
+ * protège contre les AUTRES origines : une page malveillante visitée par
+ * l'utilisateur ne peut pas inventer ce jeton ni le lire (CORS + pas de
+ * cookie). Les liens de partage /share/... restent publics sans jeton.
+ * Absent → mode dev sans authentification (comportement inchangé).
+ */
+export const SERVICE_TOKEN = process.env.NEXT_PUBLIC_SERVICE_TOKEN ?? null;
+
 /** URL complète d'une ressource servie par le mini-service. */
 export function serviceUrl(
   path: string,
   port: number = FILES_PORT
 ): string {
   const clean = path.startsWith("/") ? path : `/${path}`;
-  return `${clean}${clean.includes("?") ? "&" : "?"}XTransformPort=${port}`;
+  // Route de partage publique : PAS de jeton (le destinataire du lien n'a
+  // pas de session — F-13). Toute autre route : jeton en query (?token=),
+  // lisible par <img>/<iframe>/window.open qui ne peuvent pas mettre d'en-tête.
+  const isShareRoute = clean.startsWith("/share/");
+  const sep = clean.includes("?") ? "&" : "?";
+  const auth =
+    SERVICE_TOKEN && !isShareRoute ? `&token=${encodeURIComponent(SERVICE_TOKEN)}` : "";
+  return `${clean}${sep}XTransformPort=${port}${auth}`;
+}
+
+/** Init d'une requête fetch authentifiée vers le mini-service (Bearer). */
+export function serviceFetchInit(): RequestInit {
+  return SERVICE_TOKEN
+    ? { headers: { Authorization: `Bearer ${SERVICE_TOKEN}` } }
+    : {};
 }
