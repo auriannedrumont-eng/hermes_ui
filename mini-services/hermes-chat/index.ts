@@ -1815,9 +1815,15 @@ io.on("connection", (socket) => {
       settings?: TurnSettings;
       /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
       variant?: "a" | "b";
+      /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
+       *  réponse qu'il remplace (l'ancienne est conservée, inactive). */
+      versionGroup?: string;
     }
   ) => {
     const variant = opts.variant;
+    const versionIndex = opts.versionGroup
+      ? store.countVersions(opts.versionGroup) + 1
+      : null;
     // Un seul tour actif par conversation. L'ANCIEN tour est aborté, mais
     // son finally ne doit JAMAIS retirer le contrôleur du NOUVEAU (course
     // critique : le finally du tour précédent exécutait running.delete()
@@ -2035,6 +2041,9 @@ io.on("connection", (socket) => {
         model: usedModel,
         stopped: stopped || undefined,
         variant,
+        ...(opts.versionGroup
+          ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
+          : {}),
       });
       const conversation = store.touchConversation(conversationId) ?? undefined;
       const doneMessage: ChatMessage = {
@@ -2048,6 +2057,9 @@ io.on("connection", (socket) => {
         createdAt: new Date().toISOString(),
         stopped: stopped || undefined,
         variant,
+        ...(opts.versionGroup
+          ? { versions: { group: opts.versionGroup, index: versionIndex ?? 1, count: versionIndex ?? 1 } }
+          : {}),
       };
       // Cartes d'artefacts ancrées sur ce message (celles créées par ce tour)
       attachArtifactCards(conversationId, [doneMessage]);
@@ -2075,6 +2087,9 @@ io.on("connection", (socket) => {
           model: usedModel,
           stopped: stopped || undefined,
           variant,
+          ...(opts.versionGroup
+            ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
+            : {}),
         });
       }
       if (stopped) {
@@ -2260,17 +2275,17 @@ io.on("connection", (socket) => {
         return;
       }
       const variant = payload?.variant;
-      // F-17 : variante donnée → on ne supprime que les réponses de CE
-      // côté ; compare → les deux côtés (tous les assistant en fin de fil).
-      const { lastUser, removedIds, removedAttachments } =
-        store.deleteTrailingAssistant(conversationId, variant);
+      // F-14 : les anciennes réponses ne sont PLUS supprimées — elles
+      // passent inactives (conservées, navigables ‹ n/m ›). F-17 : variante
+      // donnée → un seul côté ; compare → les deux côtés.
+      const { lastUser, supersededIds, groups } =
+        store.supersedeTrailingAssistant(conversationId, variant);
       if (!lastUser) {
         if (typeof cb === "function") cb({ error: "Aucun message à régénérer" });
         return;
       }
-      deleteAttachmentFiles(removedAttachments);
-      if (removedIds.length) {
-        socket.emit("messages:removed", { conversationId, messageIds: removedIds });
+      if (supersededIds.length) {
+        socket.emit("messages:superseded", { conversationId, messageIds: supersededIds });
       }
       if (typeof cb === "function") cb({ ok: true });
       const turnSettings = {
@@ -2286,6 +2301,7 @@ io.on("connection", (socket) => {
             modelId: compareIds[0],
             settings: turnSettings,
             variant: "a",
+            versionGroup: groups.a,
           }),
           runAssistantTurn(conversationId, {
             content: lastUser.content,
@@ -2293,6 +2309,7 @@ io.on("connection", (socket) => {
             modelId: compareIds[1],
             settings: turnSettings,
             variant: "b",
+            versionGroup: groups.b,
           }),
         ]);
         return;
@@ -2303,6 +2320,7 @@ io.on("connection", (socket) => {
         modelId: payload?.model ?? null,
         settings: turnSettings,
         variant,
+        versionGroup: variant === "a" ? groups.a : variant === "b" ? groups.b : groups.plain,
       });
     }
   );
@@ -2414,6 +2432,37 @@ io.on("connection", (socket) => {
       deleteAttachmentFiles(removed.attachments ?? []);
       if (typeof cb === "function") cb({ ok: true, messageId });
       socket.emit("message:deleted", { conversationId, messageId });
+    }
+  );
+
+  // F-14 — naviguer entre les versions d'une réponse : la version choisie
+  // devient la version active (affichée ET envoyée au modèle dans le tour
+  // suivant) ; le fil entier est rediffusé à toutes les sessions.
+  socket.on(
+    "message:setVersion",
+    (
+      payload: { conversationId?: string; group?: string; index?: number },
+      cb?: (data: unknown) => void
+    ) => {
+      const conversationId = payload?.conversationId;
+      const group = payload?.group;
+      const index = payload?.index;
+      if (!conversationId || !group || typeof index !== "number") {
+        if (typeof cb === "function") cb({ error: "Paramètres manquants" });
+        return;
+      }
+      if (isRunning(conversationId)) {
+        if (typeof cb === "function")
+          cb({ error: "Un tour est en cours — attendez la fin de la génération" });
+        return;
+      }
+      const messages = store.setMessageVersion(conversationId, group, index);
+      if (!messages) {
+        if (typeof cb === "function") cb({ error: "Version introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ ok: true });
+      io.emit("messages:refreshed", { conversationId, messages });
     }
   );
 

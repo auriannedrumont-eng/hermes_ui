@@ -185,6 +185,23 @@ export class Store {
     } catch {
       /* colonne déjà présente */
     }
+    // Migration douce (F-14) : versions de réponse — régénérer conserve
+    // l'ancienne version (groupe + index ; active = celle affichée/envoyée).
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN version_group TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN version_index INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN version_active INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
     // Migration douce : colonne des conversations épinglées
     try {
       this.db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -891,12 +908,29 @@ export class Store {
   }
 
   getMessages(conversationId: string): ChatMessage[] {
+    // F-14 : le fil vivant ne montre que la version ACTIVE de chaque
+    // réponse (version_active NULL = message jamais régénéré).
     const rows = this.db
       .query(
-        "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC"
+        "SELECT * FROM messages WHERE conversation_id = ? AND (version_active IS NULL OR version_active = 1) ORDER BY created_at ASC, rowid ASC"
       )
       .all(conversationId) as any[];
+    const counts = new Map<string, number>();
+    const vrows = this.db
+      .query(
+        "SELECT version_group AS g, COUNT(*) AS n FROM messages WHERE conversation_id = ? AND version_group IS NOT NULL GROUP BY version_group"
+      )
+      .all(conversationId) as any[];
+    for (const v of vrows) counts.set(v.g, v.n);
     return rows.map((r) => ({
+      versions:
+        r.version_group && (counts.get(r.version_group) ?? 1) > 1
+          ? {
+              group: r.version_group,
+              index: r.version_index ?? 1,
+              count: counts.get(r.version_group) ?? 1,
+            }
+          : undefined,
       id: r.id,
       conversationId: r.conversation_id,
       role: r.role as Role,
@@ -929,12 +963,21 @@ export class Store {
     return this.getMessage(conversationId, messageId);
   }
 
-  appendMessage(msg: Omit<ChatMessage, "id" | "createdAt"> & { id?: string; createdAt?: string }): ChatMessage {
+  appendMessage(
+    msg: Omit<ChatMessage, "id" | "createdAt"> & {
+      id?: string;
+      createdAt?: string;
+      /** F-14 : version de réponse (groupe partagé, index 1-based). */
+      versionGroup?: string;
+      versionIndex?: number;
+      versionActive?: number;
+    }
+  ): ChatMessage {
     const id = msg.id ?? crypto.randomUUID();
     const createdAt = msg.createdAt ?? new Date().toISOString();
     this.db
       .query(
-        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         id,
@@ -947,9 +990,86 @@ export class Store {
         msg.model ?? null,
         createdAt,
         msg.stopped ? 1 : null,
-        msg.variant ?? null
+        msg.variant ?? null,
+        msg.versionGroup ?? null,
+        msg.versionIndex ?? null,
+        msg.versionActive ?? (msg.versionGroup ? 1 : null)
       );
     return { ...msg, id, createdAt } as ChatMessage;
+  }
+
+  /** F-14 — nombre de versions d'un groupe (1 si inconnu). */
+  countVersions(group: string): number {
+    const r = this.db
+      .query("SELECT COUNT(*) AS n FROM messages WHERE version_group = ?")
+      .get(group) as any;
+    return r?.n ?? 0;
+  }
+
+  /** F-14 — retire DU FIL (sans supprimer) les réponses assistant en fin
+   *  de conversation : version_active=0, avec retro-complétion du groupe
+   *  (première régénération d'une réponse jamais versionnée). Renvoie le
+   *  groupe de version par côté, pour versionner les nouveaux tours. */
+  supersedeTrailingAssistant(
+    conversationId: string,
+    variant?: "a" | "b"
+  ): {
+    lastUser: ChatMessage | null;
+    supersededIds: string[];
+    groups: { plain?: string; a?: string; b?: string };
+  } {
+    const msgs = this.getMessages(conversationId);
+    const supersededIds: string[] = [];
+    const groups: { plain?: string; a?: string; b?: string } = {};
+    // Parcours de la fin : on supersede les réponses de la variante visée
+    // (ou toutes si sans variante), on TRAVERSE les réponses de l'autre
+    // côté (F-17 : l'ordre d'achèvement a/b est aléatoire), et on stoppe
+    // au premier message utilisateur.
+    let i = msgs.length - 1;
+    while (i >= 0 && msgs[i].role === "assistant") {
+      const m = msgs[i];
+      if (variant !== undefined && m.variant !== variant) {
+        i--;
+        continue;
+      }
+      const group = m.versions?.group ?? m.id;
+      // Retro-complétion : une réponse non versionnée devient v1 de son groupe
+      this.db
+        .query(
+          "UPDATE messages SET version_group = ?, version_index = ?, version_active = 0 WHERE conversation_id = ? AND id = ?"
+        )
+        .run(group, m.versions?.index ?? 1, conversationId, m.id);
+      supersededIds.push(m.id);
+      const key = variant === undefined ? "plain" : m.variant;
+      if (key === "a" || key === "b" || key === "plain") {
+        if (!groups[key]) groups[key] = group;
+      }
+      i--;
+    }
+    const rest = msgs.slice(0, i + 1);
+    const lastUser = [...rest].reverse().find((m) => m.role === "user") ?? null;
+    return { lastUser, supersededIds, groups };
+  }
+
+  /** F-14 — affiche la version `index` du groupe (les autres passent inactives). */
+  setMessageVersion(
+    conversationId: string,
+    group: string,
+    index: number
+  ): ChatMessage[] | null {
+    const count = this.countVersions(group);
+    if (count < 1 || index < 1 || index > count) return null;
+    this.db
+      .query(
+        "UPDATE messages SET version_active = 0 WHERE conversation_id = ? AND version_group = ?"
+      )
+      .run(conversationId, group);
+    this.db
+      .query(
+        "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND version_group = ? AND version_index = ?"
+      )
+      .run(conversationId, group, index);
+    return this.getMessages(conversationId);
   }
 
   /** Message individuel (ou null). */
@@ -958,7 +1078,17 @@ export class Store {
       .query("SELECT * FROM messages WHERE conversation_id = ? AND id = ?")
       .get(conversationId, messageId) as any;
     if (!r) return null;
+    let versions: ChatMessage["versions"] = undefined;
+    if (r.version_group) {
+      const c = this.db
+        .query("SELECT COUNT(*) AS n FROM messages WHERE version_group = ?")
+        .get(r.version_group) as any;
+      const count = c?.n ?? 1;
+      if (count > 1)
+        versions = { group: r.version_group, index: r.version_index ?? 1, count };
+    }
     return {
+      versions,
       id: r.id,
       conversationId: r.conversation_id,
       role: r.role as Role,
@@ -982,6 +1112,24 @@ export class Store {
     this.db
       .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
       .run(conversationId, messageId);
+    // F-14 : si la version supprimée était celle affichée et que le groupe
+    // compte encore des versions, promouvoir la plus récente — le message
+    // ne disparaît pas du fil tant que des versions existent.
+    if (msg.versions?.group) {
+      const g = msg.versions.group;
+      const remaining = this.db
+        .query(
+          "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? ORDER BY version_index DESC LIMIT 1"
+        )
+        .get(conversationId, g) as any;
+      if (remaining) {
+        this.db
+          .query(
+            "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND id = ?"
+          )
+          .run(conversationId, remaining.id);
+      }
+    }
     this.touchConversation(conversationId);
     return msg;
   }

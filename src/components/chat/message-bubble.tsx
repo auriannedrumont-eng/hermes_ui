@@ -9,6 +9,8 @@ import {
   Brain,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   GitBranch,
   Loader2,
@@ -317,6 +319,8 @@ interface MessageBubbleProps {
   onSetFeedback?: (messageId: string, rating: "up" | "down" | null, comment?: string | null) => void;
   onOpenArtifact?: (artifact: Artifact) => void;
   onRetryArtifact?: (artifactId: string) => void;
+  /** F-14 — navigation entre les versions d'une réponse (‹ n/m ›). */
+  onSetVersion?: (message: ChatMessage, index: number) => void;
 }
 
 export function MessageBubble({
@@ -337,6 +341,7 @@ export function MessageBubble({
   onSetFeedback,
   onOpenArtifact,
   onRetryArtifact,
+  onSetVersion,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -344,14 +349,18 @@ export function MessageBubble({
   const editRef = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeech(isStreaming ? "" : message.content);
   // Réglage « Afficher le raisonnement » (fork.ui.showReasoning) — suivi
-  // en direct via le bus `hermes-ui:settings-changed`.
-  const [showReasoning, setShowReasoning] = useState(true);
-  useEffect(() => {
-    setShowReasoning(readClientSetting<boolean>("fork.ui.showReasoning") !== false);
-    return onSettingsChanged(({ key, value }) => {
-      if (key === "fork.ui.showReasoning") setShowReasoning(value !== false);
-    });
-  }, []);
+  // en direct via le bus `hermes-ui:settings-changed`. Initialisation
+  // paresseuse (lecture au 1er rendu), l'effet ne fait que s'abonner.
+  const [showReasoning, setShowReasoning] = useState(
+    () => readClientSetting<boolean>("fork.ui.showReasoning") !== false
+  );
+  useEffect(
+    () =>
+      onSettingsChanged(({ key, value }) => {
+        if (key === "fork.ui.showReasoning") setShowReasoning(value !== false);
+      }),
+    []
+  );
 
   const copy = async () => {
     try {
@@ -582,6 +591,39 @@ export function MessageBubble({
                 Tout télécharger ({cards.length} fichiers, .zip)
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {/* F-14 — navigation entre versions : ‹ index/count ›, visible
+            en permanence (contrôle de lecture, pas une action au survol). */}
+        {!isStreaming && message.versions && message.versions.count > 1 && onSetVersion ? (
+          <div className="flex items-center gap-0.5 pt-0.5 text-[11.5px] text-muted-foreground">
+            <button
+              type="button"
+              aria-label="Version précédente"
+              title="Version précédente"
+              disabled={message.versions.index <= 1 || isBusy}
+              onClick={() => onSetVersion(message, message.versions!.index - 1)}
+              className="flex h-5.5 w-5.5 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="min-w-9 text-center tabular-nums">
+              {message.versions.index}/{message.versions.count}
+            </span>
+            <button
+              type="button"
+              aria-label="Version suivante"
+              title="Version suivante"
+              disabled={message.versions.index >= message.versions.count || isBusy}
+              onClick={() => onSetVersion(message, message.versions!.index + 1)}
+              className="flex h-5.5 w-5.5 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            <span className="sr-only">
+              {message.versions.count} versions — version {message.versions.index} affichée
+            </span>
           </div>
         ) : null}
 

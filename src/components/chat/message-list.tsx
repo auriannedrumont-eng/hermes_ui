@@ -84,6 +84,8 @@ interface MessageListProps {
   onRegenerate: () => void;
   /** F-17 : régénérer UN côté de la dernière comparaison. */
   onRegenerateVariant: (variant: "a" | "b") => void;
+  /** F-14 — basculer la version affichée d'une réponse multi-versions. */
+  onSetVersion: (message: ChatMessage, index: number) => void;
   onRetryError: () => void;
   onDismissError: () => void;
   onEdit: (messageId: string, content: string) => void;
@@ -162,6 +164,7 @@ export function MessageList({
   onSuggestion,
   onRegenerate,
   onRegenerateVariant,
+  onSetVersion,
   onRetryError,
   onDismissError,
   onEdit,
@@ -269,6 +272,7 @@ export function MessageList({
                     isBusy={isBusy}
                     isLastAssistant={row.message.id === lastAssistantId && streams.length === 0}
                     onRegenerate={onRegenerate}
+                    onSetVersion={onSetVersion}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onFork={onFork}
@@ -285,6 +289,7 @@ export function MessageList({
                   pair={row}
                   isBusy={isBusy}
                   onRegenerateVariant={onRegenerateVariant}
+                  onSetVersion={onSetVersion}
                   artifacts={artifacts}
                   artifactStreams={artifactStreams}
                   onEdit={onEdit}
@@ -383,6 +388,7 @@ function ComparePair({
   pair,
   isBusy,
   onRegenerateVariant,
+  onSetVersion,
   artifacts,
   artifactStreams,
   onEdit,
@@ -395,6 +401,7 @@ function ComparePair({
   pair: Extract<Row, { kind: "pair" }>;
   isBusy: boolean;
   onRegenerateVariant: (variant: "a" | "b") => void;
+  onSetVersion: (message: ChatMessage, index: number) => void;
   artifacts: Artifact[];
   artifactStreams: Record<string, string>;
   onEdit: (messageId: string, content: string) => void;
@@ -446,6 +453,7 @@ function ComparePair({
               isBusy={isBusy}
               isLastAssistant={false}
               onRegenerate={() => onRegenerateVariant(variant)}
+              onSetVersion={onSetVersion}
               onEdit={onEdit}
               onDelete={onDelete}
               onFork={onFork}
@@ -465,6 +473,7 @@ function ComparePair({
                 createdAt: new Date().toISOString(),
                 variant,
               }}
+              onSetVersion={undefined}
               isStreaming
               streamingContent={cell.stream.content}
               streamingReasoning={cell.stream.reasoning}

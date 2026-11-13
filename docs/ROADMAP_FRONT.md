@@ -45,7 +45,7 @@
 | F-11 | **Prompt système / conversation** | Panneau, presets | **Terminé** | Livré le 2026-11-13 : panneau d'édition par conversation (sheet 460 px, bouton « prompt » de l'en-tête), bibliothèque de presets éditables (section Hermes du volet, 5 seeds), table additive `system_prompts`, événements `system-prompt:*` / `system-prompts:*`, effet au prochain tour (composé base + F-19 + F-11 côté service, `system_prompt` dans `api_turn_v1.settings` en gateway), jauge de contexte + pastille d'en-tête |
 | F-12 | **Citations web** | Sources cliquables | À faire | Dépend du browsing agent (FORK.md §7.5, « plus tard ») |
 | F-13 | **Partage / export** | Lien public ; export MD/PDF/image | **Terminé** | Livré le 2026-11-13 : lien public lecture seule `/shared/<token>` (snapshot **figé** à la création, table additive `shares`, token opaque 24 car., un seul lien actif par conversation), menu « Partager » de l'en-tête (copie, ouverture de la vue publique, révocation → 410 Gone), export **image PNG plein page du fil** (pipeline chrome-headless-shell), `data.json` public sans id interne, page `noindex`. Export local MD/JSON/PDF livré précédemment (`export.ts`). |
-| F-14 | **Édition avec branchement** | Éditer crée une branche ; navigation versions | Partiel | « Brancher » duplique la conversation depuis un message (fork). L'édition modifie en place (tronque + régénère) — pas de navigation entre versions dans la même conversation |
+| F-14 | **Édition avec branchement** | Éditer crée une branche ; navigation versions | **Terminé** (volet versions) | Livré le 2026-11-13 : régénérer ne supprime plus — chaque réponse a des versions conservées, navigation ‹ n/m › dans le fil (version affichée = version envoyée au modèle), par côté en comparaison ; suppression d'une version = promotion de la précédente. Choix documenté : l'édition d'un message utilisateur reste « fork explicite » (bouton Branche) plutôt qu'un arbre de branches implicites. |
 | F-15 | **Panneau artefacts** | HTML/graphiques en panneau latéral | **Terminé** | `artifact-panel.tsx` : split view ≈ 45 %, rendus code/MD/CSV/JSON/SVG/PDF/HTML (pipeline Chrome), versioning + diff |
 
 ### P2 — Différenciateurs
@@ -317,6 +317,35 @@ jamais les réponses de l'autre variante).
 - **Piège QA documenté** : le socket client passe par `/?XTransformPort=3003` → il faut
   Caddy (port 81) pour une app connectée ; sur :3000 direct, l'app reste « Hors ligne ».
 
+## Chantier du 2026-11-13 (quatorzième session) — F-14 « Navigation entre versions »
+
+Régénérer détruisait l'ancienne réponse. Désormais chaque régénération crée une
+**nouvelle version conservée** ; le fil affiche la version active avec un
+sélecteur ‹ index/count ›, et la version choisie est celle envoyée au modèle
+au tour suivant. Fonctionne par côté de comparaison (F-17) : régénérer A ne
+touche ni les versions de B ni sa réponse affichée.
+
+- **Service** : colonnes additives `messages.version_group/index/active`
+  (retro-complétion à la première régénération) ; `getMessages` ne renvoie que
+  les versions actives, enrichies de la meta `versions {group,index,count}` ;
+  `supersedeTrailingAssistant` remplace la suppression (traverse l'autre
+  variante, s'arrête au message utilisateur) ; `message:setVersion` bascule la
+  version active et rediffuse le fil (`messages:refreshed`) ; `messages:superseded`
+  signale les remplacements ; suppression d'une version active → promotion de la
+  plus récente restante ; fork = instantané du chemin actif (sans meta versions).
+- **Client** : sélecteur ‹ n/m › toujours visible dans la bulle (bornes
+  désactivées pendant un tour) ; hook `setMessageVersion` + listeners
+  `messages:superseded`/`messages:refreshed` (multi-sessions) ; garde défensive
+  dans `regenerate` (un `onClick` direct transmet l'événement React en premier
+  argument — seul `"a"`/`"b"` compte).
+- **QA** : `scripts/test-version-flow.ts` **21/21** (supersession vs suppression,
+  meta n/m, bascule + hors bornes, versions par côté de comparaison avec
+  traversée de l'autre variante, promotion après suppression, gardes) ; visuelle
+  `scripts/qa-versions-visual.ts` (‹ 2/2 › après régénération → ‹ 1/2 › au clic,
+  VLM sans anomalie — captures `download/qa-f14-versions/`) ; tsc 0 erreur
+  `src/` ; eslint propre (au passage : init paresseuse du réglage
+  « afficher le raisonnement » dans `message-bubble`, `set-state-in-effect`).
+
 ## Ordre de démarrage recommandé (suite)
 
 1. ~~Valider le volet v4 implémenté~~ **premiers retours intégrés le 2026-11-14**
@@ -329,9 +358,9 @@ jamais les réponses de l'autre variante).
 6. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
    à revoir une fois la gateway branchée (les clés de services sont désormais gérées
    dans le volet Paramètres).
-7. **F-21** (coût par message) et **F-14** (navigation versions complète)
-   restent les deux « Partiel » améliorables ; ~~**F-17** (comparaison modèles)
-   est le dernier gros chantier~~ **livré le 2026-11-13** (ci-dessus).
+7. **F-21** (coût par message) reste le seul « Partiel » améliorable ;
+   ~~**F-17** (comparaison modèles)~~ et ~~**F-14** (navigation versions)~~
+   **livrés le 2026-11-13** (ci-dessus).
 
 ## Notes de passation
 

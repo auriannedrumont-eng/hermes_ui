@@ -393,8 +393,9 @@ export default function HermesWebPage() {
             artifacts={chat.artifacts}
             artifactStreams={chat.streamingArtifacts}
             onSuggestion={(prompt) => chat.sendMessage(prompt)}
-            onRegenerate={chat.regenerate}
+            onRegenerate={() => chat.regenerate()}
             onRegenerateVariant={(v) => chat.regenerate(v)}
+            onSetVersion={chat.setMessageVersion}
             onRetryError={chat.retryAfterError}
             onDismissError={chat.dismissTurnError}
             onEdit={chat.editMessage}

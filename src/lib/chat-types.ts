@@ -70,6 +70,9 @@ export interface ChatMessage {
   // ── Comparaison de modèles (F-17) — réponse de la variante a ou b ──
   /** Variante du tour de comparaison (absent = message hors comparaison). */
   variant?: "a" | "b";
+  // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
+  /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
+  versions?: { group: string; index: number; count: number };
 }
 
 export interface ConversationMeta {

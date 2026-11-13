@@ -760,6 +760,19 @@ export function useHermesChat() {
     socket.on("message:appended", onMessageAppended);
     socket.on("message:deleted", onMessageDeleted);
     socket.on("messages:removed", onMessagesRemoved);
+    // F-14 : réponse remplacée par une nouvelle version (régénération)
+    // et fil rediffusé après bascule de version affichée.
+    const onMessagesSuperseded = (p: { conversationId: string; messageIds: string[] }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      const ids = new Set(p.messageIds);
+      setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
+    };
+    const onMessagesRefreshed = (p: { conversationId: string; messages: ChatMessage[] }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setMessages(p.messages ?? []);
+    };
+    socket.on("messages:superseded", onMessagesSuperseded);
+    socket.on("messages:refreshed", onMessagesRefreshed);
     socket.on("message:updated", onMessageUpdated);
     socket.on("feedback:changed", onFeedbackChanged);
     socket.on("conversations:pinned", onConversationsPinned);
@@ -790,6 +803,8 @@ export function useHermesChat() {
       socket.off("message:appended", onMessageAppended);
       socket.off("message:deleted", onMessageDeleted);
       socket.off("messages:removed", onMessagesRemoved);
+      socket.off("messages:superseded", onMessagesSuperseded);
+      socket.off("messages:refreshed", onMessagesRefreshed);
       socket.off("message:updated", onMessageUpdated);
       socket.off("feedback:changed", onFeedbackChanged);
       socket.off("conversations:pinned", onConversationsPinned);
@@ -970,7 +985,10 @@ export function useHermesChat() {
   /** F-17 : `variant` régénère UN côté d'une comparaison ; sans argument,
    *  en mode comparaison, les deux côtés sont relancés ; sinon tour simple. */
   const regenerate = useCallback(
-    (variant?: "a" | "b") => {
+    (rawVariant?: "a" | "b") => {
+      // Garde : un branchement direct onClick={regenerate} transmet
+      // l'événement React en premier argument — seul "a"/"b" compte.
+      const variant = rawVariant === "a" || rawVariant === "b" ? rawVariant : undefined;
       const conversationId = activeIdRef.current;
       if (!conversationId || streaming) return;
       const pair = activeComparePair;
@@ -1027,6 +1045,24 @@ export function useHermesChat() {
 
   /** Masque l'erreur du dernier tour (le partiel éventuel reste dans le fil). */
   const dismissTurnError = useCallback(() => setTurnError(null), []);
+
+  /** F-14 — affiche la version `index` d'une réponse multi-versions. La
+   *  version choisie devient aussi celle envoyée au modèle au tour suivant ;
+   *  le fil entier revient par `messages:refreshed` (y compris à l'émetteur). */
+  const setMessageVersion = useCallback(
+    (message: ChatMessage, index: number) => {
+      const conversationId = activeIdRef.current;
+      if (!conversationId || !message.versions || streaming) return;
+      getSocket().emit(
+        "message:setVersion",
+        { conversationId, group: message.versions.group, index },
+        (res: { ok?: boolean; error?: string } | null) => {
+          if (!res?.ok) openConversation(conversationId);
+        }
+      );
+    },
+    [openConversation, streaming]
+  );
 
   /** F-17 — active/coupe la comparaison ; à l'activation, pré-remplit le
    *  côté A avec le modèle courant et le côté B avec le premier modèle
@@ -1502,6 +1538,8 @@ export function useHermesChat() {
     regenerate,
     editMessage,
     deleteMessage,
+    // F-14 — navigation entre versions d'une réponse
+    setMessageVersion,
     // Feedback 👍/👎 (F-24)
     setMessageFeedback,
     togglePin,
