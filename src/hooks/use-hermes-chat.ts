@@ -55,6 +55,9 @@ export function useHermesChat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  /** Erreur persistante du dernier tour (F-04) : affichée dans le fil jusqu'à
+   *  réessai / changement de conversation — plus d'effacement automatique. */
+  const [turnError, setTurnError] = useState<{ messageId: string; error: string } | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelsSource, setModelsSource] = useState<ModelsResult["source"] | null>(null);
@@ -164,6 +167,15 @@ export function useHermesChat() {
 
   const isBusy = streaming !== null || uploadingCount > 0;
 
+  /** Machine à états du tour (F-01) : idle → streaming → done | stopped | error. */
+  const turnState: "idle" | "streaming" | "stopped" | "error" = useMemo(() => {
+    if (streaming) return "streaming";
+    if (turnError) return "error";
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant" && last.stopped) return "stopped";
+    return "idle";
+  }, [streaming, turnError, messages]);
+
   const refreshConversations = useCallback(() => {
     const socket = getSocket();
     socket.emit("conversations:list", (res: { conversations?: ConversationMeta[] } = {}) => {
@@ -226,6 +238,7 @@ export function useHermesChat() {
 
     const onStreamStart = (p: { conversationId: string; messageId: string }) => {
       if (p.conversationId !== activeIdRef.current) return;
+      setTurnError(null); // un nouveau tour efface l'erreur précédente
       setStreaming({
         messageId: p.messageId,
         conversationId: p.conversationId,
@@ -271,6 +284,7 @@ export function useHermesChat() {
       messageId: string;
       conversation?: ConversationMeta;
       message?: ChatMessage;
+      stopped?: boolean;
     }) => {
       if (p.conversationId !== activeIdRef.current) {
         refreshConversations();
@@ -281,13 +295,29 @@ export function useHermesChat() {
         setMessages((prev) => [...prev, p.message as ChatMessage]);
       }
       setStreaming(null);
+      setTurnError(null); // arrêt (stopped) ou succès : le tour est clos
       refreshConversations();
     };
 
-    const onStreamError = (p: { conversationId: string; error: string }) => {
+    const onStreamError = (p: {
+      conversationId: string;
+      messageId?: string;
+      conversation?: ConversationMeta;
+      message?: ChatMessage;
+      error: string;
+    }) => {
       if (p.conversationId !== activeIdRef.current) return;
-      setStreaming((s) => (s ? { ...s, status: `Erreur : ${p.error}` } : s));
-      setTimeout(() => setStreaming(null), 2500);
+      // Le partiel persisté (s'il existe) rejoint le fil immédiatement —
+      // plus besoin de recharger la conversation pour le voir.
+      if (p.message) {
+        const partial = p.message;
+        setMessages((prev) =>
+          prev.some((m) => m.id === partial.id) ? prev : [...prev, partial]
+        );
+      }
+      setTurnError({ messageId: p.messageId ?? p.message?.id ?? "", error: p.error });
+      setStreaming(null);
+      refreshConversations();
     };
 
     const onConversationsDeleted = (p: { id: string }) => {
@@ -295,6 +325,7 @@ export function useHermesChat() {
       if (activeIdRef.current === p.id) {
         setActiveId(null);
         setMessages([]);
+        setTurnError(null);
         setCompactInfo(null);
         setArtifacts([]);
         setStreamingArtifacts({});
@@ -541,6 +572,7 @@ export function useHermesChat() {
               setConversations((prev) => [res.conversation as ConversationMeta, ...prev]);
               setActiveId(res.conversation.id);
               setMessages([]);
+              setTurnError(null);
               setCompactInfo(null);
               resolve(res.conversation.id);
             } else {
@@ -560,6 +592,7 @@ export function useHermesChat() {
       activeIdRef.current = id;
       setActiveId(id);
       setStreaming(null);
+      setTurnError(null);
       setCompactInfo(null);
       // Le panneau appartient à la conversation : on le referme au changement
       setPanelOpen(false);
@@ -686,6 +719,15 @@ export function useHermesChat() {
       permissionsMode: permissionsRef.current,
     });
   }, [streaming]);
+
+  /** Masque l'erreur du dernier tour (le partiel éventuel reste dans le fil). */
+  const dismissTurnError = useCallback(() => setTurnError(null), []);
+
+  /** Réessai après erreur (F-04) : relance le tour depuis le dernier message utilisateur. */
+  const retryAfterError = useCallback(() => {
+    setTurnError(null);
+    regenerate();
+  }, [regenerate]);
 
   /** Modifie un message utilisateur et relance le tour depuis ce point. */
   const editMessage = useCallback(
@@ -1031,6 +1073,10 @@ export function useHermesChat() {
     messages,
     streaming,
     isBusy,
+    turnState,
+    turnError,
+    dismissTurnError,
+    retryAfterError,
     loadingHistory,
     models,
     modelsSource,

@@ -1,10 +1,21 @@
 // Liste des messages + état vide (accueil façon ChatGPT) + bouton retour en bas
+// + rangée d'erreur persistante du dernier tour (F-04 : Réessayer / Masquer).
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Code2, FileText, GitBranch, Lightbulb, Mail } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  Code2,
+  FileText,
+  GitBranch,
+  Lightbulb,
+  Mail,
+  RefreshCw,
+} from "lucide-react";
 import { HermesLogo } from "@/components/chat/hermes-logo";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Artifact, ChatMessage, StreamingState } from "@/lib/chat-types";
 
@@ -62,12 +73,16 @@ interface MessageListProps {
   streaming: StreamingState | null;
   loadingHistory: boolean;
   isBusy: boolean;
+  /** Erreur persistante du dernier tour (F-04) — affichée sous le fil. */
+  turnError: { messageId: string; error: string } | null;
   /** Toutes les versions d'artefacts de la conversation (état vivant). */
   artifacts: Artifact[];
   /** Contenu des artefacts en cours de génération, par clé. */
   artifactStreams: Record<string, string>;
   onSuggestion: (prompt: string) => void;
   onRegenerate: () => void;
+  onRetryError: () => void;
+  onDismissError: () => void;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onFork: (messageId: string) => void;
@@ -80,10 +95,13 @@ export function MessageList({
   streaming,
   loadingHistory,
   isBusy,
+  turnError,
   artifacts,
   artifactStreams,
   onSuggestion,
   onRegenerate,
+  onRetryError,
+  onDismissError,
   onEdit,
   onDelete,
   onFork,
@@ -215,6 +233,45 @@ export function MessageList({
                   onOpenArtifact={onOpenArtifact}
                   onRetryArtifact={onRetryArtifact}
                 />
+              </div>
+            ) : null}
+
+            {/* Erreur persistante du dernier tour (F-04) : le partiel éventuel
+                est déjà dans le fil au-dessus — ici, la cause et la sortie. */}
+            {!streaming && turnError ? (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-2.5"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-destructive">
+                    La génération a échoué
+                  </p>
+                  <p className="mt-0.5 break-words text-[12.5px] text-muted-foreground">
+                    {turnError.error}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onRetryError}
+                      disabled={isBusy}
+                      className="h-7 rounded-lg px-2.5 text-[12px]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Réessayer
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={onDismissError}
+                      className="h-7 rounded-lg px-2.5 text-[12px] text-muted-foreground"
+                    >
+                      Masquer
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : null}
             <div className="h-2" />

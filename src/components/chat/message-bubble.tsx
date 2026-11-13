@@ -13,6 +13,7 @@ import {
   Package,
   Pencil,
   RefreshCw,
+  Square,
   Trash2,
   Volume2,
   VolumeX,
@@ -400,6 +401,17 @@ export function MessageBubble({
         {isStreaming && streamingStatus && content ? (
           <p className="text-[12.5px] italic text-muted-foreground">
             {streamingStatus}
+          </p>
+        ) : null}
+
+        {/* Réponse interrompue par l'utilisateur (bouton Stop) : le partiel
+            reste dans le fil, clairement marqué — pas de faux « complet ». */}
+        {!isStreaming && message.stopped ? (
+          <p className="flex items-center gap-1.5 pt-0.5 text-[12px] text-muted-foreground">
+            <Square className="h-2.5 w-2.5 shrink-0 fill-current" aria-hidden="true" />
+            Réponse interrompue
+            {isLastAssistant && onRegenerate ?
+              " — « Régénérer » pour la compléter" : ""}
           </p>
         ) : null}
 

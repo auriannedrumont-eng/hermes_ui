@@ -278,10 +278,13 @@ export default function HermesWebPage() {
             streaming={chat.streaming}
             loadingHistory={chat.loadingHistory}
             isBusy={chat.isBusy}
+            turnError={chat.turnError}
             artifacts={chat.artifacts}
             artifactStreams={chat.streamingArtifacts}
             onSuggestion={(prompt) => chat.sendMessage(prompt)}
             onRegenerate={chat.regenerate}
+            onRetryError={chat.retryAfterError}
+            onDismissError={chat.dismissTurnError}
             onEdit={chat.editMessage}
             onDelete={chat.deleteMessage}
             onFork={handleFork}

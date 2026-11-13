@@ -168,8 +168,8 @@ Serveur → client (pendant un tour) :
 | `stream:reasoning` | `{conversationId, messageId, delta}` |
 | `stream:status` | `{conversationId, messageId, status}` |
 | `stream:tool` | `{conversationId, messageId, event: {name, status, detail, at}}` |
-| `stream:done` | `{conversationId, messageId, conversation, message}` |
-| `stream:error` | `{conversationId, messageId, error}` |
+| `stream:done` | `{conversationId, messageId, conversation?, message?, stopped?}` — `stopped: true` si interrompu par `chat:stop` (partiel conservé, marqué `message.stopped`) |
+| `stream:error` | `{conversationId, messageId?, conversation?, message?, error}` — `message` = partiel persisté s'il existe (affiché dans le fil + « Réessayer ») |
 
 Serveur → client (autres) :
 
@@ -199,7 +199,8 @@ convertis en WAV 16 kHz mono via `ffmpeg` si disponible (sinon échec doux).
 Base SQLite dans `../../db/hermes-chat.sqlite` (tables `conversations`, `messages`,
 `artifacts`, `projects`, `settings`), créée automatiquement au premier
 démarrage — les migrations sont **additives** (`CREATE TABLE IF NOT EXISTS` /
-`ALTER TABLE … ADD COLUMN`, jamais destructrices). Les fichiers dérivés
+`ALTER TABLE … ADD COLUMN`, jamais destructrices ; colonnes additives de
+`messages` : `attachments`, `stopped`). Les fichiers dérivés
 des artefacts (PNG / PDF) vivent dans `../../db/artifacts/`. Supprimez la base
 pour repartir de zéro.
 

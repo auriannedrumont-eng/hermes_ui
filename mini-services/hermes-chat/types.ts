@@ -58,6 +58,8 @@ export interface ChatMessage {
   createdAt: string;
   /** Cartes d'artefacts ancrées sur ce message (dernière version de chaque clé). */
   artifacts?: Artifact[];
+  /** Réponse interrompue par l'utilisateur (bouton Stop) — partiel conservé. */
+  stopped?: boolean;
 }
 
 // ── Artefacts : fichiers générés par l'agent, objets de première classe ──

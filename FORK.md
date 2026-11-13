@@ -61,6 +61,7 @@ bun run dev        # bun --hot index.ts
 | `src/components/chat/` | UI du chat, dont `composer.tsx` (Composer v2), `context-gauge.tsx` (jauge + popover de contexte), `artifact-card.tsx` (cartes inline), `artifact-panel.tsx` (split view) | Fork |
 | `src/components/settings/` | Sheet Paramètres : `settings-sheet.tsx` (étage client — phase 1 livrée, porte moteur structure v3), `info-tip.tsx` (tooltips « ? ») | Fork |
 | `design/` | Maquettes HTML autonomes de référence, validées avant implémentation (ex. `maquette-composer.html`, chantier Composer v2) | Fork (design) |
+| `docs/ROADMAP_FRONT.md` | Suivi des fonctionnalités de chat (F-xx : statuts, preuves, ordre de suite) | Fork (doc de suivi) |
 | `src/lib/socket.ts`, `export.ts`, `notify.ts`, `prompt-library.ts` | Client socket.io, exports MD/JSON/PDF, notifications, bibliothèque de prompts | Fork |
 | `db/` | SQLite + fichiers générés (`artifacts/`) et uploadés (`uploads/`) | Fork (runtime) |
 | `prisma/` + scripts `db:*` du package.json racine | **Boilerplate résiduel non utilisé** (la vraie persistance est `bun:sqlite` dans `store.ts`) | À ignorer |
@@ -347,7 +348,40 @@ initial de react-resizable-panels précédait la restauration) — garde-fou `si
 dans `page.tsx`. QA par captures : `download/parametres-phase1/` (thèmes clair/sombre,
 mobile 390 px, tour de chat démo bout en bout).
 
-### 7.5 Plus tard
+**Maquette v4 (2026-11-13, sixième session — commit `4c6269d`, en attente de validation)** :
+remplacement proposé du sheet 460 px par un **volet gauche ~860 px** ancré (plein écran
+< 1100 px) à navigation par rail (plus de forage) ; **pastilles** comme seule langue d'état
+(vert silencieux, orange action, rouge cassé) ; descriptions simples sous les libellés,
+tooltips réduits aux exemples ; sections réorganisées — Modèles (modèle d'arrière-plan,
+effort dynamique selon l'API), Fournisseurs (LLM seuls, multi-clés) **séparés** des clés
+de services, Extensions (ex-Connecteurs + serveurs MCP fusionnés, activer/désactiver),
+Outils (détail dépliable, création/modification), Skills (recherche, sources, contrôle
+qualité en langage clair), Hermes (fusion mémoire + fichiers .md + compaction + comportement).
+Fichier : `design/maquette-parametres-v4.html`. **Rien de la v4 n'est implémenté** —
+l'implémentée reste la phase 1 ci-dessus. (Entrée journalisée a posteriori : le commit
+n'avait pas été consigné au §9.)
+
+### 7.5 Fait — Chat UX : arrêt propre et erreurs persistantes (F-01/F-04)
+
+Livré le 2026-11-13 (suivi détaillé dans `docs/ROADMAP_FRONT.md`). Deux écarts corrigés :
+le message interrompu s'affichait comme une réponse complète, et une erreur réelle effaçait
+la bulle au bout de 2,5 s (partiel persisté invisible jusqu'au rechargement, sans réessai).
+
+- **Un arrêt n'est plus une erreur** : `chat:stop` clôt le tour par `stream:done`
+  (`stopped: true`) — le connecteur revient avec le partiel dans les deux modes ;
+  `ChatMessage.stopped` est **persisté** (migration additive `messages.stopped`) et rendu
+  par la bulle (« Réponse interrompue — “Régénérer” pour la compléter ») ; arrêt avant le
+  premier jeton = aucun message persisté (pas de bulle vide).
+- **Erreurs persistantes** : `stream:error` embarque le partiel persisté (`message`) et
+  la conversation ; le client affiche le partiel dans le fil immédiatement + une rangée
+  `role="alert"` avec **Réessayer / Masquer** (le réessai régénère depuis le dernier
+  message utilisateur) — plus d'effacement automatique.
+- **Machine à états** : `turnState` (`idle | streaming | stopped | error`) exposé par le
+  hook `use-hermes-chat.ts`, aux côtés de `turnError` / `retryAfterError` /
+  `dismissTurnError`.
+- Docs : protocole du README mini-service mis à jour ; nouveau `docs/ROADMAP_FRONT.md`.
+
+### 7.6 Plus tard
 
 - **Browsing agent** (étape 6 de la vision artefacts) : chip de statut discrète près du champ
   de saisie (favicon + titre), résultats en citations cliquables repliables
@@ -388,6 +422,8 @@ mobile 390 px, tour de chat démo bout en bout).
 | 2026-11-13 (3) | **Connecteurs redéfinis** (retour utilisatrice) : un connecteur = un **projet GitHub importé** (outil, skill, serveur MCP) — source, canal (branche/tag) et commit exact suivis ; cycle **Vérifier / Mettre à jour / Épingler** + retour arrière (l'historique local garde la version précédente) ; effet selon le type (outil = prochain tour, skill = rechargement, MCP = redémarrage averti). **Tavily et Exa quittent les connecteurs** : services hébergés à clé → **services d'API** au sein de Fournisseurs & clés (porte-clés, test et relai partagés). Maquette v2 corrigée en conséquence : scène E élargie (services d'API avec porte-clés), scène F = gestionnaire d'imports GitHub (formulaire d'import, « Tout vérifier », changelog de commits, épinglage, échec de vérif), grille d'outils / MCP / spec revues ; table additive `connectors` + événements `connectors:check` / `connectors:update`. |
 | 2026-11-13 (4) | **Paramètres v3 — sections séparées + maquette interactive** (retour utilisatrice : sections à part entière pour skills/tools/mcp/mémoire/profil/système, moins de détails, skills et .md éditables, modèle ou service associé par outil, profils avec skills + modèle par défaut, chercher d'autres paramètres activables) : étage moteur à **10 catégories** (ajout Modèle & raisonnement ; Mémoire séparée) ; **éditeurs in-sheet** pour skills et fichiers .md (SOUL/AGENTS/AGENTS.override/CLAUDE + MEMORY/USER) ; sélecteur **modèle/service associé** sur les lignes d'outils ; éditeur de profils avec **sélection de skills** et modèle par défaut ; paramètres activables **ancrés dans la doc amont hermes-agent** (toolsets réels, credential pools natifs — stratégies et cooldowns, réglages mémoire, priorité des fichiers de contexte, `pre_update_backup`, backends terminal) ; pied de sheet = « Mode démo » + compteur « N en attente ». Maquette **interactive** `design/maquette-parametres-v3.html` (16 vues cliquables, QA par captures) remplace la planche v2 comme référence de validation — v2 archivée. |
 | 2026-11-13 (5) | **Paramètres phase 1 livrée (étage client)** d'après la maquette v3 : sheet 460 px (Radix Dialog maison), engrenage dans la carte de statut, section « Cette interface » (7 lignes des deux registres, favoris internes cachés), tooltips « ? » (focusables, tap mobile, un seul ouvert, flèche), contrôles par type de réglage ; **application immédiate généralisée** via le bus `hermes-ui:settings-changed` émis par `writeClientSetting()` (page → largeur sidebar, sidebar → tri + repliage, composer → jauge, hook → modèle/effort/permissions) — badge « au rechargement » abandonné, tout est live ; interrupteur « Dossiers de projet repliés » dérivé du registre (tout replier / tout déplier) ; porte moteur = 10 sections « à venir » (structure v2.2+, aucune donnée simulée) ; pied « Mode démo » + compteur « N en attente » (prop `pendingEngineCount`, masqué à 0). Fix : course au montage de la largeur sidebar (le `onResize` initial de la lib écrasait la valeur persistée) neutralisée par `sidebarRestoredRef`. `bunx tsc --noEmit` : 0 erreur dans `src/`. |
+| 2026-11-13 (6) | **Paramètres v4 — maquette** (sixième session, consignée a posteriori) : proposition de remplacement du sheet 460 px par un **volet gauche ~860 px** ancré, navigation par rail (plus de forage), **pastilles** comme unique langue d'état (vert/orange/rouge), descriptions simples sous les libellés (tooltips = exemples), sections réorganisées — Modèles (modèle d'arrière-plan, effort dynamique), Fournisseurs LLM **séparés** des clés de services, Extensions (ex-Connecteurs + MCP fusionnés, activer/désactiver), Outils (détail dépliable, création), Skills (recherche + contrôle qualité en langage clair), Hermes (mémoire + .md + compaction + comportement). `design/maquette-parametres-v4.html` committé (`4c6269d`) — **en attente de validation, rien d'implémenté**. |
+| 2026-11-13 (7) | **Chat UX F-01/F-04 livré — arrêt propre + erreurs persistantes** : `stream:done` porte `stopped: true` quand `chat:stop` clôt le tour (un arrêt n'est plus traité comme une erreur) ; `ChatMessage.stopped` persisté (migration additive `messages.stopped`, transportée par append/gets/fork) et affiché (« Réponse interrompue ») ; arrêt avant le premier jeton = pas de bulle vide ; `stream:error` embarque le partiel persisté + la conversation — le client l'affiche immédiatement dans le fil avec rangée persistante **Réessayer / Masquer** (plus d'effacement automatique à 2,5 s) ; machine à états `turnState` (idle/streaming/stopped/error) + `turnError`/`retryAfterError`/`dismissTurnError` exposés par le hook. Scripts de test : `scripts/test-stop-error-flow.ts` (scénarios 1-3 en service normal, scénario 4 avec `scripts/fake-zai-error.preload.ts` — preload qui fait échouer le LLM après 2 deltas ; NB : il cible la copie du SDK du mini-service, pas celle de la racine). QA par captures : `download/qa-f01-f04/` (erreur persistante, masquée, arrêt propre, pastille, régénération). Docs : `docs/ROADMAP_FRONT.md` (nouveau — suivi F-xx réconcilié avec le code), README mini-service (payloads stream:*), §7.5 ajouté. `bunx tsc --noEmit` : 9 erreurs préexistantes hors périmètre, 0 dans `src/`. |
 
 ## 10. Synchronisation git et passation
 

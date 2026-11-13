@@ -892,6 +892,17 @@ io.on("connection", (socket) => {
         });
       }
 
+      // Arrêt utilisateur (chat:stop) : le connecteur revient avec le partiel —
+      // ce n'est pas une erreur, le tour se clôt normalement avec le marqueur.
+      const stopped = controller.signal.aborted;
+
+      // Arrêt avant le premier jeton : rien à conserver, pas de bulle vide
+      if (stopped && !contentAcc && !reasoningAcc && toolEvents.length === 0) {
+        const conversation = store.touchConversation(conversationId) ?? undefined;
+        socket.emit("stream:done", { conversationId, messageId, conversation, stopped: true });
+        return;
+      }
+
       // Clôture du suivi des artefacts (persistance définitive)
       tracker.finalize(contentAcc, false);
 
@@ -904,6 +915,7 @@ io.on("connection", (socket) => {
         reasoning: reasoningAcc || undefined,
         toolEvents: toolEvents.length ? toolEvents : undefined,
         model: usedModel,
+        stopped: stopped || undefined,
       });
       const conversation = store.touchConversation(conversationId) ?? undefined;
       const doneMessage: ChatMessage = {
@@ -915,6 +927,7 @@ io.on("connection", (socket) => {
         toolEvents: toolEvents.length ? toolEvents : undefined,
         model: usedModel,
         createdAt: new Date().toISOString(),
+        stopped: stopped || undefined,
       };
       // Cartes d'artefacts ancrées sur ce message (celles créées par ce tour)
       attachArtifactCards(conversationId, [doneMessage]);
@@ -923,12 +936,15 @@ io.on("connection", (socket) => {
         messageId,
         conversation,
         message: doneMessage,
+        stopped,
       });
     } catch (err) {
       // Sauvegarde du partiel déjà reçu
       tracker.finalize(contentAcc, true);
+      const stopped = controller.signal.aborted;
+      let partial: ChatMessage | null = null;
       if (contentAcc || reasoningAcc) {
-        store.appendMessage({
+        partial = store.appendMessage({
           id: messageId,
           conversationId,
           role: "assistant",
@@ -936,13 +952,35 @@ io.on("connection", (socket) => {
           reasoning: reasoningAcc || undefined,
           toolEvents: toolEvents.length ? toolEvents : undefined,
           model: usedModel,
+          stopped: stopped || undefined,
         });
       }
-      socket.emit("stream:error", {
-        conversationId,
-        messageId,
-        error: err instanceof Error ? err.message : "Erreur inconnue du tour",
-      });
+      if (stopped) {
+        // Abort levé en plein vol : même clôture qu'un arrêt propre
+        const conversation = store.touchConversation(conversationId) ?? undefined;
+        if (partial) attachArtifactCards(conversationId, [partial]);
+        socket.emit("stream:done", {
+          conversationId,
+          messageId,
+          conversation,
+          message: partial ?? undefined,
+          stopped: true,
+        });
+      } else {
+        // Erreur réelle : le partiel persisté part avec l'événement — le client
+        // l'affiche dans le fil et propose « Réessayer » (F-04).
+        const conversation = contentAcc || reasoningAcc
+          ? store.touchConversation(conversationId) ?? undefined
+          : undefined;
+        if (partial) attachArtifactCards(conversationId, [partial]);
+        socket.emit("stream:error", {
+          conversationId,
+          messageId,
+          conversation,
+          message: partial ?? undefined,
+          error: err instanceof Error ? err.message : "Erreur inconnue du tour",
+        });
+      }
     } finally {
       running.delete(conversationId);
     }

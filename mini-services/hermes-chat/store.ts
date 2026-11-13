@@ -104,6 +104,12 @@ export class Store {
     } catch {
       /* colonne déjà présente */
     }
+    // Migration douce : marqueur des réponses interrompues (bouton Stop)
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN stopped INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
     // Migration douce : colonne des conversations épinglées
     try {
       this.db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -538,6 +544,7 @@ export class Store {
       attachments: r.attachments ? (JSON.parse(r.attachments) as Attachment[]) : undefined,
       model: r.model ?? undefined,
       createdAt: r.created_at,
+      stopped: r.stopped ? true : undefined,
     }));
   }
 
@@ -546,7 +553,7 @@ export class Store {
     const createdAt = msg.createdAt ?? new Date().toISOString();
     this.db
       .query(
-        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         id,
@@ -557,7 +564,8 @@ export class Store {
         msg.toolEvents ? JSON.stringify(msg.toolEvents) : null,
         msg.attachments ? JSON.stringify(msg.attachments) : null,
         msg.model ?? null,
-        createdAt
+        createdAt,
+        msg.stopped ? 1 : null
       );
     return { ...msg, id, createdAt } as ChatMessage;
   }
@@ -578,6 +586,7 @@ export class Store {
       attachments: r.attachments ? (JSON.parse(r.attachments) as Attachment[]) : undefined,
       model: r.model ?? undefined,
       createdAt: r.created_at,
+      stopped: r.stopped ? true : undefined,
     };
   }
 
@@ -680,6 +689,7 @@ export class Store {
         attachments: m.attachments,
         model: m.model,
         createdAt: m.createdAt,
+        stopped: m.stopped,
       });
       messageIdMap.set(m.id, copy.id);
     }
