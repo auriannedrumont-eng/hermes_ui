@@ -268,3 +268,26 @@ export function writeClientSetting(key: string, value: unknown): void {
     })
   );
 }
+
+/** Efface un réglage client : la clé redevient absente (retour au défaut
+ *  du registre à la relecture). Sans ceci, « vider » un champ numérique
+ *  persisterait 0 — Number(null) — au lieu de le retirer (bug F-22). */
+export function deleteClientSetting(key: string): void {
+  const def = REGISTRY.get(key);
+  if (!def || def.scope !== "client") return;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PREFIX + key);
+    // Nettoyage des anciennes clés une fois migrées
+    for (const k of def.legacyKeys ?? []) window.localStorage.removeItem(k);
+  } catch {
+    /* stockage indisponible */
+    return;
+  }
+  // Même bus d'application immédiate, avec null = valeur par défaut.
+  window.dispatchEvent(
+    new CustomEvent<SettingsChangedDetail>(SETTINGS_CHANGED_EVENT, {
+      detail: { key, value: null },
+    })
+  );
+}

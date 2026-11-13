@@ -1743,14 +1743,21 @@ io.on("connection", (socket) => {
     if (compact) {
       const untilIdx = existing.findIndex((m) => m.id === compact.untilMessageId);
       const after = existing.slice(untilIdx >= 0 ? untilIdx + 1 : 0, cut);
+      // Le résumé est TOUJOURS en tête (c'est le contrat de la compaction :
+      // un contexte résumé permanent) — le plafond ne coupe que les messages
+      // postérieurs. L'ancien slice(-MAX_HISTORY) sur le tout éliminait le
+      // résumé dès le 30e message postérieur, vidant la session de son
+      // contexte sans avertissement.
       history = [
         {
           role: "user" as const,
           content:
             `[Résumé des ${compact.summarizedCount} premiers messages de cette conversation — compaction du ${new Date(compact.at).toLocaleString("fr-FR")}]\n\n${compact.summary}`,
         },
-        ...after.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
-      ].slice(-MAX_HISTORY);
+        ...after
+          .slice(-(MAX_HISTORY - 1))
+          .map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+      ];
     } else {
       history = existing
         .slice(0, cut)

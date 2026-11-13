@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
-import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
+import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { useToast } from "@/hooks/use-toast";
 import {
   contextWindowOf,
@@ -243,13 +243,20 @@ export function useHermesChat() {
   }, []);
 
   /** Mode expert (F-22) : fusionne et persiste champ par champ (undefined
-   *  = retiré : le tour repart aux valeurs par défaut du fournisseur). */
+   *  = retiré : la clé localStorage est EFFACÉE — pas écrite à null, sinon
+   *  Number(null) persisterait 0 et la valeur « reviendrait » au rechargement). */
   const setExpert = useCallback((patch: Partial<ExpertSettings>) => {
     setExpertState((prev) => {
       const next = { ...prev, ...patch };
-      writeClientSetting(EXPERT_TEMPERATURE_KEY, next.temperature ?? null);
-      writeClientSetting(EXPERT_MAX_TOKENS_KEY, next.maxTokens ?? null);
-      writeClientSetting(EXPERT_SEED_KEY, next.seed ?? null);
+      // Champ présent → écrit ; champ retiré → suppression de la clé
+      // (retour au défaut du fournisseur à la relecture).
+      const persist = (key: string, v: number | undefined) => {
+        if (v === undefined) deleteClientSetting(key);
+        else writeClientSetting(key, v);
+      };
+      persist(EXPERT_TEMPERATURE_KEY, next.temperature);
+      persist(EXPERT_MAX_TOKENS_KEY, next.maxTokens);
+      persist(EXPERT_SEED_KEY, next.seed);
       return next;
     });
   }, []);
