@@ -31,6 +31,7 @@ import {
   PinOff,
   Plus,
   Search,
+  Settings,
   Trash2,
   X,
 } from "lucide-react";
@@ -48,7 +49,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HermesLogo } from "@/components/chat/hermes-logo";
-import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import type {
   ConversationMeta,
   GatewayMode,
@@ -80,6 +81,8 @@ interface SidebarProps {
   onDeleteProject: (id: string) => void;
   onReorderProjects: (ids: string[]) => void;
   onMoveConversation: (id: string, projectId: string | null) => void;
+  /** Ouvre le sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
+  onOpenSettings: () => void;
 }
 
 /** Props communes aux items de conversation (partagées entre groupes). */
@@ -490,6 +493,7 @@ export function Sidebar({
   onDeleteProject,
   onReorderProjects,
   onMoveConversation,
+  onOpenSettings,
 }: SidebarProps) {
   const [query, setQuery] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -512,8 +516,29 @@ export function Sidebar({
       return new Set<string>();
     }
   });
-  const [sortMode] = useState<string>(() => readClientSetting<string>("fork.projects.sort"));
+  const [sortMode, setSortMode] = useState<string>(() => readClientSetting<string>("fork.projects.sort"));
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
+
+  // ── Application immédiate des réglages (page Paramètres) ──────────────
+  // Tri des projets et repliage suivent le bus `hermes-ui:settings-changed`.
+  useEffect(() => {
+    return onSettingsChanged(({ key, value }) => {
+      if (key === "fork.projects.sort") {
+        setSortMode(typeof value === "string" ? value : "updated");
+      } else if (key === "fork.projects.collapsed") {
+        try {
+          const arr = JSON.parse(typeof value === "string" ? value : "[]");
+          setCollapsedProjects(
+            Array.isArray(arr)
+              ? new Set(arr.filter((x): x is string => typeof x === "string"))
+              : new Set<string>()
+          );
+        } catch {
+          setCollapsedProjects(new Set<string>());
+        }
+      }
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -1006,13 +1031,23 @@ export function Sidebar({
               }`}
               aria-hidden="true"
             />
-            <p className="text-[12.5px] font-medium leading-none">
+            <p className="truncate text-[12.5px] font-medium leading-none">
               {!connected
                 ? "Hors ligne"
                 : mode === "gateway"
                   ? "Gateway Hermes connectée"
                   : "Mode démo · LLM intégré"}
             </p>
+            {/* Entrée unique des paramètres (décision v1 confirmée v3) */}
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title="Paramètres"
+              aria-label="Ouvrir les paramètres"
+              className="ml-auto flex size-[27px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm focus-visible:outline-2 focus-visible:outline-hermes"
+            >
+              <Settings className="size-[14px]" />
+            </button>
           </div>
           <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
             {serverModel ? `${serverModel} · ` : ""}

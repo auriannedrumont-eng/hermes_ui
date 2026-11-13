@@ -59,6 +59,7 @@ bun run dev        # bun --hot index.ts
 | `src/lib/chat-types.ts` | Types du protocole client/service (dont artefacts) | Fork (partagé) |
 | `src/lib/tokens.ts` | Estimation de contexte du Composer v2 (heuristique car/jetons, fenêtre par modèle, seuils) | Fork |
 | `src/components/chat/` | UI du chat, dont `composer.tsx` (Composer v2), `context-gauge.tsx` (jauge + popover de contexte), `artifact-card.tsx` (cartes inline), `artifact-panel.tsx` (split view) | Fork |
+| `src/components/settings/` | Sheet Paramètres : `settings-sheet.tsx` (étage client — phase 1 livrée, porte moteur structure v3), `info-tip.tsx` (tooltips « ? ») | Fork |
 | `design/` | Maquettes HTML autonomes de référence, validées avant implémentation (ex. `maquette-composer.html`, chantier Composer v2) | Fork (design) |
 | `src/lib/socket.ts`, `export.ts`, `notify.ts`, `prompt-library.ts` | Client socket.io, exports MD/JSON/PDF, notifications, bibliothèque de prompts | Fork |
 | `db/` | SQLite + fichiers générés (`artifacts/`) et uploadés (`uploads/`) | Fork (runtime) |
@@ -325,6 +326,27 @@ maquette interactive :
   une planche à scènes ; la v2 reste archivée pour référence). Captures de contrôle :
   `download/maquette-parametres-v3/`.
 
+**Livré — phase 1 « étage client » (2026-11-13, cinquième session)** : sheet overlay 460 px
+(Radix Dialog composé maison : coins arrondis à gauche, plein écran sous 640 px), entrée
+unique = engrenage de la carte de statut. Vue d'accueil = section « Cette interface »
+(7 lignes client des deux registres — `hermes.models.favorites` reste interne) : select de
+modèle (catalogue vivant du service), segment d'effort (échelle portée par le modèle), segment
+de permissions, slider de largeur, select de tri, interrupteur « Dossiers de projet repliés »
+(dérivé de `fork.projects.collapsed` : tout replier / tout déplier), interrupteur de jauge.
+Descriptions du registre → tooltips « ? » focusables (survol, focus clavier, tap mobile,
+un seul ouvert, flèche d'ancrage). **Application immédiate généralisée** :
+`writeClientSetting()` émet le CustomEvent `hermes-ui:settings-changed`, consommé par la page
+(largeur sidebar), la sidebar (tri + repliage), le composer (jauge) et le hook de chat
+(modèle / effort / permissions) — plus aucun réglage client ne demande de rechargement, le
+badge « au rechargement » prévu en v1 pour `fork.projects.sort` devient inutile (tri live).
+Porte « Paramètres moteur » : les 10 sections v3 listées avec badge « à venir » (structure
+posée pour v2.2+, aucune donnée simulée) ; pied de sheet = pastille « Mode démo » (tooltip :
+rôle post-gateway) + compteur « N en attente » (prop `pendingEngineCount`, masqué à 0, prêt
+pour v2.2). Fix au passage : la largeur de sidebar était écrasée au montage (le `onResize`
+initial de react-resizable-panels précédait la restauration) — garde-fou `sidebarRestoredRef`
+dans `page.tsx`. QA par captures : `download/parametres-phase1/` (thèmes clair/sombre,
+mobile 390 px, tour de chat démo bout en bout).
+
 ### 7.5 Plus tard
 
 - **Browsing agent** (étape 6 de la vision artefacts) : chip de statut discrète près du champ
@@ -365,6 +387,7 @@ maquette interactive :
 | 2026-11-13 (2) | **Paramètres v2 — retour utilisatrice intégré** (design globalement validé, puis : tooltips, moins d'infos visibles, carte de statut post-gateway, paramètres moteur complets) : descriptions du registre → tooltips « ? » focusables (tap = popover mobile) ; carte de statut promue barre de santé (3 états, ligne version/fournisseur/clé active une fois la gateway branchée) ; **drill-down « Paramètres moteur »** en bas du sheet (460px inchangé) — 8 catégories dont **Fournisseurs & clés** (porte-clés multi-clés, ordre = priorité, test réel dès la démo, relai sur 429/quota, tables additives `providers`/`provider_keys`, clés jamais en clair côté client) et **Connecteurs** (services à clé : Tavily, Exa — héritent du porte-clés ; daemons locaux : dev-browser, Scrapling — statut/version/ping ; distincts des fournisseurs et des outils) ; `apply` live/next-turn/reload/restart remplace `requiresRestart` (badges seulement pour reload/restart) ; étage moteur piloté par schéma découvert `settings:schema`, simulé en démo. Maquette v2 produite (scènes A-K + spec deux étages + taxonomie + phasage v2.1→v2.4) — en attente de validation. |
 | 2026-11-13 (3) | **Connecteurs redéfinis** (retour utilisatrice) : un connecteur = un **projet GitHub importé** (outil, skill, serveur MCP) — source, canal (branche/tag) et commit exact suivis ; cycle **Vérifier / Mettre à jour / Épingler** + retour arrière (l'historique local garde la version précédente) ; effet selon le type (outil = prochain tour, skill = rechargement, MCP = redémarrage averti). **Tavily et Exa quittent les connecteurs** : services hébergés à clé → **services d'API** au sein de Fournisseurs & clés (porte-clés, test et relai partagés). Maquette v2 corrigée en conséquence : scène E élargie (services d'API avec porte-clés), scène F = gestionnaire d'imports GitHub (formulaire d'import, « Tout vérifier », changelog de commits, épinglage, échec de vérif), grille d'outils / MCP / spec revues ; table additive `connectors` + événements `connectors:check` / `connectors:update`. |
 | 2026-11-13 (4) | **Paramètres v3 — sections séparées + maquette interactive** (retour utilisatrice : sections à part entière pour skills/tools/mcp/mémoire/profil/système, moins de détails, skills et .md éditables, modèle ou service associé par outil, profils avec skills + modèle par défaut, chercher d'autres paramètres activables) : étage moteur à **10 catégories** (ajout Modèle & raisonnement ; Mémoire séparée) ; **éditeurs in-sheet** pour skills et fichiers .md (SOUL/AGENTS/AGENTS.override/CLAUDE + MEMORY/USER) ; sélecteur **modèle/service associé** sur les lignes d'outils ; éditeur de profils avec **sélection de skills** et modèle par défaut ; paramètres activables **ancrés dans la doc amont hermes-agent** (toolsets réels, credential pools natifs — stratégies et cooldowns, réglages mémoire, priorité des fichiers de contexte, `pre_update_backup`, backends terminal) ; pied de sheet = « Mode démo » + compteur « N en attente ». Maquette **interactive** `design/maquette-parametres-v3.html` (16 vues cliquables, QA par captures) remplace la planche v2 comme référence de validation — v2 archivée. |
+| 2026-11-13 (5) | **Paramètres phase 1 livrée (étage client)** d'après la maquette v3 : sheet 460 px (Radix Dialog maison), engrenage dans la carte de statut, section « Cette interface » (7 lignes des deux registres, favoris internes cachés), tooltips « ? » (focusables, tap mobile, un seul ouvert, flèche), contrôles par type de réglage ; **application immédiate généralisée** via le bus `hermes-ui:settings-changed` émis par `writeClientSetting()` (page → largeur sidebar, sidebar → tri + repliage, composer → jauge, hook → modèle/effort/permissions) — badge « au rechargement » abandonné, tout est live ; interrupteur « Dossiers de projet repliés » dérivé du registre (tout replier / tout déplier) ; porte moteur = 10 sections « à venir » (structure v2.2+, aucune donnée simulée) ; pied « Mode démo » + compteur « N en attente » (prop `pendingEngineCount`, masqué à 0). Fix : course au montage de la largeur sidebar (le `onResize` initial de la lib écrasait la valeur persistée) neutralisée par `sidebarRestoredRef`. `bunx tsc --noEmit` : 0 erreur dans `src/`. |
 
 ## 10. Synchronisation git et passation
 

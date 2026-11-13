@@ -35,6 +35,9 @@ proxy : port 81 vers localhost:3000 (cf. `Caddyfile`).
   largeur de sidebar fluide, section « Sans projet ».
 - **Artefacts versionnés** dans les conversations : rendu code / Markdown /
   CSV / JSON / SVG / PDF, captures PNG et PDF vectoriel, diff entre versions.
+- **Page de paramètres** (phase 1) : sheet 460 px glissant depuis la droite —
+  réglages client des deux registres, tooltips « ? », application immédiate
+  sans rechargement (bus `hermes-ui:settings-changed`).
 - Registre de réglages séparé `hermes.*` (amont) / `fork.*` (fork).
 
 Détails, tests manuels et conventions : voir **[FORK.md](FORK.md)**.

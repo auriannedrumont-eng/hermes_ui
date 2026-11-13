@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sidebar } from "@/components/chat/sidebar";
+import { SettingsSheet } from "@/components/settings/settings-sheet";
 import { ChatHeader, type ExportFormat } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { Composer } from "@/components/chat/composer";
@@ -24,7 +25,7 @@ import { ArtifactPanel, ArtifactViewerDialog } from "@/components/chat/artifact-
 import { useHermesChat } from "@/hooks/use-hermes-chat";
 import { exportJson, exportMarkdown, exportPdf } from "@/lib/export";
 import { flashTitle, playCompletionBeep, setGeneratingTitle } from "@/lib/notify";
-import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import type { Artifact } from "@/lib/chat-types";
 
 const SIDEBAR_WIDTH_KEY = "fork.ui.sidebar.width"; // registre des réglages (FORK.md §6)
@@ -37,6 +38,8 @@ export default function HermesWebPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   /** Visionneuse plein écran (mobile uniquement). */
   const [viewerOpen, setViewerOpen] = useState(false);
+  /** Sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebarRef = useRef<ImperativePanelHandle>(null);
 
   const activeConversation = useMemo(
@@ -45,16 +48,34 @@ export default function HermesWebPage() {
   );
 
   // ── Sidebar fluide : restaure la largeur mémorisée (registre fork) ───
+  // Garde-fou : la librairie émet `onResize` dès le montage (taille par défaut) —
+  // sans ce drapeau, elle écraserait la largeur persistée avant sa restauration.
+  const sidebarRestoredRef = useRef(false);
   useEffect(() => {
     const pct = readClientSetting<number>(SIDEBAR_WIDTH_KEY);
     if (Number.isFinite(pct) && pct >= 12 && pct <= 34) {
       sidebarRef.current?.resize(pct);
     }
+    sidebarRestoredRef.current = true;
   }, []);
 
   const handleSidebarResize = useCallback((size: number) => {
     if (!Number.isFinite(size)) return;
+    if (!sidebarRestoredRef.current) return; // taille initiale au montage
     writeClientSetting(SIDEBAR_WIDTH_KEY, size);
+  }, []);
+
+  // ── Largeur de sidebar : application immédiate depuis le sheet ────────
+  // (le garde-fou évite la boucle : le panneau réémet sa taille à l'écriture)
+  useEffect(() => {
+    return onSettingsChanged(({ key, value }) => {
+      if (key !== SIDEBAR_WIDTH_KEY || typeof value !== "number") return;
+      const pct = Math.min(34, Math.max(12, value));
+      const cur = sidebarRef.current?.getSize();
+      if (cur == null || Math.abs(cur - pct) > 0.05) {
+        sidebarRef.current?.resize(pct);
+      }
+    });
   }, []);
 
   const handleNew = useCallback((projectId?: string | null) => {
@@ -213,6 +234,10 @@ export default function HermesWebPage() {
       onDeleteProject={chat.deleteProject}
       onReorderProjects={chat.reorderProjects}
       onMoveConversation={chat.moveConversation}
+      onOpenSettings={() => {
+        setSettingsOpen(true);
+        setMobileOpen(false); // mobile : le sheet remplace la sidebar
+      }}
     />
   );
 
@@ -334,6 +359,17 @@ export default function HermesWebPage() {
         onSelectVersion={chat.selectArtifactVersion}
         onRetry={chat.retryArtifact}
         fetchVersions={chat.fetchArtifactVersions}
+      />
+
+      {/* Sheet Paramètres (étage client — phase 1, maquette v3) */}
+      <SettingsSheet
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        mode={chat.mode}
+        connected={chat.connected}
+        models={chat.models}
+        selectedModel={chat.selectedModel}
+        projects={chat.projects}
       />
 
       {/* Palette de commandes (Cmd/Ctrl+K) */}

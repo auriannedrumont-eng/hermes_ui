@@ -9,6 +9,29 @@
 
 export type SettingScope = "client" | "server";
 
+// ── Application immédiate (page de paramètres, FORK.md §7.4) ────────────
+// `writeClientSetting()` émet cet événement sur `window` après chaque écriture
+// réussie ; les consommateurs (page, sidebar, composer, hook de chat)
+// s'y abonnent pour s'appliquer sans rechargement.
+export const SETTINGS_CHANGED_EVENT = "hermes-ui:settings-changed";
+
+export interface SettingsChangedDetail {
+  key: string;
+  value: unknown;
+}
+
+/** Écoute les changements de réglages client (retour : fonction de nettoyage). */
+export function onSettingsChanged(
+  cb: (detail: SettingsChangedDetail) => void
+): () => void {
+  const handler = (e: Event) => {
+    const detail = (e as CustomEvent<SettingsChangedDetail>).detail;
+    if (detail) cb(detail);
+  };
+  window.addEventListener(SETTINGS_CHANGED_EVENT, handler);
+  return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, handler);
+}
+
 export interface SettingDef {
   /** Clé complète "<namespace>.<clef>" — le préfixe définit l'appartenance. */
   key: string;
@@ -33,8 +56,8 @@ export const HERMES_SETTINGS: SettingDef[] = [
     key: "hermes.model",
     type: "string",
     default: null,
-    label: "Modèle par défaut",
-    description: "Modèle sélectionné pour les nouveaux tours de chat.",
+    label: "Modèle du chat",
+    description: "Modèle utilisé pour les nouveaux tours de chat.",
     scope: "client",
     category: "Agent Hermes",
     legacyKeys: ["hermes.selectedModel"],
@@ -63,10 +86,10 @@ export const HERMES_SETTINGS: SettingDef[] = [
     type: "enum",
     options: ["ask", "auto"],
     default: "ask",
-    label: "Autorisations de l'agent",
+    label: "Permissions d'actions",
     description:
-      "ask : confirmation avant chaque action · auto : tout exécuter. " +
-      "Réinitialisé sur « ask » à chaque session.",
+      "Demander : chaque commande sensible demande confirmation. " +
+      "Auto : approbation automatique — remis sur « Demander » à chaque session.",
     scope: "client",
     category: "Agent Hermes",
   },
@@ -89,7 +112,7 @@ export const FORK_SETTINGS: SettingDef[] = [
     type: "enum",
     options: ["updated", "created", "title"],
     default: "updated",
-    label: "Tri des conversations",
+    label: "Tri des projets",
     description: "Ordre des conversations à l'intérieur d'un projet.",
     scope: "client",
     category: "Projets",
@@ -98,8 +121,10 @@ export const FORK_SETTINGS: SettingDef[] = [
     key: "fork.projects.collapsed",
     type: "string",
     default: "[]",
-    label: "Projets repliés",
-    description: "Identifiants des projets repliés dans la sidebar (JSON).",
+    label: "Dossiers de projet repliés",
+    description:
+      "Replie tous les dossiers de projet dans la sidebar (réglage par dossier " +
+      "conservé en mémoire).",
     scope: "client",
     category: "Projets",
   },
@@ -108,7 +133,7 @@ export const FORK_SETTINGS: SettingDef[] = [
     type: "boolean",
     default: true,
     label: "Jauge de contexte",
-    description: "Affiche la jauge de consommation de tokens dans le composer.",
+    description: "L'anneau dans le composer — usage de la fenêtre (k et %).",
     scope: "client",
     category: "Interface",
   },
@@ -191,5 +216,12 @@ export function writeClientSetting(key: string, value: unknown): void {
     for (const k of def.legacyKeys ?? []) window.localStorage.removeItem(k);
   } catch {
     /* stockage indisponible */
+    return;
   }
+  // Application immédiate (page de paramètres, FORK.md §7.4).
+  window.dispatchEvent(
+    new CustomEvent<SettingsChangedDetail>(SETTINGS_CHANGED_EVENT, {
+      detail: { key, value: parse(def, stored) },
+    })
+  );
 }

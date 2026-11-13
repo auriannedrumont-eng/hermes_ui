@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
-import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { useToast } from "@/hooks/use-toast";
 import {
   contextWindowOf,
@@ -111,6 +111,20 @@ export function useHermesChat() {
   // la persistance viendra plus tard de la page de paramètres.
   useEffect(() => {
     writeClientSetting(PERMISSIONS_SETTING_KEY, "ask");
+  }, []);
+
+  // ── Application immédiate : réglages modifiés depuis le sheet Paramètres ─
+  // (modèle, effort, permissions — le bus hermes-ui:settings-changed, FORK.md §7.4)
+  useEffect(() => {
+    return onSettingsChanged(({ key, value }) => {
+      if (key === MODEL_SETTING_KEY && typeof value === "string") {
+        setSelectedModelState(value);
+      } else if (key === EFFORT_SETTING_KEY && typeof value === "string") {
+        setEffortState(value);
+      } else if (key === PERMISSIONS_SETTING_KEY) {
+        setPermissionsMode(value === "auto" ? "auto" : "ask");
+      }
+    });
   }, []);
 
   const setSelectedModel = useCallback((id: string) => {

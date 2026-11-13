@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useDictation } from "@/hooks/use-dictation";
 import { filterPromptLibrary, type PromptTemplate } from "@/lib/prompt-library";
-import { readClientSetting } from "@/lib/settings";
+import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import {
   attachmentsSub,
   buildUsage,
@@ -142,6 +142,10 @@ export function Composer({
   const [gaugeVisible, setGaugeVisible] = useState(true);
   useEffect(() => {
     setGaugeVisible(readClientSetting<boolean>("fork.context.gauge") !== false);
+    // Application immédiate depuis le sheet Paramètres (FORK.md §7.4)
+    return onSettingsChanged(({ key, value }) => {
+      if (key === "fork.context.gauge") setGaugeVisible(value !== false);
+    });
   }, []);
 
   // ── Brouillons persistants (localStorage, par conversation) ──────────
