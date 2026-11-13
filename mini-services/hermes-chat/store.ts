@@ -465,7 +465,7 @@ export class Store {
     const now = new Date().toISOString();
     this.db
       .query(
-        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0
+        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0, title = ''
          WHERE conversation_id = ? AND revoked_at IS NULL`
       )
       .run(now, conversationId);
@@ -485,9 +485,10 @@ export class Store {
     // Dette revue 2026-11-13 : la révocation PURGE le snapshot — marquer
     // revoked_at laissait le JSON complet (messages, donc données
     // personnelles) en base, lisible par tout accès direct au fichier.
+    // Audit passe 3, F-10 : le titre est purgé aussi (il ne sert plus au 410).
     const r = this.db
       .query(
-        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0
+        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0, title = ''
          WHERE conversation_id = ? AND revoked_at IS NULL`
       )
       .run(now, conversationId);
@@ -500,10 +501,21 @@ export class Store {
     const now = new Date().toISOString();
     this.db
       .query(
-        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0
+        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0, title = ''
          WHERE conversation_id = ? AND revoked_at IS NULL`
       )
       .run(now, conversationId);
+  }
+
+  /** Audit passe 3, F-10 : supprime les lignes révoquées de plus de
+   *  `olderThanDays` jours — les métadonnées ne s'accumulent pas éternellement ;
+   *  les révocations récentes restent pour la sémantique 410 vs 404. */
+  purgeAgedRevokedShares(olderThanDays = 90): number {
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 3600 * 1000).toISOString();
+    const r = this.db
+      .query("DELETE FROM shares WHERE revoked_at IS NOT NULL AND revoked_at < ?")
+      .run(cutoff);
+    return r.changes;
   }
 
   // ── Artefacts ──────────────────────────────────────────────────────────
@@ -1245,9 +1257,17 @@ export class Store {
     }>
   ): ExtensionRow | null {
     if (!this.getExtensionRow(id)) return null;
+    // Audit passe 3, F-11 : allowlist défensive — les noms de colonnes du
+    // SET sont bâtis depuis les clés du patch, on n'accepte que les champs
+    // connus du schéma (les valeurs restent 100 % paramétrées).
+    const ALLOWED = new Set([
+      "name", "kind", "description", "source", "channel", "commit", "version",
+      "pinned", "enabled", "applied", "update_available", "last_checked_at",
+      "updated_at",
+    ]);
     const cols: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const [k, v] of Object.entries(patch)) {
-      if (v !== undefined) cols[k] = v;
+      if (v !== undefined && ALLOWED.has(k)) cols[k] = v;
     }
     const sets = Object.keys(cols)
       .map((k) => `"${k}" = ?`)

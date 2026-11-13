@@ -255,6 +255,24 @@ export async function testProviderKey(
   secret: string | null,
 ): Promise<KeyTestResult> {
   const caps = providerCapabilities(name, baseUrl);
+  // Audit passe 3, F-06 : la baseUrl vient du client — le test de clé
+  // n'interroge que https, ou http strictement local (Ollama et compagnie).
+  // Interdit : http vers le réseau — le test ne doit pas servir de sonde.
+  if (baseUrl) {
+    try {
+      const u = new URL(baseUrl);
+      const isLocalHost =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
+      if (u.protocol !== "https:" && !(u.protocol === "http:" && isLocalHost)) {
+        return {
+          status: "error",
+          statusLabel: "adresse refusée : https requis (http admis sur localhost uniquement)",
+        };
+      }
+    } catch {
+      return { status: "error", statusLabel: "adresse de base invalide" };
+    }
+  }
   // Fournisseur personnalisé : convention /models avec Bearer
   const test = caps
     ? caps.test

@@ -18,19 +18,28 @@ export const FILES_PORT = 3004;
  */
 export const SERVICE_TOKEN = process.env.NEXT_PUBLIC_SERVICE_TOKEN ?? null;
 
-/** URL complète d'une ressource servie par le mini-service. */
+/**
+ * URL complète d'une ressource servie par le mini-service.
+ * `options.auth = false` produit une URL SANS jeton (audit passe 3, F-01) :
+ * réservé aux contenus exportés/partageables (markdown…), qui ne doivent
+ * jamais divulguer le jeton de service.
+ */
 export function serviceUrl(
   path: string,
-  port: number = FILES_PORT
+  port: number = FILES_PORT,
+  options: { auth?: boolean } = {}
 ): string {
   const clean = path.startsWith("/") ? path : `/${path}`;
   // Route de partage publique : PAS de jeton (le destinataire du lien n'a
   // pas de session — F-13). Toute autre route : jeton en query (?token=),
   // lisible par <img>/<iframe>/window.open qui ne peuvent pas mettre d'en-tête.
+  const wantsAuth = options.auth !== false;
   const isShareRoute = clean.startsWith("/share/");
   const sep = clean.includes("?") ? "&" : "?";
   const auth =
-    SERVICE_TOKEN && !isShareRoute ? `&token=${encodeURIComponent(SERVICE_TOKEN)}` : "";
+    SERVICE_TOKEN && wantsAuth && !isShareRoute
+      ? `&token=${encodeURIComponent(SERVICE_TOKEN)}`
+      : "";
   return `${clean}${sep}XTransformPort=${port}${auth}`;
 }
 

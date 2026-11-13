@@ -624,14 +624,15 @@ const io = new Server(httpServer, {
 // Jeton de service : refus AVANT tout gestionnaire — une socket non
 // authentifiée ne reçoit aucun événement applicatif. La comparaison est
 // en temps constant (fuite d'information par chronométrage sinon).
-function socketAuthorized(socket: { handshake: { auth?: unknown; query?: unknown; headers?: Record<string, string | undefined> } }): boolean {
+// Canal : payload auth de la socket ou en-tête Authorization (audit passe
+// 3, F-07 — la query d'URL reste réservée aux liens HTTP img/iframe du
+// 3004, elle ne doit pas finir dans des journaux de passerelle côté WS).
+function socketAuthorized(socket: { handshake: { auth?: unknown; headers?: Record<string, string | undefined> } }): boolean {
   if (!SERVICE_TOKEN) return true; // mode dev : pas de jeton configuré
   const bearer = socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, "");
   const auth = socket.handshake.auth as { token?: unknown } | null;
-  const fromQuery = (socket.handshake.query as Record<string, unknown> | null)?.token;
   const presented =
     (typeof auth?.token === "string" && auth.token) ||
-    (typeof fromQuery === "string" && fromQuery) ||
     (typeof bearer === "string" && bearer) ||
     "";
   return timingSafeEqualStr(presented, SERVICE_TOKEN);
@@ -664,6 +665,14 @@ const connector = new HermesConnector();
 
 // Presets de départ semés une seule fois si la bibliothèque est vide (F-11).
 store.seedPromptPresetsIfNeeded(SEED_PRESETS);
+
+// Audit passe 3, F-10 : les lignes de partage révoquées de plus de 90 jours
+// ne s'accumulent plus (titre et métadonnées compris).
+{
+  const purgedShares = store.purgeAgedRevokedShares();
+  if (purgedShares > 0)
+    console.log(`[hermes-chat] ${purgedShares} partage(s) révoqué(s) ancien(s) purgé(s)`);
+}
 
 // Tours en cours : conversationId -> AbortController
 const running = new Map<string, AbortController>();
@@ -2121,6 +2130,15 @@ io.on("connection", (socket) => {
     ) => {
       const conversationId = payload?.conversationId;
       if (!conversationId) return;
+      // Garde (audit passe 3, F-02) : refuser pendant un tour en vol — la
+      // troncature ci-dessous supprimerait le message que le tour rédige,
+      // puis le tour aborté le ré-insérerait (message fantôme + streams
+      // entrelacés). Même refus propre que chat:send.
+      if (running.has(conversationId)) {
+        if (typeof cb === "function")
+          cb({ error: "Un tour est déjà en cours dans cette conversation" });
+        return;
+      }
       const { lastUser, removedIds, removedAttachments } =
         store.deleteTrailingAssistant(conversationId);
       if (!lastUser) {
@@ -2168,6 +2186,14 @@ io.on("connection", (socket) => {
       const content = (payload?.content ?? "").trim();
       if (!conversationId || !messageId || !content) {
         if (typeof cb === "function") cb({ error: "Paramètres manquants" });
+        return;
+      }
+      // Garde (audit passe 3, F-02) : même refus que chat:send et
+      // chat:regenerate — la troncature ne doit pas courir sous un tour
+      // en vol, au risque d'un message fantôme ré-inséré après coup.
+      if (running.has(conversationId)) {
+        if (typeof cb === "function")
+          cb({ error: "Un tour est déjà en cours dans cette conversation" });
         return;
       }
       const result = store.editUserMessageAndTruncate(conversationId, messageId, content);
@@ -2317,6 +2343,13 @@ connector
           `[hermes-chat] HERMES_GATEWAY_URL non configurée ou injoignable → moteur de démo intégré`
         );
       }
+      // Audit passe 3, F-04 : sans jeton, socket.io (CORS *) et le 3004 sont
+      // ouverts à toute origine — acceptable en dev local ONLY.
+      if (!SERVICE_TOKEN) {
+        console.warn(
+          `[hermes-chat] ⚠ HERMES_SERVICE_TOKEN non défini : service accessible depuis TOUTE origine (mode dev). Définir ce jeton pour tout usage exposé.`
+        );
+      }
     });
   })
   .catch((err) => {
@@ -2329,15 +2362,33 @@ connector
     });
   });
 
-process.on("SIGTERM", () => {
+// Arrêt propre (audit passe 3, F-09) : on cesse D'ABORD d'accepter (ports
+// fermés, sockets clientes déconnectées), on laisse un battement aux
+// gestionnaires en vol, PUIS la base — l'inverse exposait des écritures sur
+// une SQLite déjà fermée. Le timer du checkpoint est RÉFÉRENCÉ : une boucle
+// d'événements vidée par les fermetures ne doit pas faire sortir Node
+// AVANT le checkpoint final (sinon le -wal survit à l'arrêt).
+function shutdown(signal: string): void {
+  console.log(`[hermes-chat] arrêt (${signal})…`);
   chromeRenderer.shutdown();
-  httpServer.close(() => process.exit(0));
   filesServer.close();
-  store.close(); // checkpoint WAL final + fermeture SQLite propre
-});
-process.on("SIGINT", () => {
-  chromeRenderer.shutdown();
-  httpServer.close(() => process.exit(0));
-  filesServer.close();
-  store.close();
-});
+  httpServer.close();
+  io.close(); // déconnecte les sockets clientes (plus aucun événement entrant)
+  const exitTimer = setTimeout(() => {
+    console.error("[hermes-chat] fermeture forcée après délai");
+    process.exit(0);
+  }, 5000);
+  exitTimer.unref?.();
+  setTimeout(() => {
+    try {
+      store.close(); // checkpoint WAL final + fermeture SQLite propre
+      console.log("[hermes-chat] base fermée (checkpoint WAL)");
+    } catch (err) {
+      console.error("[hermes-chat] erreur à la fermeture de la base :", err);
+    }
+    clearTimeout(exitTimer);
+    process.exit(0);
+  }, 300);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

@@ -142,6 +142,20 @@ async function main() {
       });
       check("socket mauvais jeton → REFUSÉ", !badTok.ok, badTok.err);
 
+      // audit passe 3, F-07 : le jeton en query d'URL n'est PLUS un canal
+      // d'authentification socket (réservé aux URLs HTTP img/iframe du 3004)
+      const queryTok = await new Promise<{ ok: boolean; err?: string }>((resolve) => {
+        const s = io(`${SOCK_URL}/?token=${encodeURIComponent(TOKEN)}`, {
+          path: "/",
+          transports: ["websocket"],
+          timeout: 2500,
+        });
+        const t = setTimeout(() => { s.close(); resolve({ ok: false, err: "timeout" }); }, 3000);
+        s.on("connect", () => { clearTimeout(t); s.close(); resolve({ ok: true }); });
+        s.on("connect_error", (e: any) => { clearTimeout(t); s.close(); resolve({ ok: false, err: e?.message }); });
+      });
+      check("socket jeton via query d'URL → REFUSÉ (F-07)", !queryTok.ok, queryTok.err);
+
       // avec jeton → accepté (et c'est la socket de travail)
       socket = await connectSocket();
       check("socket avec jeton → ACCEPTÉ", socket.connected, socket.id);
@@ -228,6 +242,118 @@ async function main() {
       check("2e tour complet jusqu'à stream:done", Boolean(done2?.message?.id));
     }
 
+    // ── [A2] Audit passe 3, F-02 : regenerate/edit refusés en vol ─────
+    console.log("\n[A2] Gardes chat:regenerate / message:edit (F-02)");
+    {
+      const conv = await emitAck(socket, "conversations:create");
+      const cid = conv?.conversation?.id;
+      check("conversation créée", Boolean(cid));
+
+      // Envoie un tour et attend qu'il soit EN VOL (stream:start/delta) —
+      // une attente fixe court la course si le tour de démo finit vite.
+      // Retourne false si le tour s'est terminé avant tout événement, a été
+      // REFUSÉ (tour précédent pas encore libéré) ou a dépassé 15 s.
+      const sendUntilStreaming = (content: string): Promise<boolean> =>
+        new Promise((resolve) => {
+          let settled = false;
+          const finish = (v: boolean) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(guard);
+            socket.off("stream:start", onStart);
+            socket.off("stream:delta", onDelta);
+            socket.off("stream:done", onDone);
+            resolve(v);
+          };
+          const onStart = (p: any) => {
+            if (p?.conversationId === cid) finish(true);
+          };
+          const onDelta = (p: any) => {
+            if (p?.conversationId === cid) finish(true);
+          };
+          const onDone = (p: any) => {
+            if (p?.conversationId === cid) finish(false);
+          };
+          // Garde : un tour sans événement (rate-limit côté démo) ne doit
+          // pas suspendre la suite — on débloque avec chat:stop.
+          const guard = setTimeout(() => {
+            socket.emit("chat:stop", { conversationId: cid });
+            finish(false);
+          }, 15000);
+          socket.on("stream:start", onStart);
+          socket.on("stream:delta", onDelta);
+          socket.on("stream:done", onDone);
+          socket.emit("chat:send", { conversationId: cid, content }, (res: any) => {
+            if (res?.error) finish(false); // refus (tour en vol) → nouvel essai
+          });
+        });
+      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+        Promise.race([p, wait(ms).then(() => null)]);
+
+      let streaming = false;
+      for (let attempt = 0; attempt < 3 && !streaming; attempt++) {
+        streaming = await sendUntilStreaming(
+          `Essai ${attempt + 1} : raconte-moi une très longue histoire en plusieurs paragraphes détaillés.`
+        );
+        if (!streaming) await wait(500);
+      }
+      check("tour en vol détecté (stream:chunk)", streaming);
+
+      // L'id du message utilisateur (pour message:edit)
+      const opened = await emitAck(socket, "conversations:open", { id: cid });
+      const userMsg = (opened?.messages ?? []).find((m: any) => m.role === "user");
+
+      // regenerate PENDANT le vol → refus propre, historique intact
+      const regInFlight = await emitAck(socket, "chat:regenerate", { conversationId: cid });
+      check(
+        "chat:regenerate en vol → refusé avec erreur",
+        typeof regInFlight?.error === "string" && regInFlight.error.length > 0,
+        JSON.stringify(regInFlight).slice(0, 90)
+      );
+
+      // message:edit PENDANT le vol → refus propre
+      const editInFlight = await emitAck(socket, "message:edit", {
+        conversationId: cid,
+        messageId: userMsg?.id,
+        content: "Contenu modifié pendant le vol",
+      });
+      check(
+        "message:edit en vol → refusé avec erreur",
+        typeof editInFlight?.error === "string" && editInFlight.error.length > 0,
+        JSON.stringify(editInFlight).slice(0, 90)
+      );
+      check(
+        "message utilisateur INTACT après refus (pas de troncature)",
+        Boolean(userMsg?.id) && (await emitAck(socket, "conversations:open", { id: cid }))
+          ?.messages?.some((m: any) => m.id === userMsg.id)
+      );
+
+      // arrêt du tour, puis regenerate → accepté
+      const doneP = new Promise<any>((resolve) => {
+        socket.on("stream:done", function onDone(p: any) {
+          if (p?.conversationId === cid) {
+            socket.off("stream:done", onDone);
+            resolve(p);
+          }
+        });
+      });
+      socket.emit("chat:stop", { conversationId: cid });
+      const stopped = await withTimeout(doneP, 20000);
+      check("tour arrêté (stream:done reçu)", Boolean(stopped));
+      const doneP2 = new Promise<any>((resolve) => {
+        socket.on("stream:done", function onDone2(p: any) {
+          if (p?.conversationId === cid) {
+            socket.off("stream:done", onDone2);
+            resolve(p);
+          }
+        });
+      });
+      const regAfter = await emitAck(socket, "chat:regenerate", { conversationId: cid });
+      check("chat:regenerate après fin de tour → ok:true", regAfter?.ok === true, JSON.stringify(regAfter).slice(0, 80));
+      const doneRegen = await withTimeout(doneP2, 30000);
+      check("tour régénéré complet jusqu'à stream:done", Boolean(doneRegen?.message?.id));
+    }
+
     // ── [C] Compaction de bout en bout ────────────────────────────────
     console.log("\n[C] Compaction — résumé conservé dans le contexte");
     {
@@ -309,7 +435,7 @@ async function main() {
       const { Database } = (await import("bun:sqlite")) as typeof import("bun:sqlite");
       const db = new Database(`${DB_DIR}/hermes-chat.sqlite`, { readonly: true });
       const row = db
-        .query("SELECT snapshot, message_count FROM shares WHERE token = ?")
+        .query("SELECT snapshot, message_count, title FROM shares WHERE token = ?")
         .get(token) as any;
       db.close();
       const purged =
@@ -320,6 +446,13 @@ async function main() {
         "snapshot PURGÉ de la base (plus de secret)",
         Boolean(purged),
         `snapshot=${JSON.stringify(row?.snapshot)?.slice(0, 40)} count=${row?.message_count}`
+      );
+      // Audit passe 3, F-10 : le titre est purgé lui aussi (il ne sert plus
+      // au 410, le garder était une rétention inutile de données perso).
+      check(
+        "titre PURGÉ de la base après révocation (F-10)",
+        row?.title === "",
+        `title=${JSON.stringify(row?.title)}`
       );
     }
 

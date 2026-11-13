@@ -866,14 +866,23 @@ export function useHermesChat() {
       while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
       return next;
     });
-    getSocket().emit("chat:regenerate", {
-      conversationId,
-      model: selectedModelRef.current ?? undefined,
-      effort: effortRef.current ?? undefined,
-      permissionsMode: permissionsRef.current,
-      ...expertRef.current,
-    });
-  }, [streaming]);
+    getSocket().emit(
+      "chat:regenerate",
+      {
+        conversationId,
+        model: selectedModelRef.current ?? undefined,
+        effort: effortRef.current ?? undefined,
+        permissionsMode: permissionsRef.current,
+        ...expertRef.current,
+      },
+      // Audit passe 3, F-02 : le serveur peut refuser (tour en vol dans un
+      // autre onglet) — on resynchronise le fil au lieu de rester sur un
+      // optimisme qui ne s'est pas appliqué.
+      (res: { ok?: boolean; error?: string } | null) => {
+        if (!res?.ok) openConversation(conversationId);
+      }
+    );
+  }, [openConversation, streaming]);
 
   /** Masque l'erreur du dernier tour (le partiel éventuel reste dans le fil). */
   const dismissTurnError = useCallback(() => setTurnError(null), []);

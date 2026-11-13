@@ -59,3 +59,4 @@ server.log
 /upload/
 /download/
 /.zscripts/
+/db-test-*/

@@ -32,7 +32,11 @@ export function conversationToMarkdown(
       lines.push(`## Vous`, "", m.content || "*(message vide)*", "");
       if (m.attachments?.length) {
         for (const a of m.attachments) {
-          lines.push(`- [${a.name}](${serviceUrl(a.url)}) (${a.kind}, ${a.size} o)`);
+          // Sans jeton (audit passe 3, F-01) : un export est fait pour être
+          // partagé — il ne doit jamais divulguer le jeton de service.
+          lines.push(
+            `- [${a.name}](${serviceUrl(a.url, undefined, { auth: false })}) (${a.kind}, ${a.size} o)`
+          );
         }
         lines.push("");
       }

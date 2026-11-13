@@ -10,6 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const ASR_TIMEOUT_MS = 60_000;
+const FFMPEG_TIMEOUT_MS = 30_000;
+/** Plafond explicite de transcription (audit passe 3, F-05). */
+export const MAX_TRANSCRIBE_BYTES = 20 * 1024 * 1024;
 
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 
@@ -34,10 +37,21 @@ async function ensureAsrFormat(buffer: Buffer, mime: string): Promise<Buffer> {
         "-f", "wav", "-ac", "1", "-ar", "16000",
         output,
       ]);
-      ff.on("close", (code) =>
-        code === 0 ? resolve() : reject(new Error("Conversion ffmpeg impossible"))
-      );
-      ff.on("error", reject);
+      // Audit passe 3, F-05 : un fichier corrompu ne doit pas suspendre le
+      // service indéfiniment — on tue ffmpeg passé le délai.
+      const timer = setTimeout(() => {
+        ff.kill("SIGKILL");
+        reject(new Error("Délai de conversion ffmpeg dépassé"));
+      }, FFMPEG_TIMEOUT_MS);
+      ff.on("close", (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else reject(new Error("Conversion ffmpeg impossible"));
+      });
+      ff.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
     });
     return readFileSync(output);
   } finally {
@@ -50,8 +64,16 @@ async function ensureAsrFormat(buffer: Buffer, mime: string): Promise<Buffer> {
  * `mime` permet de convertir les formats non WAV/WebM avant l'appel ASR.
  */
 export async function transcribeAudioBase64(dataBase64: string, mime = ""): Promise<string> {
+  const buffer = Buffer.from(dataBase64, "base64");
+  // Audit passe 3, F-05 : plafond explicite (avant, seule la taille de trame
+  // socket bornait la charge).
+  if (buffer.byteLength > MAX_TRANSCRIBE_BYTES) {
+    throw new Error(
+      `Audio trop volumineux (${(buffer.byteLength / 1024 / 1024).toFixed(1)} Mo, max ${MAX_TRANSCRIBE_BYTES / 1024 / 1024} Mo)`
+    );
+  }
   const zai = await getZai();
-  const wav = await ensureAsrFormat(Buffer.from(dataBase64, "base64"), mime);
+  const wav = await ensureAsrFormat(buffer, mime);
   const result = await Promise.race([
     zai.audio.asr.create({ file_base64: wav.toString("base64") }),
     new Promise<never>((_, reject) =>
