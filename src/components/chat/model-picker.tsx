@@ -61,6 +61,10 @@ interface ModelPickerProps {
   /** Réglages expert (F-22) — absents = valeurs par défaut du fournisseur. */
   expert?: ExpertSettings;
   onExpertChange?: (patch: Partial<ExpertSettings>) => void;
+  /** F-17 — comparaison : libellé du côté (A/B) affiché dans le déclencheur. */
+  slotLabel?: "A" | "B";
+  /** F-17 — comparaison : masque effort + mode expert (comparaison brute). */
+  bare?: boolean;
 }
 
 /** Champs numériques libres du mode expert : borne la saisie en live. */
@@ -191,6 +195,8 @@ export function ModelPicker({
   onEffortChange,
   expert,
   onExpertChange,
+  slotLabel,
+  bare = false,
 }: ModelPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -324,9 +330,19 @@ export function ModelPicker({
               ? "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               : "h-9 gap-1.5 rounded-xl px-2.5 text-[13.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
           }
-          aria-label={`Modèle sélectionné : ${label}. Changer de modèle`}
+          aria-label={
+            slotLabel
+              ? `Modèle ${slotLabel} : ${label}. Changer le modèle ${slotLabel}`
+              : `Modèle sélectionné : ${label}. Changer de modèle`
+          }
         >
-          {compact ? <Sparkles className="h-3.5 w-3.5 shrink-0 text-hermes" /> : null}
+          {slotLabel ? (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes">
+              {slotLabel}
+            </span>
+          ) : compact ? (
+            <Sparkles className="h-3.5 w-3.5 shrink-0 text-hermes" />
+          ) : null}
           <span className="max-w-40 truncate sm:max-w-none">{label}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
         </Button>
@@ -397,7 +413,7 @@ export function ModelPicker({
           </p>
 
           {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné */}
-          <div className="border-t border-border/60 px-3.5 py-2.5">
+          <div className={bare ? "hidden" : "border-t border-border/60 px-3.5 py-2.5"}>
             <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
               <span>Effort de raisonnement</span>
               <span className="text-[10.5px] font-medium">{effortScaleLabel}</span>
@@ -434,9 +450,9 @@ export function ModelPicker({
           </div>
 
           {/* Mode expert (F-22) : température / plafond de sortie / graine */}
-          {onExpertChange ? (
+          {bare || !onExpertChange ? null : (
             <ExpertPanel expert={expert ?? {}} onExpertChange={onExpertChange} />
-          ) : null}
+          )}
         </Command>
       </PopoverContent>
     </Popover>

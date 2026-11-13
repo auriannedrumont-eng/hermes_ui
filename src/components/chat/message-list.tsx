@@ -70,7 +70,8 @@ function cardsForMessage(
 
 interface MessageListProps {
   messages: ChatMessage[];
-  streaming: StreamingState | null;
+  /** F-17 : tous les streams actifs (tour simple + variantes a/b). */
+  streams: StreamingState[];
   loadingHistory: boolean;
   isBusy: boolean;
   /** Erreur persistante du dernier tour (F-04) — affichée sous le fil. */
@@ -81,6 +82,8 @@ interface MessageListProps {
   artifactStreams: Record<string, string>;
   onSuggestion: (prompt: string) => void;
   onRegenerate: () => void;
+  /** F-17 : régénérer UN côté de la dernière comparaison. */
+  onRegenerateVariant: (variant: "a" | "b") => void;
   onRetryError: () => void;
   onDismissError: () => void;
   onEdit: (messageId: string, content: string) => void;
@@ -92,9 +95,65 @@ interface MessageListProps {
   onRetryArtifact: (artifactId: string) => void;
 }
 
+/** Une colonne de comparaison : réponse persistée et/ou stream en cours. */
+interface CompareCell {
+  message?: ChatMessage;
+  stream?: StreamingState;
+}
+
+type Row =
+  | { kind: "single"; message: ChatMessage }
+  | { kind: "pair"; a?: CompareCell; b?: CompareCell };
+
+/** Regroupe le fil en lignes : les réponses assistant portant une variante
+ *  (F-17) forment une paire côte à côte ; tout le reste reste en Pleine largeur. */
+function buildRows(messages: ChatMessage[], streams: StreamingState[]): Row[] {
+  const rows: Row[] = [];
+  let openPair: Extract<Row, { kind: "pair" }> | null = null;
+  const closePair = () => {
+    openPair = null;
+  };
+  for (const m of messages) {
+    if (m.role === "assistant" && m.variant) {
+      if (!openPair) {
+        openPair = { kind: "pair" };
+        rows.push(openPair);
+      }
+      const cell: CompareCell = { message: m };
+      if (m.variant === "a" && !openPair.a) openPair.a = cell;
+      else if (m.variant === "b" && !openPair.b) openPair.b = cell;
+      else {
+        // Deux réponses de la même variante d'affilée (régén. d'un côté
+        // après rechargement) : nouvelle paire.
+        openPair = { kind: "pair", ...(m.variant === "a" ? { a: cell } : { b: cell }) };
+        rows.push(openPair);
+      }
+    } else {
+      closePair();
+      rows.push({ kind: "single", message: m });
+    }
+  }
+  // Les streams de comparaison rejoignent la dernière paire (ou en ouvrent une).
+  for (const st of streams) {
+    if (!st.variant) continue;
+    let pair = rows[rows.length - 1];
+    if (!pair || pair.kind !== "pair") {
+      pair = { kind: "pair" };
+      rows.push(pair);
+    }
+    const cell: CompareCell = { stream: st };
+    if (st.variant === "a" && !pair.a) pair.a = cell;
+    else if (st.variant === "b" && !pair.b) pair.b = cell;
+    else {
+      rows.push({ kind: "pair", ...(st.variant === "a" ? { a: cell } : { b: cell }) });
+    }
+  }
+  return rows;
+}
+
 export function MessageList({
   messages,
-  streaming,
+  streams,
   loadingHistory,
   isBusy,
   turnError,
@@ -102,6 +161,7 @@ export function MessageList({
   artifactStreams,
   onSuggestion,
   onRegenerate,
+  onRegenerateVariant,
   onRetryError,
   onDismissError,
   onEdit,
@@ -114,12 +174,14 @@ export function MessageList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
+  /** Tour simple (sans variante) — la bulle de stream en bas de fil. */
+  const streaming = streams.find((st) => !st.variant) ?? null;
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !pinnedRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, streaming?.content, streaming?.reasoning, streaming?.status]);
+  }, [messages, streams]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -142,7 +204,7 @@ export function MessageList({
     if (m.role === "assistant") lastAssistantId = m.id;
   }
 
-  const isEmpty = !loadingHistory && messages.length === 0 && !streaming;
+  const isEmpty = !loadingHistory && messages.length === 0 && streams.length === 0;
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -199,24 +261,41 @@ export function MessageList({
                 </div>
               </div>
             ) : null}
-            {messages.map((m) => (
-              <div key={m.id} className="group/msg">
-                <MessageBubble
-                  message={m}
+            {buildRows(messages, streams).map((row, i) =>
+              row.kind === "single" ? (
+                <div key={row.message.id} className="group/msg">
+                  <MessageBubble
+                    message={row.message}
+                    isBusy={isBusy}
+                    isLastAssistant={row.message.id === lastAssistantId && streams.length === 0}
+                    onRegenerate={onRegenerate}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onFork={onFork}
+                    onSetFeedback={onSetFeedback}
+                    artifactCards={cardsForMessage(row.message.id, artifacts, row.message.artifacts)}
+                    artifactStreams={artifactStreams}
+                    onOpenArtifact={onOpenArtifact}
+                    onRetryArtifact={onRetryArtifact}
+                  />
+                </div>
+              ) : (
+                <ComparePair
+                  key={`compare-${i}`}
+                  pair={row}
                   isBusy={isBusy}
-                  isLastAssistant={m.id === lastAssistantId && !streaming}
-                  onRegenerate={onRegenerate}
+                  onRegenerateVariant={onRegenerateVariant}
+                  artifacts={artifacts}
+                  artifactStreams={artifactStreams}
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onFork={onFork}
                   onSetFeedback={onSetFeedback}
-                  artifactCards={cardsForMessage(m.id, artifacts, m.artifacts)}
-                  artifactStreams={artifactStreams}
                   onOpenArtifact={onOpenArtifact}
                   onRetryArtifact={onRetryArtifact}
                 />
-              </div>
-            ))}
+              )
+            )}
             {streaming ? (
               <div className="group/msg">
                 <MessageBubble
@@ -242,7 +321,7 @@ export function MessageList({
 
             {/* Erreur persistante du dernier tour (F-04) : le partiel éventuel
                 est déjà dans le fil au-dessus — ici, la cause et la sortie. */}
-            {!streaming && turnError ? (
+            {streams.length === 0 && turnError ? (
               <div
                 role="alert"
                 className="flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-2.5"
@@ -294,6 +373,115 @@ export function MessageList({
           <ArrowDown className="h-4.5 w-4.5" />
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** Paire de comparaison (F-17) : deux réponses côte à côte (desktop),
+ *  empilées sous 768 px. Chaque côté garde ses actions et son modèle. */
+function ComparePair({
+  pair,
+  isBusy,
+  onRegenerateVariant,
+  artifacts,
+  artifactStreams,
+  onEdit,
+  onDelete,
+  onFork,
+  onSetFeedback,
+  onOpenArtifact,
+  onRetryArtifact,
+}: {
+  pair: Extract<Row, { kind: "pair" }>;
+  isBusy: boolean;
+  onRegenerateVariant: (variant: "a" | "b") => void;
+  artifacts: Artifact[];
+  artifactStreams: Record<string, string>;
+  onEdit: (messageId: string, content: string) => void;
+  onDelete: (messageId: string) => void;
+  onFork: (messageId: string) => void;
+  onSetFeedback: (messageId: string, rating: "up" | "down" | null, comment?: string | null) => void;
+  onOpenArtifact: (artifact: Artifact) => void;
+  onRetryArtifact: (artifactId: string) => void;
+}) {
+  const slots: Array<{ variant: "a" | "b"; cell?: CompareCell }> = [
+    { variant: "a", cell: pair.a },
+    { variant: "b", cell: pair.b },
+  ];
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Réponses comparées">
+      {slots.map(({ variant, cell }) => (
+        <div
+          key={variant}
+          className="flex min-w-0 flex-col rounded-2xl border border-border/70 bg-card/40 p-2.5"
+        >
+          <div className="mb-1.5 flex items-center gap-1.5 px-0.5">
+            <span
+              className={
+                variant === "a"
+                  ? "flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes"
+                  : "flex h-5 min-w-5 items-center justify-center rounded-md bg-primary/15 px-1 text-[11px] font-bold text-primary"
+              }
+              aria-label={`Modèle ${variant.toUpperCase()}`}
+            >
+              {variant.toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
+              {cell?.message?.model ?? cell?.stream?.status ?? "Réponse…"}
+            </span>
+            <button
+              type="button"
+              title={`Régénérer la réponse ${variant.toUpperCase()}`}
+              aria-label={`Régénérer la réponse ${variant.toUpperCase()}`}
+              disabled={isBusy}
+              onClick={() => onRegenerateVariant(variant)}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {cell?.message ? (
+            <MessageBubble
+              message={cell.message}
+              isBusy={isBusy}
+              isLastAssistant={false}
+              onRegenerate={() => onRegenerateVariant(variant)}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onFork={onFork}
+              onSetFeedback={onSetFeedback}
+              artifactCards={cardsForMessage(cell.message.id, artifacts, cell.message.artifacts)}
+              artifactStreams={artifactStreams}
+              onOpenArtifact={onOpenArtifact}
+              onRetryArtifact={onRetryArtifact}
+            />
+          ) : cell?.stream ? (
+            <MessageBubble
+              message={{
+                id: cell.stream.messageId,
+                conversationId: cell.stream.conversationId,
+                role: "assistant",
+                content: cell.stream.content,
+                createdAt: new Date().toISOString(),
+                variant,
+              }}
+              isStreaming
+              streamingContent={cell.stream.content}
+              streamingReasoning={cell.stream.reasoning}
+              streamingStatus={cell.stream.status}
+              streamingTools={cell.stream.toolEvents}
+              artifactCards={cardsForMessage(cell.stream.messageId, artifacts)}
+              artifactStreams={artifactStreams}
+              onOpenArtifact={onOpenArtifact}
+              onRetryArtifact={onRetryArtifact}
+            />
+          ) : (
+            <div className="flex min-h-16 items-center justify-center rounded-xl border border-dashed border-border text-[12px] text-muted-foreground">
+              Réponse en attente
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

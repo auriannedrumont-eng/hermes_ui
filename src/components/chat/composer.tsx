@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
+  Columns2,
   CornerDownLeft,
   Loader2,
   Mic,
@@ -73,6 +74,11 @@ interface ComposerProps {
   draftKey: string;
   models: ModelOption[];
   modelsSource: "gateway" | "catalogue" | null;
+  /** F-17 — comparaison de modèles : état, paire choisie et actions. */
+  compareEnabled: boolean;
+  compareModels: { a: string | null; b: string | null };
+  onToggleCompare: () => void;
+  onSetCompareSlot: (slot: "a" | "b", id: string) => void;
   mode: GatewayMode | null;
   selectedModel: string | null;
   onSelectModel: (id: string) => void;
@@ -116,6 +122,10 @@ export function Composer({
   draftKey,
   models,
   modelsSource,
+  compareEnabled,
+  compareModels,
+  onToggleCompare,
+  onSetCompareSlot,
   mode,
   selectedModel,
   onSelectModel,
@@ -595,18 +605,65 @@ export function Composer({
             Ordre immuable du groupe de droite — la jauge reste l'élément
             le plus à droite. */}
         <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5 sm:px-4">
-          <ModelPicker
-            compact
-            models={models}
-            selectedModel={selectedModel}
-            source={modelsSource}
-            mode={mode}
-            onSelect={onSelectModel}
-            effort={effort}
-            onEffortChange={onEffortChange}
-            expert={expert}
-            onExpertChange={onExpertChange}
-          />
+          <div className="flex min-w-0 items-center gap-1">
+            {/* F-17 — comparaison : un message, deux modèles, deux réponses */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onToggleCompare}
+              title={compareEnabled ? "Couper la comparaison" : "Comparer deux modèles côte à côte"}
+              aria-pressed={compareEnabled}
+              className={
+                compareEnabled
+                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes hover:bg-hermes/25"
+                  : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              }
+            >
+              <Columns2 className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">Comparer</span>
+            </Button>
+            {compareEnabled ? (
+              <>
+                <ModelPicker
+                  compact
+                  bare
+                  slotLabel="A"
+                  models={models}
+                  selectedModel={compareModels.a}
+                  source={modelsSource}
+                  mode={mode}
+                  onSelect={(id) => onSetCompareSlot("a", id)}
+                  effort={effort}
+                  onEffortChange={onEffortChange}
+                />
+                <ModelPicker
+                  compact
+                  bare
+                  slotLabel="B"
+                  models={models}
+                  selectedModel={compareModels.b}
+                  source={modelsSource}
+                  mode={mode}
+                  onSelect={(id) => onSetCompareSlot("b", id)}
+                  effort={effort}
+                  onEffortChange={onEffortChange}
+                />
+              </>
+            ) : (
+              <ModelPicker
+                compact
+                models={models}
+                selectedModel={selectedModel}
+                source={modelsSource}
+                mode={mode}
+                onSelect={onSelectModel}
+                effort={effort}
+                onEffortChange={onEffortChange}
+                expert={expert}
+                onExpertChange={onExpertChange}
+              />
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
             <p className="hidden items-center gap-1.5 text-[11.5px] text-muted-foreground lg:flex">
               <CornerDownLeft className="h-3 w-3" />

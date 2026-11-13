@@ -179,6 +179,12 @@ export class Store {
     } catch {
       /* colonne déjà présente */
     }
+    // Migration douce : variante de comparaison (F-17) — "a" | "b" | null
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN variant TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
     // Migration douce : colonne des conversations épinglées
     try {
       this.db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -903,6 +909,7 @@ export class Store {
       stopped: r.stopped ? true : undefined,
       feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
       feedbackComment: r.feedback_comment ?? undefined,
+      variant: (r.variant as "a" | "b" | null) ?? undefined,
     }));
   }
 
@@ -927,7 +934,7 @@ export class Store {
     const createdAt = msg.createdAt ?? new Date().toISOString();
     this.db
       .query(
-        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         id,
@@ -939,7 +946,8 @@ export class Store {
         msg.attachments ? JSON.stringify(msg.attachments) : null,
         msg.model ?? null,
         createdAt,
-        msg.stopped ? 1 : null
+        msg.stopped ? 1 : null,
+        msg.variant ?? null
       );
     return { ...msg, id, createdAt } as ChatMessage;
   }
@@ -963,6 +971,7 @@ export class Store {
       stopped: r.stopped ? true : undefined,
       feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
       feedbackComment: r.feedback_comment ?? undefined,
+      variant: (r.variant as "a" | "b" | null) ?? undefined,
     };
   }
 
@@ -981,7 +990,10 @@ export class Store {
    * Supprime les messages assistant en fin de fil (pour régénérer).
    * Renvoie le dernier message utilisateur et les ids supprimés.
    */
-  deleteTrailingAssistant(conversationId: string): {
+  deleteTrailingAssistant(
+    conversationId: string,
+    variant?: "a" | "b"
+  ): {
     lastUser: ChatMessage | null;
     removedIds: string[];
     removedAttachments: Attachment[];
@@ -989,7 +1001,11 @@ export class Store {
     const msgs = this.getMessages(conversationId);
     const removedIds: string[] = [];
     const removedAttachments: Attachment[] = [];
-    while (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
+    // F-17 : variante donnée → on ne retire que les réponses de CETTE
+    // variante (régénération d'un seul côté de la comparaison).
+    const matches = (m: ChatMessage) =>
+      m.role === "assistant" && (variant === undefined || m.variant === variant);
+    while (msgs.length > 0 && matches(msgs[msgs.length - 1])) {
       const m = msgs.pop()!;
       removedIds.push(m.id);
       removedAttachments.push(...(m.attachments ?? []));
@@ -1066,6 +1082,7 @@ export class Store {
         model: m.model,
         createdAt: m.createdAt,
         stopped: m.stopped,
+        variant: m.variant,
       });
       messageIdMap.set(m.id, copy.id);
     }

@@ -674,8 +674,34 @@ store.seedPromptPresetsIfNeeded(SEED_PRESETS);
     console.log(`[hermes-chat] ${purgedShares} partage(s) révoqué(s) ancien(s) purgé(s)`);
 }
 
-// Tours en cours : conversationId -> AbortController
+// Tours en cours : clé -> AbortController. Clé = conversationId pour un
+// tour simple, `${conversationId}:a` / `:b` pour les deux côtés d'une
+// comparaison (F-17) — deux tours concurrents, un par modèle.
 const running = new Map<string, AbortController>();
+
+/** Une des clés de tour de cette conversation est-elle active ? */
+function isRunning(conversationId: string): boolean {
+  return (
+    running.has(conversationId) ||
+    running.has(`${conversationId}:a`) ||
+    running.has(`${conversationId}:b`)
+  );
+}
+
+/** Interrompt TOUS les tours de la conversation (simple, a et b). */
+function abortRunning(conversationId: string): void {
+  running.get(conversationId)?.abort();
+  running.get(`${conversationId}:a`)?.abort();
+  running.get(`${conversationId}:b`)?.abort();
+}
+
+/** Charge compare valide : exactement 2 ids distincts non vides. */
+function validCompareIds(raw: unknown): [string, string] | null {
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  const [a, b] = raw;
+  if (typeof a !== "string" || typeof b !== "string" || !a || !b || a === b) return null;
+  return [a, b];
+}
 
 function titleFrom(text: string, attachments?: Attachment[]): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -884,7 +910,7 @@ io.on("connection", (socket) => {
       if (typeof cb === "function") cb({ error: "id requis" });
       return;
     }
-    running.get(id)?.abort();
+    abortRunning(id);
     // Nettoyage disque des pièces jointes et des artefacts de la conversation
     const attachments = store.conversationAttachments(id);
     const artifactRows = store.deleteConversationArtifacts(id);
@@ -1787,18 +1813,24 @@ io.on("connection", (socket) => {
       attachments?: Attachment[];
       modelId?: string | null;
       settings?: TurnSettings;
+      /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
+      variant?: "a" | "b";
     }
   ) => {
+    const variant = opts.variant;
     // Un seul tour actif par conversation. L'ANCIEN tour est aborté, mais
     // son finally ne doit JAMAIS retirer le contrôleur du NOUVEAU (course
     // critique : le finally du tour précédent exécutait running.delete()
     // après coup, supprimant le contrôleur remplaçant → chat:stop devenait
     // inopérant et deux tours s'entrelacaient). Chaque tour ne retire que
     // SA propre entrée.
-    const previous = running.get(conversationId);
+    // F-17 : un tour de comparaison n'aborte PAS l'autre côté — chaque
+    // variante vit sous sa propre clé (conv:a / conv:b).
+    const turnKey = variant ? `${conversationId}:${variant}` : conversationId;
+    const previous = running.get(turnKey);
     previous?.abort();
     const controller = new AbortController();
-    running.set(conversationId, controller);
+    running.set(turnKey, controller);
 
     // 0. Résout le modèle sélectionné (libellé d'affichage)
     const model = opts.modelId ? modelLabel(opts.modelId) || opts.modelId : null;
@@ -1806,12 +1838,22 @@ io.on("connection", (socket) => {
 
     // 1. Prépare le tour assistant
     const messageId = crypto.randomUUID();
-    socket.emit("stream:start", { conversationId, messageId, model });
+    socket.emit("stream:start", {
+      conversationId,
+      messageId,
+      model,
+      ...(variant ? { variant } : {}),
+    });
 
     // Historique : tout ce qui précède le dernier message utilisateur.
     // Si la conversation est compactée, le résumé remplace les messages
     // couverts ; seuls les messages postérieurs partent en clair.
-    const existing = store.getMessages(conversationId);
+    const all = store.getMessages(conversationId);
+    // F-17 : en comparaison, chaque modèle revoit le fil comme un dialogue
+    // bilatéral — ses propres réponses, pas celles de l'autre variante.
+    const existing = variant
+      ? all.filter((m) => m.role === "user" || !m.variant || m.variant === variant)
+      : all;
     let lastUserIdx = -1;
     for (let i = existing.length - 1; i >= 0; i--) {
       if (existing[i].role === "user") {
@@ -1906,7 +1948,12 @@ io.on("connection", (socket) => {
             // Coalescence légère des deltas très rapprochés
             if (now - lastEmit > 16) {
               lastEmit = now;
-              socket.emit("stream:delta", { conversationId, messageId, delta: contentAcc.slice(lastSent) });
+              socket.emit("stream:delta", {
+                conversationId,
+                messageId,
+                delta: contentAcc.slice(lastSent),
+                ...(variant ? { variant } : {}),
+              });
               lastSent = contentAcc.length;
               // Naissance / progression des artefacts du tour
               tracker.update(contentAcc);
@@ -1914,15 +1961,30 @@ io.on("connection", (socket) => {
           },
           onReasoning: (delta) => {
             reasoningAcc += delta;
-            socket.emit("stream:reasoning", { conversationId, messageId, delta });
+            socket.emit("stream:reasoning", {
+              conversationId,
+              messageId,
+              delta,
+              ...(variant ? { variant } : {}),
+            });
           },
           onStatus: (status) => {
-            socket.emit("stream:status", { conversationId, messageId, status });
+            socket.emit("stream:status", {
+              conversationId,
+              messageId,
+              status,
+              ...(variant ? { variant } : {}),
+            });
           },
           onToolEvent: (event) => {
             const toolEvent: ToolEvent = { ...event, at: new Date().toISOString() };
             toolEvents.push(toolEvent);
-            socket.emit("stream:tool", { conversationId, messageId, event: toolEvent });
+            socket.emit("stream:tool", {
+              conversationId,
+              messageId,
+              event: toolEvent,
+              ...(variant ? { variant } : {}),
+            });
           },
         }
       );
@@ -1938,6 +2000,7 @@ io.on("connection", (socket) => {
           conversationId,
           messageId,
           delta: contentAcc.slice(lastSent),
+          ...(variant ? { variant } : {}),
         });
       }
 
@@ -1948,7 +2011,13 @@ io.on("connection", (socket) => {
       // Arrêt avant le premier jeton : rien à conserver, pas de bulle vide
       if (stopped && !contentAcc && !reasoningAcc && toolEvents.length === 0) {
         const conversation = store.touchConversation(conversationId) ?? undefined;
-        socket.emit("stream:done", { conversationId, messageId, conversation, stopped: true });
+        socket.emit("stream:done", {
+          conversationId,
+          messageId,
+          conversation,
+          stopped: true,
+          ...(variant ? { variant } : {}),
+        });
         return;
       }
 
@@ -1965,6 +2034,7 @@ io.on("connection", (socket) => {
         toolEvents: toolEvents.length ? toolEvents : undefined,
         model: usedModel,
         stopped: stopped || undefined,
+        variant,
       });
       const conversation = store.touchConversation(conversationId) ?? undefined;
       const doneMessage: ChatMessage = {
@@ -1977,6 +2047,7 @@ io.on("connection", (socket) => {
         model: usedModel,
         createdAt: new Date().toISOString(),
         stopped: stopped || undefined,
+        variant,
       };
       // Cartes d'artefacts ancrées sur ce message (celles créées par ce tour)
       attachArtifactCards(conversationId, [doneMessage]);
@@ -1986,6 +2057,7 @@ io.on("connection", (socket) => {
         conversation,
         message: doneMessage,
         stopped,
+        ...(variant ? { variant } : {}),
       });
     } catch (err) {
       // Sauvegarde du partiel déjà reçu
@@ -2002,6 +2074,7 @@ io.on("connection", (socket) => {
           toolEvents: toolEvents.length ? toolEvents : undefined,
           model: usedModel,
           stopped: stopped || undefined,
+          variant,
         });
       }
       if (stopped) {
@@ -2014,6 +2087,7 @@ io.on("connection", (socket) => {
           conversation,
           message: partial ?? undefined,
           stopped: true,
+          ...(variant ? { variant } : {}),
         });
       } else {
         // Erreur réelle : le partiel persisté part avec l'événement — le client
@@ -2028,6 +2102,7 @@ io.on("connection", (socket) => {
           conversation,
           message: partial ?? undefined,
           error: err instanceof Error ? err.message : "Erreur inconnue du tour",
+          ...(variant ? { variant } : {}),
         });
       }
     } finally {
@@ -2035,8 +2110,8 @@ io.on("connection", (socket) => {
       // un tour plus récent a pu prendre la place entre-temps (chat:send
       // pendant la génération — cf. ack ci-dessous) ; le retirer ici
       // casserait le chat:stop du tour actif.
-      if (running.get(conversationId) === controller) {
-        running.delete(conversationId);
+      if (running.get(turnKey) === controller) {
+        running.delete(turnKey);
       }
     }
   };
@@ -2055,11 +2130,14 @@ io.on("connection", (socket) => {
         temperature?: unknown;
         maxTokens?: unknown;
         seed?: unknown;
+        // Comparaison (F-17) : deux ids de modèles distincts
+        compare?: string[];
       },
       cb?: (data: unknown) => void
     ) => {
       const conversationId = payload?.conversationId;
       const content = (payload?.content ?? "").trim();
+      const compareIds = validCompareIds(payload?.compare);
       const attachments = Array.isArray(payload?.attachments)
         ? payload!.attachments!.slice(0, MAX_ATTACHMENTS_PER_MESSAGE)
         : [];
@@ -2072,9 +2150,14 @@ io.on("connection", (socket) => {
       // PROPRE avec accusé d'erreur, au lieu d'aborter silencieusement le
       // tour en cours et d'entrelacer deux streams sur le même fil. Le
       // client reste maître : il peut arrêter (chat:stop) puis renvoyer.
-      if (running.has(conversationId)) {
+      if (isRunning(conversationId)) {
         if (typeof cb === "function")
           cb({ error: "Un tour est déjà en cours dans cette conversation" });
+        return;
+      }
+      if (payload?.compare !== undefined && !compareIds) {
+        if (typeof cb === "function")
+          cb({ error: "Comparaison : deux modèles distincts sont requis" });
         return;
       }
 
@@ -2097,16 +2180,40 @@ io.on("connection", (socket) => {
       // 2. Lance le tour assistant (réglages additifs du chantier Composer v2).
       //    Ack positif AVANT le lancement : le tour tourne en arrière-plan,
       //    les streams suivent par les événements stream:*.
-      if (typeof cb === "function") cb({ ok: true, message: userMessage });
+      if (typeof cb === "function")
+        cb({ ok: true, message: userMessage, ...(compareIds ? { compare: true } : {}) });
+      const turnSettings = {
+        reasoningEffort: payload?.effort || undefined,
+        permissionsMode: payload?.permissionsMode || undefined,
+        ...sanitizeExpertSettings(payload),
+      };
+      // F-17 : comparaison — deux tours parallèles, un par modèle. Le
+      // message utilisateur est unique ; chaque réponse assistant porte
+      // sa variante (a/b) et son modèle.
+      if (compareIds) {
+        await Promise.all([
+          runAssistantTurn(conversationId, {
+            content,
+            attachments: attachments.length ? attachments : undefined,
+            modelId: compareIds[0],
+            settings: turnSettings,
+            variant: "a",
+          }),
+          runAssistantTurn(conversationId, {
+            content,
+            attachments: attachments.length ? attachments : undefined,
+            modelId: compareIds[1],
+            settings: turnSettings,
+            variant: "b",
+          }),
+        ]);
+        return;
+      }
       await runAssistantTurn(conversationId, {
         content,
         attachments: attachments.length ? attachments : undefined,
         modelId: payload?.model ?? null,
-        settings: {
-          reasoningEffort: payload?.effort || undefined,
-          permissionsMode: payload?.permissionsMode || undefined,
-          ...sanitizeExpertSettings(payload),
-        },
+        settings: turnSettings,
       });
     }
   );
@@ -2125,6 +2232,9 @@ io.on("connection", (socket) => {
         temperature?: unknown;
         maxTokens?: unknown;
         seed?: unknown;
+        // F-17 : régénérer UN côté ("a"/"b") ou les deux (compare)
+        variant?: "a" | "b";
+        compare?: string[];
       },
       cb?: (data: unknown) => void
     ) => {
@@ -2133,14 +2243,27 @@ io.on("connection", (socket) => {
       // Garde (audit passe 3, F-02) : refuser pendant un tour en vol — la
       // troncature ci-dessous supprimerait le message que le tour rédige,
       // puis le tour aborté le ré-insérerait (message fantôme + streams
-      // entrelacés). Même refus propre que chat:send.
-      if (running.has(conversationId)) {
+      // entrelacés). Même refus propre que chat:send (a et b compris).
+      if (isRunning(conversationId)) {
         if (typeof cb === "function")
           cb({ error: "Un tour est déjà en cours dans cette conversation" });
         return;
       }
+      const compareIds = validCompareIds(payload?.compare);
+      if (payload?.compare !== undefined && !compareIds) {
+        if (typeof cb === "function")
+          cb({ error: "Comparaison : deux modèles distincts sont requis" });
+        return;
+      }
+      if (payload?.variant && payload?.variant !== "a" && payload?.variant !== "b") {
+        if (typeof cb === "function") cb({ error: "Variante invalide" });
+        return;
+      }
+      const variant = payload?.variant;
+      // F-17 : variante donnée → on ne supprime que les réponses de CE
+      // côté ; compare → les deux côtés (tous les assistant en fin de fil).
       const { lastUser, removedIds, removedAttachments } =
-        store.deleteTrailingAssistant(conversationId);
+        store.deleteTrailingAssistant(conversationId, variant);
       if (!lastUser) {
         if (typeof cb === "function") cb({ error: "Aucun message à régénérer" });
         return;
@@ -2150,15 +2273,36 @@ io.on("connection", (socket) => {
         socket.emit("messages:removed", { conversationId, messageIds: removedIds });
       }
       if (typeof cb === "function") cb({ ok: true });
+      const turnSettings = {
+        reasoningEffort: payload?.effort || undefined,
+        permissionsMode: payload?.permissionsMode || undefined,
+        ...sanitizeExpertSettings(payload),
+      };
+      if (compareIds) {
+        await Promise.all([
+          runAssistantTurn(conversationId, {
+            content: lastUser.content,
+            attachments: lastUser.attachments,
+            modelId: compareIds[0],
+            settings: turnSettings,
+            variant: "a",
+          }),
+          runAssistantTurn(conversationId, {
+            content: lastUser.content,
+            attachments: lastUser.attachments,
+            modelId: compareIds[1],
+            settings: turnSettings,
+            variant: "b",
+          }),
+        ]);
+        return;
+      }
       await runAssistantTurn(conversationId, {
         content: lastUser.content,
         attachments: lastUser.attachments,
         modelId: payload?.model ?? null,
-        settings: {
-          reasoningEffort: payload?.effort || undefined,
-          permissionsMode: payload?.permissionsMode || undefined,
-          ...sanitizeExpertSettings(payload),
-        },
+        settings: turnSettings,
+        variant,
       });
     }
   );
@@ -2178,12 +2322,15 @@ io.on("connection", (socket) => {
         temperature?: unknown;
         maxTokens?: unknown;
         seed?: unknown;
+        // Comparaison (F-17) : relance les deux variantes après édition
+        compare?: string[];
       },
       cb?: (data: unknown) => void
     ) => {
       const conversationId = payload?.conversationId;
       const messageId = payload?.messageId;
       const content = (payload?.content ?? "").trim();
+      const compareIds = validCompareIds(payload?.compare);
       if (!conversationId || !messageId || !content) {
         if (typeof cb === "function") cb({ error: "Paramètres manquants" });
         return;
@@ -2191,9 +2338,14 @@ io.on("connection", (socket) => {
       // Garde (audit passe 3, F-02) : même refus que chat:send et
       // chat:regenerate — la troncature ne doit pas courir sous un tour
       // en vol, au risque d'un message fantôme ré-inséré après coup.
-      if (running.has(conversationId)) {
+      if (isRunning(conversationId)) {
         if (typeof cb === "function")
           cb({ error: "Un tour est déjà en cours dans cette conversation" });
+        return;
+      }
+      if (payload?.compare !== undefined && !compareIds) {
+        if (typeof cb === "function")
+          cb({ error: "Comparaison : deux modèles distincts sont requis" });
         return;
       }
       const result = store.editUserMessageAndTruncate(conversationId, messageId, content);
@@ -2209,15 +2361,37 @@ io.on("connection", (socket) => {
         message: result.message,
         removedIds: result.removedIds,
       });
+      const turnSettings = {
+        reasoningEffort: payload?.effort || undefined,
+        permissionsMode: payload?.permissionsMode || undefined,
+        ...sanitizeExpertSettings(payload),
+      };
+      if (compareIds) {
+        // F-17 : l'édition tronque tout ce qui suit (les deux variantes)
+        // puis relance la comparaison sur le texte modifié.
+        await Promise.all([
+          runAssistantTurn(conversationId, {
+            content,
+            attachments: result.message.attachments,
+            modelId: compareIds[0],
+            settings: turnSettings,
+            variant: "a",
+          }),
+          runAssistantTurn(conversationId, {
+            content,
+            attachments: result.message.attachments,
+            modelId: compareIds[1],
+            settings: turnSettings,
+            variant: "b",
+          }),
+        ]);
+        return;
+      }
       await runAssistantTurn(conversationId, {
         content,
         attachments: result.message.attachments,
         modelId: payload?.model ?? null,
-        settings: {
-          reasoningEffort: payload?.effort || undefined,
-          permissionsMode: payload?.permissionsMode || undefined,
-          ...sanitizeExpertSettings(payload),
-        },
+        settings: turnSettings,
       });
     }
   );
@@ -2246,9 +2420,10 @@ io.on("connection", (socket) => {
   socket.on("chat:stop", (payload: { conversationId?: string }) => {
     const id = payload?.conversationId;
     if (!id) return;
-    const controller = running.get(id);
-    if (controller) {
-      controller.abort();
+    // F-17 : stop coupe le tour simple ET les deux côtés d'une comparaison.
+    const had = isRunning(id);
+    abortRunning(id);
+    if (had) {
       socket.emit("stream:status", { conversationId: id, messageId: null, status: "Génération interrompue" });
     }
   });
@@ -2269,7 +2444,7 @@ io.on("connection", (socket) => {
         if (typeof cb === "function") cb({ error: "Paramètres manquants" });
         return;
       }
-      if (running.has(conversationId)) {
+      if (isRunning(conversationId)) {
         if (typeof cb === "function") cb({ error: "Un tour est en cours — attendez la fin de la génération" });
         return;
       }

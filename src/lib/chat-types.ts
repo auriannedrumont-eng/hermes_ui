@@ -67,6 +67,9 @@ export interface ChatMessage {
   feedbackRating?: "up" | "down";
   /** Commentaire libre associé au feedback (max 2 000 caractères). */
   feedbackComment?: string;
+  // ── Comparaison de modèles (F-17) — réponse de la variante a ou b ──
+  /** Variante du tour de comparaison (absent = message hors comparaison). */
+  variant?: "a" | "b";
 }
 
 export interface ConversationMeta {
@@ -144,6 +147,8 @@ export interface CompactInfo {
 export interface StreamingState {
   messageId: string;
   conversationId: string;
+  /** Variante du tour de comparaison (F-17) — absent = tour simple. */
+  variant?: "a" | "b";
   content: string;
   reasoning: string;
   status: string | null;

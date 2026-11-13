@@ -53,7 +53,7 @@
 | ID | Feature | Critères | Statut | Preuve / écart |
 |----|---------|----------|--------|----------------|
 | F-16 | **Voix** | Dictée STT + lecture TTS | **Terminé** (cœur) | Dictée `use-dictation.ts` + `asr.ts` ; TTS « Écouter » par message (`useSpeech`). Reste optionnel : lecture en continu pendant le stream |
-| F-17 | **Comparaison modèles** | 2 modèles côte à côte | À faire | — |
+| F-17 | **Comparaison modèles** | 2 modèles côte à côte | **Terminé** | Livré le 2026-11-13 : variantes `a`/`b` en base (`messages.variant`), protocole `compare` sur send/regenerate/edit + `variant` dans les `stream:*`, chaque modèle ne voit que ses réponses ; colonnes A/B côte à côte (empilées < 768 px) avec régénération par côté ; toggle « Comparer » + pickers A/B du composer ; paire mémorisée `hermes.compare.models`. QA 33/33 + visuelle. |
 | F-18 | **Mémoire utilisateur** | Consultable, éditable, effaçable | **Terminé** | Livré le 2026-11-13 : carte « Mémoire » de la section Hermes du volet (toggle activer/désactiver, apprentissage automatique, éditeur 12 000 car., effacement) ; clés `hermes.memory.{enabled,autoLearn,notes}` (table `settings`, fallback actif), événements `memory:*` + broadcast ; composition des instructions du tour par le service (démo : section « Mémoire de l'utilisateur » ; gateway : `memory_notes`/`memory_auto_learn` dans `api_turn_v1.settings`, clés à valider) ; `hello.memoryChars` honnête. |
 | F-19 | **Instructions personnalisées** | Globales | **Terminé** | Livré le 2026-11-13 avec F-11 (même chantier) : instructions globales persistées côté service (`hermes.instructions.custom`, table `settings`), éditeur dans la section Hermes du volet, appliquées à toutes les conversations, transmises dans `api_turn_v1.settings` en gateway |
 | F-20 | **Projets/dossiers** | Contexte par groupe | **Terminé** | UI projets (FORK.md §7.2) — rangement seul ; le contexte persistant par projet viendra des fichiers .md moteur |
@@ -287,6 +287,36 @@ contenu x=208/y=0 ✓, × à y=16 ✓, composer y≈932 ✓) + captures VLM
 `src/` ; eslint propre. NB poste Windows : après `git pull`, effacer `.next/` pour que
 le lanceur reconstruise le build de production au prochain double-clic.
 
+## Chantier du 2026-11-13 (treizième session) — F-17 « Comparaison de modèles »
+
+Le dernier gros chantier UI de la roadmap. Un message → deux modèles → deux réponses
+côte à côte ; chaque modèle poursuit le fil comme un dialogue bilatéral (il ne voit
+jamais les réponses de l'autre variante).
+
+- **Service** : `compare?: string[]` sur `chat:send`/`chat:regenerate`/`message:edit`
+  (exactement deux ids distincts, refus propre sinon) ; colonne additive
+  `messages.variant` (`a`/`b`, transportée append/gets/fork) ; événements `stream:*`
+  portant `variant` (ignoré quand absent — clients antérieurs compatibles) ; tours sous
+  les clés `conv`/`conv:a`/`conv:b` (`isRunning`/`abortRunning`, `chat:stop` coupe tout,
+  gardes anti-tour couvrant les trois clés) ; régénération d'un seul côté
+  (`deleteTrailingAssistant(conv, variant)`).
+- **Client** : `streams` en map par messageId (`streaming` = première entrée, gardes
+  inchangés) ; `buildRows`/`ComparePair` (grille 2 colonnes ≥ 768 px, badges A/B +
+  modèle, bouton régénérer par côté, placeholder « Réponse en attente ») ; toggle
+  « Comparer » + pickers A/B compacts (`slotLabel`/`bare`) dans le composer ; paire
+  mémorisée `hermes.compare.models` (§6) ; édition d'un message utilisateur relance
+  les deux côtés.
+- **QA** : `scripts/test-compare-flow.ts` **33/33** (payloads invalides refusés ; tour
+  complet : 1 user + 2 assistant tagués à modèles distincts ; régén côté a seul — b
+  intact au même id ; gardes pendant le vol ; stop des deux côtés puis tour simple
+  accepté sans variante ; fork transportant les variantes ; édition relançant les
+  deux). Visuelle : `scripts/qa-compare-visual.ts` via Caddy (app connectée) —
+  2 colonnes de 354 px, réponses réelles distinctes, contrôle VLM sans anomalie
+  (captures `download/qa-f17-compare/`). `bunx tsc --noEmit` 0 erreur `src/` ;
+  eslint propre.
+- **Piège QA documenté** : le socket client passe par `/?XTransformPort=3003` → il faut
+  Caddy (port 81) pour une app connectée ; sur :3000 direct, l'app reste « Hors ligne ».
+
 ## Ordre de démarrage recommandé (suite)
 
 1. ~~Valider le volet v4 implémenté~~ **premiers retours intégrés le 2026-11-14**
@@ -300,8 +330,8 @@ le lanceur reconstruise le build de production au prochain double-clic.
    à revoir une fois la gateway branchée (les clés de services sont désormais gérées
    dans le volet Paramètres).
 7. **F-21** (coût par message) et **F-14** (navigation versions complète)
-   restent les deux « Partiel » améliorables ; **F-17** (comparaison modèles)
-   est le dernier gros chantier.
+   restent les deux « Partiel » améliorables ; ~~**F-17** (comparaison modèles)
+   est le dernier gros chantier~~ **livré le 2026-11-13** (ci-dessus).
 
 ## Notes de passation
 

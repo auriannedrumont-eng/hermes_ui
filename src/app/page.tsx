@@ -386,7 +386,7 @@ export default function HermesWebPage() {
           />
           <MessageList
             messages={chat.messages}
-            streaming={chat.streaming}
+            streams={chat.streams}
             loadingHistory={chat.loadingHistory}
             isBusy={chat.isBusy}
             turnError={chat.turnError}
@@ -394,6 +394,7 @@ export default function HermesWebPage() {
             artifactStreams={chat.streamingArtifacts}
             onSuggestion={(prompt) => chat.sendMessage(prompt)}
             onRegenerate={chat.regenerate}
+            onRegenerateVariant={(v) => chat.regenerate(v)}
             onRetryError={chat.retryAfterError}
             onDismissError={chat.dismissTurnError}
             onEdit={chat.editMessage}
@@ -412,6 +413,10 @@ export default function HermesWebPage() {
             mode={chat.mode}
             selectedModel={chat.selectedModel}
             onSelectModel={chat.setSelectedModel}
+            compareEnabled={chat.compareEnabled}
+            compareModels={chat.compareModels}
+            onToggleCompare={chat.toggleCompare}
+            onSetCompareSlot={chat.setCompareSlot}
             effort={chat.effort}
             onEffortChange={chat.setEffort}
             expert={chat.expert}

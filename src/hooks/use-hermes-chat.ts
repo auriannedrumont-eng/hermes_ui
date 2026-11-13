@@ -31,6 +31,7 @@ import type {
 } from "@/lib/chat-types";
 
 const MODEL_SETTING_KEY = "hermes.model"; // registre des réglages (FORK.md §6)
+const COMPARE_KEY = "hermes.compare.models"; // F-17 : paire [a, b] persistée
 const EFFORT_SETTING_KEY = "hermes.reasoning.effort";
 const PERMISSIONS_SETTING_KEY = "hermes.permissions.mode";
 // Mode expert (F-22) — registre des réglages (FORK.md §6)
@@ -73,7 +74,20 @@ export function useHermesChat() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  // F-17 — comparaison : DEUX réponses streament en parallèle (variantes
+  // a/b). L'état vit dans une map par messageId ; `streaming` (première
+  // entrée active) reste l'indicateur d'occupation pour tout le hook.
+  const [streamsRecord, setStreamsRecord] = useState<Record<string, StreamingState>>({});
+  const streams = useMemo(() => Object.values(streamsRecord), [streamsRecord]);
+  const streaming = streams[0] ?? null;
+
+  // F-17 — état du mode comparaison (paire persistée dans le registre).
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [compareModels, setCompareModels] = useState<{ a: string | null; b: string | null }>({ a: null, b: null });
+  const compareEnabledRef = useRef(compareEnabled);
+  compareEnabledRef.current = compareEnabled;
+  const compareModelsRef = useRef(compareModels);
+  compareModelsRef.current = compareModels;
   /** Erreur persistante du dernier tour (F-04) : affichée dans le fil jusqu'à
    *  réessai / changement de conversation — plus d'effacement automatique. */
   const [turnError, setTurnError] = useState<{ messageId: string; error: string } | null>(null);
@@ -182,6 +196,19 @@ export function useHermesChat() {
   useEffect(() => {
     const saved = readClientSetting<string | null>(MODEL_SETTING_KEY);
     if (saved) setSelectedModelState(saved);
+    // F-17 : paire de comparaison mémorisée (best effort, ignorée si invalide)
+    try {
+      const raw = readClientSetting<string>(COMPARE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length === 2) {
+        const [a, b] = parsed;
+        if (typeof a === "string" && typeof b === "string" && a && b) {
+          setCompareModels({ a, b });
+        }
+      }
+    } catch {
+      /* paire illisible : on repart à vide */
+    }
     const savedEffort = readClientSetting<string>(EFFORT_SETTING_KEY);
     if (savedEffort) setEffortState(savedEffort);
     // Mode expert (F-22) : champs individuels, absents = défaut du fournisseur
@@ -287,6 +314,23 @@ export function useHermesChat() {
 
   const isBusy = streaming !== null || uploadingCount > 0;
 
+  /** Paire de comparaison actuellement actionnable (F-17), sinon null. */
+  const activeComparePair = useMemo(() => {
+    const { a, b } = compareModelsRef.current;
+    if (!compareEnabled || !a || !b || a === b) return null;
+    return [a, b] as [string, string];
+  }, [compareEnabled, compareModels]);
+
+  /** Retrouve l'id d'un modèle depuis le libellé d'une réponse (« … (démo) »). */
+  const modelIdFromLabel = useCallback(
+    (label?: string) => {
+      if (!label) return null;
+      const clean = label.replace(/\s*\(démo\)$/, "");
+      return models.find((m) => m.label === clean)?.id ?? null;
+    },
+    [models]
+  );
+
   /** Machine à états du tour (F-01) : idle → streaming → done | stopped | error. */
   const turnState: "idle" | "streaming" | "stopped" | "error" = useMemo(() => {
     if (streaming) return "streaming";
@@ -353,50 +397,93 @@ export function useHermesChat() {
     };
     const onDisconnect = () => {
       setConnected(false);
-      setStreaming(null);
+      setStreamsRecord({});
     };
 
-    const onStreamStart = (p: { conversationId: string; messageId: string }) => {
+    const onStreamStart = (p: {
+      conversationId: string;
+      messageId: string;
+      variant?: "a" | "b";
+    }) => {
       if (p.conversationId !== activeIdRef.current) return;
       setTurnError(null); // un nouveau tour efface l'erreur précédente
-      setStreaming({
-        messageId: p.messageId,
-        conversationId: p.conversationId,
-        content: "",
-        reasoning: "",
-        status: "Hermes réfléchit…",
-        toolEvents: [],
+      setStreamsRecord((prev) => ({
+        ...prev,
+        [p.messageId]: {
+          messageId: p.messageId,
+          conversationId: p.conversationId,
+          variant: p.variant,
+          content: "",
+          reasoning: "",
+          status: "Hermes réfléchit…",
+          toolEvents: [],
+        },
+      }));
+    };
+
+    const onStreamDelta = (p: {
+      conversationId: string;
+      messageId: string;
+      delta: string;
+      variant?: "a" | "b";
+    }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setStreamsRecord((prev) => {
+        const s = prev[p.messageId];
+        if (!s) return prev;
+        return {
+          ...prev,
+          [p.messageId]: { ...s, content: s.content + p.delta, status: null },
+        };
       });
     };
 
-    const onStreamDelta = (p: { conversationId: string; messageId: string; delta: string }) => {
+    const onStreamReasoning = (p: {
+      conversationId: string;
+      messageId: string;
+      delta: string;
+      variant?: "a" | "b";
+    }) => {
       if (p.conversationId !== activeIdRef.current) return;
-      setStreaming((s) =>
-        s && s.messageId === p.messageId
-          ? { ...s, content: s.content + p.delta, status: null }
-          : s
-      );
+      setStreamsRecord((prev) => {
+        const s = prev[p.messageId];
+        if (!s) return prev;
+        return { ...prev, [p.messageId]: { ...s, reasoning: s.reasoning + p.delta } };
+      });
     };
 
-    const onStreamReasoning = (p: { conversationId: string; messageId: string; delta: string }) => {
+    const onStreamStatus = (p: {
+      conversationId: string;
+      messageId: string | null;
+      status: string;
+      variant?: "a" | "b";
+    }) => {
       if (p.conversationId !== activeIdRef.current) return;
-      setStreaming((s) =>
-        s && s.messageId === p.messageId ? { ...s, reasoning: s.reasoning + p.delta } : s
-      );
+      setStreamsRecord((prev) => {
+        const next: Record<string, StreamingState> = {};
+        for (const [id, s] of Object.entries(prev)) {
+          // Statut global (messageId null, ex. arrêt) → tous les côtés.
+          next[id] = !p.messageId || p.messageId === id ? { ...s, status: p.status } : s;
+        }
+        return next;
+      });
     };
 
-    const onStreamStatus = (p: { conversationId: string; messageId: string | null; status: string }) => {
+    const onStreamTool = (p: {
+      conversationId: string;
+      messageId: string;
+      event: ToolEvent;
+      variant?: "a" | "b";
+    }) => {
       if (p.conversationId !== activeIdRef.current) return;
-      setStreaming((s) => (s ? { ...s, status: p.status } : s));
-    };
-
-    const onStreamTool = (p: { conversationId: string; messageId: string; event: ToolEvent }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setStreaming((s) =>
-        s && s.messageId === p.messageId
-          ? { ...s, toolEvents: [...s.toolEvents, p.event], status: null }
-          : s
-      );
+      setStreamsRecord((prev) => {
+        const s = prev[p.messageId];
+        if (!s) return prev;
+        return {
+          ...prev,
+          [p.messageId]: { ...s, toolEvents: [...s.toolEvents, p.event], status: null },
+        };
+      });
     };
 
     const onStreamDone = (p: {
@@ -408,14 +495,25 @@ export function useHermesChat() {
     }) => {
       if (p.conversationId !== activeIdRef.current) {
         refreshConversations();
-        setStreaming(null);
+        setStreamsRecord((prev) => {
+          if (!(p.messageId in prev)) return prev;
+          const next = { ...prev };
+          delete next[p.messageId];
+          return next;
+        });
         return;
       }
       if (p.message) {
         setMessages((prev) => [...prev, p.message as ChatMessage]);
       }
-      setStreaming(null);
-      setTurnError(null); // arrêt (stopped) ou succès : le tour est clos
+      // F-17 : ne retirer que CE tour — l'autre variante peut couler encore.
+      setStreamsRecord((prev) => {
+        if (!(p.messageId in prev)) return prev;
+        const next = { ...prev };
+        delete next[p.messageId];
+        return next;
+      });
+      setTurnError(null); // arrêt (stopped) ou succès : ce tour est clos
       refreshConversations();
     };
 
@@ -436,7 +534,15 @@ export function useHermesChat() {
         );
       }
       setTurnError({ messageId: p.messageId ?? p.message?.id ?? "", error: p.error });
-      setStreaming(null);
+      // F-17 : un côté peut échouer pendant que l'autre termine — on ne
+      // retire que le tour concerné.
+      setStreamsRecord((prev) => {
+        const key = p.messageId ?? p.message?.id;
+        if (!key || !(key in prev)) return {};
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
       refreshConversations();
     };
 
@@ -732,7 +838,7 @@ export function useHermesChat() {
       setLoadingHistory(true);
       activeIdRef.current = id;
       setActiveId(id);
-      setStreaming(null);
+      setStreamsRecord({});
       setTurnError(null);
       setCompactInfo(null);
       // Le panneau appartient à la conversation : on le referme au changement
@@ -826,12 +932,16 @@ export function useHermesChat() {
       setMessages((prev) => [...prev, optimistic]);
 
       const socket = getSocket();
+      // F-17 : mode comparaison — un message, deux modèles, deux réponses.
+      const pair = activeComparePair;
       socket.emit(
         "chat:send",
         {
           conversationId,
           content,
-          model: selectedModelRef.current ?? undefined,
+          ...(pair
+            ? { compare: pair }
+            : { model: selectedModelRef.current ?? undefined }),
           attachments: attachments.length ? attachments : undefined,
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
@@ -848,7 +958,7 @@ export function useHermesChat() {
         }
       );
     },
-    [newConversation, streaming]
+    [newConversation, streaming, activeComparePair]
   );
 
   const stopGeneration = useCallback(() => {
@@ -857,35 +967,94 @@ export function useHermesChat() {
   }, []);
 
   /** Régénère la dernière réponse (relance le tour depuis le dernier message utilisateur). */
-  const regenerate = useCallback(() => {
-    const conversationId = activeIdRef.current;
-    if (!conversationId || streaming) return;
-    // Optimiste : retire les messages assistant en fin de fil
-    setMessages((prev) => {
-      const next = [...prev];
-      while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
-      return next;
-    });
-    getSocket().emit(
-      "chat:regenerate",
-      {
-        conversationId,
-        model: selectedModelRef.current ?? undefined,
+  /** F-17 : `variant` régénère UN côté d'une comparaison ; sans argument,
+   *  en mode comparaison, les deux côtés sont relancés ; sinon tour simple. */
+  const regenerate = useCallback(
+    (variant?: "a" | "b") => {
+      const conversationId = activeIdRef.current;
+      if (!conversationId || streaming) return;
+      const pair = activeComparePair;
+      const base = {
         effort: effortRef.current ?? undefined,
         permissionsMode: permissionsRef.current,
         ...expertRef.current,
-      },
-      // Audit passe 3, F-02 : le serveur peut refuser (tour en vol dans un
-      // autre onglet) — on resynchronise le fil au lieu de rester sur un
-      // optimisme qui ne s'est pas appliqué.
-      (res: { ok?: boolean; error?: string } | null) => {
+      };
+      const resync = (res: { ok?: boolean; error?: string } | null) => {
         if (!res?.ok) openConversation(conversationId);
+      };
+      if (variant && !pair) {
+        // Côté d'une comparaison (mode coupé ou session rechargée) :
+        // retrouve le modèle de ce côté depuis le libellé de sa réponse.
+        const last = [...messages].reverse().find((m) => m.variant === variant);
+        const id = modelIdFromLabel(last?.model) ?? selectedModelRef.current ?? undefined;
+        setMessages((prev) => {
+          const next = [...prev];
+          while (
+            next.length > 0 &&
+            next[next.length - 1].role === "assistant" &&
+            next[next.length - 1].variant === variant
+          )
+            next.pop();
+          return next;
+        });
+        getSocket().emit("chat:regenerate", { conversationId, variant, model: id, ...base }, resync);
+        return;
       }
-    );
-  }, [openConversation, streaming]);
+      if (pair) {
+        // Comparaison active : les deux côtés repartent ensemble.
+        setMessages((prev) => {
+          const next = [...prev];
+          while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
+          return next;
+        });
+        getSocket().emit("chat:regenerate", { conversationId, compare: pair, ...base }, resync);
+        return;
+      }
+      // Tour simple : comportement historique (optimiste + resync au refus).
+      setMessages((prev) => {
+        const next = [...prev];
+        while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
+        return next;
+      });
+      getSocket().emit(
+        "chat:regenerate",
+        { conversationId, model: selectedModelRef.current ?? undefined, ...base },
+        resync
+      );
+    },
+    [openConversation, streaming, activeComparePair, messages, modelIdFromLabel]
+  );
 
   /** Masque l'erreur du dernier tour (le partiel éventuel reste dans le fil). */
   const dismissTurnError = useCallback(() => setTurnError(null), []);
+
+  /** F-17 — active/coupe la comparaison ; à l'activation, pré-remplit le
+   *  côté A avec le modèle courant et le côté B avec le premier modèle
+   *  différent du catalogue. La paire est mémorisée dans le registre. */
+  const toggleCompare = useCallback(() => {
+    setCompareEnabled((on) => {
+      if (on) return false; // simple extinction
+      setCompareModels((cur) => {
+        const a = cur.a ?? selectedModelRef.current ?? models[0]?.id ?? null;
+        const b =
+          cur.b ?? models.find((m) => m.id !== a)?.id ?? null;
+        if (a && b && a !== b) writeClientSetting(COMPARE_KEY, JSON.stringify([a, b]));
+        return { a, b };
+      });
+      return true;
+    });
+  }, [models]);
+
+  /** F-17 — choisit le modèle d'un côté (a/b) et mémorise la paire. */
+  const setCompareSlot = useCallback((slot: "a" | "b", id: string) => {
+    setCompareModels((cur) => {
+      const next = { ...cur, [slot]: id };
+      if (next.a && next.b && next.a !== next.b) {
+        writeClientSetting(COMPARE_KEY, JSON.stringify([next.a, next.b]));
+      }
+      return next;
+    });
+  }, []);
 
   /** Réessai après erreur (F-04) : relance le tour depuis le dernier message utilisateur. */
   const retryAfterError = useCallback(() => {
@@ -917,7 +1086,10 @@ export function useHermesChat() {
           conversationId,
           messageId,
           content: clean,
-          model: selectedModelRef.current ?? undefined,
+          // F-17 : en mode comparaison, l'édition relance les deux côtés.
+          ...(activeComparePair
+            ? { compare: activeComparePair }
+            : { model: selectedModelRef.current ?? undefined }),
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
           ...expertRef.current,
@@ -927,7 +1099,7 @@ export function useHermesChat() {
         }
       );
     },
-    [openConversation, streaming]
+    [openConversation, streaming, activeComparePair]
   );
 
   /** Supprime un message individuel. */
@@ -1289,7 +1461,14 @@ export function useHermesChat() {
     activeId,
     messages,
     streaming,
+    /** F-17 : TOUS les streams actifs (tour simple + variantes a/b). */
+    streams,
     isBusy,
+    // F-17 — comparaison de modèles
+    compareEnabled,
+    compareModels,
+    toggleCompare,
+    setCompareSlot,
     turnState,
     turnError,
     dismissTurnError,

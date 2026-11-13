@@ -65,6 +65,9 @@ export interface ChatMessage {
   feedbackRating?: "up" | "down";
   /** Commentaire libre associé au feedback (max 2 000 caractères). */
   feedbackComment?: string;
+  // ── Comparaison de modèles (F-17) — réponse de la variante a ou b ──
+  /** Variante du tour de comparaison (absent = message hors comparaison). */
+  variant?: "a" | "b";
 }
 
 /** Charge utile du bus `feedback:changed` (F-24, broadcast). */
