@@ -263,6 +263,18 @@ chaque création/révocation). Script de test E2E :
 `scripts/test-share-flow.ts` (24 contrôles : 404/410, remplacement,
 isolation, PNG Chrome).
 
+## Mode expert (F-22) — température, plafond de jetons, graine
+
+Réglages par tour transmis par `chat:send` / `chat:regenerate` /
+`message:edit` (charge `temperature` / `maxTokens` / `seed`, assainis par
+`sanitizeExpertSettings` : température clampée **[0, 1]** — le fournisseur
+rejette au-delà, erreur 1210 ; plafond [1, 8192] ; graine entière 32 bits ;
+`null` / non-numériques ignorés). En mode démo ils sont injectés au LLM
+pour de réel (`temperature`, `max_tokens`, `seed`) ; en mode gateway ils
+partent dans `api_turn_v1.settings` (clés à valider — convention « ignoré
+sans dommage »). Script de test E2E : `scripts/test-expert-flow.ts`
+(14 contrôles, dont la troncation comportementale `maxTokens=3`).
+
 ## Mémoire utilisateur (F-18)
 
 Mémoire **consultable, éditable, effaçable** : notes persistantes injectées

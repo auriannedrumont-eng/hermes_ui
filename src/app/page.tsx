@@ -409,6 +409,8 @@ export default function HermesWebPage() {
             onSelectModel={chat.setSelectedModel}
             effort={chat.effort}
             onEffortChange={chat.setEffort}
+            expert={chat.expert}
+            onExpertChange={chat.setExpert}
             permissionsMode={chat.permissionsMode}
             onPermissionsChange={chat.setPermissionsMode}
             contextBase={chat.contextBase}

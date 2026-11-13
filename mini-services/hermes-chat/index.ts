@@ -1,7 +1,7 @@
 // Service de chat Hermes Web — socket.io sur le port 3003
 // Événements client -> serveur :
 //   hello, conversations:list/create/rename/delete/open/pin/fork/search,
-//   chat:send, chat:stop, chat:regenerate,
+//   chat:send, chat:stop, chat:regenerate (réglages expert F-22 : temperature/maxTokens/seed, assainis),
 //   message:edit, message:delete,
 //   models:list, attachments:upload, audio:transcribe,
 //   artifacts:list, artifact:versions, artifact:retry,
@@ -57,6 +57,7 @@ import {
   SEED_PRESETS,
   composeDemoSystemPrompt,
   rowToPreset,
+  sanitizeExpertSettings,
   validatePromptText,
 } from "./prompts";
 import { DEMO_BASE_PROMPT } from "./demo-engine";
@@ -1954,6 +1955,10 @@ io.on("connection", (socket) => {
       attachments?: Attachment[];
       effort?: string;
       permissionsMode?: "ask" | "auto";
+      // Mode expert (F-22) — assaini avant l'envoi au moteur
+      temperature?: unknown;
+      maxTokens?: unknown;
+      seed?: unknown;
     }) => {
       const conversationId = payload?.conversationId;
       const content = (payload?.content ?? "").trim();
@@ -1986,6 +1991,7 @@ io.on("connection", (socket) => {
         settings: {
           reasoningEffort: payload?.effort || undefined,
           permissionsMode: payload?.permissionsMode || undefined,
+          ...sanitizeExpertSettings(payload),
         },
       });
     }
@@ -2001,6 +2007,10 @@ io.on("connection", (socket) => {
         model?: string;
         effort?: string;
         permissionsMode?: "ask" | "auto";
+        // Mode expert (F-22) — assaini avant l'envoi au moteur
+        temperature?: unknown;
+        maxTokens?: unknown;
+        seed?: unknown;
       },
       cb?: (data: unknown) => void
     ) => {
@@ -2024,6 +2034,7 @@ io.on("connection", (socket) => {
         settings: {
           reasoningEffort: payload?.effort || undefined,
           permissionsMode: payload?.permissionsMode || undefined,
+          ...sanitizeExpertSettings(payload),
         },
       });
     }
@@ -2040,6 +2051,10 @@ io.on("connection", (socket) => {
         model?: string;
         effort?: string;
         permissionsMode?: "ask" | "auto";
+        // Mode expert (F-22) — assaini avant l'envoi au moteur
+        temperature?: unknown;
+        maxTokens?: unknown;
+        seed?: unknown;
       },
       cb?: (data: unknown) => void
     ) => {
@@ -2070,6 +2085,7 @@ io.on("connection", (socket) => {
         settings: {
           reasoningEffort: payload?.effort || undefined,
           permissionsMode: payload?.permissionsMode || undefined,
+          ...sanitizeExpertSettings(payload),
         },
       });
     }

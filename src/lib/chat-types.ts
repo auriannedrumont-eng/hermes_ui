@@ -107,6 +107,17 @@ export type GatewayMode = "gateway" | "demo";
 /** Mode d'autorisation de l'agent (reset sur « ask » à chaque session). */
 export type PermissionsMode = "ask" | "auto";
 
+// ── Mode expert (F-22) : température, plafond de sortie, graine ────────
+
+/** Réglages expert d'un tour — champs facultatifs, assainis côté service
+ *  (température [0,1] : le moteur démo rejette au-delà ; plafond [1,8192] ;
+ *  graine entière 32 bits). Absents = valeurs par défaut du fournisseur. */
+export interface ExpertSettings {
+  temperature?: number;
+  maxTokens?: number;
+  seed?: number;
+}
+
 export interface ServerHello {
   app: string;
   version: string;

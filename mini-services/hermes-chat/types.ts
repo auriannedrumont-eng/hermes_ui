@@ -179,6 +179,13 @@ export interface TurnSettings {
   memoryNotes?: string;
   /** Apprentissage automatique demandé au moteur. */
   memoryAutoLearn?: boolean;
+  // ── Mode expert (F-22) — température, plafond de sortie, graine ────
+  /** Température du tour (0–1 : le moteur démo refuse au-delà, erreur 1210). */
+  temperature?: number;
+  /** Plafond de jetons de la réponse (16–8192). */
+  maxTokens?: number;
+  /** Graine de reproductibilité (entier 32 bits). */
+  seed?: number;
 }
 
 // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────

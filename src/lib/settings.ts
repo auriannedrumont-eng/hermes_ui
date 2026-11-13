@@ -81,6 +81,38 @@ export const HERMES_SETTINGS: SettingDef[] = [
     scope: "client",
     category: "Agent Hermes",
   },
+  // ── Mode expert (F-22) — température, plafond de sortie, graine ────
+  {
+    key: "hermes.expert.temperature",
+    type: "number",
+    default: null,
+    label: "Température",
+    description:
+      "Réglage du tour entre 0 (déterministe) et 1 (créatif) — le moteur démo " +
+      "rejette au-delà. Absente = valeur par défaut du fournisseur.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.expert.maxTokens",
+    type: "number",
+    default: null,
+    label: "Plafond de jetons de réponse",
+    description:
+      "Coupe la réponse au-delà du plafond (1 à 8192 jetons). Absent = pas de plafond.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.expert.seed",
+    type: "number",
+    default: null,
+    label: "Graine",
+    description:
+      "Reproductibilité des tirages (entier 32 bits). Absente = tirage libre.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
   {
     key: "hermes.permissions.mode",
     type: "enum",

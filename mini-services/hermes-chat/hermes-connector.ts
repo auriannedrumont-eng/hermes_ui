@@ -261,6 +261,17 @@ export class HermesConnector {
           ...(req.settings?.memoryAutoLearn !== undefined
             ? { memory_auto_learn: req.settings.memoryAutoLearn }
             : {}),
+          // Mode expert (F-22) : température / plafond de sortie / graine —
+          // assainis côté service, ignorés sans dommage par la gateway.
+          ...(req.settings?.temperature !== undefined
+            ? { temperature: req.settings.temperature }
+            : {}),
+          ...(req.settings?.maxTokens !== undefined
+            ? { max_tokens: req.settings.maxTokens }
+            : {}),
+          ...(req.settings?.seed !== undefined
+            ? { seed: req.settings.seed }
+            : {}),
         };
         ws.send(
           JSON.stringify({

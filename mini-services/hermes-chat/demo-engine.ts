@@ -158,10 +158,18 @@ export class DemoEngine {
     const thinkingType: "enabled" | "disabled" =
       req.settings?.reasoningEffort === "off" ? "disabled" : "enabled";
 
+    // Mode expert (F-22) : température / plafond de jetons / graine — déjà
+    // assainis côté service ([0,1], [16,8192], entier 32 bits) ; absents du
+    // tour = valeurs par défaut du fournisseur.
+    const expert = req.settings ?? {};
+
     const stream = await this.zai!.chat.completions.create({
       messages,
       stream: true,
       thinking: { type: thinkingType },
+      ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
+      ...(expert.maxTokens !== undefined ? { max_tokens: expert.maxTokens } : {}),
+      ...(expert.seed !== undefined ? { seed: expert.seed } : {}),
     });
 
     let content = "";

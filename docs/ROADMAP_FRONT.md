@@ -63,7 +63,7 @@
 | ID | Feature | Critères | Statut | Preuve / écart |
 |----|---------|----------|--------|----------------|
 | F-21 | **Compteur tokens/coût** | Par message, repliable | Partiel | Jauge de contexte + popover par poste (`tokens.ts`, heuristique car/jetons). Manque : coût par message |
-| F-22 | **Mode expert** | Température, max tokens, seed | Partiel | Effort de raisonnement par modèle livré. Manquent : température, max tokens, seed |
+| F-22 | **Mode expert** | Température, max tokens, seed | **Terminé** | Livré le 2026-11-13 (douzième session, suite) : section repliable « Mode expert » dans le popover du sélecteur (température curseur **0–1** — le moteur démo rejette au-delà, erreur 1210 vérifiée ; plafond 1–8192 ; graine 32 bits) ; registre `hermes.expert.*` + payloads `chat:send`/`regenerate`/`edit` ; `sanitizeExpertSettings` côté service (clamps, non-numériques ignorés) ; injectés au LLM démo **pour de vrai** (`maxTokens=3` → « Le renard », troncation vérifiée) et transmis dans `api_turn_v1.settings` en gateway. QA `test-expert-flow.ts` 14/14. |
 | F-23 | **Raccourcis clavier** | Nouveau chat, recherche, focus composer | **Terminé** | Cmd/Ctrl+K palette (nouveau chat, stop, régénérer, épingler, exports, modèles, recherche), Cmd/Ctrl+Maj+O nouveau chat, Échap = stop / fermer panneau |
 | F-24 | **Feedback intégré** | 👍/👎 + commentaire | **Terminé** | Livré le 2026-11-13 : boutons 👍/👎 + popover commentaire sur chaque réponse assistant (`message-bubble.tsx`, re-clic = efface, commentaire ≤ 2 000 car.) ; colonnes additives `messages.feedback_rating`/`feedback_comment`, événement `feedback:set` + broadcast `feedback:changed`, mise à jour optimiste côté hook. **Local : jamais envoyé au modèle** (consigné §7.9). Non-transporté au fork (une branche repart sans retours) — assumé. |
 
@@ -228,6 +228,38 @@ service, jamais assemblée côté client.
   l'injection, réactivation la rétablit ; effacement complet). Re-passé une
   seconde fois. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre.
 
+## Chantier du 2026-11-13 (douzième session, suite) — F-22 « Mode expert »
+
+F-22 était « Partiel » (effort livré) : la température, le plafond de jetons
+et la graine manquaient. Livré en fin de douzième session. Décisions clefs
+tirées de sondages SDK réels (consignées FORK.md §9-13) :
+
+- **Bornes vérifiées empiriquement** : le moteur démo accepte
+  `temperature`/`max_tokens`/`seed` mais rejette la température au-delà de 1
+  (erreur fournisseur 1210) — le curseur vit donc sur **[0, 1]**, pas
+  l'échelle OpenAI [0, 2]. `max_tokens=1` est accepté et tronque à un unique
+  jeton (le plancher est donc 1, pas 16 : un plancher à 16 laissait passer
+  des phrases courtes entières — détecté en QA).
+- **Assainissement côté service** (`sanitizeExpertSettings`, prompts.ts) :
+  température clampée [0,1], plafond [1,8192], graine entière 32 bits ;
+  `null`/chaîdes non numériques/`NaN` ignorés (Number(null) vaut 0 — piège
+  corrigé : un champ vide du client n'active plus la valeur 0). Branché sur
+  les trois points d'entrée : `chat:send`, `chat:regenerate`, `message:edit`.
+- **Injection réelle au LLM démo** (moteur `demo-engine.ts`) + transmission
+  gateway dans `api_turn_v1.settings` (convention « ignoré sans dommage »).
+- **Client** : section repliable « Mode expert » dans le popover du
+  sélecteur (compteur « N actifs », curseur température, champs plafond /
+  graine, champs vides = valeurs par défaut du fournisseur) ; registre
+  `hermes.expert.*` (3 clés, §6) ; état + refs + persistance dans
+  `use-hermes-chat` (payloads `send`/`regenerate`/`edit`) ; passage
+  `page` → `composer` → `ModelPicker`.
+- QA : `scripts/test-expert-flow.ts` **14/14 verts** — 9 contrôles
+  d'assainissement + comportemental réel (`maxTokens=3` → « Le renard »,
+  la réponse tronquée fait ~3 jetons ; le tour sans plafond rend la phrase
+  entière) + tours réussis sur valeurs hors bornes (clampées) et
+  non-numériques (ignorées). Reprises anti-429 espacées de 8 s.
+  `bunx tsc --noEmit` : 0 erreur `src/` et service ; eslint propre.
+
 ## Ordre de démarrage recommandé (suite)
 
 1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
@@ -240,6 +272,9 @@ service, jamais assemblée côté client.
 6. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
    à revoir une fois la gateway branchée (les clés de services sont désormais gérées
    dans le volet Paramètres).
+7. **F-21** (coût par message) et **F-14** (navigation versions complète)
+   restent les deux « Partiel » améliorables ; **F-17** (comparaison modèles)
+   est le dernier gros chantier.
 
 ## Notes de passation
 

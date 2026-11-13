@@ -11,6 +11,54 @@
 //   `hermes.instructions.custom` (registre §6) — aucune table dédiée.
 import type { ChatMessage } from "./types";
 
+// ── Mode expert (F-22) : assainissement des réglages d'un tour ─────────
+
+/** Charge brute du client (trois champs optionnels, non typés). */
+export interface ExpertSettingsInput {
+  temperature?: unknown;
+  maxTokens?: unknown;
+  seed?: unknown;
+}
+
+/**
+ * Assainit les réglages expert d'un tour (F-22) : température clampée à
+ * [0, 1] (le moteur démo rejette au-delà — erreur 1210 du fournisseur),
+ * plafond de jetons clampé à [1, 8192] (vérifié : 1 token = une unique
+ * sortie, la troncation est réellement effective), graine entière 32 bits.
+ * Toute valeur absente, non numérique ou non finie est ignorée — le tour
+ * part alors avec les valeurs par défaut du fournisseur.
+ */
+export function sanitizeExpertSettings(
+  input: ExpertSettingsInput | undefined | null
+): {
+  temperature?: number;
+  maxTokens?: number;
+  seed?: number;
+} {
+  if (!input) return {};
+  // null/undefined/non-fini → ignoré (Number(null) vaut 0 : exclu d'office,
+  // sinon un champ « vide » du client activerait la valeur 0).
+  const num = (v: unknown): number | undefined => {
+    if (v === null || v === undefined || v === "") return undefined;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const temperature = num(input.temperature);
+  const maxTokens = num(input.maxTokens);
+  const seed = num(input.seed);
+  return {
+    ...(temperature !== undefined
+      ? { temperature: Math.min(1, Math.max(0, temperature)) }
+      : {}),
+    ...(maxTokens !== undefined
+      ? { maxTokens: Math.min(8192, Math.max(1, Math.round(maxTokens))) }
+      : {}),
+    ...(seed !== undefined
+      ? { seed: Math.min(2 ** 31 - 1, Math.max(0, Math.round(seed))) }
+      : {}),
+  };
+}
+
 export interface SystemPromptRow {
   id: string;
   scope: "conversation" | "preset";

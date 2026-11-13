@@ -39,6 +39,7 @@ import {
 } from "@/lib/tokens";
 import type {
   Attachment,
+  ExpertSettings,
   GatewayMode,
   ModelOption,
   PermissionsMode,
@@ -78,6 +79,9 @@ interface ComposerProps {
   /** Effort de raisonnement courant (valeur brute du fournisseur). */
   effort: string | null;
   onEffortChange: (effort: string) => void;
+  /** Réglages expert (F-22) — absents = valeurs par défaut du fournisseur. */
+  expert?: ExpertSettings;
+  onExpertChange?: (patch: Partial<ExpertSettings>) => void;
   /** Mode d'autorisations (ask | auto) — reset sur « ask » à chaque session. */
   permissionsMode: PermissionsMode;
   onPermissionsChange: (mode: PermissionsMode) => void;
@@ -117,6 +121,8 @@ export function Composer({
   onSelectModel,
   effort,
   onEffortChange,
+  expert,
+  onExpertChange,
   permissionsMode,
   onPermissionsChange,
   contextBase,
@@ -598,6 +604,8 @@ export function Composer({
             onSelect={onSelectModel}
             effort={effort}
             onEffortChange={onEffortChange}
+            expert={expert}
+            onExpertChange={onExpertChange}
           />
           <div className="flex items-center gap-1.5">
             <p className="hidden items-center gap-1.5 text-[11.5px] text-muted-foreground lg:flex">

@@ -18,6 +18,7 @@ import type {
   ChatMessage,
   CompactInfo,
   ConversationMeta,
+  ExpertSettings,
   GatewayMode,
   ModelOption,
   ModelsResult,
@@ -32,6 +33,10 @@ import type {
 const MODEL_SETTING_KEY = "hermes.model"; // registre des réglages (FORK.md §6)
 const EFFORT_SETTING_KEY = "hermes.reasoning.effort";
 const PERMISSIONS_SETTING_KEY = "hermes.permissions.mode";
+// Mode expert (F-22) — registre des réglages (FORK.md §6)
+const EXPERT_TEMPERATURE_KEY = "hermes.expert.temperature";
+const EXPERT_MAX_TOKENS_KEY = "hermes.expert.maxTokens";
+const EXPERT_SEED_KEY = "hermes.expert.seed";
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 Mo, aligné sur le service
 
 function fileToBase64(file: File): Promise<string> {
@@ -80,6 +85,9 @@ export function useHermesChat() {
   // ── Chantier « Composer v2 » : effort, permissions, compaction ──────
   /** Effort de raisonnement (valeur brute du fournisseur, persisté). */
   const [effort, setEffortState] = useState<string | null>(null);
+  // ── Mode expert (F-22) : température, plafond de sortie, graine ─────
+  /** Réglages expert persistés (champs absents = valeur par défaut). */
+  const [expert, setExpertState] = useState<ExpertSettings>({});
   /** Autorisations : reset sur « ask » à chaque session — jamais restauré. */
   const [permissionsMode, setPermissionsMode] = useState<PermissionsMode>("ask");
   /** État de compaction de la conversation active. */
@@ -102,6 +110,7 @@ export function useHermesChat() {
   /** Clé de l'artefact affiché dans le panneau (survit aux changements de version). */
   const panelKeyRef = useRef<string | null>(null);
   const effortRef = useRef<string | null>(null);
+  const expertRef = useRef<ExpertSettings>({});
   const permissionsRef = useRef<PermissionsMode>("ask");
 
   // Synchronise les refs (lecture seule côté handlers d'événements)
@@ -116,6 +125,10 @@ export function useHermesChat() {
   useEffect(() => {
     effortRef.current = effort;
   }, [effort]);
+
+  useEffect(() => {
+    expertRef.current = expert;
+  }, [expert]);
 
   useEffect(() => {
     permissionsRef.current = permissionsMode;
@@ -171,6 +184,15 @@ export function useHermesChat() {
     if (saved) setSelectedModelState(saved);
     const savedEffort = readClientSetting<string>(EFFORT_SETTING_KEY);
     if (savedEffort) setEffortState(savedEffort);
+    // Mode expert (F-22) : champs individuels, absents = défaut du fournisseur
+    const savedTemperature = readClientSetting<number | null>(EXPERT_TEMPERATURE_KEY);
+    const savedMaxTokens = readClientSetting<number | null>(EXPERT_MAX_TOKENS_KEY);
+    const savedSeed = readClientSetting<number | null>(EXPERT_SEED_KEY);
+    setExpertState({
+      ...(savedTemperature !== null ? { temperature: savedTemperature } : {}),
+      ...(savedMaxTokens !== null ? { maxTokens: savedMaxTokens } : {}),
+      ...(savedSeed !== null ? { seed: savedSeed } : {}),
+    });
   }, []);
 
   // Autorisations : reset explicite sur « ask » à chaque session (spec) —
@@ -189,6 +211,22 @@ export function useHermesChat() {
         setEffortState(value);
       } else if (key === PERMISSIONS_SETTING_KEY) {
         setPermissionsMode(value === "auto" ? "auto" : "ask");
+      } else if (
+        key === EXPERT_TEMPERATURE_KEY ||
+        key === EXPERT_MAX_TOKENS_KEY ||
+        key === EXPERT_SEED_KEY
+      ) {
+        // Mode expert (F-22) : chaque champ vit sa clé (null = retiré)
+        setExpertState((prev) => {
+          const next = { ...prev };
+          if (key === EXPERT_TEMPERATURE_KEY)
+            next.temperature = typeof value === "number" ? value : undefined;
+          if (key === EXPERT_MAX_TOKENS_KEY)
+            next.maxTokens = typeof value === "number" ? value : undefined;
+          if (key === EXPERT_SEED_KEY)
+            next.seed = typeof value === "number" ? value : undefined;
+          return next;
+        });
       }
     });
   }, []);
@@ -202,6 +240,18 @@ export function useHermesChat() {
   const setEffort = useCallback((e: string) => {
     setEffortState(e);
     writeClientSetting(EFFORT_SETTING_KEY, e);
+  }, []);
+
+  /** Mode expert (F-22) : fusionne et persiste champ par champ (undefined
+   *  = retiré : le tour repart aux valeurs par défaut du fournisseur). */
+  const setExpert = useCallback((patch: Partial<ExpertSettings>) => {
+    setExpertState((prev) => {
+      const next = { ...prev, ...patch };
+      writeClientSetting(EXPERT_TEMPERATURE_KEY, next.temperature ?? null);
+      writeClientSetting(EXPERT_MAX_TOKENS_KEY, next.maxTokens ?? null);
+      writeClientSetting(EXPERT_SEED_KEY, next.seed ?? null);
+      return next;
+    });
   }, []);
 
   /** Autorisations : armement explicite — jamais silencieux. */
@@ -776,6 +826,7 @@ export function useHermesChat() {
         attachments: attachments.length ? attachments : undefined,
         effort: effortRef.current ?? undefined,
         permissionsMode: permissionsRef.current,
+        ...expertRef.current,
       });
     },
     [newConversation, streaming]
@@ -801,6 +852,7 @@ export function useHermesChat() {
       model: selectedModelRef.current ?? undefined,
       effort: effortRef.current ?? undefined,
       permissionsMode: permissionsRef.current,
+      ...expertRef.current,
     });
   }, [streaming]);
 
@@ -840,6 +892,7 @@ export function useHermesChat() {
           model: selectedModelRef.current ?? undefined,
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
+          ...expertRef.current,
         },
         (res: { ok?: boolean; error?: string }) => {
           if (!res?.ok) openConversation(conversationId);
@@ -1220,6 +1273,8 @@ export function useHermesChat() {
     setSelectedModel,
     // Chantier « Composer v2 »
     effort,
+    expert,
+    setExpert,
     setEffort,
     permissionsMode,
     setPermissionsMode: changePermissions,

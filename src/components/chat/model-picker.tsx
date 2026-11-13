@@ -22,7 +22,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { readClientSetting, writeClientSetting } from "@/lib/settings";
-import { GENERIC_EFFORTS, type ModelOption } from "@/lib/chat-types";
+import { GENERIC_EFFORTS, type ExpertSettings, type ModelOption } from "@/lib/chat-types";
 
 const FAVORITES_KEY = "hermes.models.favorites";
 const EFFORT_KEY = "hermes.reasoning.effort";
@@ -58,6 +58,125 @@ interface ModelPickerProps {
   /** Effort de raisonnement courant (valeur brute du fournisseur). */
   effort: string | null;
   onEffortChange: (effort: string) => void;
+  /** Réglages expert (F-22) — absents = valeurs par défaut du fournisseur. */
+  expert?: ExpertSettings;
+  onExpertChange?: (patch: Partial<ExpertSettings>) => void;
+}
+
+/** Champs numériques libres du mode expert : borne la saisie en live. */
+function expertClamp(
+  field: "temperature" | "maxTokens" | "seed",
+  raw: string
+): number | undefined {
+  if (!raw.trim()) return undefined;
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n)) return undefined;
+  if (field === "temperature") return Math.min(1, Math.max(0, n));
+  if (field === "maxTokens") return Math.min(8192, Math.max(1, Math.round(n)));
+  return Math.min(2 ** 31 - 1, Math.max(0, Math.round(n)));
+}
+
+/** Section repliable « Mode expert » (F-22) du popover : température
+ *  (curseur 0–1), plafond de jetons, graine. Champs vides = retirés. */
+function ExpertPanel({
+  expert,
+  onExpertChange,
+}: {
+  expert: ExpertSettings;
+  onExpertChange: (patch: Partial<ExpertSettings>) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const activeCount = [expert.temperature, expert.maxTokens, expert.seed].filter(
+    (v) => v !== undefined
+  ).length;
+  return (
+    <div className="border-t border-border/60 px-3.5 py-2.5">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full cursor-pointer items-center justify-between text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5">
+          Mode expert
+          {activeCount > 0 ? (
+            <span className="rounded-full bg-hermes/10 px-1.5 py-px text-[9.5px] font-medium text-hermes">
+              {activeCount} actif{activeCount > 1 ? "s" : ""}
+            </span>
+          ) : null}
+        </span>
+        <span className="flex items-center gap-1.5 text-[10.5px] font-medium">
+          {expanded ? "replier" : "déplier"}
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+        </span>
+      </button>
+      {expanded ? (
+        <div className="mt-2 space-y-2.5">
+          <div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">Température</span>
+              <span className="tabular-nums">
+                {expert.temperature !== undefined
+                  ? expert.temperature.toLocaleString("fr-FR", { maximumFractionDigits: 2 })
+                  : "défaut"}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={expert.temperature ?? 0.7}
+              onChange={(e) =>
+                onExpertChange({ temperature: Number(e.target.value) })
+              }
+              aria-label="Température"
+              className="mt-1 h-1.5 w-full cursor-pointer accent-[var(--hermes)]"
+            />
+            <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+              0 = déterministe · 1 = créatif (le moteur démo refuse au-delà).
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">
+              Plafond de jetons
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={8192}
+              placeholder="8192"
+              value={expert.maxTokens ?? ""}
+              onChange={(e) =>
+                onExpertChange({ maxTokens: expertClamp("maxTokens", e.target.value) })
+              }
+              aria-label="Plafond de jetons de la réponse"
+              className="h-7 w-24 rounded-[8px] border border-border bg-background px-2 text-right text-[11.5px] tabular-nums outline-none focus-visible:border-hermes/60"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">Graine</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={expert.seed ?? ""}
+              onChange={(e) => onExpertChange({ seed: expertClamp("seed", e.target.value) })}
+              aria-label="Graine de reproductibilité"
+              className="h-7 w-24 rounded-[8px] border border-border bg-background px-2 text-right text-[11.5px] tabular-nums outline-none focus-visible:border-hermes/60"
+            />
+          </div>
+          <p className="text-[10.5px] leading-snug text-muted-foreground">
+            Champs vides = valeurs par défaut du fournisseur. Envoyés dans{" "}
+            <code className="rounded bg-muted px-1 font-mono text-[10px]">api_turn_v1.settings</code>{" "}
+            — ignorés sans dommage si non supportés.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function ModelPicker({
@@ -70,6 +189,8 @@ export function ModelPicker({
   onSelect,
   effort,
   onEffortChange,
+  expert,
+  onExpertChange,
 }: ModelPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -311,6 +432,11 @@ export function ModelPicker({
               — ignoré sans dommage si le fournisseur ne le supporte pas.
             </p>
           </div>
+
+          {/* Mode expert (F-22) : température / plafond de sortie / graine */}
+          {onExpertChange ? (
+            <ExpertPanel expert={expert ?? {}} onExpertChange={onExpertChange} />
+          ) : null}
         </Command>
       </PopoverContent>
     </Popover>

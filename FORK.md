@@ -116,7 +116,7 @@ n'existe pas encore — le socle est posé **dès maintenant** pour ne jamais av
 
 | Namespace | Contenu | Exemples |
 | --- | --- | --- |
-| `hermes` | Réglages de l'agent amont | `hermes.gateway.url`, `hermes.gateway.token`, `hermes.model`, `hermes.models.favorites`, `hermes.reasoning.effort`, `hermes.permissions.mode` |
+| `hermes` | Réglages de l'agent amont | `hermes.gateway.url`, `hermes.gateway.token`, `hermes.model`, `hermes.models.favorites`, `hermes.reasoning.effort`, `hermes.permissions.mode`, `hermes.expert.temperature`, `hermes.expert.maxTokens`, `hermes.expert.seed` (F-22, `null` = défaut du fournisseur) |
 | `fork` | Tout ce que le fork ajoute | `fork.ui.sidebar.width`, `fork.artifacts.panel.autoOpen`, `fork.projects.sort`, `fork.context.gauge` |
 
 ### Schéma (fichier unique source de vérité : `src/lib/settings.ts`, à créer)
@@ -222,7 +222,8 @@ affichées (k + %, seuils ambre 50 % / rouge 80 %).
 - `model-picker.tsx` réécrit en cmdk (recherche, favoris), contrôleur d'effort de
   raisonnement (`hermes.reasoning.effort`, « off » coupe le thinking côté démo-engine),
   bouclier de permissions ask | auto (`hermes.permissions.mode`, reset sur « ask »
-  à chaque session).
+  à chaque session), section repliable « Mode expert » (F-22 : température 0–1,
+  plafond de jetons, graine — `hermes.expert.*`).
 - Réglage `fork.context.gauge` (affichage de la jauge), déclaré dans le registre (§6).
 
 ### 7.4 En chantier — page de paramètres
@@ -544,6 +545,40 @@ fallback additif des clés fait qu'une mise à jour ne coupe jamais la mémoire.
   dans l'UI du fork ; une fois la gateway branchée, l'apprentissage
   automatique pourra écrire dans les fichiers du moteur côté agent.
 
+### 7.11 Fait — Mode expert complet (F-22)
+
+Livré le 2026-11-13 (douzième session, suite). F-22 était « Partiel »
+(effort livré) — la température, le plafond de jetons et la graine
+complètent le chantier, avec des bornes **vérifiées empiriquement** contre
+le moteur démo :
+
+- **Sondages SDK (consignés §9-13)** : `temperature`/`max_tokens`/`seed`
+  sont acceptés ; la plage réelle de température est **[0, 1]** (erreur
+  fournisseur 1210 au-delà — l'échelle OpenAI [0, 2] ne s'applique pas) ;
+  `max_tokens=1` est accepté et tronque à un unique jeton (plancher = 1,
+  pas 16 : un plancher à 16 laissait passer des phrases courtes entières,
+  détecté en QA comportementale).
+- **Assainissement côté service** (`sanitizeExpertSettings` dans
+  `prompts.ts`) : température clampée [0,1], plafond [1,8192], graine
+  entière 32 bits ; `null`/chaîne non numérique/`NaN` ignorés — piège
+  `Number(null) === 0` corrigé (un champ vide n'active plus la valeur 0).
+  Branché sur `chat:send`, `chat:regenerate`, `message:edit`.
+- **Injection réelle** au LLM démo (`demo-engine.ts` : `temperature`,
+  `max_tokens`, `seed` passés à `chat.completions.create`) + transmission
+  gateway dans `api_turn_v1.settings` (convention « ignoré sans dommage »).
+- **Client** : section repliable « Mode expert » dans le popover du
+  sélecteur (`model-picker.tsx` : compteur « N actifs », curseur
+  température 0–1, champs plafond/graine, vides = défaut fournisseur) ;
+  registre `hermes.expert.*` (3 clés §6) ; état + refs + persistance dans
+  `use-hermes-chat` ; payloads `send`/`regenerate`/`edit` ; passage
+  `page` → `composer` → `ModelPicker`.
+- QA : `scripts/test-expert-flow.ts` **14/14 verts** — 9 contrôles
+  d'assainissement + comportemental réel (`maxTokens=3` → « Le renard » ~3
+  jetons vs la phrase entière sans plafond) + tours réussis sur valeurs hors
+  bornes (clampées) et non-numériques (ignorées). Reprises anti-429
+  espacées de 8 s (le fournisseur démo limite les requêtes rapprochées).
+  `bunx tsc --noEmit` : 0 erreur `src/` et service ; eslint propre.
+
 ## 8. Dettes techniques et pièges
 
 - `prisma/schema.prisma` et les scripts `db:*` de la racine sont **résiduels et inutilisés**
@@ -584,7 +619,8 @@ fallback additif des clés fait qu'une mise à jour ne coupe jamais la mémoire.
 | 2026-11-13 (9) | **F-11 + F-19 livrés — Prompt système & instructions personnalisées** (neuvième session, point 2 de l'ordre recommandé) : le prompt **s'ajoute** aux instructions de base, jamais les remplace. Table additive `system_prompts` (scope `conversation` / `preset`, 5 presets semés), instructions globales dans `settings` (`hermes.instructions.custom`, max 4 000 car.) ; événements `system-prompt:*` / `system-prompts:*` / `custom-instructions:*` avec broadcasts ; composition côté service (démo : base + F-19 + F-11 ; gateway : `system_prompt` seul dans `api_turn_v1.settings`), `hello.systemPromptChars` honnête ; hook `use-system-prompts`, `SystemPromptPanel` (sheet 460 px, bouton « prompt » + pastille d'en-tête), section **Hermes** du volet v4 livrée (instructions globales + bibliothèque éditable — mémoire et .md restent à venir), poste « Prompt de conversation » dans la jauge. QA : `scripts/test-system-prompt-flow.ts` **24/24**, dont vérification comportementale réelle (LLM démo répond « B »), isolation entre conversations, garde-fous de longueur. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (10) | **F-13 livré — Partage public lecture seule + export image** (dixième session, point 3 de l'ordre recommandé) : le lien est un **snapshot figé** (la conversation peut continuer sans changer le lien ; révocation → 410 Gone sans toucher la source ; suppression de la conversation → liens 410 persistant). Table additive `shares` (token opaque 24 car. base62, un lien actif max par conversation — recréer révoque l'ancien) ; événements `share:get/create/revoke` + broadcast `share:changed` ; HTTP (3004) : `data.json` public sans id interne (CORS `*`) et `image.png` plein page via le pipeline chrome-headless-shell. Client : page publique `/shared/[token]` (`noindex`, Markdown réutilisé, états révoqué/introuvable) + menu « Partager » de l'en-tête (créer/copier, ouvrir la vue, révoquer). QA : `scripts/test-share-flow.ts` **24/24** (404/410, remplacement, isolation, PNG Chrome valide ~35 Ko) ; page servie et snapshot chargé vérifiés en dev ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (11) | **F-24 livré — Feedback intégré 👍/👎 + commentaire** (onzième session, point 4 de l'ordre recommandé) : retour **local, jamais envoyé au modèle** (protocole gateway inchangé). Migration additive `messages.feedback_rating`/`feedback_comment` + `setMessageFeedback` (assistant seule, troncature 2 000, `null` = efface) ; événement `feedback:set` + broadcast `feedback:changed` ; client `FeedbackControl` dans la rangée d'actions (re-clic = efface, popover commentaire, pastille italique), câblage list→page, action optimiste du hook avec retour arrière si refus. Assumé : fork repart sans retours. QA : `scripts/test-feedback-flow.ts` **15/15** (pose, inversion, troncature, garde-fous, retrait, persistance au rechargement, isolation) ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint sans nouvelle erreur. |
-| 2026-11-13 (12) | **F-18 livré — Mémoire utilisateur** (douzième session ; l'ordre recommandé était épuisé côté démo, premier P2 non bloqué) : mémoire **consultable, éditable, effaçable**. Clés `hermes.memory.{enabled,autoLearn,notes}` (table `settings`, fallback additif : absentes = actives) ; événements `memory:*` + broadcast ; `composeDemoSystemPrompt` gagne la section « Mémoire de l'utilisateur », jauge `systemPromptSize` et `hello.memoryChars` honnêtes ; en gateway `memory_notes`/`memory_auto_learn` dans `api_turn_v1.settings` (clés à valider, convention Composer v2). Client : `MemoryCard` de la section Hermes (interrupteur, apprentissage automatique honnête, éditeur 12 000 car., effacement) + hook `use-memory`. NB : MEMORY.md/USER.md du moteur non touchés — l'apprentissage réel viendra avec la gateway. QA : `scripts/test-memory-flow.ts` **17/17** re-passé (garde-fou 12 000, broadcasts, comportemental : la démo cite la mémoire, désactivation coupe l'injection) ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
+| 2026-11-13 (13) | **F-22 complété — Mode expert : température, plafond de jetons, graine** (douzième session, suite) : bornes tirées de sondages SDK réels — température **[0,1]** (le fournisseur rejette au-delà, erreur 1210 ; l'échelle [0,2] d'OpenAI ne s'applique pas), `max_tokens=1` accepté et tronquant réellement (plancher 1, pas 16 — un plancher à 16 laissait passer des phrases courtes entières, détecté en QA). `sanitizeExpertSettings` (prompts.ts) : clamps [0,1]/[1,8192]/entier 32 bits, `null`/non-numériques ignorés (piège `Number(null)===0` corrigé) ; branché sur `chat:send`/`chat:regenerate`/`message:edit` ; injecté au LLM démo pour de vrai + `api_turn_v1.settings` en gateway. Client : section repliable « Mode expert » du popover sélecteur (curseur 0–1, compteur actifs), registre `hermes.expert.*`, payloads du hook. QA `scripts/test-expert-flow.ts` **14/14** (assainissement 9, comportemental troncation, tolérance 429 anti-rate-limit) ; tsc 0 / eslint propre. |
+ **F-18 livré — Mémoire utilisateur** (douzième session ; l'ordre recommandé était épuisé côté démo, premier P2 non bloqué) : mémoire **consultable, éditable, effaçable**. Clés `hermes.memory.{enabled,autoLearn,notes}` (table `settings`, fallback additif : absentes = actives) ; événements `memory:*` + broadcast ; `composeDemoSystemPrompt` gagne la section « Mémoire de l'utilisateur », jauge `systemPromptSize` et `hello.memoryChars` honnêtes ; en gateway `memory_notes`/`memory_auto_learn` dans `api_turn_v1.settings` (clés à valider, convention Composer v2). Client : `MemoryCard` de la section Hermes (interrupteur, apprentissage automatique honnête, éditeur 12 000 car., effacement) + hook `use-memory`. NB : MEMORY.md/USER.md du moteur non touchés — l'apprentissage réel viendra avec la gateway. QA : `scripts/test-memory-flow.ts` **17/17** re-passé (garde-fou 12 000, broadcasts, comportemental : la démo cite la mémoire, désactivation coupe l'injection) ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 
 ## 10. Synchronisation git et passation
 
