@@ -1,0 +1,1950 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette v4 — Paramètres · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --amber:oklch(0.72 0.16 70);
+    --amber-soft:oklch(0.72 0.16 70 / 0.12);
+    --red:oklch(0.577 0.245 27.325);
+    --red-soft:oklch(0.577 0.245 27.325 / 0.10);
+    --green:oklch(0.62 0.13 150);
+    --radius:0.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    font-size:15px;line-height:1.5;overflow:hidden;
+  }
+  button{font-family:inherit}
+
+  /* ═════════ SCÈNE : application + volet gauche ═════════ */
+  .app{position:fixed;inset:0;display:flex}
+  .ghost{flex:1;min-width:0;display:flex;gap:12px;padding:16px;opacity:.5;
+    filter:grayscale(.3) blur(.3px);transition:opacity .25s,filter .25s;overflow:hidden}
+  .app.closed .ghost{opacity:1;filter:none}
+  .g-side{flex:0 0 240px;background:var(--card);border:1px solid var(--border);border-radius:16px;
+    padding:12px;display:flex;flex-direction:column;gap:10px}
+  .side-top{display:flex;align-items:center;gap:8px;padding:4px 6px}
+  .side-top .logo{width:22px;height:22px;border-radius:7px;background:var(--hermes);color:var(--hermes-foreground);display:grid;place-items:center;flex:none}
+  .side-top .name{font-size:13px;font-weight:700;flex:1}
+  .side-top .plus{width:22px;height:22px;border-radius:7px;border:1px solid var(--border);display:grid;place-items:center;color:var(--muted-foreground)}
+  .side-search{border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:11.5px;color:var(--muted-foreground);display:flex;gap:6px;align-items:center}
+  .side-lines{flex:1;display:flex;flex-direction:column;gap:7px;padding:6px}
+  .side-lines i{display:block;height:8px;border-radius:4px;background:var(--muted)}
+  .w1{width:62%}.w2{width:40%}.w3{width:74%}.w4{width:52%}
+  .side-lines .gap{height:10px}
+  .status-card{border:1px solid var(--border);border-radius:12px;padding:9px 11px;background:var(--background)}
+  .status-line{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600}
+  .status-line .dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .status-line .mode{flex:1}
+  .gear-btn{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:var(--card);
+    display:grid;place-items:center;cursor:pointer;color:var(--muted-foreground);transition:color .15s,border-color .15s}
+  .gear-btn:hover{color:var(--hermes);border-color:var(--hermes)}
+  .status-sub{font-size:10.5px;color:var(--muted-foreground);margin-top:3px}
+  .g-main{flex:1;display:flex;flex-direction:column;gap:10px;background:var(--card);
+    border:1px solid var(--border);border-radius:16px;padding:16px;min-width:0}
+  .g-bubble{height:34px;border-radius:12px;background:var(--muted);width:58%}
+  .g-bubble.b{align-self:flex-end;background:var(--hermes-soft);width:44%}
+  .g-composer{margin-top:auto;height:40px;border-radius:12px;border:1px solid var(--border)}
+
+  /* ═════════ LE VOLET ═════════ */
+  .panel{order:-1;flex:0 0 860px;max-width:100%;display:flex;background:var(--card);
+    border-right:1px solid var(--border);transition:margin-left .24s cubic-bezier(.32,.72,.24,1)}
+  .app.closed .panel{margin-left:-860px}
+
+  /* — rail gauche — */
+  .rail{flex:0 0 208px;background:var(--background);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:18px 12px 12px;gap:2px;min-height:0}
+  .rail-top{display:flex;align-items:center;gap:9px;padding:2px 10px 16px}
+  .rail-top .logo{width:26px;height:26px;border-radius:8px;background:var(--hermes);color:var(--hermes-foreground);display:grid;place-items:center;flex:none}
+  .rail-top b{font-size:14px;letter-spacing:-.01em}
+  .rail-nav{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:1px;min-height:0}
+  .rn{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:none;background:none;
+    font-size:13px;color:var(--muted-foreground);cursor:pointer;text-align:left;position:relative;
+    transition:background .15s,color .15s;width:100%}
+  .rn:hover{background:var(--muted);color:var(--foreground)}
+  .rn.on{background:var(--hermes-soft);color:var(--hermes);font-weight:600}
+  .rn:focus-visible{outline:2px solid var(--hermes);outline-offset:-2px}
+  .rn svg{flex:none}
+  .rn .rdot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none}
+  .rail-foot{padding:12px 10px 2px;font-size:10.5px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+
+  /* — zone de contenu — */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .main-head{flex:none;height:52px;display:flex;align-items:center;justify-content:flex-end;padding:0 18px;border-bottom:1px solid var(--border)}
+  .x-btn{width:30px;height:30px;border-radius:9px;border:1px solid var(--border);background:var(--card);
+    display:grid;place-items:center;cursor:pointer;color:var(--muted-foreground);transition:color .15s,border-color .15s}
+  .x-btn:hover{color:var(--red);border-color:var(--red)}
+  .main-scroll{flex:1;overflow-y:auto;padding:26px 34px 70px}
+  .main-scroll::-webkit-scrollbar,.rail-nav::-webkit-scrollbar,.skres::-webkit-scrollbar{width:8px}
+  .main-scroll::-webkit-scrollbar-thumb,.rail-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+
+  .pane{display:none}
+  .pane.on{display:block;animation:fadein .15s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .pane h1{font-size:19px;font-weight:700;letter-spacing:-.015em}
+  .psub{font-size:13px;color:var(--muted-foreground);margin-top:4px;margin-bottom:22px;max-width:520px;line-height:1.5}
+  .grp{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground);
+    margin:28px 0 4px;display:flex;align-items:baseline;gap:8px}
+  .grp:first-child{margin-top:0}
+  .grp .grpsub{font-size:10.5px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted-foreground);opacity:.85}
+  .grp2{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);margin:16px 0 6px}
+
+  /* — ligne de réglage : libellé + description à gauche, contrôle à droite — */
+  .row{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:13px 0;border-bottom:1px solid var(--border)}
+  .pane>.row:last-of-type{border-bottom:none}
+  .rt{min-width:0;flex:1;max-width:380px}
+  .rt .lbl{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .rt .desc{font-size:12px;color:var(--muted-foreground);line-height:1.45;margin-top:2px}
+  .rc{flex:none;display:flex;align-items:center;gap:10px}
+
+  /* — pastilles d'état (une seule langue : le point) — */
+  .st{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap}
+  .st i{width:8px;height:8px;border-radius:50%;flex:none}
+  .st.ok i{background:var(--green)}
+  .st.warn{color:var(--amber)} .st.warn i{background:var(--amber)}
+  .st.err{color:var(--red)} .st.err i{background:var(--red)}
+  .st.off{color:var(--muted-foreground)} .st.off i{background:var(--border)}
+
+  /* — contrôles — */
+  .switch{flex:none;width:38px;height:22px;border-radius:999px;background:var(--border);border:none;cursor:pointer;
+    position:relative;transition:background .18s}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;
+    transition:left .18s;box-shadow:0 1px 2px rgba(0,0,0,.18)}
+  .switch.on{background:var(--hermes)}
+  .switch.on::after{left:19px}
+  .switch:disabled{opacity:.45;cursor:not-allowed}
+  .switch:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+
+  .seg{display:inline-flex;background:var(--muted);border-radius:10px;padding:3px;gap:2px}
+  .seg button{border:none;background:none;font-size:12px;font-weight:600;color:var(--muted-foreground);
+    padding:5px 12px;border-radius:8px;cursor:pointer;transition:color .15s,background .15s;white-space:nowrap}
+  .seg button.on{background:var(--card);color:var(--hermes);box-shadow:0 1px 3px rgba(16,12,8,.08)}
+  .seg button:focus-visible{outline:2px solid var(--hermes)}
+
+  .sel-wrap{position:relative}
+  .sel-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--card);
+    border-radius:10px;padding:6px 10px;font-size:12.5px;cursor:pointer;min-width:170px;justify-content:space-between;
+    transition:border-color .15s;color:var(--foreground)}
+  .sel-btn:hover{border-color:var(--hermes)}
+  .sel-btn .sv{font-weight:600}
+  .sel-btn svg{color:var(--muted-foreground)}
+  .sel-list{position:absolute;top:calc(100% + 6px);right:0;z-index:40;background:var(--card);
+    border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(28,20,12,.14);padding:5px;min-width:240px}
+  .sel-item{display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;font-size:12.5px;
+    padding:7px 9px;border-radius:8px;cursor:pointer;text-align:left;color:var(--foreground)}
+  .sel-item:hover{background:var(--muted)}
+  .sel-item .check{flex:none;width:15px;height:15px}
+  .m-body{display:flex;flex-direction:column;line-height:1.3}
+  .m-name{font-weight:600}
+  .m-id{font-size:11px;color:var(--muted-foreground)}
+
+  .slider-row{display:flex;align-items:center;gap:10px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:4px;border-radius:99px;background:var(--border);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--hermes);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer}
+  .slider-val{font-size:12px;font-weight:600;color:var(--hermes);min-width:40px;text-align:right;font-variant-numeric:tabular-nums}
+
+  .num{width:92px;border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:12.5px;
+    background:var(--card);text-align:right;color:var(--foreground)}
+  .num:focus{border-color:var(--hermes);outline:none}
+  .roval{font-size:13px;font-weight:600;white-space:nowrap}
+  .rounit{font-size:11px;color:var(--muted-foreground);font-weight:500}
+
+  .btn{border:1px solid var(--border);background:var(--card);border-radius:10px;padding:7px 14px;font-size:12.5px;
+    font-weight:600;cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s}
+  .btn:hover{border-color:var(--hermes);color:var(--hermes)}
+  .btn-p{background:var(--hermes);color:var(--hermes-foreground);border:none}
+  .btn-p:hover{opacity:.9;color:var(--hermes-foreground)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .mini{flex:none;font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card);cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s}
+  .mini:hover{border-color:var(--hermes);color:var(--hermes)}
+  .linkbtn{border:none;background:none;color:var(--hermes);font-size:12px;font-weight:600;cursor:pointer;padding:0}
+  .linkbtn:hover{text-decoration:underline}
+
+  /* — info-bulle : approfondit, n'explique jamais seul — */
+  .tip{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;
+    border:1px solid var(--border);color:var(--muted-foreground);font-size:9.5px;font-weight:700;cursor:help;flex:none}
+  .tip-pop{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-55%);width:max-content;max-width:260px;
+    background:var(--foreground);color:var(--background);font-size:11.5px;font-weight:400;line-height:1.5;
+    padding:8px 11px;border-radius:9px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:60;
+    box-shadow:0 8px 22px rgba(28,20,12,.22)}
+  .tip:hover .tip-pop,.tip:focus-visible .tip-pop{opacity:1}
+
+  /* — cartes (fournisseurs, services) — */
+  .card{border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px 16px;margin-bottom:10px}
+  .ch{display:flex;align-items:center;gap:12px}
+  .ci{width:34px;height:34px;border-radius:10px;background:var(--muted);display:grid;place-items:center;
+    color:var(--muted-foreground);flex:none}
+  .cb{flex:1;min-width:0}
+  .cb b{font-size:14px;display:flex;align-items:center;gap:8px}
+  .cb>span{display:block;font-size:12px;color:var(--muted-foreground);margin-top:1px}
+  .klist{margin-top:10px}
+  .krow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border)}
+  .krow:first-child{border-top:none}
+  .kn{font-size:12.5px;font-weight:600;width:104px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted-foreground);flex:1;min-width:0}
+  .formrow{display:flex;gap:8px;margin-top:8px}
+  .formrow .tin{flex:1}
+  .hint{font-size:11.5px;color:var(--muted-foreground);margin-top:8px;line-height:1.5}
+  .formcard .tin{margin-bottom:4px}
+
+  .tin{width:100%;border:1px solid var(--border);border-radius:10px;padding:8px 11px;font-size:13px;
+    background:var(--card);color:var(--foreground)}
+  .tin:focus{border-color:var(--hermes);outline:none}
+  .tin::placeholder{color:var(--muted-foreground)}
+
+  .addln{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--hermes);
+    background:none;border:none;cursor:pointer;padding:8px 2px;transition:opacity .15s}
+  .addln:hover{text-decoration:underline}
+  .adv-t{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted-foreground);
+    background:none;border:none;cursor:pointer;padding:6px 0}
+  .adv-t:hover{color:var(--foreground)}
+  .adv{margin-top:6px}
+  .adv-in{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px dashed var(--border)}
+  .adv-in .albl{font-size:12.5px;font-weight:600}
+  .adv-in .adesc{font-size:11.5px;color:var(--muted-foreground)}
+
+  .note{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--muted-foreground);margin-top:16px;line-height:1.5}
+  .note svg{flex:none;margin-top:1px;color:var(--muted-foreground)}
+
+  /* — lignes dépliables (extensions, outils, skills, savoir) — */
+  .xr{border:1px solid var(--border);border-radius:14px;margin-bottom:10px;background:var(--card);overflow:hidden}
+  .xh{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:background .15s}
+  .xh:hover{background:var(--muted)}
+  .xi{width:34px;height:34px;border-radius:10px;background:var(--muted);display:grid;place-items:center;
+    color:var(--muted-foreground);flex:none}
+  .xb{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .xb b{font-size:13.5px;display:flex;align-items:center;gap:8px;min-width:0}
+  .xb>span{font-size:12px;color:var(--muted-foreground);line-height:1.4}
+  .orig{font-size:10.5px;color:var(--muted-foreground);font-weight:500;white-space:nowrap}
+  .xmore{flex:none;color:var(--muted-foreground);transition:transform .18s}
+  .xh>.st{align-self:flex-start;margin-top:9px}
+  .xr.open .xmore{transform:rotate(90deg)}
+  .xbody{display:none;padding:2px 16px 14px;border-top:1px solid var(--border)}
+  .xr.open .xbody{display:block}
+  .xr.off .xi,.xr.off .xb{opacity:.55}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;padding-top:10px}
+  .bar .sep{flex:1}
+
+  .commit{display:flex;gap:10px;font-size:11.5px;color:var(--muted-foreground);padding:5px 0;border-top:1px dashed var(--border)}
+  .commit:first-of-type{border-top:none}
+  .commit .cd{flex:none;width:64px}
+
+  /* — recherche de skills — */
+  .searchrow{display:flex;gap:9px;align-items:center;margin-bottom:12px}
+  .searchrow svg{color:var(--muted-foreground);flex:none}
+  .searchrow .tin{flex:1}
+  .skres{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--card)}
+  .skhit{display:flex;align-items:center;gap:12px;padding:9px 13px;border-top:1px solid var(--border)}
+  .skhit:first-child{border-top:none}
+  .skhit .sh-t{display:flex;gap:7px;align-items:baseline;font-size:13px;flex:none}
+  .skhit .sh-d{flex:1;font-size:12px;color:var(--muted-foreground);min-width:0}
+  .skempty{padding:10px 13px;font-size:12px;color:var(--muted-foreground)}
+
+  /* — jauges mémoire — */
+  .gauge{display:flex;align-items:center;gap:8px;flex:none}
+  .gbar{width:90px;height:6px;border-radius:99px;background:var(--muted);overflow:hidden}
+  .gbar i{display:block;height:100%;background:var(--hermes)}
+  .gtxt{font-size:11px;font-weight:600;color:var(--muted-foreground);min-width:32px;font-variant-numeric:tabular-nums}
+
+  /* — éditeurs en place — */
+  textarea.ed{width:100%;resize:vertical;background:var(--background);border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;font-size:12px;line-height:1.55;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:var(--foreground);margin-top:10px}
+  textarea.ed:focus{border-color:var(--hermes);outline:none}
+  .edbar{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
+  .edbar .sep{flex:1}
+
+  .prow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .prow .tin{flex:1}
+  .prow .reqlbl{font-size:11.5px;color:var(--muted-foreground);display:flex;align-items:center;gap:6px;flex:none}
+
+  .cklist{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;padding:4px 0}
+  .ck{display:flex;align-items:center;gap:9px;font-size:12.5px}
+
+  .updcard{border:1px solid var(--amber);border-radius:14px;background:var(--amber-soft);padding:14px 16px;margin:10px 0}
+  .updcard b{font-size:13.5px}
+  .updcard ul{margin:8px 0 4px 16px;font-size:12px;color:var(--muted-foreground);line-height:1.6}
+
+  /* — toast & pastille d'aide — */
+  .toast{position:fixed;bottom:26px;left:50%;transform:translate(-50%,10px);background:var(--foreground);
+    color:var(--background);padding:9px 16px;border-radius:11px;font-size:12.5px;font-weight:500;opacity:0;
+    pointer-events:none;transition:opacity .2s,transform .2s;z-index:90;max-width:70%}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .pill{position:fixed;top:24px;right:24px;z-index:80;display:inline-flex;align-items:center;gap:7px;
+    background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 12px;
+    font-size:11.5px;font-weight:600;color:var(--muted-foreground)}
+  .app.closed + .pill{display:none}
+
+  @media (max-width:1100px){
+    .panel{flex-basis:100%;border-right:none}
+    .app.closed .panel{margin-left:-100%}
+    .rail{flex:none;flex-direction:row;width:100%;border-right:none;border-bottom:1px solid var(--border);
+      padding:10px 12px;overflow-x:auto;gap:4px}
+    .rail-top,.rail-foot{display:none}
+    .rail-nav{flex-direction:row;gap:4px}
+    .rn{flex:none;padding:7px 11px}
+    .main-scroll{padding:20px 20px 60px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- Application derrière le volet -->
+  <div class="ghost" aria-hidden="true">
+    <div class="g-side">
+      <div class="side-top">
+        <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+        <span class="name">Hermes Web</span>
+        <span class="plus"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="side-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> Rechercher</div>
+      <div class="side-lines">
+        <i class="w1"></i><i class="w2"></i><i class="gap"></i><i class="w3"></i><i class="w4"></i><i class="gap"></i><i class="w1"></i><i class="w3"></i>
+      </div>
+      <div class="status-card">
+        <div class="status-line">
+          <span class="dot"></span>
+          <span class="mode">Mode démo</span>
+          <button class="gear-btn" id="gearBtn" title="Paramètres" aria-label="Ouvrir les paramètres">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+        <div class="status-sub">réponses simulées — moteur non exposé</div>
+      </div>
+    </div>
+    <div class="g-main">
+      <div class="g-bubble"></div><div class="g-bubble b"></div>
+      <div class="g-bubble" style="width:44%"></div><div class="g-bubble b" style="width:36%"></div>
+      <div class="g-bubble" style="width:52%"></div>
+      <div class="g-composer"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════ LE VOLET DES PARAMÈTRES ════════════════ -->
+  <aside class="panel" role="dialog" aria-label="Paramètres">
+
+    <!-- Rail de sections -->
+    <nav class="rail" aria-label="Sections des paramètres">
+      <div class="rail-top">
+        <span class="logo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+        <b>Paramètres</b>
+      </div>
+      <div class="rail-nav">
+        <button class="rn" type="button" data-goto="p-interface">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Interface</button>
+        <button class="rn" type="button" data-goto="p-modele">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+          Modèles</button>
+        <button class="rn" type="button" data-goto="p-fournisseurs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>
+          Fournisseurs</button>
+        <button class="rn" type="button" data-goto="p-cles">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.777 5.5 5.5 0 0 1 7.777-7.777Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          Clés de services</button>
+        <button class="rn" type="button" data-goto="p-extensions">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>
+          Extensions<span class="rdot" title="Mise à jour disponible"></span></button>
+        <button class="rn" type="button" data-goto="p-outils">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          Outils</button>
+        <button class="rn" type="button" data-goto="p-skills">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg>
+          Skills</button>
+        <button class="rn" type="button" data-goto="p-hermes">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+          Hermes</button>
+        <button class="rn" type="button" data-goto="p-profils">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Profils</button>
+        <button class="rn" type="button" data-goto="p-systeme">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+          Système</button>
+      </div>
+      <div class="rail-foot">moteur v2.4.1</div>
+    </nav>
+
+    <!-- Contenu -->
+    <div class="main">
+      <div class="main-head">
+        <button class="x-btn" id="closeBtn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="main-scroll" id="mainScroll">
+
+        <!-- ══════ SECTION : INTERFACE ══════ -->
+        <section class="pane on" id="p-interface">
+          <h1>Interface</h1>
+          <p class="psub">Le confort de cette interface — appliqué dès le clic.</p>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Thème</div>
+              <div class="desc">L'apparence de l'interface, claire ou sombre.</div>
+            </div>
+            <div class="rc"><div class="seg"><button type="button">Système</button><button type="button" class="on">Clair</button><button type="button">Sombre</button></div></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Largeur de la colonne</div>
+              <div class="desc">La colonne des conversations, à gauche de l'écran.</div>
+            </div>
+            <div class="rc"><div class="slider-row"><input type="range" min="12" max="30" value="19" data-out="wVal"><span class="slider-val" id="wVal">19 %</span></div></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Ordre des projets</div>
+              <div class="desc">Les plus récents d'abord, ou par ordre de nom.</div>
+            </div>
+            <div class="rc">
+              <div class="sel-wrap">
+                <button class="sel-btn" type="button"><span class="sv">Récents</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="sel-list" hidden>
+                  <button class="sel-item on" type="button" data-v="Récents"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Récents</span></span></button>
+                  <button class="sel-item" type="button" data-v="Nom"><span class="check"></span><span class="m-body"><span class="m-name">Nom</span></span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Dossiers repliés</div>
+              <div class="desc">Les dossiers de projets démarrent fermés.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Dossiers repliés"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Jauge de contexte
+                <span class="tip">?<span class="tip-pop">L'anneau devient ambre dans le dernier tiers de la fenêtre, puis rouge à l'approche de la limite.</span></span>
+              </div>
+              <div class="desc">Affiche, autour du bouton d'envoi, la place restante dans la conversation.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Jauge de contexte"></button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : MODÈLES ══════ -->
+        <section class="pane" id="p-modele">
+          <h1>Modèles</h1>
+          <p class="psub">Qui répond, qui travaille en arrière-plan, et avec quel effort.</p>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Modèle de conversation
+                <span class="tip">?<span class="tip-pop">Le modèle choisi dans la barre de saisie vaut pour la conversation en cours ; ceci règle celui des nouvelles conversations.</span></span>
+              </div>
+              <div class="desc">Le modèle qui rédige les réponses.</div>
+            </div>
+            <div class="rc">
+              <div class="sel-wrap" id="selConv">
+                <button class="sel-btn" type="button"><span class="sv">glm-4.6</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="sel-list" hidden>
+                  <button class="sel-item on" type="button" data-v="glm-4.6"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.6</span><span class="m-id">z.ai · fenêtre 128k</span></span></button>
+                  <button class="sel-item" type="button" data-v="glm-4.5-air"><span class="check"></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai · fenêtre 128k</span></span></button>
+                  <button class="sel-item" type="button" data-v="claude-opus-4.7"><span class="check"></span><span class="m-body"><span class="m-name">claude-opus-4.7</span><span class="m-id">Anthropic · fenêtre 200k</span></span></button>
+                  <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google · fenêtre 1M</span></span></button>
+                  <button class="sel-item" type="button" data-v="qwen3.5:27b"><span class="check"></span><span class="m-body"><span class="m-name">qwen3.5:27b</span><span class="m-id">Ollama · sur votre machine</span></span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Modèle d'arrière-plan
+                <span class="tip">?<span class="tip-pop">Par exemple : indexer la mémoire, préparer la veille, résumer une longue conversation.</span></span>
+              </div>
+              <div class="desc">Pour les travaux invisibles — résumés, mémoire, veille. Un modèle plus léger réduit le coût sans changer les réponses.</div>
+            </div>
+            <div class="rc">
+              <div class="sel-wrap">
+                <button class="sel-btn" type="button"><span class="sv">Identique à la conversation</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="sel-list" hidden>
+                  <button class="sel-item on" type="button" data-v="Identique à la conversation"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Identique à la conversation</span></span></button>
+                  <button class="sel-item" type="button" data-v="glm-4.5-air"><span class="check"></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai · léger et rapide</span></span></button>
+                  <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google · très rapide</span></span></button>
+                  <button class="sel-item" type="button" data-v="qwen3.5:27b"><span class="check"></span><span class="m-body"><span class="m-name">qwen3.5:27b</span><span class="m-id">Ollama · sans coût</span></span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Modèle de secours
+                <span class="tip">?<span class="tip-pop">Hermes bascule automatiquement si le modèle principal tombe en panne ou si toutes ses clés échouent.</span></span>
+              </div>
+              <div class="desc">Si le modèle principal devient indisponible, Hermes poursuit avec celui-ci.</div>
+            </div>
+            <div class="rc">
+              <div class="sel-wrap">
+                <button class="sel-btn" type="button"><span class="sv">glm-4.5-air</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="sel-list" hidden>
+                  <button class="sel-item" type="button" data-v="Aucun"><span class="check"></span><span class="m-body"><span class="m-name">Aucun</span></span></button>
+                  <button class="sel-item on" type="button" data-v="glm-4.5-air"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai</span></span></button>
+                  <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google</span></span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" id="rowEffort">
+            <div class="rt">
+              <div class="lbl">Effort de raisonnement
+                <span class="tip">?<span class="tip-pop">Les niveaux proposés dépendent du modèle choisi — certains modèles n'en proposent aucun, et la ligne disparaît alors.</span></span>
+              </div>
+              <div class="desc">La profondeur de réflexion avant de répondre.</div>
+            </div>
+            <div class="rc"><div class="seg" id="segEffort"><button type="button">Léger</button><button type="button" class="on">Moyen</button><button type="button">Élevé</button></div></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Afficher le raisonnement</div>
+              <div class="desc">Montre le cheminement du modèle avant chaque réponse.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Afficher le raisonnement"></button></div>
+          </div>
+
+          <p class="note"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            La place dont Hermes dispose pour une conversation est détectée automatiquement — voir la section Hermes.</p>
+        </section>
+
+        <!-- ══════ SECTION : FOURNISSEURS (LLM uniquement) ══════ -->
+        <section class="pane" id="p-fournisseurs">
+          <h1>Fournisseurs</h1>
+          <p class="psub">Vos comptes d'accès aux modèles de langage. Plusieurs clés par fournisseur : quand l'une atteint sa limite, la suivante prend le relais.</p>
+
+          <!-- z.ai -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span>
+              <div class="cb"><b>z.ai <span class="st ok"><i></i></span></b><span>modèles GLM</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Perso</span><span class="kv">sk-••••••••7f3a</span><span class="st ok"><i></i></span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+              <div class="krow"><span class="kn">Secours</span><span class="kv">sk-••••••••c21b</span><span class="st warn"><i></i>à tester</span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+              <div class="krow"><span class="kn">Compte pro</span><span class="kv">sk-••••••••9d04</span><span class="st err"><i></i>limite atteinte</span><button class="mini tester" type="button" data-out="err" data-why="limite atteinte">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-zai">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-zai" hidden>
+              <input class="tin" placeholder="Étiquette (ex. Perso) et clé">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — à tester">Ajouter</button>
+            </div>
+            <button class="adv-t" type="button" data-open="f-adv-zai">Réglages avancés</button>
+            <div class="adv" id="f-adv-zai" hidden>
+              <div class="adv-in">
+                <span class="albl">Ordre d'utilisation des clés
+                  <span class="adesc">comment choisir la prochaine clé quand il faut changer</span>
+                </span>
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button"><span class="sv">Première disponible</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="Première disponible"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Première disponible</span></span></button>
+                    <button class="sel-item" type="button" data-v="Tournante"><span class="check"></span><span class="m-body"><span class="m-name">Tournante</span><span class="m-id">changement à chaque tour</span></span></button>
+                    <button class="sel-item" type="button" data-v="La moins utilisée"><span class="check"></span><span class="m-body"><span class="m-name">La moins utilisée</span></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- OpenRouter -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span>
+              <div class="cb"><b>OpenRouter <span class="st ok"><i></i></span></b><span>des centaines de modèles sous un même compte</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Principale</span><span class="kv">sk-or-••••44e1</span><span class="st ok"><i></i></span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+              <div class="krow"><span class="kn">Backup</span><span class="kv">sk-or-••••90bc</span><span class="st warn"><i></i>à tester</span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-or">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-or" hidden>
+              <input class="tin" placeholder="Étiquette et clé">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — à tester">Ajouter</button>
+            </div>
+          </div>
+
+          <!-- Anthropic -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span>
+              <div class="cb"><b>Anthropic <span class="st err"><i></i>à réparer</span></b><span>modèles Claude</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Ancienne clé</span><span class="kv">sk-ant-••••02d7</span><span class="st err"><i></i>expirée</span><button class="mini tester" type="button" data-out="err" data-why="clé expirée">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-ant">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-ant" hidden>
+              <input class="tin" placeholder="La nouvelle clé remplacera l'ancienne en priorité">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — l'ancienne reste en secours">Ajouter</button>
+            </div>
+          </div>
+
+          <!-- Ollama -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="7" rx="2"/><rect x="2" y="13" width="20" height="7" rx="2"/><path d="M6 7.5h.01M6 16.5h.01"/></svg></span>
+              <div class="cb"><b>Ollama <span class="st off"><i></i></span></b><span>sur votre machine — aucune clé nécessaire</span></div>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addprov">+ Ajouter un fournisseur</button>
+          <div class="card formcard" id="f-addprov" hidden>
+            <input class="tin" placeholder="Nom ou adresse du fournisseur">
+            <p class="hint">Les fournisseurs connus (z.ai, OpenRouter, Anthropic, Mistral, Ollama…) sont reconnus ; pour les autres, collez simplement leur adresse.</p>
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Fournisseur ajouté — ajoutez une première clé">Ajouter</button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : CLÉS DE SERVICES ══════ -->
+        <section class="pane" id="p-cles">
+          <h1>Clés de services</h1>
+          <p class="psub">Recherche web, images, vidéo — chaque service demande sa propre clé. Plusieurs clés possibles par service.</p>
+
+          <!-- Tavily -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+              <div class="cb"><b>Tavily <span class="st ok"><i></i></span></b><span>recherche web</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Principale</span><span class="kv">tvly-••••••••e9c2</span><span class="st ok"><i></i></span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-tav">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-tav" hidden>
+              <input class="tin" placeholder="Étiquette et clé">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — à tester">Ajouter</button>
+            </div>
+          </div>
+
+          <!-- Exa -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+              <div class="cb"><b>Exa <span class="st warn"><i></i>à tester</span></b><span>recherche web</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Essai</span><span class="kv">exa-••••••••6b34</span><span class="st warn"><i></i>à tester</span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-exa">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-exa" hidden>
+              <input class="tin" placeholder="Étiquette et clé">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — à tester">Ajouter</button>
+            </div>
+          </div>
+
+          <!-- FAL.ai -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></span>
+              <div class="cb"><b>FAL.ai <span class="st ok"><i></i></span></b><span>images et vidéo</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Principale</span><span class="kv">fal_••••••••11f8</span><span class="st ok"><i></i></span><button class="mini tester" type="button" data-out="ok">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-fal">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-fal" hidden>
+              <input class="tin" placeholder="Étiquette et clé">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — à tester">Ajouter</button>
+            </div>
+          </div>
+
+          <!-- xAI -->
+          <div class="card">
+            <div class="ch">
+              <span class="ci"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></span>
+              <div class="cb"><b>xAI <span class="st err"><i></i>crédit épuisé</span></b><span>vidéo et recherche sur X</span></div>
+            </div>
+            <div class="klist">
+              <div class="krow"><span class="kn">Grok Imagine</span><span class="kv">xai-••••••••77aa</span><span class="st err"><i></i>crédit épuisé</span><button class="mini tester" type="button" data-out="err" data-why="crédit épuisé">Tester</button></div>
+            </div>
+            <button class="addln" type="button" data-open="f-key-xai">+ Ajouter une clé</button>
+            <div class="formrow" id="f-key-xai" hidden>
+              <input class="tin" placeholder="Étiquette et clé">
+              <button class="btn btn-p fsubmit" type="button" data-msg="Clé ajoutée — à tester">Ajouter</button>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addsvc">+ Ajouter un service</button>
+          <div class="card formcard" id="f-addsvc" hidden>
+            <input class="tin" placeholder="Nom du service ou adresse">
+            <p class="hint">Tavily, Exa, FAL.ai… ou n'importe quelle adresse d'API.</p>
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Service ajouté — ajoutez sa clé">Ajouter</button></div>
+          </div>
+
+          <p class="note"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            Les clés restent sur votre machine, dans Hermes — jamais dans le navigateur.</p>
+        </section>
+
+        <!-- ══════ SECTION : EXTENSIONS (dépôts + serveurs MCP) ══════ -->
+        <section class="pane" id="p-extensions">
+          <h1>Extensions</h1>
+          <p class="psub">Dépôts et serveurs ajoutés, qui apportent de nouveaux pouvoirs à Hermes. Désactiver garde la configuration ; tout décharger.</p>
+
+          <!-- dev-browser -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+              <div class="xb">
+                <b>dev-browser</b>
+                <span>Pilote un navigateur pour visiter et lire le web · dépôt importé · v0.9.1</span>
+              </div>
+              <span class="st warn"><i></i>v0.9.2 disponible</span>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer dev-browser" data-note="Pris en compte au prochain redémarrage — les sessions en cours seront prévenues"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar">
+                <button class="btn btn-p do-update" type="button" data-name="dev-browser" data-ver="v0.9.2">Mettre à jour</button>
+                <button class="btn" type="button" data-toast="Vérification faite — rien à signaler">Vérifier</button>
+                <button class="btn" type="button" data-toast="Version figée — plus de mises à jour automatiques">Épingler</button>
+              </div>
+              <div class="grp2">Dernières modifications</div>
+              <div class="commit"><span class="cd">il y a 3 j</span><span>reconnexion du navigateur après la mise en veille</span></div>
+              <div class="commit"><span class="cd">il y a 6 j</span><span>mode invisible pour l'arrière-plan</span></div>
+              <div class="commit"><span class="cd">…</span><span>4 autres modifications</span></div>
+            </div>
+          </div>
+
+          <!-- scrapling -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.777 5.5 5.5 0 0 1 7.777-7.777Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
+              <div class="xb">
+                <b>scrapling</b>
+                <span>Extrait le contenu précis de n'importe quelle page · dépôt importé · v1.2.4</span>
+              </div>
+              <span class="st ok"><i></i></span>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer scrapling" data-note="Pris en compte au prochain redémarrage — les sessions en cours seront prévenues"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar">
+                <button class="btn" type="button" data-toast="Vérification faite — rien à signaler">Vérifier</button>
+                <button class="btn" type="button" data-toast="Version figée — plus de mises à jour automatiques">Épingler</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- filesystem (MCP) -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><path d="M8 16h.01"/><path d="M8 20h.01"/><path d="M12 18h.01"/><path d="M12 22h.01"/><path d="M16 16h.01"/><path d="M16 20h.01"/></svg></span>
+              <div class="xb">
+                <b>Fichiers de projet</b>
+                <span>Lit et écrit dans vos dossiers de projet · serveur ajouté · local</span>
+              </div>
+              <span class="st ok"><i></i></span>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Fichiers de projet" data-note="Pris en compte au prochain redémarrage — les sessions en cours seront prévenues"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar">
+                <button class="btn" type="button" data-toast="Vérification faite — rien à signaler">Vérifier</button>
+                <button class="btn" type="button" data-toast="Extension retirée d'Hermes">Retirer</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- github (MCP) -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg></span>
+              <div class="xb">
+                <b>GitHub</b>
+                <span>Dépôts, demandes de fusion et tickets · serveur ajouté</span>
+              </div>
+              <span class="st ok"><i></i></span>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer GitHub" data-note="Pris en compte au prochain redémarrage — les sessions en cours seront prévenues"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar">
+                <button class="btn" type="button" data-toast="Vérification faite — rien à signaler">Vérifier</button>
+                <button class="btn" type="button" data-toast="Extension retirée d'Hermes">Retirer</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- browser-tools (MCP, désactivé) -->
+          <div class="xr off">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>
+              <div class="xb">
+                <b>browser-tools</b>
+                <span>Débogue le navigateur pendant les sessions · serveur ajouté</span>
+              </div>
+              <span class="st off"><i></i></span>
+              <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer browser-tools" data-note="Pris en compte au prochain redémarrage — les sessions en cours seront prévenues"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar">
+                <button class="btn" type="button" data-toast="Vérification faite — rien à signaler">Vérifier</button>
+                <button class="btn" type="button" data-toast="Extension retirée d'Hermes">Retirer</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addext">+ Importer un dépôt GitHub</button>
+          <button class="addln" type="button" data-open="f-addmcp" style="margin-left:18px">+ Ajouter un serveur</button>
+          <div class="card formcard" id="f-addext" hidden>
+            <input class="tin" placeholder="Adresse du dépôt (https://github.com/…)">
+            <p class="hint">Hermes analysera le dépôt et détectera ce qu'il apporte : outils, skills, serveur.</p>
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Import lancé — Hermes analyse le dépôt">Importer</button></div>
+          </div>
+          <div class="card formcard" id="f-addmcp" hidden>
+            <input class="tin" placeholder="Adresse du serveur, ou commande de lancement">
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Serveur ajouté — activé au prochain redémarrage">Ajouter</button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : OUTILS ══════ -->
+        <section class="pane" id="p-outils">
+          <h1>Outils</h1>
+          <p class="psub">Ce qu'Hermes peut faire, outil par outil. Les changements s'appliquent au prochain message.</p>
+
+          <div class="grp">Recherche &amp; lecture</div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+              <div class="xb"><b>Recherche web</b><span>Cherche sur le web et cite ses sources.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Recherche web"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="adv-in" style="border-top:none">
+                <span class="albl">Fournisseur</span>
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button"><span class="sv">Tavily</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="Tavily"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Tavily</span><span class="m-id">clé active</span></span></button>
+                    <button class="sel-item" type="button" data-v="Exa"><span class="check"></span><span class="m-body"><span class="m-name">Exa</span><span class="m-id">à tester</span></span></button>
+                    <button class="sel-item" type="button" data-v="DuckDuckGo"><span class="check"></span><span class="m-body"><span class="m-name">DuckDuckGo</span><span class="m-id">sans clé, plus lent</span></span></button>
+                  </div>
+                </div>
+              </div>
+              <div class="bar"><span class="sep"></span><button class="linkbtn" type="button" data-goto="p-cles">Gérer les clés</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+              <div class="xb"><b>Navigateur</b><span>Ouvre des pages et en lit le contenu, comme un visiteur.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Navigateur"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="adv-in" style="border-top:none">
+                <span class="albl">Moteur</span>
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button"><span class="sv">dev-browser</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="dev-browser"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">dev-browser</span><span class="m-id">extension · v0.9.1</span></span></button>
+                    <button class="sel-item" type="button" data-v="scrapling"><span class="check"></span><span class="m-body"><span class="m-name">scrapling</span><span class="m-id">extension · v1.2.4</span></span></button>
+                    <button class="sel-item" type="button" data-v="Intégré"><span class="check"></span><span class="m-body"><span class="m-name">Intégré</span><span class="m-id">Chrome local</span></span></button>
+                  </div>
+                </div>
+              </div>
+              <div class="bar"><span class="sep"></span><button class="linkbtn" type="button" data-goto="p-extensions">Gérer les extensions</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg></span>
+              <div class="xb"><b>Recherche sur X</b><span>Publications de X, via xAI.</span></div>
+              <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer Recherche sur X"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><span style="font-size:12px;color:var(--muted-foreground)">Nécessite une clé xAI.</span><button class="linkbtn" type="button" data-goto="p-cles">Ajouter la clé</button></div>
+            </div>
+          </div>
+
+          <div class="grp">Images, vidéo &amp; voix</div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></span>
+              <div class="xb"><b>Génération d'images</b><span>Crée des images à partir d'une description.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Génération d'images"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="adv-in" style="border-top:none">
+                <span class="albl">Prestataire</span>
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button"><span class="sv">FAL.ai</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="FAL.ai"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">FAL.ai</span><span class="m-id">clé active</span></span></button>
+                    <button class="sel-item" type="button" data-v="xAI"><span class="check"></span><span class="m-body"><span class="m-name">xAI</span><span class="m-id">clé en échec</span></span></button>
+                  </div>
+                </div>
+              </div>
+              <div class="bar"><span class="sep"></span><button class="linkbtn" type="button" data-goto="p-cles">Gérer les clés</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></span>
+              <div class="xb"><b>Génération vidéo</b><span>Crée de courtes vidéos à partir d'une description.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Génération vidéo"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="adv-in" style="border-top:none">
+                <span class="albl">Prestataire</span>
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button"><span class="sv">FAL.ai · Veo 3.1</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="FAL.ai · Veo 3.1"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">FAL.ai · Veo 3.1</span><span class="m-id">clé active</span></span></button>
+                    <button class="sel-item" type="button" data-v="FAL.ai · Kling 3.0"><span class="check"></span><span class="m-body"><span class="m-name">FAL.ai · Kling 3.0</span><span class="m-id">clé active</span></span></button>
+                    <button class="sel-item" type="button" data-v="xAI · Grok Imagine"><span class="check"></span><span class="m-body"><span class="m-name">xAI · Grok Imagine</span><span class="m-id">clé en échec</span></span></button>
+                  </div>
+                </div>
+              </div>
+              <div class="bar"><span class="sep"></span><button class="linkbtn" type="button" data-goto="p-cles">Gérer les clés</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <div class="xb"><b>Analyse d'images</b><span>Comprend les images jointes à la conversation.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Analyse d'images"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="adv-in" style="border-top:none">
+                <span class="albl">Modèle</span>
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button"><span class="sv">glm-4.6v</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="glm-4.6v"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.6v</span><span class="m-id">z.ai</span></span></button>
+                    <button class="sel-item" type="button" data-v="claude-opus-4.7"><span class="check"></span><span class="m-body"><span class="m-name">claude-opus-4.7</span><span class="m-id">Anthropic</span></span></button>
+                    <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google</span></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Analyse vidéo</div>
+              <div class="desc">Comprend les vidéos jointes — gourmand, donc désactivé par défaut.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer Analyse vidéo"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Synthèse vocale</div>
+              <div class="desc">Transforme un texte en voix naturelle.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Synthèse vocale"></button></div>
+          </div>
+
+          <div class="grp">Exécution &amp; fichiers</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Terminal
+                <span class="tip">?<span class="tip-pop">Le réglage « Demander avant chaque action sensible » se règle dans les Profils.</span></span>
+              </div>
+              <div class="desc">Exécute des commandes sur votre machine.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Terminal"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Fichiers</div>
+              <div class="desc">Lit, écrit et organise vos fichiers.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Fichiers"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Exécution de code</div>
+              <div class="desc">Fait tourner du Python avec les outils d'Hermes.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Exécution de code"></button></div>
+          </div>
+
+          <div class="grp">Mémoire &amp; organisation</div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span>
+              <div class="xb"><b>Mémoire</b><span>Note et rappelle ce qui vous concerne, d'une session à l'autre.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Mémoire"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><button class="linkbtn" type="button" data-goto="p-hermes">Régler la mémoire</button></div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Skills</div>
+              <div class="desc">Suit les procédures installées — voir la section Skills.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Skills"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Historique des sessions</div>
+              <div class="desc">Retrouve d'anciennes conversations.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Historique des sessions"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Tâches planifiées</div>
+              <div class="desc">Programme des actions récurrentes — veille, rapports.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Tâches planifiées"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Délégation</div>
+              <div class="desc">Confie des sous-tâches à d'autres agents pour aller plus vite.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Délégation"></button></div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></span>
+              <div class="xb"><b>Contrôle de l'ordinateur</b><span>Pilote l'écran en arrière-plan, comme le ferait une main humaine.</span></div>
+              <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer Contrôle de l'ordinateur"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><span style="font-size:12px;color:var(--muted-foreground)">Nécessite le pilote cua-driver sur votre machine.</span></div>
+            </div>
+          </div>
+
+          <div class="grp">Vos outils</div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+              <div class="xb"><b>Nettoyeur de CSV <span class="orig">créé par vous</span></b><span>Supprime les doublons et normalise les colonnes.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer Nettoyeur de CSV"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <input class="tin" style="margin-top:10px" value="Nettoyeur de CSV">
+              <input class="tin" style="margin-top:8px" value="Supprime les doublons et normalise les colonnes.">
+              <div class="grp2">Paramètres</div>
+              <div class="prow">
+                <input class="tin" value="fichier">
+                <div class="sel-wrap">
+                  <button class="sel-btn" type="button" style="min-width:120px"><span class="sv">Fichier</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item" type="button" data-v="Texte"><span class="check"></span><span class="m-body"><span class="m-name">Texte</span></span></button>
+                    <button class="sel-item" type="button" data-v="Nombre"><span class="check"></span><span class="m-body"><span class="m-name">Nombre</span></span></button>
+                    <button class="sel-item on" type="button" data-v="Fichier"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Fichier</span></span></button>
+                  </div>
+                </div>
+                <span class="reqlbl">requis <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Paramètre requis"></button></span>
+              </div>
+              <div class="edbar">
+                <button class="btn" type="button" data-toast="Outil supprimé">Supprimer</button>
+                <span class="sep"></span>
+                <button class="btn fsubmit" type="button" data-msg="Outil enregistré — actif au prochain message">Enregistrer</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addtool">+ Créer un outil</button>
+          <div class="card formcard" id="f-addtool" hidden>
+            <input class="tin" placeholder="Nom de l'outil (ex. Convertisseur PDF)">
+            <input class="tin" style="margin-top:8px" placeholder="À quoi il sert — une phrase suffit">
+            <div class="grp2">Paramètres</div>
+            <div id="paramList"></div>
+            <button class="addln" type="button" id="addParam">+ Ajouter un paramètre</button>
+            <button class="adv-t" type="button" data-open="f-tooladv">Mode avancé — décrire le schéma à la main</button>
+            <div id="f-tooladv" hidden>
+              <textarea class="ed" rows="4" placeholder="Description formelle de l'outil (JSON) — pour qui sait déjà ce qu'il fait."></textarea>
+            </div>
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Outil créé — actif dès le prochain message">Créer l'outil</button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : SKILLS ══════ -->
+        <section class="pane" id="p-skills">
+          <h1>Skills</h1>
+          <p class="psub">Des procédures écrites que Hermes suit pour certaines tâches. Chaque skill installée passe un contrôle qualité avant de s'activer.</p>
+
+          <div class="searchrow">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="tin" id="skq" placeholder="Chercher une skill à installer…" autocomplete="off">
+          </div>
+          <div class="skres" id="skres" hidden></div>
+
+          <div class="grp">Sources <span class="grpsub">où Hermes cherche les skills</span></div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">skills.sh</div>
+              <div class="desc">Le catalogue public — recherche, tout est vérifié à l'installation.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer skills.sh"></button></div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg></span>
+              <div class="xb"><b>mes-skills <span class="orig">votre dépôt GitHub</span></b><span>Vos skills personnelles, synchronisées depuis GitHub.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer le dépôt mes-skills"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><button class="btn" type="button" data-toast="Dépôt retiré des sources">Retirer</button></div>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addrepo">+ Ajouter un dépôt de skills</button>
+          <div class="card formcard" id="f-addrepo" hidden>
+            <input class="tin" placeholder="Adresse du dépôt (https://github.com/…)">
+            <p class="hint">Hermes ira y chercher des skills en plus de skills.sh.</p>
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Dépôt ajouté — Hermes y cherchera des skills">Ajouter</button></div>
+          </div>
+
+          <div class="grp">Natives Hermes <span class="grpsub">fournies avec le moteur, mises à jour avec lui</span></div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></span>
+              <div class="xb"><b>csv-to-chart</b><span>Transforme un CSV en graphique propre.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer csv-to-chart"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <textarea class="ed" rows="5"># csv-to-chart
+Transforme un fichier CSV en graphique lisible.
+1. Lire le CSV et deviner les colonnes (valeurs, dates, libellés).
+2. Choisir le graphique le plus clair pour ces données.
+3. Rendre le graphique avec les couleurs d'Hermes.</textarea>
+              <div class="edbar"><span class="sep"></span><button class="btn fsubmit" type="button" data-msg="Enregistré">Enregistrer</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></span>
+              <div class="xb"><b>web-reader</b><span>Lit une page web et en extrait l'essentiel.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer web-reader"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></span>
+              <div class="xb"><b>export-pdf</b><span>Imprime un document en PDF net et sélectionnable.</span></div>
+              <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer export-pdf"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="grp">Créées par Hermes <span class="grpsub">écrites par l'agent au fil des sessions</span></div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+              <div class="xb"><b>rapport-hebdo</b><span>Résume vos conversations de la semaine en un rapport.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer rapport-hebdo"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <textarea class="ed" rows="5"># rapport-hebdo
+Chaque vendredi, préparer le rapport de la semaine.
+1. Relire les conversations de la semaine.
+2. Extraire décisions, avancées, points bloqués.
+3. Rédiger un rapport court, une page maximum.</textarea>
+              <div class="edbar">
+                <button class="btn" type="button" data-toast="Skill supprimée">Supprimer</button>
+                <span class="sep"></span>
+                <button class="btn fsubmit" type="button" data-msg="Enregistré">Enregistrer</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+              <div class="xb"><b>veille-techno</b><span>Veille hebdomadaire sur l'écosystème des agents.</span></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer veille-techno"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+              <div class="xb"><b>citation-web</b><span>Cite ses sources en notes de bas de page.</span></div>
+              <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer citation-web"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="grp">Installées <span class="grpsub">de skills.sh ou de vos dépôts — toutes vérifiées</span></div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <div class="xb"><b>pdf-sign <span class="orig">skills.sh</span></b><span>Vérifie et signe des PDF.</span></div>
+              <span class="st ok"><i></i></span>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Activer pdf-sign"></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><button class="btn" type="button" data-toast="Skill désinstallée">Désinstaller</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+              <div class="xb"><b>table-master <span class="orig">skills.sh</span></b><span>Assemble des tableaux complexes à partir de plusieurs sources.</span></div>
+              <span class="st warn"><i></i>analyse en cours</span>
+              <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Activer table-master" disabled></button>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><span style="font-size:12px;color:var(--muted-foreground)">Le contrôle qualité tourne — la skill s'activera si tout est en ordre.</span></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+              <div class="xb"><b>auto-post-x <span class="orig">votre dépôt</span></b><span>Publie automatiquement sur X.</span></div>
+              <span class="st err"><i></i>refusée</span>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <p class="hint" style="margin-top:10px">Pourquoi refusée ? La skill demande un accès étendu au disque sans l'expliquer, et sa documentation est trop mince pour être évaluée.</p>
+              <button class="adv-t" type="button" data-open="f-rapport">Rapport complet</button>
+              <div id="f-rapport" hidden>
+                <div class="adv-in"><span class="albl">Évaluation <span class="adesc">SkillEvaluator — lisibilité et documentation</span></span><span class="st err"><i></i>insuffisante</span></div>
+                <div class="adv-in"><span class="albl">Inspection <span class="adesc">SkillSpector — accès et effets annoncés</span></span><span class="st err"><i></i>accès disque non annoncé</span></div>
+              </div>
+              <div class="bar">
+                <button class="btn" type="button" data-toast="Skill désinstallée">Désinstaller</button>
+                <span class="sep"></span>
+                <button class="btn" type="button" data-toast="Nouvelle analyse demandée">Redemander une analyse</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addskill">+ Créer une skill</button>
+          <div class="card formcard" id="f-addskill" hidden>
+            <input class="tin" placeholder="Nom de la skill (ex. tri-photos)">
+            <textarea class="ed" rows="5" placeholder="Décrivez la procédure à suivre, étape par étape — comme vous l'expliqueriez à quelqu'un de fiable."></textarea>
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Skill créée — active dès le prochain message">Créer</button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : HERMES (mémoire + savoir + contexte + comportement) ══════ -->
+        <section class="pane" id="p-hermes">
+          <h1>Hermes</h1>
+          <p class="psub">Sa mémoire, son savoir, sa façon de gérer les conversations longues — tout ce qui le constitue, au même endroit.</p>
+
+          <div class="grp">Mémoire</div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span>
+              <div class="xb"><b>Notes d'Hermes <span class="orig">MEMORY.md</span></b><span>Ce qu'Hermes a retenu de vos conversations.</span></div>
+              <span class="gauge"><span class="gbar"><i style="width:68%"></i></span><span class="gtxt">68 %</span></span>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <textarea class="ed" rows="6"># Notes
+- Préfère les réponses en français, ton direct sans jargon.
+- Projet principal : Atlas — livraison prévue en juin.
+- Ne pas rouvrir les fichiers de config sans demander.
+- Café le matin, thé l'après-midi — le rappeler est apprécié.</textarea>
+              <div class="edbar"><span class="sep"></span><button class="btn fsubmit" type="button" data-msg="Enregistré">Enregistrer</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+              <div class="xb"><b>Votre profil <span class="orig">USER.md</span></b><span>Ce qu'Hermes sait de vous, relu à chaque conversation.</span></div>
+              <span class="gauge"><span class="gbar"><i style="width:31%"></i></span><span class="gtxt">31 %</span></span>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <textarea class="ed" rows="5"># Profil
+- Aurore, ingénieure — plutôt matinale.
+- Geeks non : les termes techniques se justifient d'une phrase.
+- Les livrables en fichiers, jamais en collage dans le chat.</textarea>
+              <div class="edbar"><span class="sep"></span><button class="btn fsubmit" type="button" data-msg="Enregistré">Enregistrer</button></div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Mémoire
+                <span class="tip">?<span class="tip-pop">Par exemple : « préfère les réponses courtes », « le projet Atlas arrive en juin ».</span></span>
+              </div>
+              <div class="desc">Hermes retient des faits vous concernant d'une conversation à l'autre : préférences, projets, décisions.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Mémoire"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Profil utilisateur</div>
+              <div class="desc">Ajoute ce qu'Hermes sait de vous au début de chaque conversation.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Profil utilisateur"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Approbation des écritures</div>
+              <div class="desc">Hermes montre ce qu'il veut retenir avant de l'enregistrer.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Approbation des écritures"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Rappel externe</div>
+              <div class="desc">Cherche des souvenirs plus anciens quand la mémoire récente ne suffit pas.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Rappel externe"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Taille des notes</div>
+              <div class="desc">Au-delà, les souvenirs les moins utiles sont oubliés en premier.</div>
+            </div>
+            <div class="rc"><input class="num" type="number" value="2200" step="100" min="500" aria-label="Taille des notes"> <span class="rounit">caractères</span></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Taille du profil</div>
+              <div class="desc">Même principe pour ce qu'Hermes sait de vous.</div>
+            </div>
+            <div class="rc"><input class="num" type="number" value="1375" step="25" min="250" aria-label="Taille du profil"> <span class="rounit">caractères</span></div>
+          </div>
+
+          <div class="grp">Savoir <span class="grpsub">les fichiers qu'Hermes lit à chaque session</span></div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+              <div class="xb"><b>SOUL.md <span class="orig">toujours chargé</span></b><span>La personnalité d'Hermes : ton, humour, exigences.</span></div>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <textarea class="ed" rows="5"># Âme d'Hermes
+- Ton : chaleureux, précis, jamais obséquieux.
+- Dire « je ne sais pas » plutôt qu'inventer.
+- Une image vaut un paragraphe — mais seulement si elle aide.</textarea>
+              <div class="edbar"><span class="sep"></span><button class="btn fsubmit" type="button" data-msg="Enregistré">Enregistrer</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span>
+              <div class="xb"><b>AGENTS.md</b><span>Vos conventions de travail : comment nommer, structurer, livrer.</span></div>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <textarea class="ed" rows="5"># Conventions du projet
+- Commits en français, impératif, sans préfixe.
+- Tout fichier livré passe par un artefact versionné.
+- Pas de dépendance ajoutée sans accord écrit.</textarea>
+              <div class="edbar"><span class="sep"></span><button class="btn fsubmit" type="button" data-msg="Enregistré">Enregistrer</button></div>
+            </div>
+          </div>
+
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
+              <div class="xb"><b>AGENTS.override.md <span class="orig">jamais partagé</span></b><span>Vos ajustements personnels, par-dessus les conventions du projet.</span></div>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">CLAUDE.md
+                <span class="tip">?<span class="tip-pop">Hermes charge un seul fichier de conventions, dans cet ordre : .hermes.md, puis vos ajustements, puis AGENTS.md, puis CLAUDE.md.</span></span>
+              </div>
+              <div class="desc">Fichier similaire détecté — non utilisé, un autre sert déjà.</div>
+            </div>
+            <div class="rc"><span class="st off"><i></i></span></div>
+          </div>
+
+          <div class="grp">Conversations longues</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Fenêtre du modèle
+                <span class="tip">?<span class="tip-pop">Elle suit le modèle choisi dans la section Modèles — aucune valeur à régler à la main.</span></span>
+              </div>
+              <div class="desc">La place dont Hermes dispose pour une conversation. Détectée automatiquement.</div>
+            </div>
+            <div class="rc"><span class="roval">128 000 jetons</span> <span class="rounit">· glm-4.6</span></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Résumé automatique</div>
+              <div class="desc">Quand la conversation approche de la limite, Hermes la résume et poursuit — rien n'est coupé.</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Résumé automatique"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Seuil du résumé
+                <span class="tip">?<span class="tip-pop">Plus haut : des conversations plus longues avant le résumé, au prix d'un coût par message plus élevé.</span></span>
+              </div>
+              <div class="desc">Déclenche le résumé à ce niveau de remplissage de la fenêtre.</div>
+            </div>
+            <div class="rc"><div class="slider-row"><input type="range" min="50" max="95" value="80" data-out="thrVal"><span class="slider-val" id="thrVal">80 %</span></div></div>
+          </div>
+
+          <div class="grp">Comportement</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Initiatives d'Hermes
+                <span class="tip">?<span class="tip-pop">Ces tâches utilisent le modèle d'arrière-plan, réglé dans la section Modèles.</span></span>
+              </div>
+              <div class="desc">Laisse Hermes lancer seul certaines tâches de fond : veille, résumés périodiques.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Initiatives d'Hermes"></button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : PROFILS ══════ -->
+        <section class="pane" id="p-profils">
+          <h1>Profils</h1>
+          <p class="psub">Des ensembles de réglages prêts à appliquer en un clic — modèle, effort, outils, skills.</p>
+
+          <!-- Défaut -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+              <div class="xb"><b>Défaut <span class="st ok"><i></i>appliqué</span></b><span>glm-4.6 · effort élevé · 6 skills · tous les outils</span></div>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="row" style="border-top:none;padding-top:8px">
+                <div class="rt"><div class="lbl">Modèle</div><div class="desc">Celui que ce profil utilise pour répondre.</div></div>
+                <div class="rc">
+                  <div class="sel-wrap">
+                    <button class="sel-btn" type="button"><span class="sv">glm-4.6</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                    <div class="sel-list" hidden>
+                      <button class="sel-item on" type="button" data-v="glm-4.6"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">glm-4.6</span><span class="m-id">z.ai</span></span></button>
+                      <button class="sel-item" type="button" data-v="glm-4.5-air"><span class="check"></span><span class="m-body"><span class="m-name">glm-4.5-air</span><span class="m-id">z.ai · rapide</span></span></button>
+                      <button class="sel-item" type="button" data-v="claude-opus-4.7"><span class="check"></span><span class="m-body"><span class="m-name">claude-opus-4.7</span><span class="m-id">Anthropic</span></span></button>
+                      <button class="sel-item" type="button" data-v="gemini-3-flash"><span class="check"></span><span class="m-body"><span class="m-name">gemini-3-flash</span><span class="m-id">Google</span></span></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="rt"><div class="lbl">Effort de raisonnement</div><div class="desc">Les niveaux viennent du modèle choisi ci-dessus.</div></div>
+                <div class="rc"><div class="seg"><button type="button">Léger</button><button type="button">Moyen</button><button type="button" class="on">Élevé</button></div></div>
+              </div>
+              <div class="row">
+                <div class="rt"><div class="lbl">Actions sensibles</div><div class="desc">Confirmation avant chaque commande délicate.</div></div>
+                <div class="rc"><div class="seg"><button type="button" class="on">Demander</button><button type="button">Auto</button></div></div>
+              </div>
+              <div class="grp2">Skills du profil</div>
+              <div class="cklist">
+                <label class="ck">rapport-hebdo <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="rapport-hebdo"></button></label>
+                <label class="ck">veille-techno <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="veille-techno"></button></label>
+                <label class="ck">citation-web <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="citation-web"></button></label>
+                <label class="ck">csv-to-chart <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="csv-to-chart"></button></label>
+                <label class="ck">web-reader <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="web-reader"></button></label>
+                <label class="ck">export-pdf <button class="switch" type="button" role="switch" aria-checked="false" aria-label="export-pdf"></button></label>
+              </div>
+              <div class="edbar">
+                <button class="btn" type="button" data-toast="Profil supprimé">Supprimer</button>
+                <button class="btn" type="button" data-toast="Profil dupliqué">Dupliquer</button>
+                <span class="sep"></span>
+                <button class="btn btn-p" type="button" data-toast="Profil appliqué">Appliquer</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analyse -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+              <div class="xb"><b>Analyse</b><span>glm-4.6 · effort élevé · 3 skills · sans terminal</span></div>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><button class="btn" type="button" data-toast="Profil dupliqué">Dupliquer</button><button class="btn btn-p" type="button" data-toast="Profil appliqué">Appliquer</button></div>
+            </div>
+          </div>
+
+          <!-- Veille -->
+          <div class="xr">
+            <div class="xh">
+              <span class="xi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <div class="xb"><b>Veille</b><span>glm-4.5-air · effort léger · 3 skills · orientée web</span></div>
+              <svg class="xmore" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="xbody">
+              <div class="bar"><span class="sep"></span><button class="btn" type="button" data-toast="Profil dupliqué">Dupliquer</button><button class="btn btn-p" type="button" data-toast="Profil appliqué">Appliquer</button></div>
+            </div>
+          </div>
+
+          <button class="addln" type="button" data-open="f-addprofil">+ Nouveau profil</button>
+          <div class="card formcard" id="f-addprofil" hidden>
+            <input class="tin" placeholder="Nom du profil (ex. Rédaction)">
+            <div class="edbar"><span class="sep"></span><button class="btn btn-p fsubmit" type="button" data-msg="Profil créé — réglez-le puis appliquez-le">Créer</button></div>
+          </div>
+        </section>
+
+        <!-- ══════ SECTION : SYSTÈME ══════ -->
+        <section class="pane" id="p-systeme">
+          <h1>Système</h1>
+          <p class="psub">Versions, exécution des commandes, journaux.</p>
+
+          <div class="grp">Moteur Hermes</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Version</div>
+              <div class="desc">La version du moteur installée sur votre machine.</div>
+            </div>
+            <div class="rc"><span class="roval">v2.4.1</span><button class="btn" type="button" id="chkUpd">Vérifier les mises à jour</button></div>
+          </div>
+
+          <div class="updcard" id="updCard" hidden>
+            <b>Hermes v2.5.0 — publié il y a 3 jours</b>
+            <ul>
+              <li>Conversations longues 40 % plus légères grâce aux nouveaux résumés</li>
+              <li>Génération vidéo stabilisée</li>
+              <li>Corrections de connexion pour les serveurs ajoutés</li>
+            </ul>
+            <div class="row" style="border-bottom:none;padding:8px 0 0">
+              <div class="rt"><div class="lbl">Sauvegarde avant mise à jour</div><div class="desc">Pour revenir en arrière d'un clic si besoin.</div></div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Sauvegarde avant mise à jour"></button></div>
+            </div>
+            <div class="edbar">
+              <button class="btn" type="button" data-toast="Rappel plus tard">Plus tard</button>
+              <span class="sep"></span>
+              <button class="btn btn-p" type="button" data-toast="Mise à jour lancée — Hermes redémarrera à la fin">Mettre à jour</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Interface</div>
+              <div class="desc">La révision de cette interface, installée sur votre machine.</div>
+            </div>
+            <div class="rc"><span class="roval">1680b5e</span> <span class="rounit">à jour</span></div>
+          </div>
+
+          <div class="grp">Outils externes</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Chrome headless</div>
+              <div class="desc">Utilisé par le navigateur d'Hermes.</div>
+            </div>
+            <div class="rc"><span class="st ok"><i></i></span></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">FFmpeg</div>
+              <div class="desc">Utilisé pour la vidéo et la voix.</div>
+            </div>
+            <div class="rc"><span class="st ok"><i></i></span></div>
+          </div>
+
+          <div class="grp">Exécution des commandes</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Où s'exécutent les commandes</div>
+              <div class="desc">Sur votre machine, dans un conteneur isolé, ou sur une machine distante.</div>
+            </div>
+            <div class="rc"><div class="seg"><button type="button" class="on">Local</button><button type="button">Conteneur</button><button type="button">Distant</button></div></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Durée max d'une commande</div>
+              <div class="desc">Au-delà, la commande est coupée et signalée.</div>
+            </div>
+            <div class="rc"><input class="num" type="number" value="120" step="10" min="10" aria-label="Durée max d'une commande"> <span class="rounit">secondes</span></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Réseau isolé
+                <span class="tip">?<span class="tip-pop">Utile pour exécuter du code non fiable sans risque de fuite.</span></span>
+              </div>
+              <div class="desc">Le conteneur coupe l'accès au réseau.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Réseau isolé"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Installations personnelles</div>
+              <div class="desc">Ajoute vos propres outils aux commandes disponibles (nvm, cargo…).</div>
+            </div>
+            <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Installations personnelles"></button></div>
+          </div>
+
+          <div class="grp">Journaux</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Journalisation détaillée</div>
+              <div class="desc">Trace chaque échange — utile au débogage, coûteux en écriture disque.</div>
+            </div>
+            <div class="rc"><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Journalisation détaillée"></button></div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Télémétrie</div>
+              <div class="desc">Ce qu'Hermes envoie à l'extérieur sur son usage.</div>
+            </div>
+            <div class="rc"><span class="roval" style="color:var(--muted-foreground);font-weight:500">Aucune — tout reste chez vous</span></div>
+          </div>
+
+          <div class="grp">Actions</div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Redémarrer Hermes</div>
+              <div class="desc">Les sessions en cours seront prévenues avant l'arrêt.</div>
+            </div>
+            <div class="rc">
+              <button class="btn" type="button" id="restartBtn">Redémarrer</button>
+              <span id="restartRow" hidden>
+                <button class="btn" type="button" id="restartNo">Annuler</button>
+                <button class="btn btn-p" type="button" id="restartYes">Confirmer</button>
+              </span>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="rt">
+              <div class="lbl">Vider le cache des rendus</div>
+              <div class="desc">Libère de la place si les documents s'accumulent.</div>
+            </div>
+            <div class="rc"><button class="btn" type="button" id="clearCache">Vider</button></div>
+          </div>
+        </section>
+
+        <!-- template : ligne de paramètre pour l'assistant de création d'outil -->
+        <template id="paramTpl">
+          <div class="prow">
+            <input class="tin" placeholder="Nom du paramètre">
+            <div class="sel-wrap">
+              <button class="sel-btn" type="button" style="min-width:120px"><span class="sv">Texte</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="sel-list" hidden>
+                <button class="sel-item on" type="button" data-v="Texte"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Texte</span></span></button>
+                <button class="sel-item" type="button" data-v="Nombre"><span class="check"></span><span class="m-body"><span class="m-name">Nombre</span></span></button>
+                <button class="sel-item" type="button" data-v="Fichier"><span class="check"></span><span class="m-body"><span class="m-name">Fichier</span></span></button>
+              </div>
+            </div>
+            <span class="reqlbl">requis <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Paramètre requis"></button></span>
+          </div>
+        </template>
+
+      </div><!-- /main-scroll -->
+    </div><!-- /main -->
+  </aside>
+</div>
+
+<div class="pill">Échap pour fermer</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = (s, c) => (c || document).querySelector(s);
+const $$ = (s, c) => [...(c || document).querySelectorAll(s)];
+
+/* ---------- volet ---------- */
+const app = $('#app');
+$('#gearBtn').addEventListener('click', () => app.classList.remove('closed'));
+$('#closeBtn').addEventListener('click', () => app.classList.add('closed'));
+addEventListener('keydown', e => { if (e.key === 'Escape') app.classList.add('closed'); });
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---------- navigation par le rail ---------- */
+const panes = $$('.pane');
+const items = $$('.rn');
+function goto(id) {
+  items.forEach(b => b.classList.toggle('on', b.dataset.goto === id));
+  panes.forEach(p => p.classList.toggle('on', p.id === id));
+  $('#mainScroll').scrollTop = 0;
+}
+items.forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
+$$('[data-goto]').forEach(el => {
+  if (el.classList.contains('rn')) return;
+  el.addEventListener('click', () => goto(el.dataset.goto));
+});
+goto('p-interface');
+
+/* ---------- effort dynamique : les niveaux viennent du modèle ---------- */
+const EFFORTS = {
+  'glm-4.6': ['Léger', 'Moyen', 'Élevé'],
+  'glm-4.5-air': ['Léger', 'Moyen', 'Élevé'],
+  'claude-opus-4.7': ['Bas', 'Moyen', 'Haut'],
+  'gemini-3-flash': null, /* ce modèle n'expose aucun niveau */
+  'qwen3.5:27b': ['Désactivé', 'Léger', 'Approfondi']
+};
+$('#selConv').addEventListener('change', e => {
+  const lv = EFFORTS[e.detail];
+  const row = $('#rowEffort');
+  if (!lv) {
+    row.style.display = 'none';
+    toast('Ce modèle ne propose pas de réglage d\u2019effort');
+    return;
+  }
+  row.style.display = '';
+  const seg = $('#segEffort');
+  seg.innerHTML = '';
+  lv.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = l;
+    if (i === Math.min(1, lv.length - 1)) b.classList.add('on');
+    seg.appendChild(b);
+  });
+});
+
+/* ---------- curseurs ---------- */
+$$('input[type=range]').forEach(r => {
+  const out = r.dataset.out ? $('#' + r.dataset.out) : null;
+  if (!out) return;
+  const f = () => out.textContent = r.value + ' %';
+  r.addEventListener('input', f);
+  f();
+});
+
+/* ---------- interactions déléguées ---------- */
+document.addEventListener('click', e => {
+  /* fermer les listes déroulantes ouvertes si on clique ailleurs */
+  if (!e.target.closest('.sel-wrap')) $$('.sel-list').forEach(l => l.hidden = true);
+
+  const sw = e.target.closest('.switch');
+  if (sw && !sw.disabled) {
+    sw.classList.toggle('on');
+    sw.setAttribute('aria-checked', sw.classList.contains('on'));
+    const xr = sw.closest('.xr');
+    if (xr && sw.closest('.xh')) xr.classList.toggle('off', !sw.classList.contains('on'));
+    if (sw.dataset.note) toast(sw.dataset.note);
+    return;
+  }
+
+  const sg = e.target.closest('.seg button');
+  if (sg) {
+    $$('button', sg.parentElement).forEach(x => x.classList.remove('on'));
+    sg.classList.add('on');
+    return;
+  }
+
+  const si = e.target.closest('.sel-item');
+  if (si) {
+    const w = si.closest('.sel-wrap');
+    const list = $('.sel-list', w);
+    const btn = $('.sel-btn', w);
+    $('.sv', btn).textContent = si.dataset.v;
+    $$('.sel-item', list).forEach(x => x.classList.remove('on'));
+    si.classList.add('on');
+    list.hidden = true;
+    btn.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: si.dataset.v }));
+    return;
+  }
+
+  const sb = e.target.closest('.sel-btn');
+  if (sb) {
+    const list = $('.sel-list', sb.parentElement);
+    const wasOpen = !list.hidden;
+    $$('.sel-list').forEach(l => l.hidden = true);
+    list.hidden = wasOpen;
+    return;
+  }
+
+  const ts = e.target.closest('.tester');
+  if (ts && !ts.dataset.busy) {
+    ts.dataset.busy = '1';
+    ts.textContent = 'Test…';
+    setTimeout(() => {
+      ts.textContent = 'Tester';
+      delete ts.dataset.busy;
+      if (ts.dataset.out === 'ok') {
+        toast('Clé testée — elle fonctionne');
+        const st = ts.closest('.krow').querySelector('.st');
+        if (st) { st.className = 'st ok'; st.innerHTML = '<i></i>'; }
+      } else {
+        toast('Clé en échec — ' + (ts.dataset.why || 'limite atteinte'));
+      }
+    }, 900);
+    return;
+  }
+
+  const up = e.target.closest('.do-update');
+  if (up && !up.dataset.busy) {
+    up.dataset.busy = '1';
+    up.textContent = 'Mise à jour…';
+    setTimeout(() => {
+      toast(up.dataset.name + ' mis à jour — ' + up.dataset.ver);
+      const xr = up.closest('.xr');
+      xr.classList.remove('open');
+      const st = xr.querySelector('.st');
+      if (st) { st.className = 'st ok'; st.innerHTML = '<i></i>'; }
+      up.remove();
+    }, 1000);
+    return;
+  }
+
+  const fs = e.target.closest('.fsubmit');
+  if (fs) {
+    toast(fs.dataset.msg || 'Enregistré');
+    const f = fs.closest('.formcard,.formrow');
+    if (f) {
+      f.hidden = true;
+      $$('input', f).forEach(i => i.value = '');
+    }
+    return;
+  }
+
+  const dop = e.target.closest('[data-open]');
+  if (dop) {
+    const t = $(dop.dataset.open);
+    if (t) t.hidden = !t.hidden;
+    return;
+  }
+
+  const dt = e.target.closest('[data-toast]');
+  if (dt) {
+    toast(dt.dataset.toast);
+    return;
+  }
+
+  /* déplier une ligne (sauf si on a cliqué un contrôle) */
+  if (!e.target.closest('.mini,.btn,.linkbtn,input,textarea,select,.sel-wrap,label,.switch')) {
+    const h = e.target.closest('.xh');
+    if (h) h.parentElement.classList.toggle('open');
+  }
+});
+
+/* ---------- recherche de skills (skills.sh + dépôts) ---------- */
+const IDX = [
+  { n: 'csv-to-chart', s: 'native Hermes', d: 'Transforme un CSV en graphique propre' },
+  { n: 'web-reader', s: 'native Hermes', d: 'Lit une page web et en extrait l\u2019essentiel' },
+  { n: 'rapport-hebdo', s: 'créée par Hermes', d: 'Résume vos conversations de la semaine' },
+  { n: 'veille-concurrentielle', s: 'votre dépôt', d: 'Surveille les sites de vos concurrents' },
+  { n: 'flowchart-maker', s: 'skills.sh', d: 'Diagrammes de flux et d\u2019architecture' },
+  { n: 'excel-cleaner', s: 'skills.sh', d: 'Nettoie et normalise des tableaux' },
+  { n: 'pdf-sign', s: 'skills.sh', d: 'Vérifie et signe des PDF' },
+  { n: 'table-master', s: 'skills.sh', d: 'Assemble des tableaux complexes multi-sources' }
+];
+const skq = $('#skq'), skres = $('#skres');
+skq.addEventListener('input', () => {
+  const q = skq.value.trim().toLowerCase();
+  if (q.length < 2) { skres.hidden = true; skres.innerHTML = ''; return; }
+  const hits = IDX.filter(x => x.n.includes(q) || x.d.toLowerCase().includes(q)).slice(0, 5);
+  skres.innerHTML = hits.length
+    ? hits.map(h =>
+        '<div class="skhit"><span class="sh-t"><b>' + h.n + '</b><span class="orig">' + h.s + '</span></span>' +
+        '<span class="sh-d">' + h.d + '</span>' +
+        '<button class="mini" type="button" data-toast="« ' + h.n + ' » installée — contrôle qualité en cours…">Installer</button></div>'
+      ).join('')
+    : '<div class="skempty">Aucune skill trouvée pour cette recherche.</div>';
+  skres.hidden = false;
+});
+
+/* ---------- assistant de création d\u2019outil ---------- */
+$('#addParam').addEventListener('click', () => {
+  $('#paramList').appendChild($('#paramTpl').content.cloneNode(true));
+});
+
+/* ---------- système ---------- */
+$('#chkUpd').addEventListener('click', () => {
+  $('#updCard').hidden = false;
+  $('#chkUpd').disabled = true;
+  $('#chkUpd').textContent = 'À jour';
+});
+$('#restartBtn').addEventListener('click', () => { $('#restartRow').hidden = false; $('#restartBtn').hidden = true; });
+$('#restartNo').addEventListener('click', () => { $('#restartRow').hidden = true; $('#restartBtn').hidden = false; });
+$('#restartYes').addEventListener('click', () => {
+  $('#restartRow').hidden = true;
+  toast('Hermes redémarre — les sessions en cours sont prévenues');
+});
+$('#clearCache').addEventListener('click', () => toast('Cache des rendus vidé'));
+</script>
+</body>
+</html>
