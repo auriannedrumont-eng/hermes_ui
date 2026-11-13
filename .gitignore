@@ -62,3 +62,6 @@ server.log
 /db-test-*/
 desktop/runtime/
 desktop/logs/
+
+# installation portable auto-installee par Hermes-Web.bat (1er demarrage)
+tools/

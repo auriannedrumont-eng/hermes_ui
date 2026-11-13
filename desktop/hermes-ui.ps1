@@ -1,10 +1,19 @@
 ﻿# ─────────────────────────────────────────────────────────────────────────
-# Hermes Web — lanceur bureau (Windows)
+# Hermes Web — lanceur unique (Windows), appele par Hermes-Web.bat a la
+# racine du dossier hermes.
+#
 # Demarre la pile complete (mini-service chat, interface Next, passerelle
 # Caddy), ouvre le navigateur, puis surveille les composants.
 #
 # Usage (normalement via Hermes-Web.bat, pas en ligne de commande) :
 #   hermes-ui.ps1 start | stop | status | restart
+#
+# Installation portable automatique :
+#   Au premier demarrage, tout ce qui manque est installe DANS le dossier
+#   hermes (sous-dossier tools\) : Node.js v22 LTS, Bun, Caddy, puis
+#   dependances npm/bun, client Prisma et build de production. Sans admin,
+#   sans registre, sans ecrire hors du dossier : il reste mobile (cle USB
+#   comprise). Les fois suivantes, le double-clic est immediat.
 #
 # Securite de fermeture :
 #   • Tous les processus sont places dans un Job Object noyau avec
@@ -18,7 +27,7 @@
 #
 # Ne sont JAMAIS tues les processus hors de ce projet : chaque cible est
 # validee (chemin du projet dans la ligne de commande) avant arret.
-# Fichier volontairement en ASCII (compatibilite PowerShell 5.1 sans BOM).
+# Encodage : UTF-8 avec BOM (requis par PowerShell 5.1 pour les accents).
 # ─────────────────────────────────────────────────────────────────────────
 param([ValidateSet('start','stop','status','restart')][string]$Action = 'start')
 $ErrorActionPreference = 'Stop'
@@ -244,12 +253,173 @@ function Start-Component([string]$file, [string[]]$argList, [string]$workDir, [s
 
 # ── Dependances ─────────────────────────────────────────────────────────
 function Test-Command([string]$name) { return [bool](Get-Command $name -ErrorAction SilentlyContinue) }
-function Check-Deps {
-    if (-not (Test-Command 'bun'))  { Die "« bun » est introuvable. Installez-le puis relancez : winget install Oven-sh.Bun" }
-    if (-not (Test-Command 'node')) { Die "« node » est introuvable. Installez-le puis relancez : winget install OpenJS.NodeJS" }
-    if (-not (Test-Path (Join-Path $Root 'mini-services\hermes-chat\index.ts'))) { Die "projet introuvable autour de $Root" }
-    if (-not (Test-Path (Join-Path $Root 'node_modules'))) { Die "node_modules absent — faites un clic droit sur Installer-Hermes.bat n'est pas suffisant : ouvrez un terminal dans $Root et lancez npm install" }
-    if (-not (Test-Path (Join-Path $Root 'mini-services\hermes-chat\node_modules'))) { Die "dependances du mini-service absentes — lancez bun install dans $Root\mini-services\hermes-chat" }
+
+# ── Installation portable automatique (tout dans <projet>\tools\) ───────
+# Ordre de resolution pour chaque outil : 1) deja sur le PATH systeme,
+# 2) deja installe dans tools\ (installation portable precedente),
+# 3) telecharge puis installe dans tools\ — sans admin, sans registre,
+# sans toucher au systeme : le dossier hermes reste autonome et mobile
+# (disque externe ou cle USB compris).
+$ToolsDir   = Join-Path $Root 'tools'
+$NodeVer    = 'v22.20.0'    # LTS ; Next 16 exige Node >= 20.9
+$NodeZipUrl = "https://nodejs.org/dist/$NodeVer/node-$NodeVer-win-x64.zip"
+$BunZipUrl  = 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip'
+$CaddyExeUrl= 'https://caddyserver.com/api/download?os=windows&arch=amd64'   # renvoie l'exe directement
+
+# Repertoire de tools\<outil>\ contenant l'exe (1 niveau de sous-dossier
+# tolere : les zips s'extraient dans un sous-dossier nomme par l'editeur)
+function Find-ExeDir([string]$toolName, [string]$exe) {
+    $base = Join-Path $ToolsDir $toolName
+    if (-not (Test-Path $base)) { return '' }
+    $hit = Get-ChildItem -Path $base -Filter $exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($hit) { return $hit.DirectoryName }
+    return ''
+}
+# Outil disponible dans l'installation portable ? Renvoie le dossier a
+# mettre dans le PATH, sinon ''.
+function Get-ToolDir([string]$toolName, [string]$exe) {
+    $d = Find-ExeDir $toolName $exe
+    if ($d) { return $d }
+    return ''
+}
+function Invoke-Download([string]$url, [string]$outFile) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $oldPref = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'   # la barre de progression IWB ralentit ~10x le telechargement
+    try { Invoke-WebRequest -Uri $url -OutFile $outFile -UseBasicParsing }
+    finally { $ProgressPreference = $oldPref }
+}
+function Install-ZipTool([string]$toolName, [string]$url, [string]$exe) {
+    $dest = Join-Path $ToolsDir $toolName
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    $zip = Join-Path $ToolsDir "$toolName.zip"
+    Log "  telechargement de $toolName (une seule fois)..."
+    Invoke-Download $url $zip
+    Log "  extraction de $toolName..."
+    Expand-Archive -Path $zip -DestinationPath $dest -Force
+    Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    $d = Find-ExeDir $toolName $exe
+    if (-not $d) { Die "$toolName telecharge mais $exe est introuvable dans l'archive — effacez $dest et reessayez" }
+    return $d
+}
+function Install-ExeTool([string]$toolName, [string]$url, [string]$exe) {
+    $dest = Join-Path $ToolsDir $toolName
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    Log "  telechargement de $toolName (une seule fois)..."
+    Invoke-Download $url (Join-Path $dest $exe)
+    return $dest
+}
+# Execute une commande en affichant sa sortie EN DIRECT dans la fenetre
+# (installations, build) puis renvoie son code de sortie.
+function Invoke-Live([string]$file, [string[]]$argList, [string]$workDir) {
+    $p = Start-Process -FilePath $file -ArgumentList ($argList | ForEach-Object { Quote-Arg $_ }) `
+        -WorkingDirectory $workDir -NoNewWindow -Wait -PassThru
+    return $p.ExitCode
+}
+
+# Installe ce qui manque (idempotent : au 2e double-clic, ne refait rien)
+function Ensure-PortableSetup {
+    $needInstall = -not (Test-Path (Join-Path $Root 'node_modules')) -or
+                   -not (Test-Path (Join-Path $Root 'mini-services\hermes-chat\node_modules')) -or
+                   -not ((Get-ToolDir 'node' 'node.exe') -or (Test-Command 'node')) -or
+                   -not ((Get-ToolDir 'bun' 'bun.exe') -or (Test-Command 'bun')) -or
+                   -not ((Get-ToolDir 'caddy' 'caddy.exe') -or (Test-Command 'caddy'))
+    if ($needInstall) {
+        Write-Host ''
+        Write-Host '  ═══ PREMIER DEMARRAGE : installation automatique ═══'
+        Write-Host '  Les composants manquants sont installes DANS le dossier'
+        Write-Host '  hermes (sous-dossier tools\) : rien n est ecrit ailleurs,'
+        Write-Host '  pas de droits admin. Comptez quelques minutes.'
+        Write-Host ''
+    }
+
+    New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
+
+    # ── 1. Node.js (node + npm vivent dans le meme dossier) ──
+    $nodeDir = ''
+    if (Test-Command 'node') {
+        $npmHit = Get-Command 'npm.cmd' -ErrorAction SilentlyContinue
+        if ($npmHit) { $nodeDir = Split-Path -Parent $npmHit.Source }
+    }
+    if (-not $nodeDir) {
+        $nodeDir = Get-ToolDir 'node' 'node.exe'
+        if (-not $nodeDir) { $nodeDir = Install-ZipTool 'node' $NodeZipUrl 'node.exe' }
+    }
+    $npmCmd = Join-Path $nodeDir 'npm.cmd'
+    if (-not (Test-Path $npmCmd)) { Die "npm.cmd introuvable dans $nodeDir" }
+    if (-not (Test-Path (Join-Path $nodeDir 'node.exe'))) { Die "node.exe introuvable dans $nodeDir" }
+
+    # ── 2. Bun ──
+    $bunDir = ''
+    if (Test-Command 'bun') { $bunDir = Split-Path -Parent (Get-Command 'bun').Source }
+    if (-not $bunDir) {
+        $bunDir = Get-ToolDir 'bun' 'bun.exe'
+        if (-not $bunDir) { $bunDir = Install-ZipTool 'bun' $BunZipUrl 'bun.exe' }
+    }
+    # ── 3. Caddy ──
+    $caddyDir = ''
+    if (Test-Command 'caddy') { $caddyDir = Split-Path -Parent (Get-Command 'caddy').Source }
+    if (-not $caddyDir) {
+        $caddyDir = Get-ToolDir 'caddy' 'caddy.exe'
+        if (-not $caddyDir) { $caddyDir = Install-ExeTool 'caddy' $CaddyExeUrl 'caddy.exe' }
+    }
+
+    # PATH de session : les outils portables (sous tools\) passes devant,
+    # pour ce lanceur et tous ses processus enfants
+    $portableDirs = @($nodeDir, $bunDir, $caddyDir) | Where-Object {
+        $_ -and $_.StartsWith($ToolsDir, [StringComparison]::OrdinalIgnoreCase)
+    }
+    if ($portableDirs) { $env:Path = ($portableDirs -join ';') + ';' + $env:Path }
+    foreach ($t in @('node', 'bun', 'caddy')) {
+        if (-not (Test-Command $t)) { Die "l outil « $t » reste introuvable apres l installation" }
+    }
+
+    # ── 4. Dependances npm de l interface ──
+    if (-not (Test-Path (Join-Path $Root 'node_modules'))) {
+        Log "• installation des dependances de l interface (npm install, quelques minutes)..."
+        $code = Invoke-Live $npmCmd @('install', '--no-audit', '--no-fund') $Root
+        if ($code -ne 0) { Die "npm install a echoue (code $code) — relancez, ou verifiez votre connexion" }
+        # client Prisma : @prisma/client doit etre genere pour compiler
+        Log "• generation du client Prisma..."
+        $prismaBin = Join-Path $Root 'node_modules\prisma\build\index.js'
+        if (Test-Path $prismaBin) {
+            [void](Invoke-Live (Join-Path $nodeDir 'node.exe') @($prismaBin, 'generate') $Root)
+        }
+    }
+
+    # ── 5. Dependances bun du mini-service ──
+    $chatDir = Join-Path $Root 'mini-services\hermes-chat'
+    if (-not (Test-Path (Join-Path $chatDir 'node_modules'))) {
+        Log "• installation des dependances du mini-service (bun install)..."
+        $code = Invoke-Live (Join-Path $bunDir 'bun.exe') @('install') $chatDir
+        if ($code -ne 0) { Die "bun install a echoue (code $code) — relancez, ou verifiez votre connexion" }
+    }
+
+    # ── 6. Build de production (une seule fois, meilleur effort) ──
+    # NB : on ne passe PAS par « npm run build » : son script package.json
+    # utilise « cp » (Unix) et echouerait sous Windows. On fait next build
+    # puis les copies static/public en PowerShell.
+    Ensure-Build $nodeDir
+}
+
+function Ensure-Build([string]$nodeDir) {
+    if (Test-Path (Join-Path $Root '.next\standalone\server.js')) { return }
+    $flag = Join-Path $ToolsDir 'build-echoue.flag'
+    if (Test-Path $flag) { Log "• build production saute (tentative precedente echouee — effacez $flag pour reessayer)"; return }
+    Log "• build de production de l interface (1 a 3 minutes, une seule fois)..."
+    $nextBin = Join-Path $Root 'node_modules\next\dist\bin\next'
+    $code = Invoke-Live (Join-Path $nodeDir 'node.exe') @($nextBin, 'build') $Root
+    if ($code -eq 0 -and (Test-Path (Join-Path $Root '.next\standalone\server.js'))) {
+        # reproduit le script build du package.json (cp unix) : static + public -> standalone
+        Copy-Item -Path (Join-Path $Root '.next\static') -Destination (Join-Path $Root '.next\standalone\.next\static') -Recurse -Force
+        if (Test-Path (Join-Path $Root 'public')) {
+            Copy-Item -Path (Join-Path $Root 'public') -Destination (Join-Path $Root '.next\standalone\public') -Recurse -Force
+        }
+        Log "  OK build production pret"
+    } else {
+        New-Item -ItemType File -Path $flag -Force | Out-Null
+        Log "  ATTENTION build echoue (code $code) — l interface demarrera en mode developpement ; detail dans les messages ci-dessus"
+    }
 }
 
 # ── Demarrage des composants ────────────────────────────────────────────
@@ -284,7 +454,7 @@ function Start-Ui {
         State-Set 'UI_MODE' 'production'
     } else {
         Log "• demarrage de l'interface (mode developpement) sur :$port..."
-        Log "  (pour le mode production : npm run build une fois, puis relancez)"
+        Log "  (le build production automatique a ete saute ou a echoue — voir tools\build-echoue.flag)"
         $nextBin = Join-Path $Root 'node_modules\next\dist\bin\next'
         $p = Start-Component 'node' @($nextBin, 'dev', '-p', "$port") $Root 'interface'
         State-Set 'UI_MODE' 'developpement'
@@ -412,10 +582,8 @@ function Show-Status {
 }
 
 function Do-Start {
-    Check-Deps
-    Initialize-JobObject
-
-    # Pile deja lancee par un lanceur precedent encore vivant ?
+    # Pile deja lancee par un lanceur precedent encore vivant ? (reponse
+    # immediate, sans meme verifier les installations)
     $lpid = 0; [int]::TryParse((State-Get 'LAUNCHER_PID'), [ref]$lpid) | Out-Null
     $lproc = Get-ProcById $lpid
     if ($lproc -and ($lproc.CommandLine -match 'hermes-ui\.ps1')) {
@@ -424,6 +592,11 @@ function Do-Start {
         Write-Host ("Hermes Web est deja lance : http://127.0.0.1:{0}/" -f (State-Get 'GW_PORT'))
         return
     }
+
+    # Installation portable automatique de tout ce qui manque (idempotente)
+    Ensure-PortableSetup
+    Initialize-JobObject
+
     # Verrou perime (plantage precedent) : nettoie les restes eventuels
     if (Test-Path $StateFile) {
         Log "Verrou d'une session precedente trouve — nettoyage des restes eventuels."

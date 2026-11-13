@@ -1,5 +1,5 @@
 @echo off
-rem ── Hermes Web — demarrage (double-clic) ─────────────────────────────
+rem -- Hermes Web -- demarrage (double-clic) -----------------------------
 rem Cette fenetre reste ouverte tant qu'Hermes tourne : la fermer arrete
 rem toute la pile proprement (Job Object noyau + arret ordonne sur Ctrl-C).
 title Hermes Web - fermez cette fenetre pour tout arreter

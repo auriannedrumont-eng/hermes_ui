@@ -1,26 +1,53 @@
-# Hermes Web — Raccourcis bureau (Windows et Linux)
+# Hermes Web — Une seule icône, installation portable (Windows et Linux)
 
-Un double-clic démarre toute la pile (mini-service chat, interface Next.js,
-passerelle Caddy) puis ouvre le navigateur. La fermeture propre est garantie
-à chaque chemin de sortie. **Aucune ligne de commande à taper.**
+**Windows : un seul fichier à la racine du dossier `hermes` —
+`Hermes-Web.bat`.** Double-clic dessus et c'est tout.
 
----
+- **1er double-clic** : installe automatiquement tout ce qui manque **à
+  l'intérieur du dossier hermes** (sous-dossier `tools\`) — Node.js v22 LTS,
+  Bun, Caddy, puis les dépendances npm/bun, le client Prisma et le build de
+  production de l'interface. Aucune ligne de commande, aucun droit
+  administrateur, **rien n'est écrit hors du dossier**. Comptez quelques
+  minutes (téléchargements + installations) avec la progression affichée
+  dans la fenêtre.
+- **Double-clics suivants** : démarrage quasi instantané de la pile
+  (mini-service chat, interface Next.js, passerelle Caddy) puis ouverture
+  du navigateur.
+- **Fermer la fenêtre du lanceur (ou Ctrl-C)** : arrêt propre de toute la
+  pile.
 
-## Windows (installation en 2 double-clics)
+Le dossier `hermes` est **autonome et mobile** : copiez-le où vous voulez,
+y compris sur un disque externe ou une clé USB — tout vit dedans. Vous
+pouvez le renommer, le déplacer, il fonctionnera.
 
-1. **`Installer-Hermes.bat`** (double-clic) → crée les raccourcis
-   **« Hermes Web »** et **« Hermes Web — Arret »** sur le **Bureau** et dans
-   le **menu Démarrer**, avec l'icône de l'application. Il vérifie aussi les
-   dépendances et affiche quoi installer le cas échéant :
-   - `winget install Oven-sh.Bun`
-   - `winget install OpenJS.NodeJS`
-   - `winget install CaddyServer.Caddy`
-   - dans le dossier du projet : `npm install` puis `bun install` dans
-     `mini-services\hermes-chat` (une seule fois)
-2. **« Hermes Web »** sur le Bureau (double-clic) → la pile démarre, le
-   navigateur s'ouvre.
+> Note : le fichier `.bat` porte l'icône générique de Windows (limite du
+> format). Si vous préférez le logo Hermes, faites un clic droit sur
+> `Hermes-Web.bat` → *Envoyer vers → Bureau (créer un raccourci)* ;
+> l'icône `desktop\hermes.ico` peut lui être appliquée (clic droit sur le
+> raccourci → Propriétés → Changer d'icône). Rien d'obligatoire.
 
-**Retrait des raccourcis** : `Installer-Hermes.bat --remove`.
+> Si Windows affiche « Windows a protégé votre ordinateur » au premier
+> lancement (fichier téléchargé depuis Internet) : *Informations
+> complémentaires → Exécuter quand même*.
+
+## Ce que l'icône unique fait, dans l'ordre
+
+1. Si Hermes tourne déjà → ouvre simplement une nouvelle fenêtre navigateur
+   (aucune pile dupliquée).
+2. Outils manquants → téléchargés et installés dans `tools\` (ordre de
+   préférence : déjà sur le PATH système, sinon déjà dans `tools\`, sinon
+   téléchargement). Node v22.20.0 (LTS) et Bun en zip officiels, Caddy en
+   exe officiel.
+3. `node_modules` manquants → `npm install` (interface) et `bun install`
+   (mini-service), sortie en direct dans la fenêtre.
+4. Client Prisma généré, puis **build de production** de l'interface
+   (`next build` + copies `static`/`public`, une seule fois). Si le build
+   échoue : bascule en mode développement et pose un marqueur
+   `tools\build-echoue.flag` (effacez-le pour retenter).
+5. Démarrage de la pile : mini-service → interface → passerelle, navigateur
+   ouvert sur `http://127.0.0.1:81/` (ou 8081/8181… si le port est pris).
+6. Surveillance : un composant qui plante est relancé (3 essais), puis
+   arrêt général propre si ça persiste.
 
 ### Fermeture — tous les cas couverts
 
@@ -30,57 +57,58 @@ passerelle Caddy) puis ouvre le navigateur. La fermeture propre est garantie
 | Fermeture de la fenêtre du lanceur | **Job Object noyau** (`KILL_ON_JOB_CLOSE`) : Windows tue l'arbre entier, zéro orphelin garanti par le noyau |
 | Déconnexion / arrêt du PC / taskkill | idem — le Job Object suit le lanceur dans tous les cas |
 | Fermer l'onglet du navigateur seulement | la pile reste disponible (retour instantané) |
-| « Hermes Web — Arret » | arrêt ordonné explicite |
 
 Sur arrêt brutal, la base est quand même sûre : SQLite est en mode WAL,
 **récupéré automatiquement au démarrage suivant** — aucune donnée perdue.
 
-### Ouverture — tous les cas couverts
+### Autres cas couverts à l'ouverture
 
-- Dépendance manquante → message explicite (avec commande winget), rien n'est
-  démarré à moitié.
-- Double-clic alors qu'Hermes tourne déjà → simplement une nouvelle fenêtre
-  navigateur, aucune pile dupliquée.
 - Session précédente plantée (verrou périmé) → nettoyage puis démarrage.
 - Demi-pile (service vivant, interface morte…) → composants sains adoptés,
   manquants démarrés ; l'arrêt ne touche que ce qu'Hermes a lancé.
 - Ports 81/3000 occupés par autre chose → repli automatique (8081/8181…,
   3001/3002…). Ports 3003/3004 (codés dans le client) occupés sans servir
   Hermes → refus explicite avec la commande de diagnostic.
-- Composant qui plante en cours de session → relance automatique (3 essais),
-  puis arrêt général propre si ça persiste.
+- Téléchargement interrompu → relancez, tout est idempotent.
 - Aucun processus hors du projet n'est jamais tué : chaque cible est validée
   par le chemin du projet dans sa ligne de commande.
 
 ---
 
+## Variantes (facultatives)
+
+- `desktop\Installer-Hermes.bat` : si vous préférez en plus des raccourcis
+  classiques « Hermes Web » / « Hermes Web — Arret » sur le **Bureau** et au
+  **menu Démarrer** (icône incluse). `--remove` les retire.
+- `desktop\hermes-ui.ps1 stop | status | restart` : arrêt, état, redémarrage
+  (via `Hermes-Web.bat` c'est `start`).
+
 ## Linux
 
 ```bash
-cd hermes_ui/desktop
+cd hermes/desktop
 ./install.sh            # « Hermes Web » + « Hermes Web — Arrêter » (menu + bureau)
 ./install.sh --remove   # retrait
 ```
 
-Mêmes garanties que Windows ; l'arrêt par fermeture de fenêtre passe par
-SIGHUP, l'arrêt ordonné du mini-service déclenche en plus son checkpoint
-WAL (correctif F-09).
-
----
+Mêmes garanties que Windows pour la surveillance et l'arrêt (SIGHUP + SIGTERM,
+checkpoint WAL du mini-service). L'installation automatique portable des
+outils est spécifique à la version Windows ; sous Linux, installez Bun, Node
+et Caddy via votre gestionnaire de paquets.
 
 ## Dépannage
 
 | Symptôme | Où regarder |
 |---|---|
 | « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
+| Téléchargement qui échoue | relancez (idempotent) ; vérifiez la connexion / le proxy |
+| Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` |
 | Page blanche / erreur | `desktop\logs\interface-err.log` |
 | Chat ne répond pas | `desktop\logs\mini-service-err.log` |
 | Page inaccessible | `desktop\logs\passerelle-err.log` |
-| État de la pile | double-clic `Hermes-Web.bat` affiche l'état si déjà lancé ; Linux : `hermes-ui.sh status` |
-| Ports 3003/3004 occupés | `netstat -ano | findstr "3003 3004"` (Windows) / `ss -tlnp` (Linux) puis libérez-les |
-
-Interface en **build production** si `.next\standalone` existe (faites
-`npm run build` une fois pour y passer), sinon mode développement.
+| Ports 3003/3004 occupés | `netstat -ano \| findstr "3003 3004"` (Windows) / `ss -tlnp` (Linux) puis libérez-les |
+| Repartir de zéro | effacez `tools\` (outils), `node_modules\`, `.next\` — tout se réinstalle |
 
 L'état de session vit dans `desktop\runtime\` (verrou, PIDs, Caddyfile
-généré) et les journaux dans `desktop\logs\` — ignorés par git.
+généré), les journaux dans `desktop\logs\`, les outils portables dans
+`tools\` — les trois ignorés par git.
