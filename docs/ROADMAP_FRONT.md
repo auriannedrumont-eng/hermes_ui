@@ -44,7 +44,7 @@
 | F-10 | **Slash commands** | `/traduire`, `/résumer` + templates | **Terminé** | `prompt-library.ts` + suggestions `/` du composer (Tab/Entrée pour appliquer) |
 | F-11 | **Prompt système / conversation** | Panneau, presets | **Terminé** | Livré le 2026-11-13 : panneau d'édition par conversation (sheet 460 px, bouton « prompt » de l'en-tête), bibliothèque de presets éditables (section Hermes du volet, 5 seeds), table additive `system_prompts`, événements `system-prompt:*` / `system-prompts:*`, effet au prochain tour (composé base + F-19 + F-11 côté service, `system_prompt` dans `api_turn_v1.settings` en gateway), jauge de contexte + pastille d'en-tête |
 | F-12 | **Citations web** | Sources cliquables | À faire | Dépend du browsing agent (FORK.md §7.5, « plus tard ») |
-| F-13 | **Partage / export** | Lien public ; export MD/PDF/image | Partiel | Export **MD/JSON/PDF** livré (`export.ts`, palette + header). Manquent : lien public lecture seule, export image |
+| F-13 | **Partage / export** | Lien public ; export MD/PDF/image | **Terminé** | Livré le 2026-11-13 : lien public lecture seule `/shared/<token>` (snapshot **figé** à la création, table additive `shares`, token opaque 24 car., un seul lien actif par conversation), menu « Partager » de l'en-tête (copie, ouverture de la vue publique, révocation → 410 Gone), export **image PNG plein page du fil** (pipeline chrome-headless-shell), `data.json` public sans id interne, page `noindex`. Export local MD/JSON/PDF livré précédemment (`export.ts`). |
 | F-14 | **Édition avec branchement** | Éditer crée une branche ; navigation versions | Partiel | « Brancher » duplique la conversation depuis un message (fork). L'édition modifie en place (tronque + régénère) — pas de navigation entre versions dans la même conversation |
 | F-15 | **Panneau artefacts** | HTML/graphiques en panneau latéral | **Terminé** | `artifact-panel.tsx` : split view ≈ 45 %, rendus code/MD/CSV/JSON/SVG/PDF/HTML (pipeline Chrome), versioning + diff |
 
@@ -152,13 +152,39 @@ instructions de base d'Hermes, il ne les remplace jamais.
   remise à zéro des instructions. `bunx tsc --noEmit` : 0 erreur `src/` ;
   eslint propre sur les fichiers du chantier.
 
+## Chantier du 2026-11-13 (dixième session) — F-13 « Partage public lecture seule + export image »
+
+Point 3 de l'ordre recommandé. Le lien est un **snapshot figé** : la conversation
+peut continuer sans changer le lien ; la révocation coupe l'accès (410 Gone)
+sans toucher la source.
+
+- **Serveur** : nouveau `mini-services/hermes-chat/shares.ts` (token opaque 24 car.
+  base62, snapshot, vues) + migration additive `shares` dans `store.ts`
+  (une ligne active max par conversation — un nouveau lien révoque l'ancien) ;
+  événements `share:get/create/revoke` + broadcast `share:changed` ;
+  suppression d'une conversation → ses liens passent 410. HTTP (3004) :
+  `GET /share/<token>/data.json` (CORS `*`, cache 5 min, aucune donnée interne)
+  et `GET /share/<token>/image.png` — document autonome sobre du fil rendu par
+  le **pipeline chrome-headless-shell** existant (plein page).
+- **Client** : page publique `/shared/[token]` (lecture seule, `noindex`,
+  Markdown réutilisé pour les réponses, état « lien révoqué / introuvable »,
+  bouton d'export image) ; menu « Partager » de l'en-tête (créer + copier le
+  lien, ouvrir la vue publique, révoquer — avec détail du snapshot) ;
+  câblage `page.tsx` (état, bus, toasts).
+- QA : `scripts/test-share-flow.ts` **24/24** — vues sans snapshot, 404/410,
+  ancien lien → 410 au remplacement, isolation entre conversations,
+  conversation vide refusée, révocation, suppression → 410 persistant,
+  **PNG Chrome valide (signature + 35 Ko)**. Page publique servie (200) et
+  snapshot chargé côté client vérifiés en dev ; `bunx tsc --noEmit` 0 erreur
+  `src/` ; eslint propre.
+
 ## Ordre de démarrage recommandé (suite)
 
 1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
    local : `bun dev` + mini-service) — retours à intégrer directement sur
    l'implémenté.
 2. ~~F-11 + F-19~~ **livrés le 2026-11-13** (ci-dessus).
-3. **F-13** (lien public lecture seule) — l'export local est déjà couvert.
+3. ~~F-13~~ **livré le 2026-11-13** (ci-dessus).
 4. **F-24** (feedback 👍/👎) — léger, autonome.
 5. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
    à revoir une fois la gateway branchée (les clés de services sont désormais gérées

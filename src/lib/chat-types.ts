@@ -282,3 +282,31 @@ export interface SystemPromptChanged {
   conversationId: string;
   prompt: ConversationPrompt | null;
 }
+
+// ── Partage public lecture seule (F-13) ────────────────────────────────
+// Miroir de mini-services/hermes-chat/shares.ts (vues wire uniquement).
+
+/** Lien de partage d'une conversation (vu par le propriétaire). */
+export interface ShareView {
+  id: string;
+  token: string;
+  conversationId: string;
+  title: string;
+  messageCount: number;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** Données publiques servies au destinataire (aucun id interne). */
+export interface SharedConversationData {
+  title: string;
+  messageCount: number;
+  sharedAt: string;
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string;
+    model?: string;
+    createdAt: string;
+    attachments?: Array<{ name: string; kind: string }>;
+  }>;
+}

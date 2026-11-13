@@ -54,12 +54,14 @@ bun run dev        # bun --hot index.ts
 | `mini-services/hermes-chat/demo-engine.ts` | LLM démo z-ai, persona Hermes | Fork |
 | `mini-services/hermes-chat/store.ts` | Persistance `bun:sqlite` : conversations, messages, artefacts, fork de conversations, recherche | Fork (édition sensible) |
 | `mini-services/hermes-chat/artifacts.ts` + `render.ts` | Pipeline artefacts + rendu chrome-headless-shell (PNG plein page, PDF vectoriel) | Fork |
+| `mini-services/hermes-chat/shares.ts` | Partage public lecture seule (F-13) : snapshot figé, token opaque, vues | Fork |
 | `mini-services/hermes-chat/asr.ts`, `uploads.ts` | Dictée vocale (ffmpeg), pièces jointes | Fork |
 | `src/hooks/use-hermes-chat.ts` | Orchestrateur frontend (conversations, streaming, artefacts, panneau) | Fork (édition sensible) |
 | `src/lib/chat-types.ts` | Types du protocole client/service (dont artefacts) | Fork (partagé) |
 | `src/lib/tokens.ts` | Estimation de contexte du Composer v2 (heuristique car/jetons, fenêtre par modèle, seuils) | Fork |
 | `src/components/chat/` | UI du chat, dont `composer.tsx` (Composer v2), `context-gauge.tsx` (jauge + popover de contexte), `artifact-card.tsx` (cartes inline), `artifact-panel.tsx` (split view) | Fork |
 | `src/components/settings/` | Volet Paramètres v4 : `settings-panel.tsx` (volet 860 px à rail), `providers-section.tsx`, `extensions-section.tsx`, `hermes-section.tsx` (F-11/F-19), `system-prompt-panel.tsx` (prompt de conversation), `bits.tsx` (pastilles), `info-tip.tsx` (tooltips « ? ») | Fork |
+| `src/components/shared/shared-conversation-view.tsx` + `src/app/shared/[token]/page.tsx` | Page publique de partage (F-13) : lecture seule, `noindex`, export image | Fork |
 | `design/` | Maquettes HTML autonomes de référence, validées avant implémentation (ex. `maquette-composer.html`, chantier Composer v2) | Fork (design) |
 | `docs/ROADMAP_FRONT.md` | Suivi des fonctionnalités de chat (F-xx : statuts, preuves, ordre de suite) | Fork (doc de suivi) |
 | `src/lib/socket.ts`, `export.ts`, `notify.ts`, `prompt-library.ts` | Client socket.io, exports MD/JSON/PDF, notifications, bibliothèque de prompts | Fork |
@@ -454,7 +456,31 @@ Livré le 2026-11-13 (neuvième session, point 2 de l'ordre recommandé — le p
   longueur et le retour à l'état par défaut. `bunx tsc --noEmit` : 0 erreur
   dans `src/` ; eslint propre sur les fichiers du chantier.
 
-### 7.7 Plus tard
+### 7.7 Fait — Partage public lecture seule (F-13)
+
+Livré le 2026-11-13 (dixième session, point 3 de l'ordre recommandé). Le lien
+est un **snapshot figé** de la conversation (titre + messages allégés) : elle
+peut continuer sans changer le lien ; révoquer coupe l'accès sans toucher la
+source ; supprimer la conversation passe les liens en 410 Gone.
+
+- **Serveur** : `mini-services/hermes-chat/shares.ts` (token opaque 24 car.
+  base62, snapshot JSON, vues wire) + migration additive `shares` (index sur
+  `conversation_id`) ; événements `share:get/create/revoke` + broadcast
+  `share:changed` ; HTTP (3004) : `GET /share/<token>/data.json` (CORS `*`,
+  sans id interne) et `GET /share/<token>/image.png` — fil rendu en document
+  autonome sobre par le pipeline chrome-headless-shell (plein page).
+- **Client** : page publique `/shared/[token]` (`noindex`, Markdown réutilisé,
+  états révoqué/introuvable/erreur, export image) ; menu « Partager » de
+  l'en-tête (création + copie automatique du lien, ouverture de la vue
+  publique, révocation) ; état + bus + toasts dans `page.tsx`.
+- QA : `scripts/test-share-flow.ts` — **24/24 verts** : vues sans snapshot,
+  404/410, remplacement du lien (ancien → 410), isolation entre
+  conversations, conversation vide refusée, révocation, suppression → 410
+  persistant, PNG Chrome valide (signature binaire, ~35 Ko). Page publique
+  servie (200) et snapshot chargé côté client vérifiés en dev ;
+  `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre.
+
+### 7.8 Plus tard
 
 - **Browsing agent** (étape 6 de la vision artefacts) : chip de statut discrète près du champ
   de saisie (favicon + titre), résultats en citations cliquables repliables
@@ -499,6 +525,7 @@ Livré le 2026-11-13 (neuvième session, point 2 de l'ordre recommandé — le p
 | 2026-11-13 (7) | **Chat UX F-01/F-04 livré — arrêt propre + erreurs persistantes** : `stream:done` porte `stopped: true` quand `chat:stop` clôt le tour (un arrêt n'est plus traité comme une erreur) ; `ChatMessage.stopped` persisté (migration additive `messages.stopped`, transportée par append/gets/fork) et affiché (« Réponse interrompue ») ; arrêt avant le premier jeton = pas de bulle vide ; `stream:error` embarque le partiel persisté + la conversation — le client l'affiche immédiatement dans le fil avec rangée persistante **Réessayer / Masquer** (plus d'effacement automatique à 2,5 s) ; machine à états `turnState` (idle/streaming/stopped/error) + `turnError`/`retryAfterError`/`dismissTurnError` exposés par le hook. Scripts de test : `scripts/test-stop-error-flow.ts` (scénarios 1-3 en service normal, scénario 4 avec `scripts/fake-zai-error.preload.ts` — preload qui fait échouer le LLM après 2 deltas ; NB : il cible la copie du SDK du mini-service, pas celle de la racine). QA par captures : `download/qa-f01-f04/` (erreur persistante, masquée, arrêt propre, pastille, régénération). Docs : `docs/ROADMAP_FRONT.md` (nouveau — suivi F-xx réconcilié avec le code), README mini-service (payloads stream:*), §7.5 ajouté. `bunx tsc --noEmit` : 9 erreurs préexistantes hors périmètre, 0 dans `src/`. |
 | 2026-11-13 (8) | **Paramètres phase 2 livrée — volet v4 + Fournisseurs & clés + Extensions (v2.2)** : menée sur la maquette v4 à la demande « continue » de l'utilisatrice (validation formelle a posteriori, ajustements sur l'implémenté). Volet gauche 860 px à rail (10 sections, pastilles, plein écran < 1100 px) remplace le sheet 460 px ; Interface gagne le **Thème** (next-themes) et **Afficher le raisonnement** (`fork.ui.showReasoning`, appliqué en direct aux bulles) ; serveur : tables additives `providers`/`provider_keys`/`extensions` (colonne `applied` = effet au redémarrage, compteur « N en attente »), « Tester » = **appel réel** exécuté par le service (401 → « clé refusée », 429 → épuisée), secrets **jamais** renvoyés au navigateur (masquage `sk-••••7f3a`), imports GitHub **réels** avec **repli `git ls-remote`** quand l'API est au quota (jeton `GITHUB_TOKEN` optionnel), Vérifier / Mettre à jour / Épingler ; stratégies de porte-clés prêtes pour le moteur (`pickActiveKey`, non consommées en démo — assumé). Suppression du « commit » SQLite réservé (colonne quotée). QA : `scripts/test-providers-flow.ts` 29/29 (test clé réel → 401, import GitHub réel), 14 captures `download/qa-parametres-v2/` contrôlées par script + VLM. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 | 2026-11-13 (9) | **F-11 + F-19 livrés — Prompt système & instructions personnalisées** (neuvième session, point 2 de l'ordre recommandé) : le prompt **s'ajoute** aux instructions de base, jamais les remplace. Table additive `system_prompts` (scope `conversation` / `preset`, 5 presets semés), instructions globales dans `settings` (`hermes.instructions.custom`, max 4 000 car.) ; événements `system-prompt:*` / `system-prompts:*` / `custom-instructions:*` avec broadcasts ; composition côté service (démo : base + F-19 + F-11 ; gateway : `system_prompt` seul dans `api_turn_v1.settings`), `hello.systemPromptChars` honnête ; hook `use-system-prompts`, `SystemPromptPanel` (sheet 460 px, bouton « prompt » + pastille d'en-tête), section **Hermes** du volet v4 livrée (instructions globales + bibliothèque éditable — mémoire et .md restent à venir), poste « Prompt de conversation » dans la jauge. QA : `scripts/test-system-prompt-flow.ts` **24/24**, dont vérification comportementale réelle (LLM démo répond « B »), isolation entre conversations, garde-fous de longueur. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
+| 2026-11-13 (10) | **F-13 livré — Partage public lecture seule + export image** (dixième session, point 3 de l'ordre recommandé) : le lien est un **snapshot figé** (la conversation peut continuer sans changer le lien ; révocation → 410 Gone sans toucher la source ; suppression de la conversation → liens 410 persistant). Table additive `shares` (token opaque 24 car. base62, un lien actif max par conversation — recréer révoque l'ancien) ; événements `share:get/create/revoke` + broadcast `share:changed` ; HTTP (3004) : `data.json` public sans id interne (CORS `*`) et `image.png` plein page via le pipeline chrome-headless-shell. Client : page publique `/shared/[token]` (`noindex`, Markdown réutilisé, états révoqué/introuvable) + menu « Partager » de l'en-tête (créer/copier, ouvrir la vue, révoquer). QA : `scripts/test-share-flow.ts` **24/24** (404/410, remplacement, isolation, PNG Chrome valide ~35 Ko) ; page servie et snapshot chargé vérifiés en dev ; `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 
 ## 10. Synchronisation git et passation
 

@@ -2,6 +2,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { ShareRow } from "./shares";
 import type { SystemPromptRow } from "./prompts";
 import type {
   Artifact,
@@ -287,6 +288,20 @@ export class Store {
     this.db.exec(
       "CREATE INDEX IF NOT EXISTS idx_system_prompts_preset ON system_prompts(updated_at DESC) WHERE scope = 'preset'"
     );
+    // ── Partage public lecture seule (F-13) — snapshot figé ───────────
+    this.db.exec(`CREATE TABLE IF NOT EXISTS shares (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      conversation_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      message_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    )`);
+    this.db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_shares_conversation ON shares(conversation_id, created_at DESC)"
+    );
     // Au démarrage, l'état courant devient l'état appliqué (les toggles
     // effectués sous l'ancien process ont été pris en compte au relancement).
     this.db.exec("UPDATE extensions SET applied = enabled WHERE applied <> enabled");
@@ -390,6 +405,68 @@ export class Store {
     ).n;
     if (n > 0) return;
     for (const s of seeds) this.createPromptPreset(s.title, s.content);
+  }
+
+  // ── Partage public lecture seule (F-13, FORK.md §7.8) ────────────────
+  // Snapshot figé : le lien reste stable même si la conversation continue ;
+  // la révocation marque la ligne (revoked_at) sans toucher la source.
+
+  /** Partage actif d'une conversation (null si aucun ou révoqué). */
+  getActiveShareByConversation(conversationId: string): ShareRow | null {
+    const r = this.db
+      .query(
+        "SELECT id, token, conversation_id, title, snapshot, message_count, created_at, revoked_at FROM shares WHERE conversation_id = ? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1"
+      )
+      .get(conversationId) as any;
+    return r ? (r as ShareRow) : null;
+  }
+
+  /** Ligne d'un partage par token (révoqué compris — l'HTTP décide du statut). */
+  getShareByToken(token: string): ShareRow | null {
+    const r = this.db
+      .query(
+        "SELECT id, token, conversation_id, title, snapshot, message_count, created_at, revoked_at FROM shares WHERE token = ?"
+      )
+      .get(token) as any;
+    return r ? (r as ShareRow) : null;
+  }
+
+  /** Crée (ou recrée) le partage d'une conversation : un seul lien actif,
+   *  l'ancien est révoqué silencieusement (le snapshot est remplacé). */
+  createShare(
+    conversationId: string,
+    title: string,
+    snapshot: string,
+    messageCount: number,
+    token: string
+  ): ShareRow {
+    const now = new Date().toISOString();
+    this.db
+      .query("UPDATE shares SET revoked_at = ? WHERE conversation_id = ? AND revoked_at IS NULL")
+      .run(now, conversationId);
+    const id = crypto.randomUUID();
+    this.db
+      .query(
+        `INSERT INTO shares (id, token, conversation_id, title, snapshot, message_count, created_at, revoked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
+      )
+      .run(id, token, conversationId, title.slice(0, 300), snapshot, messageCount, now);
+    return this.getShareByToken(token)!;
+  }
+
+  /** Révoque le partage actif d'une conversation (le lien devient 410). */
+  revokeShareByConversation(conversationId: string): boolean {
+    const r = this.db
+      .query("UPDATE shares SET revoked_at = ? WHERE conversation_id = ? AND revoked_at IS NULL")
+      .run(new Date().toISOString(), conversationId);
+    return r.changes > 0;
+  }
+
+  /** Supprime les partages d'une conversation supprimée ( liens 410 ). */
+  revokeSharesOfConversation(conversationId: string): void {
+    this.db
+      .query("UPDATE shares SET revoked_at = ? WHERE conversation_id = ? AND revoked_at IS NULL")
+      .run(new Date().toISOString(), conversationId);
   }
 
   // ── Artefacts ──────────────────────────────────────────────────────────

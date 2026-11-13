@@ -228,6 +228,41 @@ Serveur → client : `system-prompt:changed {conversationId, prompt}`,
 `scripts/test-system-prompt-flow.ts` (24 contrôles, dont la vérification
 comportementale — le LLM démo suit le prompt).
 
+## Partage public lecture seule (F-13)
+
+Chaque conversation peut être **partagée par lien public en lecture seule** :
+`/shared/<token>` côté interface (accessible sans session, jamais indexée).
+Le lien sert un **snapshot figé** — la conversation peut continuer sans
+changer le lien ; le créateur peut le **révoquer** à tout moment (le
+destinataire voit alors « lien révoqué ») ; supprimer la conversation passe
+ses liens en 410 Gone. Un seul lien actif par conversation : en recréer un
+révoque l'ancien.
+
+- `GET /share/<token>/data.json` — vue publique (titre, messages allégés,
+  noms de pièces jointes ; **aucun id interne**, CORS `*`, cache 5 min).
+- `GET /share/<token>/image.png` — le fil rendu en document autonome sobre
+  puis capturé **plein page par chrome-headless-shell** (même pipeline que
+  les artefacts HTML). 503 si le navigateur headless est indisponible.
+
+Schéma SQL : table additive `shares` (token opaque 24 caractères base62,
+index sur `conversation_id`) ; le snapshot JSON vit dans la ligne, la
+conversation source n'est jamais modifiée.
+
+### Événements socket partage
+
+Client → serveur :
+
+| Événement | Charge utile | Réponse (ack) |
+| --- | --- | --- |
+| `share:get` | `{conversationId}` | `{share: ShareView \| null}` |
+| `share:create` | `{conversationId}` | `{share}` — snapshot figé, token frais ; révoque l'ancien lien actif |
+| `share:revoke` | `{conversationId}` | `{ok}` (lien actif → 410 Gone) |
+
+Serveur → client : `share:changed {conversationId, share}` (broadcast après
+chaque création/révocation). Script de test E2E :
+`scripts/test-share-flow.ts` (24 contrôles : 404/410, remplacement,
+isolation, PNG Chrome).
+
 ## Protocole socket.io
 
 Client → serveur :

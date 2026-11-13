@@ -9,18 +9,22 @@
 //   providers:list/add/remove/set-strategy/add-key/remove-key/test-key,
 //   extensions:list/add/toggle/remove/pin/check/update,
 //   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
-//   custom-instructions:get/set
+//   custom-instructions:get/set,
+//   share:get/create/revoke
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
 //   stream:done, stream:error, message:appended, message:deleted,
 //   conversations:created, conversations:pinned,
 //   artifact:created, artifact:delta, artifact:updated,
 //   settings:changed, providers:changed, extensions:changed,
-//   system-prompt:changed, system-prompts:changed, custom-instructions:changed
+//   system-prompt:changed, system-prompts:changed, custom-instructions:changed,
+//   share:changed
 // HTTP (port 3004) :
 //   GET /uploads/<id>.<ext>            — pièces jointes multimédia
 //   GET /artifacts/<id>/raw|download|thumb|pdf
 //   GET /artifacts/zip?ids=a,b,c       — archive de plusieurs artefacts
+//   GET /share/<token>/data.json       — snapshot public lecture seule (F-13)
+//   GET /share/<token>/image.png       — capture Chrome du fil partagé (F-13)
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { Server } from "socket.io";
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
@@ -30,6 +34,14 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { Store, type ArtifactRow, type ExtensionRow, type KeyRow, type ProviderRow } from "./store";
 import { HermesConnector } from "./hermes-connector";
+import {
+  buildSnapshot,
+  generateShareToken,
+  isValidShareToken,
+  parseSnapshot,
+  rowToShareView,
+  type SharedConversationData,
+} from "./shares";
 import { modelLabel } from "./models";
 import { transcribeAudioBase64 } from "./asr";
 import {
@@ -302,6 +314,13 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
     return;
   }
 
+  // /share/<token>/(data.json|image.png) — lien public lecture seule (F-13)
+  const shareMatch = /^\/share\/([A-Za-z0-9]{16,64})\/(data\.json|image\.png)$/.exec(u.pathname);
+  if (shareMatch) {
+    void handleShareFile(shareMatch[1], shareMatch[2], res);
+    return;
+  }
+
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Introuvable");
 });
@@ -434,6 +453,123 @@ function handleArtifactZip(u: URL, res: ServerResponse): void {
     } catch {
       /* nettoyage best effort */
     }
+  }
+}
+
+// ── Partage public lecture seule (F-13) — HTTP du port 3004 ─────────────
+// data.json : snapshot figé (jamais d'id interne) ; image.png : capture
+// Chrome plein page du fil, via le même pipeline que les artefacts HTML
+// (badge de confiance « Rendu Chrome »). 410 Gone pour un lien révoqué.
+
+function shareEscapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Document autonome du fil partagé (base du rendu Chrome et de la page). */
+function sharedConversationHtml(data: SharedConversationData): string {
+  const msgs = data.messages
+    .map((m) => {
+      const who = m.role === "user" ? "Vous" : "Hermes";
+      const atts = m.attachments?.length
+        ? `<div class="atts">${m.attachments
+            .map((a) => shareEscapeHtml(`${a.name} (${a.kind})`))
+            .join(" · ")}</div>`
+        : "";
+      return `<div class="msg ${m.role}">
+  <div class="who">${shareEscapeHtml(who)}${m.model ? ` · ${shareEscapeHtml(m.model)}` : ""}</div>
+  <div class="body">${shareEscapeHtml(m.content)}</div>${atts}
+</div>`;
+    })
+    .join("\n");
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>${shareEscapeHtml(data.title)}</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #faf9f7; color: #1a1a1a; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 64px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .meta { color: #8a8378; font-size: 12.5px; margin-bottom: 36px; font-family: system-ui, sans-serif; }
+  .meta b { color: #b3592a; }
+  .msg { margin: 0 0 28px; }
+  .who { font-family: system-ui, sans-serif; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; color: #8a8378; }
+  .msg.user .who { color: #b3592a; }
+  .body { white-space: pre-wrap; line-height: 1.6; font-size: 15px; }
+  .msg.assistant .body { background: #fff; border: 1px solid #eee7dd; border-radius: 14px; padding: 14px 18px; }
+  .atts { margin-top: 6px; font-size: 12px; color: #8a8378; font-family: system-ui, sans-serif; }
+  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid #eee7dd; color: #b6ada0; font-size: 11.5px; font-family: system-ui, sans-serif; }
+</style></head><body><div class="wrap">
+<h1>${shareEscapeHtml(data.title)}</h1>
+<p class="meta">Conversation partagée depuis <b>Hermes Web</b> · ${data.messageCount} message(s) · le ${new Date(data.sharedAt).toLocaleString("fr-FR")}</p>
+${msgs}
+<footer>Lecture seule — partagé via Hermes Web (interface de chat pour l'agent Hermes).</footer>
+</div></body></html>`;
+}
+
+async function handleShareFile(
+  token: string,
+  action: string,
+  res: ServerResponse
+): Promise<void> {
+  if (!isValidShareToken(token)) {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Lien invalide");
+    return;
+  }
+  const row = store.getShareByToken(token);
+  if (!row) {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Lien introuvable");
+    return;
+  }
+  if (row.revoked_at) {
+    res.writeHead(410, { "Content-Type": "text/plain" });
+    res.end("Ce lien de partage a été révoqué");
+    return;
+  }
+  const data = parseSnapshot(row);
+  if (!data) {
+    res.writeHead(500, { "Content-Type": "text/plain" });
+    res.end("Partage illisible");
+    return;
+  }
+  try {
+    if (action === "data.json") {
+      const body = JSON.stringify(data);
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body, "utf-8"),
+        // Public : le destinataire n'a pas de session — pas de nosniff strict
+        // sur le JSON (la page publique le fetch), mais jamais de HTML servi.
+        "Cache-Control": "public, max-age=300",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(body, "utf-8");
+      return;
+    }
+    // image.png — capture Chrome plein page du document autonome
+    const { png } = await chromeRenderer.renderHtml(sharedConversationHtml(data));
+    res.writeHead(200, {
+      "Content-Type": "image/png",
+      "Content-Length": png.byteLength,
+      "Cache-Control": "public, max-age=86400",
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(
+        `hermes-${row.title.slice(0, 40).replace(/[^\w -]+/g, "") || "conversation"}.png`
+      )}`,
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end(png);
+  } catch (err) {
+    console.warn(
+      "[hermes-chat] rendu du partage impossible :",
+      err instanceof Error ? err.message : err
+    );
+    res.writeHead(503, { "Content-Type": "text/plain" });
+    res.end("Rendu indisponible (chrome-headless-shell introuvable ?)");
   }
 }
 
@@ -660,6 +796,8 @@ io.on("connection", (socket) => {
     const artifactRows = store.deleteConversationArtifacts(id);
     deleteAttachmentFiles(attachments);
     deleteArtifactFiles(artifactRows);
+    // Les liens de partage deviennent 410 Gone (snapshot conservé en base)
+    store.revokeSharesOfConversation(id);
     store.deleteConversation(id);
     if (typeof cb === "function") cb({ ok: true, id });
     socket.emit("conversations:deleted", { id });
@@ -1051,6 +1189,70 @@ io.on("connection", (socket) => {
       store.setSetting(CUSTOM_INSTRUCTIONS_KEY, value);
       if (typeof cb === "function") cb({ ok: true, value });
       io.emit("custom-instructions:changed", { value });
+    }
+  );
+
+  // ── Partage public lecture seule (F-13) ───────────────────────────
+
+  // Partage actif de la conversation (null si aucun)
+  socket.on(
+    "share:get",
+    (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
+      const id = payload?.conversationId;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      const row = store.getActiveShareByConversation(id);
+      if (typeof cb === "function")
+        cb({ share: row ? rowToShareView(row) : null });
+    }
+  );
+
+  // Crée (ou recrée) le lien — snapshot FIGÉ des messages au moment du partage
+  socket.on(
+    "share:create",
+    (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
+      const id = payload?.conversationId;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      const conversation = store.getConversation(id);
+      if (!conversation) {
+        if (typeof cb === "function") cb({ error: "Conversation introuvable" });
+        return;
+      }
+      const messages = store.getMessages(id);
+      if (messages.length === 0) {
+        if (typeof cb === "function") cb({ error: "Rien à partager : conversation vide" });
+        return;
+      }
+      const { snapshot, data } = buildSnapshot(conversation, messages);
+      const row = store.createShare(
+        id,
+        conversation.title,
+        snapshot,
+        data.messageCount,
+        generateShareToken()
+      );
+      if (typeof cb === "function") cb({ share: rowToShareView(row) });
+      io.emit("share:changed", { conversationId: id, share: rowToShareView(row) });
+    }
+  );
+
+  // Révoque le lien actif (le snapshot et la conversation ne bougent pas)
+  socket.on(
+    "share:revoke",
+    (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
+      const id = payload?.conversationId;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      const ok = store.revokeShareByConversation(id);
+      if (typeof cb === "function") cb({ ok });
+      if (ok) io.emit("share:changed", { conversationId: id, share: null });
     }
   );
 

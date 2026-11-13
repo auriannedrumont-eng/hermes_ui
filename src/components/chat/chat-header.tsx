@@ -1,7 +1,21 @@
-// En-tête : titre de conversation, export, statut de connexion, thème
+// En-tête : titre de conversation, export, partage public, statut, thème
 "use client";
 
-import { Download, FileJson, FileText, Moon, PanelLeft, Sparkle, Sun, WifiOff } from "lucide-react";
+import { useState } from "react";
+import {
+  Check,
+  Copy,
+  Download,
+  FileJson,
+  FileText,
+  Link2,
+  Moon,
+  PanelLeft,
+  Sparkle,
+  Sun,
+  Unlink,
+  WifiOff,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { ConversationMeta, GatewayMode } from "@/lib/chat-types";
+import type { ConversationMeta, GatewayMode, ShareView } from "@/lib/chat-types";
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -48,6 +62,10 @@ interface ChatHeaderProps {
   /** Prompt système actif sur cette conversation (F-11). */
   hasPrompt?: boolean;
   onOpenPrompt?: () => void;
+  /** Partage actif de la conversation (F-13) — null si aucun. */
+  share: ShareView | null;
+  onShareCreate: () => Promise<ShareView | null>;
+  onShareRevoke: () => void;
   onExport: (format: ExportFormat) => void;
   onOpenSidebar: () => void;
 }
@@ -59,9 +77,26 @@ export function ChatHeader({
   hasMessages,
   hasPrompt = false,
   onOpenPrompt,
+  share,
+  onShareCreate,
+  onShareRevoke,
   onExport,
   onOpenSidebar,
 }: ChatHeaderProps) {
+  // Copie du lien : feedback inline « Lien copié » (toast inutile ici)
+  const [copied, setCopied] = useState(false);
+  const copyLink = async () => {
+    if (!share) return;
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/shared/${share.token}`
+      );
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* clipboard indisponible (contexte non sécurisé) */
+    }
+  };
   return (
     <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-border/60 px-3 sm:px-4">
       <Button
@@ -138,6 +173,77 @@ export function ChatHeader({
             <TooltipContent>Connexion au service perdue — reconnexion…</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+      ) : null}
+
+      {/* Partage public lecture seule (F-13) */}
+      {activeConversation && hasMessages ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-9 w-9 rounded-xl",
+                share
+                  ? "text-hermes hover:text-hermes"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-label="Partager la conversation"
+            >
+              <Link2 className={cn("h-4.5 w-4.5", share && "fill-hermes/15")} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>
+              {share ? "Lien public actif" : "Partager en lecture seule"}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {share ? (
+              <>
+                <DropdownMenuItem onClick={() => void copyLink()}>
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  {copied ? "Lien copié !" : "Copier le lien"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    window.open(`/shared/${share.token}`, "_blank", "noopener")
+                  }
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Ouvrir la vue publique
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onShareRevoke}
+                  className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                  Révoquer le lien
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <DropdownMenuItem onClick={() => void onShareCreate()}>
+                <Link2 className="h-3.5 w-3.5" />
+                Créer un lien public
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  figé à la création
+                </span>
+              </DropdownMenuItem>
+            )}
+            {share ? (
+              <p className="px-2 pt-1.5 pb-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                {share.messageCount} message(s) · créé le{" "}
+                {new Date(share.createdAt).toLocaleDateString("fr-FR")} — le
+                contenu est un instantané : la conversation peut continuer sans
+                changer le lien.
+              </p>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
 
       {/* Export de la conversation */}

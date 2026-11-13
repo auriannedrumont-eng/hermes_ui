@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProviders } from "@/hooks/use-providers";
 import { useSystemPrompts } from "@/hooks/use-system-prompts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getSocket } from "@/lib/socket";
 import { Sidebar } from "@/components/chat/sidebar";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { SystemPromptPanel } from "@/components/settings/system-prompt-panel";
@@ -29,7 +30,7 @@ import { useHermesChat } from "@/hooks/use-hermes-chat";
 import { exportJson, exportMarkdown, exportPdf } from "@/lib/export";
 import { flashTitle, playCompletionBeep, setGeneratingTitle } from "@/lib/notify";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
-import type { Artifact } from "@/lib/chat-types";
+import type { Artifact, ShareView } from "@/lib/chat-types";
 
 const SIDEBAR_WIDTH_KEY = "fork.ui.sidebar.width"; // registre des réglages (FORK.md §6)
 
@@ -51,6 +52,93 @@ export default function HermesWebPage() {
   const [promptOpen, setPromptOpen] = useState(false);
   const providersApi = useProviders();
   const sidebarRef = useRef<ImperativePanelHandle>(null);
+
+  // ── Partage public lecture seule (F-13) ────────────────────────────────
+  // Un seul lien actif par conversation ; le bus share:changed (broadcast)
+  // maintient l'état à jour, le changement de conversation recharge (l'ack
+  // repart de zéro : null tant que la réponse n'est pas arrivée).
+  const [share, setShare] = useState<ShareView | null>(null);
+  useEffect(() => {
+    const id = chat.activeId;
+    if (!id) return;
+    const socket = getSocket();
+    socket.emit(
+      "share:get",
+      { conversationId: id },
+      (res: { share?: ShareView | null } = {}) => {
+        if (id !== chat.activeId) return;
+        setShare(res.share ?? null);
+      }
+    );
+  }, [chat.activeId]);
+  useEffect(() => {
+    const socket = getSocket();
+    const onShareChanged = (p: { conversationId: string; share?: ShareView | null }) => {
+      if (p.conversationId !== chat.activeId) return;
+      setShare(p.share ?? null);
+    };
+    socket.on("share:changed", onShareChanged);
+    return () => {
+      socket.off("share:changed", onShareChanged);
+    };
+  }, [chat.activeId]);
+
+  /** Crée le lien public (snapshot figé) et copie l'URL dans le presse-papier. */
+  const handleShareCreate = useCallback(async (): Promise<ShareView | null> => {
+    const id = chat.activeId;
+    if (!id) return null;
+    return new Promise((resolve) => {
+      getSocket().emit(
+        "share:create",
+        { conversationId: id },
+        (res: { share?: ShareView; error?: string } = {}) => {
+          if (res.share) {
+            setShare(res.share);
+            const url = `${window.location.origin}/shared/${res.share.token}`;
+            navigator.clipboard
+              ?.writeText(url)
+              .then(() => {
+                toast({
+                  title: "Lien de partage créé et copié",
+                  description: `${res.share!.messageCount} message(s) figés — lecture seule, révocable à tout moment.`,
+                  duration: 4000,
+                });
+              })
+              .catch(() => {
+                toast({
+                  title: "Lien de partage créé",
+                  description: url,
+                  duration: 6000,
+                });
+              });
+          } else if (res.error) {
+            toast({
+              title: "Partage impossible",
+              description: res.error,
+              variant: "destructive",
+            });
+          }
+          resolve(res.share ?? null);
+        }
+      );
+    });
+  }, [chat.activeId, toast]);
+
+  /** Révoque le lien actif (le destinataire voit « lien révoqué »). */
+  const handleShareRevoke = useCallback(() => {
+    const id = chat.activeId;
+    if (!id) return;
+    getSocket().emit(
+      "share:revoke",
+      { conversationId: id },
+      (res: { ok?: boolean } = {}) => {
+        if (res.ok) {
+          setShare(null);
+          toast({ title: "Lien révoqué", description: "La vue publique n'est plus accessible.", duration: 3000 });
+        }
+      }
+    );
+  }, [chat.activeId, toast]);
 
   const activeConversation = useMemo(
     () => chat.conversations.find((c) => c.id === chat.activeId) ?? null,
@@ -282,6 +370,9 @@ export default function HermesWebPage() {
             hasMessages={chat.messages.length > 0}
             hasPrompt={chat.promptInfo !== null}
             onOpenPrompt={() => setPromptOpen(true)}
+            share={share}
+            onShareCreate={handleShareCreate}
+            onShareRevoke={handleShareRevoke}
             onExport={handleExport}
             onOpenSidebar={() => setMobileOpen(true)}
           />
