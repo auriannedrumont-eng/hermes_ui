@@ -182,3 +182,63 @@ export interface ServerHello {
   /** Taille des instructions système (estimation honnête de la jauge). */
   systemPromptChars?: number | null;
 }
+
+// ── Fournisseurs & clés (chantier « Paramètres v2.2 ») ─────────────────
+// Sécurité : le secret d'une clé ne quitte JAMAIS le service — le client
+// ne reçoit que la vue masquée (`masked`) et un identifiant stable.
+
+export type ProviderKind = "llm" | "service";
+/** Stratégie de choix de la prochaine clé (pools d'identifiants moteur). */
+export type ProviderStrategy = "fill_first" | "round_robin" | "least_used";
+export type KeyStatus = "untested" | "ok" | "error" | "exhausted";
+
+export interface ProviderKeyView {
+  id: string;
+  label: string;
+  masked: string;
+  status: KeyStatus;
+  statusLabel?: string | null;
+  lastTestedAt?: string | null;
+}
+
+export interface ProviderView {
+  id: string;
+  name: string;
+  kind: ProviderKind;
+  strategy: ProviderStrategy;
+  baseUrl?: string | null;
+  /** Fournisseur local sans clé (Ollama) — la carte l'explique. */
+  keyless?: boolean;
+  keys: ProviderKeyView[];
+}
+
+// ── Extensions : dépôts importés + serveurs MCP ───────────────────────
+
+export type ExtensionKind = "repo" | "mcp";
+
+/** Commit GitHub tel qu'affiché dans « Dernières modifications ». */
+export interface ExtensionCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface ExtensionView {
+  id: string;
+  name: string;
+  kind: ExtensionKind;
+  description?: string | null;
+  /** « owner/repo » pour un dépôt ; adresse ou commande pour un serveur. */
+  source?: string | null;
+  channel?: string | null;
+  commit?: string | null;
+  version?: string | null;
+  pinned: boolean;
+  enabled: boolean;
+  /** État réellement chargé par le service (false = au prochain redémarrage). */
+  applied: boolean;
+  /** Version/commit détecté par « Vérifier » (null = à jour). */
+  updateAvailable?: string | null;
+  lastCheckedAt?: string | null;
+}

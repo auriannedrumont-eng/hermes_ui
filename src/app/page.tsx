@@ -14,9 +14,10 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useToast } from "@/hooks/use-toast";
+import { useProviders } from "@/hooks/use-providers";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sidebar } from "@/components/chat/sidebar";
-import { SettingsSheet } from "@/components/settings/settings-sheet";
+import { SettingsPanel } from "@/components/settings/settings-panel";
 import { ChatHeader, type ExportFormat } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { Composer } from "@/components/chat/composer";
@@ -40,6 +41,7 @@ export default function HermesWebPage() {
   const [viewerOpen, setViewerOpen] = useState(false);
   /** Sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const providersApi = useProviders();
   const sidebarRef = useRef<ImperativePanelHandle>(null);
 
   const activeConversation = useMemo(
@@ -364,8 +366,9 @@ export default function HermesWebPage() {
         fetchVersions={chat.fetchArtifactVersions}
       />
 
-      {/* Sheet Paramètres (étage client — phase 1, maquette v3) */}
-      <SettingsSheet
+      {/* Volet Paramètres v4 (860 px, rail) — Interface, Modèles,
+          Fournisseurs, Clés de services, Extensions… */}
+      <SettingsPanel
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         mode={chat.mode}
@@ -373,6 +376,8 @@ export default function HermesWebPage() {
         models={chat.models}
         selectedModel={chat.selectedModel}
         projects={chat.projects}
+        api={providersApi}
+        serverVersion={chat.serverVersion}
       />
 
       {/* Palette de commandes (Cmd/Ctrl+K) */}

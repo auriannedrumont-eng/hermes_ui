@@ -31,6 +31,7 @@ import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AttachmentsList } from "@/components/chat/attachments";
 import { ArtifactCard } from "@/components/chat/artifact-card";
 import { stripArtifactBlocks, downloadArtifactZip } from "@/lib/artifact-utils";
+import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import type { Artifact, ChatMessage, ToolEvent } from "@/lib/chat-types";
 
 function ToolEventRow({ event }: { event: ToolEvent }) {
@@ -209,6 +210,15 @@ export function MessageBubble({
   const [editValue, setEditValue] = useState("");
   const editRef = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeech(isStreaming ? "" : message.content);
+  // Réglage « Afficher le raisonnement » (fork.ui.showReasoning) — suivi
+  // en direct via le bus `hermes-ui:settings-changed`.
+  const [showReasoning, setShowReasoning] = useState(true);
+  useEffect(() => {
+    setShowReasoning(readClientSetting<boolean>("fork.ui.showReasoning") !== false);
+    return onSettingsChanged(({ key, value }) => {
+      if (key === "fork.ui.showReasoning") setShowReasoning(value !== false);
+    });
+  }, []);
 
   const copy = async () => {
     try {
@@ -347,9 +357,11 @@ export function MessageBubble({
   const rawContent = isStreaming ? (streamingContent ?? "") : message.content;
   // Les blocs devenus artefacts disparaissent du flux : la carte les remplace
   const content = stripArtifactBlocks(rawContent);
-  const reasoning = isStreaming
-    ? (streamingReasoning ?? "")
-    : (message.reasoning ?? "");
+  const reasoning = showReasoning
+    ? isStreaming
+      ? (streamingReasoning ?? "")
+      : (message.reasoning ?? "")
+    : "";
   const tools = isStreaming ? (streamingTools ?? []) : (message.toolEvents ?? []);
   const cards = artifactCards ?? [];
   const waitingFirstToken =

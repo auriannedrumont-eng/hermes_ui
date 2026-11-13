@@ -137,6 +137,17 @@ export const FORK_SETTINGS: SettingDef[] = [
     scope: "client",
     category: "Interface",
   },
+  {
+    key: "fork.ui.showReasoning",
+    type: "boolean",
+    default: true,
+    label: "Afficher le raisonnement",
+    description:
+      "Montre le cheminement du modèle au-dessus de chaque réponse " +
+      "(les tours déjà affichés suivent le réglage).",
+    scope: "client",
+    category: "Interface",
+  },
 ];
 
 const PREFIX = "hermes-ui:";

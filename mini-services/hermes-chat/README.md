@@ -135,6 +135,56 @@ Client → serveur :
 Les réglages serveur suivent le découpage `hermes.*` / `fork.*` documenté
 dans le `FORK.md` du repo (registre source de vérité : `src/lib/settings.ts`).
 
+## Fournisseurs & clés + Extensions (Paramètres v2.2)
+
+Tables SQLite additives (`store.ts`) : `providers` (LLM et services d'API,
+`kind` = `llm | service`, `strategy` = `fill_first | round_robin | least_used`),
+`provider_keys` (le **secret ne quitte jamais le service** : seules les vues
+masquées `masked` partent au navigateur, `status` = `untested | ok | error |
+exhausted`), `extensions` (dépôts GitHub importés `repo` et serveurs `mcp` ;
+`enabled` vs `applied` — un toggle ne devient effectif qu'au redémarrage du
+service, le pied du volet compte les écarts).
+
+- **« Tester » une clé = appel minimal réel** exécuté par le service
+  (`providers.ts`) : liste des modèles du fournisseur (z.ai, OpenRouter,
+  Anthropic, Mistral, OpenAI, DeepSeek, Groq, xAI…), requête minimale pour
+  les services (Tavily, Exa, FAL.ai) ; 401/403 → « clé refusée »,
+  429 → « limite atteinte » (clé marquée épuisée), `/models` Bearer pour
+  toute adresse personnalisée.
+- **Imports GitHub réels** : `extensions:add` résout le dépôt via l'API
+  GitHub (nom, description, branche par défaut, tête, derniers commits,
+  dernier tag) avec **repli automatique sur le protocole git**
+  (`git ls-remote`) quand l'API est au quota — sans description ni commits
+  dans ce cas. Jeton optionnel : `GITHUB_TOKEN` dans le `.env` du service
+  (quota ×80).
+- `pickActiveKey()` (stratégies de porte-clés) est prêt pour le moteur ;
+  en mode démo les tours du LLM intégré ne consomment pas les pools.
+
+### Événements socket fournisseurs & extensions
+
+Client → serveur :
+
+| Événement | Charge utile | Réponse (ack) |
+| --- | --- | --- |
+| `providers:list` | — | `{providers: ProviderView[]}` (avec clés masquées) |
+| `providers:add` | `{name, kind, baseUrl?}` | `{provider}` — nom connu (z.ai, Tavily…) ou adresse https |
+| `providers:remove` | `{id}` | `{ok}` (supprime ses clés) |
+| `providers:set-strategy` | `{id, strategy}` | `{provider}` |
+| `providers:add-key` | `{providerId, label, secret}` | `{key: ProviderKeyView}` (masquée) |
+| `providers:remove-key` | `{keyId}` | `{ok}` |
+| `providers:test-key` | `{keyId}` | `{ok, key}` — test réseau réel, peut prendre quelques secondes |
+| `extensions:list` | — | `{extensions: ExtensionView[]}` |
+| `extensions:add` | `{kind: repo\|mcp, source, channel?}` | `{extension, commits?}` — résolution GitHub réelle |
+| `extensions:toggle` | `{id, enabled}` | `{extension}` (effet au redémarrage) |
+| `extensions:remove` | `{id}` | `{ok}` |
+| `extensions:pin` | `{id, pinned}` | `{extension}` (figée : plus de vérifications) |
+| `extensions:check` | `{id}` | `{ok, extension, commits?, changed?, skipped?}` |
+| `extensions:update` | `{id}` | `{extension, commits?}` (suit la tête distante) |
+
+Serveur → client : `providers:changed {providers}` et `extensions:changed
+{extensions}` (listes complètes, diffusées à tous les clients après chaque
+mutation). Script de test E2E : `scripts/test-providers-flow.ts`.
+
 ## Protocole socket.io
 
 Client → serveur :

@@ -361,6 +361,44 @@ Fichier : `design/maquette-parametres-v4.html`. **Rien de la v4 n'est implément
 l'implémentée reste la phase 1 ci-dessus. (Entrée journalisée a posteriori : le commit
 n'avait pas été consigné au §9.)
 
+**Livré — phase 2 « volet v4 + Fournisseurs & clés + Extensions » (2026-11-13, huitième
+session)** : le chantier v2.2 a été mené **sur la maquette v4** (dernière direction de
+design, sections Fournisseurs / Clés de services / Extensions = organisation v4) à la
+demande « continue » de l'utilisatrice — la validation formelle de la maquette reste à
+donner a posteriori, les ajustements éventuels se feront sur l'implémenté.
+
+- **Volet v4** : `src/components/settings/settings-panel.tsx` remplace le sheet 460 px
+  (supprimé) — volet gauche 860 px ancré (plein écran < 1100 px), rail des 10 sections,
+  pastilles uniques d'état, pied « mode démo + N en attente », point ambre sur
+  Extensions quand une mise à jour est détectée. Sections livrées : **Interface**
+  (registres client — dont nouveau `fork.ui.showReasoning`, appliqué en direct aux bulles
+  via le bus — et **Thème** Système/Clair/Sombre via next-thèmes), **Modèles** (catalogue
+  vivant + effort porté par le modèle ; arrière-plan et secours annoncés v2.3),
+  **Fournisseurs**, **Clés de services**, **Extensions**. Outils, Skills, Hermes,
+  Profils, Système = structure cible listée sans données simulées (v2.3+).
+- **Serveur — porte-clés** (`mini-services/hermes-chat/providers.ts` + tables additives
+  `providers` / `provider_keys`) : plusieurs clés par fournisseur (ordre = priorité),
+  stratégie `fill_first` / `round_robin` / `least_used` (`pickActiveKey` prêt pour le
+  moteur, non consommé en démo), « **Tester** » = appel minimal **réel** exécuté par le
+  service (liste des modèles : z.ai, OpenRouter, Anthropic, Mistral, OpenAI, DeepSeek,
+  Groq, xAI ; requête minimale : Tavily, Exa, FAL.ai ; `/models` Bearer pour les adresses
+  personnalisées) ; 401/403 → « clé refusée », 429 → « limite atteinte ». **Clés jamais
+  en localStorage ni renvoyées en clair** — vues masquées `sk-••••7f3a` seulement.
+- **Serveur — extensions** (table `extensions`) : imports GitHub **réels** (nom,
+  description, branche, commit exact, dernier tag, derniers commits) avec **repli
+  protocole git** (`git ls-remote`) quand l'API GitHub est au quota ; jeton optionnel
+  `GITHUB_TOKEN` dans le `.env` du service ; **Vérifier** (diff local ↔ distant),
+  **Mettre à jour** (suit la tête — le rapatriement/relance effectifs relèvent du
+  moteur, post-gateway), **Épingler** (fige, saute les vérifications), activer/désactiver
+  (colonne `applied` : effet au redémarrage du service, compteur « N en attente » du pied).
+- **Hook** `src/hooks/use-providers.ts` (état + actions, broadcasts `providers:changed` /
+  `extensions:changed`) ; miroir des types dans les deux `types.ts` / `chat-types.ts`.
+- QA : `scripts/test-providers-flow.ts` (29 contrôles E2E verts — y compris test de clé
+  réel → 401, import GitHub via repli git) ; captures `download/qa-parametres-v2/`
+  (14 vues : sections, ajout fournisseur/clé, test réel, import, dépliage, désactivation
+  + « 1 en attente », Modèles, à venir, thème clair, mobile 390 px). `bunx tsc
+  --noEmit` : 0 erreur dans `src/` ; eslint propre sur les nouveaux fichiers.
+
 ### 7.5 Fait — Chat UX : arrêt propre et erreurs persistantes (F-01/F-04)
 
 Livré le 2026-11-13 (suivi détaillé dans `docs/ROADMAP_FRONT.md`). Deux écarts corrigés :
@@ -424,6 +462,7 @@ la bulle au bout de 2,5 s (partiel persisté invisible jusqu'au rechargement, sa
 | 2026-11-13 (5) | **Paramètres phase 1 livrée (étage client)** d'après la maquette v3 : sheet 460 px (Radix Dialog maison), engrenage dans la carte de statut, section « Cette interface » (7 lignes des deux registres, favoris internes cachés), tooltips « ? » (focusables, tap mobile, un seul ouvert, flèche), contrôles par type de réglage ; **application immédiate généralisée** via le bus `hermes-ui:settings-changed` émis par `writeClientSetting()` (page → largeur sidebar, sidebar → tri + repliage, composer → jauge, hook → modèle/effort/permissions) — badge « au rechargement » abandonné, tout est live ; interrupteur « Dossiers de projet repliés » dérivé du registre (tout replier / tout déplier) ; porte moteur = 10 sections « à venir » (structure v2.2+, aucune donnée simulée) ; pied « Mode démo » + compteur « N en attente » (prop `pendingEngineCount`, masqué à 0). Fix : course au montage de la largeur sidebar (le `onResize` initial de la lib écrasait la valeur persistée) neutralisée par `sidebarRestoredRef`. `bunx tsc --noEmit` : 0 erreur dans `src/`. |
 | 2026-11-13 (6) | **Paramètres v4 — maquette** (sixième session, consignée a posteriori) : proposition de remplacement du sheet 460 px par un **volet gauche ~860 px** ancré, navigation par rail (plus de forage), **pastilles** comme unique langue d'état (vert/orange/rouge), descriptions simples sous les libellés (tooltips = exemples), sections réorganisées — Modèles (modèle d'arrière-plan, effort dynamique), Fournisseurs LLM **séparés** des clés de services, Extensions (ex-Connecteurs + MCP fusionnés, activer/désactiver), Outils (détail dépliable, création), Skills (recherche + contrôle qualité en langage clair), Hermes (mémoire + .md + compaction + comportement). `design/maquette-parametres-v4.html` committé (`4c6269d`) — **en attente de validation, rien d'implémenté**. |
 | 2026-11-13 (7) | **Chat UX F-01/F-04 livré — arrêt propre + erreurs persistantes** : `stream:done` porte `stopped: true` quand `chat:stop` clôt le tour (un arrêt n'est plus traité comme une erreur) ; `ChatMessage.stopped` persisté (migration additive `messages.stopped`, transportée par append/gets/fork) et affiché (« Réponse interrompue ») ; arrêt avant le premier jeton = pas de bulle vide ; `stream:error` embarque le partiel persisté + la conversation — le client l'affiche immédiatement dans le fil avec rangée persistante **Réessayer / Masquer** (plus d'effacement automatique à 2,5 s) ; machine à états `turnState` (idle/streaming/stopped/error) + `turnError`/`retryAfterError`/`dismissTurnError` exposés par le hook. Scripts de test : `scripts/test-stop-error-flow.ts` (scénarios 1-3 en service normal, scénario 4 avec `scripts/fake-zai-error.preload.ts` — preload qui fait échouer le LLM après 2 deltas ; NB : il cible la copie du SDK du mini-service, pas celle de la racine). QA par captures : `download/qa-f01-f04/` (erreur persistante, masquée, arrêt propre, pastille, régénération). Docs : `docs/ROADMAP_FRONT.md` (nouveau — suivi F-xx réconcilié avec le code), README mini-service (payloads stream:*), §7.5 ajouté. `bunx tsc --noEmit` : 9 erreurs préexistantes hors périmètre, 0 dans `src/`. |
+| 2026-11-13 (8) | **Paramètres phase 2 livrée — volet v4 + Fournisseurs & clés + Extensions (v2.2)** : menée sur la maquette v4 à la demande « continue » de l'utilisatrice (validation formelle a posteriori, ajustements sur l'implémenté). Volet gauche 860 px à rail (10 sections, pastilles, plein écran < 1100 px) remplace le sheet 460 px ; Interface gagne le **Thème** (next-themes) et **Afficher le raisonnement** (`fork.ui.showReasoning`, appliqué en direct aux bulles) ; serveur : tables additives `providers`/`provider_keys`/`extensions` (colonne `applied` = effet au redémarrage, compteur « N en attente »), « Tester » = **appel réel** exécuté par le service (401 → « clé refusée », 429 → épuisée), secrets **jamais** renvoyés au navigateur (masquage `sk-••••7f3a`), imports GitHub **réels** avec **repli `git ls-remote`** quand l'API est au quota (jeton `GITHUB_TOKEN` optionnel), Vérifier / Mettre à jour / Épingler ; stratégies de porte-clés prêtes pour le moteur (`pickActiveKey`, non consommées en démo — assumé). Suppression du « commit » SQLite réservé (colonne quotée). QA : `scripts/test-providers-flow.ts` 29/29 (test clé réel → 401, import GitHub réel), 14 captures `download/qa-parametres-v2/` contrôlées par script + VLM. `bunx tsc --noEmit` : 0 erreur `src/` ; eslint propre. |
 
 ## 10. Synchronisation git et passation
 

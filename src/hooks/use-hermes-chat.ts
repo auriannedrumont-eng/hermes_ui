@@ -1067,6 +1067,7 @@ export function useHermesChat() {
     connected,
     mode: (serverInfo?.mode ?? null) as GatewayMode | null,
     serverModel: serverInfo?.model ?? null,
+    serverVersion: serverInfo?.version ?? null,
     conversations,
     projects,
     activeId,

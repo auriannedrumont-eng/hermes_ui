@@ -203,3 +203,55 @@ export function formatArtifactBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} Ko`;
   return `${(n / 1024 / 1024).toFixed(1)} Mo`;
 }
+
+// ── Fournisseurs & clés + Extensions (Paramètres v2.2) ────────────────
+// Miroir de mini-services/hermes-chat/types.ts — les secrets restent
+// côté service : le client ne voit que les vues masquées.
+
+export type ProviderKind = "llm" | "service";
+export type ProviderStrategy = "fill_first" | "round_robin" | "least_used";
+export type KeyStatus = "untested" | "ok" | "error" | "exhausted";
+
+export interface ProviderKeyView {
+  id: string;
+  label: string;
+  masked: string;
+  status: KeyStatus;
+  statusLabel?: string | null;
+  lastTestedAt?: string | null;
+}
+
+export interface ProviderView {
+  id: string;
+  name: string;
+  kind: ProviderKind;
+  strategy: ProviderStrategy;
+  baseUrl?: string | null;
+  keyless?: boolean;
+  keys: ProviderKeyView[];
+}
+
+export type ExtensionKind = "repo" | "mcp";
+
+export interface ExtensionCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface ExtensionView {
+  id: string;
+  name: string;
+  kind: ExtensionKind;
+  description?: string | null;
+  source?: string | null;
+  channel?: string | null;
+  commit?: string | null;
+  version?: string | null;
+  pinned: boolean;
+  enabled: boolean;
+  applied: boolean;
+  updateAvailable?: string | null;
+  lastCheckedAt?: string | null;
+}

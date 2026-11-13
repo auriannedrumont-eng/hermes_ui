@@ -71,7 +71,7 @@
 
 | ID | Feature | Statut | Preuve |
 |----|---------|--------|--------|
-| F-25 | **Page Paramètres** | **Terminé (phase 1)** — maquette v4 en attente de validation | Sheet 460 px livré + poussé (commits `004b388`, puis maquette `4c6269d`). Phasage v2.2+ : voir FORK.md §7.4 |
+| F-25 | **Page Paramètres** | **Terminé (phase 2 — volet v4 + Fournisseurs & clés + Extensions)** | Volet 860 px à rail (maquette v4 implémentée, `settings-panel.tsx`), Fournisseurs LLM et Clés de services (porte-clés multi-clés, **test réseau réel**, stratégies), Extensions (imports GitHub réels — repli `git ls-remote`, Vérifier/Mettre à jour/Épingler), Thème + Afficher le raisonnement en Interface. Phases : 1 = sheet 460 px (`004b388`) ; 2 = ce chantier. Suit : v2.3 découverte moteur (Outils, Skills, Hermes, Profils, Système) |
 
 ## Chantier du 2026-11-13 — F-01/F-04 « arrêt propre + erreurs persistantes »
 
@@ -95,16 +95,43 @@ Modifications (toutes chirurgicales, cf. journal FORK.md §9) :
   d'erreur `role="alert"` avec Réessayer/Masquer en bas de fil (`message-list.tsx`) ; câblage
   `page.tsx`.
 
+## Chantier du 2026-11-13 (huitième session) — Paramètres v2.2 « volet v4 + Fournisseurs & clés + Extensions »
+
+Mené à la demande « continue » sur la **maquette v4** (dernière direction de design) ;
+la validation formelle de l'utilisatrice reste à donner a posteriori, les ajustements
+se feront sur l'implémenté (décision consignée FORK.md §9-8).
+
+- **Volet gauche 860 px à rail** (10 sections, pastilles, plein écran < 1100 px) remplace
+  le sheet 460 px de la phase 1 (`settings-sheet.tsx` supprimé).
+- **Fournisseurs** (LLM) et **Clés de services** (Tavily, Exa, FAL.ai, xAI…) : porte-clés
+  multi-clés — ordre = priorité, stratégie (Première disponible / Tournante / La moins
+  utilisée), « Tester » = appel réseau **réel** exécuté par le mini-service
+  (401 → « clé refusée », 429 → « limite atteinte ») ; secrets jamais renvoyés au
+  navigateur (vues masquées `sk-••••7f3a` uniquement).
+- **Extensions** : imports GitHub réels (branche, commit exact, dernier tag, derniers
+  commits) avec repli protocole git quand l'API GitHub est au quota ; Vérifier /
+  Mettre à jour / Épingler / activer-désactiver (colonne `applied` → « N en attente »
+  au pied du volet, effet au redémarrage).
+- **Interface** gagne Thème (Système/Clair/Sombre, next-themes) et Afficher le
+  raisonnement (`fork.ui.showReasoning`, appliqué en direct aux bulles) ; **Modèles**
+  = catalogue vivant + effort ; Outils/Skills/Hermes/Profils/Système = structure cible
+  sans données simulées (v2.3+).
+- QA : `scripts/test-providers-flow.ts` (29/29, dont test de clé réel → 401 et import
+  GitHub réel) ; 14 captures `download/qa-parametres-v2/` (contrôle pixel + VLM) ;
+  `bunx tsc --noEmit` 0 erreur `src/` ; eslint propre.
+
 ## Ordre de démarrage recommandé (suite)
 
-1. **Valider la maquette paramètres v4** (`design/maquette-parametres-v4.html`) → chantier
-   v2.2 (Fournisseurs & clés + Extensions) — c'est le chantier actif de l'utilisatrice.
-2. **F-11 + F-19** (prompt système / instructions personnalisées) — se greffe sur la section
-   « Hermes » des paramètres et les fichiers .md moteur.
+1. **Valider le volet v4 implémenté** (captures `download/qa-parametres-v2/` ou en
+   local : `bun dev` + mini-service) — retours à intégrer directement sur
+   l'implémenté.
+2. **F-11 + F-19** (prompt système / instructions personnalisées) — se greffe sur la
+   section « Hermes » du volet et les fichiers .md moteur.
 3. **F-13** (lien public lecture seule) — l'export local est déjà couvert.
 4. **F-24** (feedback 👍/👎) — léger, autonome.
 5. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
-   à revoir une fois la gateway branchée.
+   à revoir une fois la gateway branchée (les clés de services sont désormais gérées
+   dans le volet Paramètres).
 
 ## Notes de passation
 

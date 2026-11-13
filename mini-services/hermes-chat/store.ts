@@ -65,6 +65,52 @@ export interface ProjectRow {
   updated_at: string;
 }
 
+/** Ligne interne d'un fournisseur (LLM ou service d'API). */
+export interface ProviderRow {
+  id: string;
+  name: string;
+  kind: string;
+  base_url: string | null;
+  strategy: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Ligne interne d'une clé — `secret` ne quitte jamais le service. */
+export interface KeyRow {
+  id: string;
+  provider_id: string;
+  label: string;
+  secret: string;
+  masked: string;
+  status: string;
+  status_label: string | null;
+  last_tested_at: string | null;
+  position: number;
+  used_count: number;
+  created_at: string;
+}
+
+/** Ligne interne d'une extension (dépôt importé ou serveur MCP). */
+export interface ExtensionRow {
+  id: string;
+  name: string;
+  kind: string;
+  description: string | null;
+  source: string | null;
+  channel: string | null;
+  commit: string | null;
+  version: string | null;
+  pinned: number;
+  enabled: number;
+  applied: number;
+  update_available: string | null;
+  last_checked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 function rowToProject(r: ProjectRow): Project {
   return {
     id: r.id,
@@ -172,6 +218,58 @@ export class Store {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`);
+    // ── Fournisseurs & clés (Paramètres v2.2) ────────────────────────
+    // Les secrets restent côté service : seules les vues masquées
+    // partent vers le navigateur (providers.ts / toKeyView).
+    this.db.exec(`CREATE TABLE IF NOT EXISTS providers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      base_url TEXT,
+      strategy TEXT NOT NULL DEFAULT 'fill_first',
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS provider_keys (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      secret TEXT NOT NULL,
+      masked TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'untested',
+      status_label TEXT,
+      last_tested_at TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`);
+    this.db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_provider_keys_provider ON provider_keys(provider_id, position)"
+    );
+    // ── Extensions : dépôts importés + serveurs MCP (Paramètres v2.2) ─
+    // `applied` suit l'état réellement chargé : un toggle change `enabled`,
+    // le redémarrage du service (re)charge l'état courant → applied = enabled.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS extensions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      description TEXT,
+      source TEXT,
+      channel TEXT,
+      "commit" TEXT,
+      version TEXT,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      applied INTEGER NOT NULL DEFAULT 1,
+      update_available TEXT,
+      last_checked_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`);
+    // Au démarrage, l'état courant devient l'état appliqué (les toggles
+    // effectués sous l'ancien process ont été pris en compte au relancement).
+    this.db.exec("UPDATE extensions SET applied = enabled WHERE applied <> enabled");
   }
 
   // ── Artefacts ──────────────────────────────────────────────────────────
@@ -730,6 +828,180 @@ export class Store {
       });
     }
     return hits;
+  }
+
+  // ── Fournisseurs & clés (Paramètres v2.2) ────────────────────────
+
+  listProviderRows(): ProviderRow[] {
+    return this.db
+      .query("SELECT * FROM providers ORDER BY position ASC, created_at ASC")
+      .all() as ProviderRow[];
+  }
+
+  getProviderRow(id: string): ProviderRow | null {
+    return (this.db.query("SELECT * FROM providers WHERE id = ?").get(id) as ProviderRow) ?? null;
+  }
+
+  createProvider(p: {
+    name: string;
+    kind: string;
+    baseUrl?: string | null;
+  }): ProviderRow {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const r = this.db.query("SELECT MAX(position) AS p FROM providers").get() as any;
+    const position = (r?.p ?? -1) + 1;
+    this.db
+      .query(
+        "INSERT INTO providers (id, name, kind, base_url, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      )
+      .run(id, p.name.slice(0, 60), p.kind, p.baseUrl ?? null, position, now, now);
+    return this.getProviderRow(id)!;
+  }
+
+  deleteProvider(id: string): void {
+    this.db.query("DELETE FROM provider_keys WHERE provider_id = ?").run(id);
+    this.db.query("DELETE FROM providers WHERE id = ?").run(id);
+  }
+
+  setProviderStrategy(id: string, strategy: string): ProviderRow | null {
+    if (!this.getProviderRow(id)) return null;
+    this.db
+      .query("UPDATE providers SET strategy = ?, updated_at = ? WHERE id = ?")
+      .run(strategy, new Date().toISOString(), id);
+    return this.getProviderRow(id);
+  }
+
+  listKeyRows(providerId: string): KeyRow[] {
+    return this.db
+      .query("SELECT * FROM provider_keys WHERE provider_id = ? ORDER BY position ASC, created_at ASC")
+      .all(providerId) as KeyRow[];
+  }
+
+  getKeyRow(id: string): KeyRow | null {
+    return (this.db.query("SELECT * FROM provider_keys WHERE id = ?").get(id) as KeyRow) ?? null;
+  }
+
+  createProviderKey(providerId: string, label: string, secret: string, masked: string): KeyRow {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const r = this.db
+      .query("SELECT MAX(position) AS p FROM provider_keys WHERE provider_id = ?")
+      .get(providerId) as any;
+    const position = (r?.p ?? -1) + 1;
+    this.db
+      .query(
+        `INSERT INTO provider_keys (id, provider_id, label, secret, masked, status, position, created_at)
+         VALUES (?, ?, ?, ?, ?, 'untested', ?, ?)`
+      )
+      .run(id, providerId, label.slice(0, 40), secret, masked, position, now);
+    return this.getKeyRow(id)!;
+  }
+
+  deleteProviderKey(id: string): void {
+    this.db.query("DELETE FROM provider_keys WHERE id = ?").run(id);
+  }
+
+  setKeyStatus(
+    id: string,
+    status: string,
+    statusLabel: string | null
+  ): KeyRow | null {
+    this.db
+      .query("UPDATE provider_keys SET status = ?, status_label = ?, last_tested_at = ? WHERE id = ?")
+      .run(status, statusLabel, new Date().toISOString(), id);
+    return this.getKeyRow(id);
+  }
+
+  /** Incrémente le compteur d'usage (stratégie « la moins utilisée »). */
+  markKeyUsed(id: string): void {
+    this.db
+      .query("UPDATE provider_keys SET used_count = used_count + 1 WHERE id = ?")
+      .run(id);
+  }
+
+  // ── Extensions : dépôts importés + serveurs MCP ──────────────────
+
+  listExtensionRows(): ExtensionRow[] {
+    return this.db
+      .query("SELECT * FROM extensions ORDER BY created_at ASC")
+      .all() as ExtensionRow[];
+  }
+
+  getExtensionRow(id: string): ExtensionRow | null {
+    return (this.db.query("SELECT * FROM extensions WHERE id = ?").get(id) as ExtensionRow) ?? null;
+  }
+
+  createExtension(e: {
+    name: string;
+    kind: string;
+    description?: string | null;
+    source?: string | null;
+    channel?: string | null;
+    commit?: string | null;
+    version?: string | null;
+  }): ExtensionRow {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.db
+      .query(
+        `INSERT INTO extensions (id, name, kind, description, source, channel, "commit", version, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        e.name.slice(0, 80),
+        e.kind,
+        e.description ?? null,
+        e.source ?? null,
+        e.channel ?? null,
+        e.commit ?? null,
+        e.version ?? null,
+        now,
+        now
+      );
+    return this.getExtensionRow(id)!;
+  }
+
+  updateExtensionRow(
+    id: string,
+    patch: Partial<{
+      name: string;
+      description: string | null;
+      channel: string | null;
+      commit: string | null;
+      version: string | null;
+      pinned: boolean;
+      enabled: boolean;
+      applied: boolean;
+      update_available: string | null;
+      last_checked_at: string | null;
+    }>
+  ): ExtensionRow | null {
+    if (!this.getExtensionRow(id)) return null;
+    const cols: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v !== undefined) cols[k] = v;
+    }
+    const sets = Object.keys(cols)
+      .map((k) => `"${k}" = ?`)
+      .join(", ");
+    this.db
+      .query(`UPDATE extensions SET ${sets} WHERE id = ?`)
+      .run(...Object.values(cols), id);
+    return this.getExtensionRow(id);
+  }
+
+  deleteExtension(id: string): void {
+    this.db.query("DELETE FROM extensions WHERE id = ?").run(id);
+  }
+
+  /** Extensions dont l'état diffère de celui chargé (footer « N en attente »). */
+  countPendingExtensions(): number {
+    const r = this.db
+      .query("SELECT COUNT(*) AS n FROM extensions WHERE enabled <> applied")
+      .get() as any;
+    return r?.n ?? 0;
   }
 
   /** Pièces jointes d'une conversation (pour le nettoyage disque). */

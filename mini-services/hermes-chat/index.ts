@@ -4,12 +4,16 @@
 //   chat:send, chat:stop, chat:regenerate,
 //   message:edit, message:delete,
 //   models:list, attachments:upload, audio:transcribe,
-//   artifacts:list, artifact:versions, artifact:retry
+//   artifacts:list, artifact:versions, artifact:retry,
+//   settings:get/set,
+//   providers:list/add/remove/set-strategy/add-key/remove-key/test-key,
+//   extensions:list/add/toggle/remove/pin/check/update
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
 //   stream:done, stream:error, message:appended, message:deleted,
 //   conversations:created, conversations:pinned,
-//   artifact:created, artifact:delta, artifact:updated
+//   artifact:created, artifact:delta, artifact:updated,
+//   settings:changed, providers:changed, extensions:changed
 // HTTP (port 3004) :
 //   GET /uploads/<id>.<ext>            — pièces jointes multimédia
 //   GET /artifacts/<id>/raw|download|thumb|pdf
@@ -21,11 +25,24 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
-import { Store, type ArtifactRow } from "./store";
+import { Store, type ArtifactRow, type ExtensionRow, type KeyRow, type ProviderRow } from "./store";
 import { HermesConnector } from "./hermes-connector";
 import { modelLabel } from "./models";
 import { transcribeAudioBase64 } from "./asr";
 import { SYSTEM_PROMPT_CHARS } from "./demo-engine";
+import {
+  fetchRepoSnapshot,
+  maskSecret,
+  parseRepoInput,
+  providerCapabilities,
+  resolveKnownProvider,
+  testProviderKey,
+  toKeyView,
+} from "./providers";
+import type {
+  ExtensionView,
+  ProviderView,
+} from "./types";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   deleteAttachmentFiles,
@@ -41,6 +58,56 @@ import {
 } from "./artifacts";
 import { chromeRenderer } from "./render";
 import type { Artifact, Attachment, ChatMessage, CompactInfo, ToolEvent, TurnSettings } from "./types";
+
+// ── Vues « wire » fournisseurs & extensions (Paramètres v2.2) ──────────
+// Les secrets ne partent jamais : seules les vues masquées circulent.
+
+function providerWire(row: ProviderRow, keys: KeyRow[]): ProviderView {
+  const caps = providerCapabilities(row.name, row.base_url);
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind as ProviderView["kind"],
+    strategy: row.strategy as ProviderView["strategy"],
+    baseUrl: row.base_url,
+    keyless: caps?.keyless ?? false,
+    keys: keys.map(toKeyView),
+  };
+}
+
+function providersWire(): ProviderView[] {
+  return store.listProviderRows().map((p) => providerWire(p, store.listKeyRows(p.id)));
+}
+
+function extensionWire(r: ExtensionRow): ExtensionView {
+  return {
+    id: r.id,
+    name: r.name,
+    kind: r.kind as ExtensionView["kind"],
+    description: r.description,
+    source: r.source,
+    channel: r.channel,
+    commit: r.commit,
+    version: r.version,
+    pinned: !!r.pinned,
+    enabled: !!r.enabled,
+    applied: !!r.applied,
+    updateAvailable: r.update_available,
+    lastCheckedAt: r.last_checked_at,
+  };
+}
+
+function extensionsWire(): ExtensionView[] {
+  return store.listExtensionRows().map(extensionWire);
+}
+
+function broadcastProviders(): void {
+  io.emit("providers:changed", { providers: providersWire() });
+}
+
+function broadcastExtensions(): void {
+  io.emit("extensions:changed", { extensions: extensionsWire() });
+}
 
 const PORT = 3003;
 const FILES_PORT = 3004; // service HTTP dédié aux pièces jointes
@@ -753,6 +820,341 @@ io.on("connection", (socket) => {
       store.setSetting(key, value);
       if (typeof cb === "function") cb({ ok: true, key, value });
       io.emit("settings:changed", { key, value });
+    }
+  );
+
+  // ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
+
+  socket.on("providers:list", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function") cb({ providers: providersWire() });
+  });
+
+  socket.on(
+    "providers:add",
+    (
+      payload: { name?: string; kind?: string; baseUrl?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const raw = (payload?.name ?? "").trim();
+      const kind = payload?.kind === "service" ? "service" : "llm";
+      if (!raw) {
+        if (typeof cb === "function") cb({ error: "Nom ou adresse requis" });
+        return;
+      }
+      const resolved = resolveKnownProvider(raw);
+      if (!resolved) {
+        if (typeof cb === "function")
+          cb({ error: "Fournisseur non reconnu — collez son adresse (https://…)" });
+        return;
+      }
+      // Un fournisseur connu n'est pas dupliqué
+      const canonicalName = "known" in resolved ? resolved.known.name : resolved.custom.name;
+      const existing = store
+        .listProviderRows()
+        .find((p) => p.name.toLowerCase() === canonicalName.toLowerCase() && p.kind === kind);
+      if (existing) {
+        if (typeof cb === "function") cb({ error: `${canonicalName} est déjà dans la liste` });
+        return;
+      }
+      const baseUrl =
+        "known" in resolved
+          ? (resolved.known.defaultBaseUrl ?? null)
+          : resolved.custom.baseUrl;
+      const row = store.createProvider({ name: canonicalName, kind, baseUrl });
+      if (typeof cb === "function") cb({ provider: providerWire(row, []) });
+      broadcastProviders();
+    }
+  );
+
+  socket.on("providers:remove", (payload: { id?: string }, cb?: (data: unknown) => void) => {
+    const id = payload?.id;
+    if (!id || !store.getProviderRow(id)) {
+      if (typeof cb === "function") cb({ error: "Fournisseur introuvable" });
+      return;
+    }
+    store.deleteProvider(id);
+    if (typeof cb === "function") cb({ ok: true });
+    broadcastProviders();
+  });
+
+  socket.on(
+    "providers:set-strategy",
+    (
+      payload: { id?: string; strategy?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const id = payload?.id;
+      const strategy = payload?.strategy;
+      const ok = ["fill_first", "round_robin", "least_used"];
+      if (!id || !strategy || !ok.includes(strategy)) {
+        if (typeof cb === "function") cb({ error: "Paramètres invalides" });
+        return;
+      }
+      const row = store.setProviderStrategy(id, strategy);
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Fournisseur introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ provider: providerWire(row, store.listKeyRows(id)) });
+      broadcastProviders();
+    }
+  );
+
+  socket.on(
+    "providers:add-key",
+    (
+      payload: { providerId?: string; label?: string; secret?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const providerId = payload?.providerId;
+      const label = (payload?.label ?? "").trim() || "Clé";
+      const secret = (payload?.secret ?? "").trim();
+      const provider = providerId ? store.getProviderRow(providerId) : null;
+      if (!providerId || !provider) {
+        if (typeof cb === "function") cb({ error: "Fournisseur introuvable" });
+        return;
+      }
+      if (secret.length < 8) {
+        if (typeof cb === "function") cb({ error: "Clé trop courte" });
+        return;
+      }
+      const row = store.createProviderKey(providerId, label, secret, maskSecret(secret));
+      console.log(
+        `[hermes-chat] clé ajoutée pour ${provider.name} : « ${label} » (${row.masked})`
+      );
+      if (typeof cb === "function") cb({ key: toKeyView(row) });
+      broadcastProviders();
+    }
+  );
+
+  socket.on("providers:remove-key", (payload: { keyId?: string }, cb?: (data: unknown) => void) => {
+    const keyId = payload?.keyId;
+    if (!keyId || !store.getKeyRow(keyId)) {
+      if (typeof cb === "function") cb({ error: "Clé introuvable" });
+      return;
+    }
+    store.deleteProviderKey(keyId);
+    if (typeof cb === "function") cb({ ok: true });
+    broadcastProviders();
+  });
+
+  // « Tester » = appel minimal RÉEL exécuté par le service (liste des
+  // modèles, ou requête minimale pour les services d'API) — réseau inclus.
+  socket.on(
+    "providers:test-key",
+    async (payload: { keyId?: string }, cb?: (data: unknown) => void) => {
+      const key = payload?.keyId ? store.getKeyRow(payload.keyId) : null;
+      if (!key) {
+        if (typeof cb === "function") cb({ error: "Clé introuvable" });
+        return;
+      }
+      const provider = store.getProviderRow(key.provider_id);
+      if (!provider) {
+        if (typeof cb === "function") cb({ error: "Fournisseur introuvable" });
+        return;
+      }
+      try {
+        const result = await testProviderKey(provider.name, provider.base_url, key.secret);
+        const updated = store.setKeyStatus(key.id, result.status, result.statusLabel);
+        console.log(
+          `[hermes-chat] test ${provider.name}/${key.label} → ${result.status} (${result.statusLabel})`
+        );
+        if (typeof cb === "function")
+          cb({ ok: true, key: updated ? toKeyView(updated) : null, detail: result.detail ?? null });
+        broadcastProviders();
+      } catch (err) {
+        if (typeof cb === "function")
+          cb({ error: err instanceof Error ? err.message : "Test impossible" });
+      }
+    }
+  );
+
+  // ── Extensions : dépôts importés + serveurs MCP ───────────────────
+
+  socket.on("extensions:list", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function") cb({ extensions: extensionsWire() });
+  });
+
+  // Import d'un dépôt GitHub : résolution réelle (infos, branche, tête)
+  socket.on(
+    "extensions:add",
+    async (
+      payload: { kind?: string; source?: string; channel?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const kind = payload?.kind === "mcp" ? "mcp" : "repo";
+      const source = (payload?.source ?? "").trim();
+      if (!source) {
+        if (typeof cb === "function") cb({ error: "Source requise" });
+        return;
+      }
+      if (kind === "mcp") {
+        const row = store.createExtension({
+          name: source.slice(0, 80),
+          kind,
+          description: "serveur ajouté",
+          source,
+        });
+        if (typeof cb === "function") cb({ extension: extensionWire(row) });
+        broadcastExtensions();
+        return;
+      }
+      const ref = parseRepoInput(source);
+      if (!ref) {
+        if (typeof cb === "function")
+          cb({ error: "Adresse de dépôt invalide (https://github.com/owner/repo)" });
+        return;
+      }
+      try {
+        const snap = await fetchRepoSnapshot(ref, payload?.channel ?? null);
+        const row = store.createExtension({
+          name: snap.name,
+          kind,
+          description: snap.description,
+          source: `${ref.owner}/${ref.repo}`,
+          channel: snap.defaultBranch,
+          commit: snap.headSha,
+          version: snap.versionLabel,
+        });
+        console.log(
+          `[hermes-chat] extension importée : ${row.source} @ ${row.channel} (${row.version})`
+        );
+        if (typeof cb === "function")
+          cb({ extension: extensionWire(row), commits: snap.commits });
+        broadcastExtensions();
+      } catch (err) {
+        if (typeof cb === "function")
+          cb({ error: err instanceof Error ? err.message : "Import impossible" });
+      }
+    }
+  );
+
+  socket.on(
+    "extensions:toggle",
+    (payload: { id?: string; enabled?: boolean }, cb?: (data: unknown) => void) => {
+      const id = payload?.id;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "id requis" });
+        return;
+      }
+      // `applied` n'est PAS touché : le footer compte les écarts et le
+      // redémarrage du service prendra le nouvel état en compte.
+      const row = store.updateExtensionRow(id, { enabled: !!payload?.enabled });
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Extension introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ extension: extensionWire(row) });
+      broadcastExtensions();
+    }
+  );
+
+  socket.on("extensions:remove", (payload: { id?: string }, cb?: (data: unknown) => void) => {
+    const id = payload?.id;
+    if (!id || !store.getExtensionRow(id)) {
+      if (typeof cb === "function") cb({ error: "Extension introuvable" });
+      return;
+    }
+    store.deleteExtension(id);
+    if (typeof cb === "function") cb({ ok: true });
+    broadcastExtensions();
+  });
+
+  socket.on(
+    "extensions:pin",
+    (payload: { id?: string; pinned?: boolean }, cb?: (data: unknown) => void) => {
+      const id = payload?.id;
+      if (!id) {
+        if (typeof cb === "function") cb({ error: "id requis" });
+        return;
+      }
+      const row = store.updateExtensionRow(id, { pinned: !!payload?.pinned });
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Extension introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ extension: extensionWire(row) });
+      broadcastExtensions();
+    }
+  );
+
+  // « Vérifier » : diff réel local ↔ distant via l'API GitHub.
+  socket.on(
+    "extensions:check",
+    async (payload: { id?: string }, cb?: (data: unknown) => void) => {
+      const row = payload?.id ? store.getExtensionRow(payload.id) : null;
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Extension introuvable" });
+        return;
+      }
+      if (row.kind !== "repo" || !row.source) {
+        if (typeof cb === "function") cb({ error: "Rien à vérifier pour ce type d'extension" });
+        return;
+      }
+      if (row.pinned) {
+        if (typeof cb === "function")
+          cb({ ok: true, skipped: true, extension: extensionWire(row) });
+        return;
+      }
+      const ref = parseRepoInput(row.source);
+      if (!ref) {
+        if (typeof cb === "function") cb({ error: "Source de dépôt invalide" });
+        return;
+      }
+      try {
+        const snap = await fetchRepoSnapshot(ref, row.channel);
+        const changed = snap.headSha !== row.commit;
+        const updated = store.updateExtensionRow(row.id, {
+          update_available: changed ? snap.versionLabel : null,
+          last_checked_at: new Date().toISOString(),
+        })!;
+        if (typeof cb === "function")
+          cb({ ok: true, extension: extensionWire(updated), commits: snap.commits, changed });
+        broadcastExtensions();
+      } catch (err) {
+        if (typeof cb === "function")
+          cb({ error: err instanceof Error ? err.message : "Vérification impossible" });
+      }
+    }
+  );
+
+  // « Mettre à jour » : suit le commit distant (le rapatriement effectif
+  // et le relancement du composant relèvent du moteur, post-gateway).
+  socket.on(
+    "extensions:update",
+    async (payload: { id?: string }, cb?: (data: unknown) => void) => {
+      const row = payload?.id ? store.getExtensionRow(payload.id) : null;
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Extension introuvable" });
+        return;
+      }
+      if (row.kind !== "repo" || !row.source) {
+        if (typeof cb === "function") cb({ error: "Cette extension ne se met pas à jour" });
+        return;
+      }
+      const ref = parseRepoInput(row.source);
+      if (!ref) {
+        if (typeof cb === "function") cb({ error: "Source de dépôt invalide" });
+        return;
+      }
+      try {
+        const snap = await fetchRepoSnapshot(ref, row.channel);
+        const updated = store.updateExtensionRow(row.id, {
+          commit: snap.headSha,
+          version: snap.versionLabel,
+          update_available: null,
+          last_checked_at: new Date().toISOString(),
+        })!;
+        console.log(
+          `[hermes-chat] extension mise à jour : ${updated.source} → ${updated.version}`
+        );
+        if (typeof cb === "function")
+          cb({ extension: extensionWire(updated), commits: snap.commits });
+        broadcastExtensions();
+      } catch (err) {
+        if (typeof cb === "function")
+          cb({ error: err instanceof Error ? err.message : "Mise à jour impossible" });
+      }
     }
   );
 
