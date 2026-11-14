@@ -140,21 +140,29 @@ interface SettingDef {
 - **Scope serveur** → table SQLite `settings (key TEXT PRIMARY KEY, value TEXT, updated_at)`,
   migration additive (à créer lors du chantier projets, en même temps que la table `projects`).
 
-### Inventaire au 2026-11-13
+### Inventaire au 2026-11-14 (v2.4)
 
 - Client (`hermes-ui:`) : `hermes.model`, `hermes.models.favorites` (JSON d'ids),
   `hermes.reasoning.effort` (valeur brute du fournisseur, chantier « Composer v2 »),
   `hermes.permissions.mode` (ask | auto — reset sur `ask` à chaque session),
-  `hermes.tools.web` (F-09/F-12 — recherche web du tour, ajouté le 2026-11-14),
+  `hermes.tools.web` (F-09/F-12 — recherche web du tour, ajouté le 2026-11-14 ; **au
+  registre le 2026-11-14 (v2.4) — correctif de persistance**, cf. §9 (21)),
+  `hermes.compare.models` (F-17 — paire [a, b] ; **au registre le 2026-11-14 (v2.4),
+  même correctif**),
+  `hermes.compaction.auto` + `hermes.compaction.threshold` (v2.4 — résumé
+  automatique, seuil 50–95 %),
+  `hermes.profiles.applied` (v2.4 — marqueur du dernier profil appliqué, interne),
+  `hermes.expert.{temperature,maxTokens,seed}` (F-22, déjà inventoriés),
   `fork.ui.sidebar.width`, `fork.projects.sort`, `fork.projects.collapsed`,
-  `fork.context.gauge` (affichage de la jauge de contexte).
+  `fork.context.gauge` (affichage de la jauge de contexte), `fork.ui.showReasoning`.
 - Serveur : table `settings` du mini-service (`settings:get/set`), dont les résumés de
   compaction `compact:<conversationId>` (chantier « Composer v2 »), les instructions
-  personnalisées `hermes.instructions.custom` (F-19, chantier « Prompt système »),
-  la mémoire `hermes.memory.*` (F-18) et les tarifs des modèles `hermes.pricing`
-  (F-21, ajouté le 2026-11-14 — JSON `{id: {input, output}}` en $/M jetons) ;
-  `.env` → `HERMES_GATEWAY_URL`/`HERMES_GATEWAY_TOKEN` (namespace `hermes`),
-  `DATABASE_URL` (infrastructure fork, reste en `.env`).
+  personnalisées `hermes.instructions.custom` (F-19), la mémoire `hermes.memory.*`
+  (F-18), les tarifs des modèles `hermes.pricing` (F-21 — JSON `{id: {input, output}}` en $/M jetons) et **la liste des profils `hermes.profiles` (v2.4 — JSON de
+  `ChatProfile[]`, cf. `src/lib/profiles.ts`)** ;
+  `.env` → `HERMES_GATEWAY_URL`/`HERMES_GATEWAY_TOKEN` (namespace `hermes`).
+  NB (v2.4) : `DATABASE_URL` et le schéma Prisma ont été RETIRÉS du repo (§8) — la
+  persistance réelle est `bun:sqlite` (`store.ts`) depuis l'origine.
 
 ### Règles d'or
 
@@ -584,8 +592,10 @@ le moteur démo :
 
 ## 8. Dettes techniques et pièges
 
-- `prisma/schema.prisma` et les scripts `db:*` de la racine sont **résiduels et inutilisés**
-  par le chat — ne pas s'en servir, la persistance réelle est `bun:sqlite` (`store.ts`).
+- ~~`prisma/schema.prisma` et les scripts `db:*`~~ **retirés le 2026-11-14 (v2.4)** :
+  plus de fichier ni de dépendance Prisma dans le repo (le client `src/lib/db.ts`, la
+  génération du client dans le lanceur Windows et les mentions des README sont partis
+  avec) — la persistance réelle est `bun:sqlite` (`store.ts`) depuis l'origine.
 - `.env`, bases SQLite et fichiers uploadés sont **committés dans le repo** : pratique en
   solo, à revoir avant toute ouverture publique.
 - Pas de tests frontend automatisés ; seuls des scripts de test manuels (`scripts/`).
@@ -593,6 +603,11 @@ le moteur démo :
 - Pièges UI hérités de la vision artefacts : jamais d'artefact plein format dans le flux ;
   rendu asynchrone jamais bloquant (source d'abord, vignette ensuite) ; vignette PDF =
   première page seulement.
+- **Piège socket.io (v2.4)** : un emit-ack n'accepte qu'UN ack — le client appelle le
+  callback puis le retire ; un second `cb(...)` (même id) est silencieusement ignoré.
+  Ne jamais « acker deux fois » (voir le contrat `conversation:compact`, §9 (21)).
+- Piège QA : le z-ai du bac à sable renvoie parfois 429/pend — espacer les scripts à
+  tours SDK réels et les repasser (transitoire, cf. §9 (20)).
 
 ## 9. Journal des décisions
 
@@ -673,3 +688,4 @@ le moteur démo :
 | 2026-11-14 (19) | **F-09/F-12 livrés — recherche web + citations** (démo via les clés de services, sans attendre la gateway) : toggle « Web » du composer (actionnable si une clé Tavily/Exa existe — sinon infobulle qui oriente ; « Image » et « Agent » verrouillés « nécessite la gateway ») ; le service lance la recherche avant le tour (événement outil « Recherche web » running → done/error), injecte les résultats numérotés en fin de prompt système du tour démo avec consigne de citation [n], persiste les sources (`messages.sources`) ; **best effort** — un échec n'annule jamais le tour, l'événement l'affiche honnêtement ; en gateway : événement explicatif, aucune injection (l'agent Hermes gère son browsing). Comparaison = brute : webSearch ignoré en compare (même philosophie que le picker `bare`). `providers:add` accepte une **adresse explicite** (`baseUrl` — surcharge https/http-local de l'adresse canonique d'un fournisseur connu). Sources cliquables sous la réponse (rangée `Sources :`, titre+extrait au survol). QA `scripts/test-web-flow.ts` **14/14** (surcharge d'adresse, running→done, injection prouvée par la réponse, sources persistées + réouverture, toggle éteint = rien, sans clé = erreur claire et tour sauf). |
 | 2026-11-13 (16) | **F-14 livré — Navigation entre versions** : régénérer ne supprime plus — colonnes additives `messages.version_group/index/active` (retro-complétion à la 1re régénération, migration `ALTER TABLE` douce), `getMessages` renvoie le chemin actif enrichi de `versions {group,index,count}`, `supersedeTrailingAssistant` (traverse l'autre variante F-17, stoppe au user) remplace la suppression dans `chat:regenerate` (3 chemins), `message:setVersion` + broadcast `messages:refreshed`, `messages:superseded` aux autres sessions, promotion de la dernière version restante à la suppression d'une version active, fork = instantané du chemin actif. Client : sélecteur ‹ n/m › permanent dans `MessageBubble` (aussi dans les cellules de comparaison), hook `setMessageVersion`, garde défensive `regenerate` (événement React passé en 1er arg par un `onClick` direct — seul `"a"/"b"` compte, correctif double hook+page). Choix documenté : l'édition d'un message utilisateur reste fork explicite (« Branche ») — pas d'arbre de branches implicite. QA : `scripts/test-version-flow.ts` **21/21** ; visuelle ‹ 2/2 › → ‹ 1/2 › confirmée (captures `download/qa-f14-versions/`) ; tsc 0 / eslint propre. |
 | 2026-11-14 (20) | **Livraison de la session** : repassage QA complet — providers, pool 24/24, coût 21/21, web 14/14, compare 33/33 (correctif : le script écoutait `messages:removed`, dette laissée par F-14 → `messages:superseded`), version 21/21, stop/error — tous verts ; QA DOM v2.3 12/12 (captures `download/qa-v23/`). NB : le rate-limit 429 du bac à sable z.ai fait échouer temporairement les scripts à tours SDK réels — les espacer. La branche `publish` avait été **perdue au recyclage du bac à sable** (le clone n'a que `main`) : recréée depuis `origin/main` + commit propre signé (recette §10 respectée) ; artefacts régénérés dans `download/push/` (archive zip de téléversement, `git format-patch`, bundle). Le push reste à faire : sans PAT (fourni au moment du push uniquement, jetable — cf. §10) ou téléversement du zip via l'interface web GitHub par l'utilisatrice. Poste Windows : `git pull` (une fois poussé) puis effacer `.next/`. |
+| 2026-11-14 (21) | **v2.4 livrée — « le volet devient réel »** (suite de « lance ce chantier et tous les autres ») : les 10 sections du rail sont réelles. Outils (statuts réels : Web suit les clés de services, voix/vision livrées ; le reste verrouillé « gateway », jamais simulé), Skills (état vide honnête + liens croisés), Profils (création depuis les réglages courants, application par le bus `hermes-ui:settings-changed` — effet immédiat sans dépendance moteur, duplication, suppression ; liste côté service `hermes.profiles`, lib `src/lib/profiles.ts` + hook `use-profiles`), Système (sondes réelles dans `hello` : `appRevision` = révision git du déploiement, `chromeHeadless` ; événements `system:renderCache`/`system:clearRenderCache` sur les profils de rendu Chrome, purgés aussi au démarrage), Hermes « Conversations longues » (résumé automatique avant le tour, seuil 50–95 %, fenêtre suivie/estimée — décision pure `src/lib/compaction.ts`, exécution `conversation:compact` existant). **Contrat `conversation:compact` changé** : UN SEUL ack À LA FIN avec le compact (`{ok:true, compact, done:true}` ; échec `{ok:false, error}`) — l'ack « started » a été retiré après un piège socket.io démontré par QA : un emit-ack n'accepte qu'un ack, le second appel (même id) est ignoré par le client ; la compaction automatique (v2.4) repose sur cet ack final, `sendMessage` attend la fin avant d'émettre `chat:send` (best effort, timeout 60 s → le tour part quand même + toast honnête). **Correctif de persistance du registre** : `hermes.tools.web` (F-09) et `hermes.compare.models` (F-17) étaient écrits par `writeClientSetting`, qui ignore silencieusement les clés hors registre — la persistance documentée ne fonctionnait pas ; les deux clés sont au registre désormais (plus `hermes.profiles.applied`, interne). F-16 complétée : lecture continue pendant le stream (`useContinuousSpeech` — phrases complètes au fil de l'eau, courtes ignorées, blocs de code « bloc de code », plafond 4 000 car., coupure = silence). §8 : boilerplate Prisma retiré du repo (schéma, `db:*`, `@prisma/client`, `src/lib/db.ts`, génération dans le lanceur Windows, mentions README). QA : `test-autocompact.ts` (unitaire), `test-profiles-flow.ts`, **`qa-v24-dom.ts` 40/40** (volet + profils + F-16 + chemin COMPLET de la compaction automatique prouvé au faux fournisseur : synthèse AVANT le tour, résumé en tête d'historique, message porté, toast v2.4, broadcast à un 3e client) ; repassé : providers 29/29, pool 24/24, coût 21/21, web 14/14, compare 33/33, version 21/21, stop/error, mémoire, prompt système, feedback, expert, partage, intégration — tous verts (échecs initiaux share/expert/intégration = 429 z.ai transitoire, repassés espacés). NB QA DOM : Caddy sur :81 requiert root dans ce bac à sable → variant `/tmp/Caddyfile-8181` sur :8181 (le 81 du Caddyfile du repo reste la référence en production) ; les captures QA vivent dans `download/` du bac à sable, pas dans le repo. Poste Windows : `git pull` (une fois poussé) puis effacer `.next/`. |

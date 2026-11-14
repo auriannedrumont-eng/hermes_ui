@@ -131,6 +131,9 @@ Client → serveur :
 | `conversations:move` | `{id, projectId}` | `{conversation}` (broadcast `conversations:moved`) |
 | `settings:get` | `{key?}` | `{value}` ou `{settings: [...]}` si sans clé |
 | `settings:set` | `{key, value}` | `{ok, key, value}` (broadcast `settings:changed`) |
+| `conversation:compact` | `{conversationId}` | **v2.4 : ack unique À LA FIN** `{ok: true, compact, done: true}` (échec `{ok: false, error}`) + broadcast `conversation:compacted`. NB socket.io : un emit-ack n'accepte qu'UN ack — le second appel (même id) est ignoré par le client. |
+| `system:renderCache` | — | `{count, bytes}` (place des profils de rendu Chrome, v2.4) |
+| `system:clearRenderCache` | — | `{count, bytes, removed, kept}` — purge (faite aussi à chaque démarrage) |
 
 Les réglages serveur suivent le découpage `hermes.*` / `fork.*` documenté
 dans le `FORK.md` du repo (registre source de vérité : `src/lib/settings.ts`).

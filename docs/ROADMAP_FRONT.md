@@ -52,7 +52,7 @@
 
 | ID | Feature | Critères | Statut | Preuve / écart |
 |----|---------|----------|--------|----------------|
-| F-16 | **Voix** | Dictée STT + lecture TTS | **Terminé** (cœur) | Dictée `use-dictation.ts` + `asr.ts` ; TTS « Écouter » par message (`useSpeech`). Reste optionnel : lecture en continu pendant le stream |
+| F-16 | **Voix** | Dictée STT + lecture TTS | **Terminé** | Dictée `use-dictation.ts` + `asr.ts` ; TTS « Écouter » par message (`useSpeech`). **Lecture continue pendant le stream livrée le 2026-11-14 (v2.4)** : bouton « Lire en continu » dans la bulle vivante (`useContinuousSpeech` — phrases complètes au fil de l'eau, file speechSynthesis, coupure = silence). |
 | F-17 | **Comparaison modèles** | 2 modèles côte à côte | **Terminé** | Livré le 2026-11-13 : variantes `a`/`b` en base (`messages.variant`), protocole `compare` sur send/regenerate/edit + `variant` dans les `stream:*`, chaque modèle ne voit que ses réponses ; colonnes A/B côte à côte (empilées < 768 px) avec régénération par côté ; toggle « Comparer » + pickers A/B du composer ; paire mémorisée `hermes.compare.models`. QA 33/33 + visuelle. |
 | F-18 | **Mémoire utilisateur** | Consultable, éditable, effaçable | **Terminé** | Livré le 2026-11-13 : carte « Mémoire » de la section Hermes du volet (toggle activer/désactiver, apprentissage automatique, éditeur 12 000 car., effacement) ; clés `hermes.memory.{enabled,autoLearn,notes}` (table `settings`, fallback actif), événements `memory:*` + broadcast ; composition des instructions du tour par le service (démo : section « Mémoire de l'utilisateur » ; gateway : `memory_notes`/`memory_auto_learn` dans `api_turn_v1.settings`, clés à valider) ; `hello.memoryChars` honnête. |
 | F-19 | **Instructions personnalisées** | Globales | **Terminé** | Livré le 2026-11-13 avec F-11 (même chantier) : instructions globales persistées côté service (`hermes.instructions.custom`, table `settings`), éditeur dans la section Hermes du volet, appliquées à toutes les conversations, transmises dans `api_turn_v1.settings` en gateway |
@@ -71,7 +71,7 @@
 
 | ID | Feature | Statut | Preuve |
 |----|---------|--------|--------|
-| F-25 | **Page Paramètres** | **Terminé (phase 2 — volet v4 + Fournisseurs & clés + Extensions)** | Volet 860 px à rail (maquette v4 implémentée, `settings-panel.tsx`), Fournisseurs LLM et Clés de services (porte-clés multi-clés, **test réseau réel**, stratégies), Extensions (imports GitHub réels — repli `git ls-remote`, Vérifier/Mettre à jour/Épingler), Thème + Afficher le raisonnement en Interface. Phases : 1 = sheet 460 px (`004b388`) ; 2 = ce chantier. Suit : v2.3 découverte moteur (Outils, Skills, Hermes, Profils, Système) |
+| F-25 | **Page Paramètres** | **Terminé (phase 3 — v2.4 : les 10 sections du rail sont réelles)** | Volet 860 px à rail (maquette v4, `settings-panel.tsx`). Phases : 1 = sheet 460 px (`004b388`) ; 2 = volet + Fournisseurs & clés + Extensions (test réseau réel) + Hermes (presets, instructions, mémoire) + Modèles (tarifs) ; **3 = v2.4 : Outils (statuts réels, « gateway » jamais simulé), Skills (état vide honnête + liens croisés), Profils (création/application/duplication, liste côté service), Système (révision git, chrome-headless, cache des rendus, purge), Hermes « Conversations longues » (résumé automatique + seuil)**. Navigation interne du volet par liens croisés. |
 
 ## Chantier du 2026-11-13 — F-01/F-04 « arrêt propre + erreurs persistantes »
 
@@ -393,6 +393,47 @@ fournisseur à clé active et le sélecteur devient vivant.
   `SourcesRow` cliquable.
 - **QA** `scripts/test-web-flow.ts` **14/14**.
 
+## Chantier du 2026-11-14 (v2.4) — « le volet devient réel : sections moteur, profils, résumé automatique »
+
+Réponse à « lance ce chantier et tous les autres » : la feuille de route ne laissait plus que
+la « découverte moteur » (point 8 de l'ordre recommandé) et l'option F-16. Tout est livré
+en statuts RÉELS — la partie moteur dépendante de la gateway reste verrouillée
+« gateway », jamais simulée.
+
+- **Volet (10/10 sections)** : Outils (statuts réels — Web suit les clés de services, voix et
+  vision livrées, le reste « gateway »), Skills (état vide honnête + liens croisés vers les
+  presets et les imports), Profils (création depuis les réglages courants, application par le
+  bus `hermes-ui:settings-changed`, duplication, suppression ; liste côté service sous
+  `hermes.profiles`, `src/lib/profiles.ts` + `use-profiles`), Système (révision git du déploiement,
+  binaire chrome-headless, place des profils de rendu + purge `system:renderCache`/
+  `system:clearRenderCache`, moteur verrouillé « gateway »).
+- **Hermes — Conversations longues** : résumé automatique avant le tour (décision pure
+  `src/lib/compaction.ts` — même mesure que la jauge : base + brouillon contre la fenêtre),
+  seuil 50–95 %, fenêtre suivie/estimée ; exécution par l'événement `conversation:compact`
+  existant, puis envoi du tour. Best effort (échec/timeout 60 s → le tour part quand même).
+- **Contrat `conversation:compact` (v2.4)** : UN SEUL ack, À LA FIN, avec le compact
+  (`{ok:true, compact, done:true}`) — l'ack « started » intermédiaire a été retiré :
+  socket.io n'accepte qu'un ack par requête (le second appel, même id, est ignoré par le
+  client — piège QA documenté). Échec : `{ok:false, error}`.
+- **Correctif de persistance du registre** : `hermes.tools.web` (F-09) et `hermes.compare.models`
+  (F-17) étaient écrits via `writeClientSetting`, qui ignore silencieusement les clés hors
+  registre — la persistance documentée ne fonctionnait pas (réglages perdus au rechargement).
+  Les deux clés sont maintenant au registre (aucune ligne d'interface ne les liste).
+- **F-16 lecture continue** : `useContinuousSpeech` dans la bulle vivante — phrases complètes
+  au fil de l'eau (file speechSynthesis), courtes ignorées, blocs de code lus « bloc de code »,
+  plafond 4 000 caractères, coupure = silence immédiat.
+- **§8 — retrait du boilerplate Prisma** : `prisma/`, `db:*`, `@prisma/client`, génération du
+  client dans le lanceur Windows et mentions des README supprimés (la persistance réelle est
+  `bun:sqlite`, `store.ts` — inchangée).
+- **QA** : `test-autocompact.ts` (unitaire, bornes/frontières), `test-profiles-flow.ts` (lib +
+  service + sondes hello), `qa-v24-dom.ts` **40/40** (volet, profils, F-16, et chemin COMPLET de
+  la compaction automatique prouvé par le journal d'un faux fournisseur : synthèse avant le
+  tour, résumé en tête d'historique, message porté, toast v2.4, broadcast à un 3e client).
+  Repassé : providers 29/29, pool 24/24, coût 21/21, web 14/14, compare 33/33, version 21/21,
+  stop/error, mémoire, prompt système, feedback, expert, partage, intégration — tous verts
+  (les échecs initiaux share/expert/intégration étaient le rate-limit 429 z.ai transitoire,
+  §9 (20) — repassés avec espacement).
+
 ## Ordre de démarrage recommandé (suite)
 
 1. ~~Valider le volet v4 implémenté~~ **premiers retours intégrés le 2026-11-14**
@@ -407,9 +448,11 @@ fournisseur à clé active et le sélecteur devient vivant.
 7. ~~**F-21** (coût par message)~~ **livré le 2026-11-14** ;
    ~~**F-17** (comparaison modèles)~~ et ~~**F-14** (navigation versions)~~
    **livrés le 2026-11-13** (ci-dessus).
-8. **v2.3 découverte moteur** (Outils, Skills, Hermes .md, Profils, Système) :
-   structure cible déjà en place, données réelles au branchement de la gateway ;
-   la lecture continue pendant le stream (F-16) reste optionnelle.
+8. ~~**v2.3 découverte moteur** (Outils, Skills, Hermes .md, Profils, Système)~~
+   **livré le 2026-11-14 en v2.4** (ci-dessus) : tout ce qui peut être réel l'est ;
+   restent « gateway » par conception — fichiers .md moteur, comportement (initiatives,
+   tâches planifiées), génération d'images/vidéo, navigateur, exécution de code.
+   ~~la lecture continue pendant le stream (F-16)~~ **livrée le 2026-11-14 (v2.4)**.
 
 ## Notes de passation
 
