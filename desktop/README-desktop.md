@@ -130,6 +130,37 @@ et Caddy via votre gestionnaire de paquets.
 | Ports 3003/3004 occupés | `netstat -ano \| findstr "3003 3004"` (Windows) / `ss -tlnp` (Linux) puis libérez-les |
 | Repartir de zéro | effacez `tools\` (outils), `node_modules\`, `.next\` — tout se réinstalle |
 
+## Mise à jour manuelle (défaut d'origine : installation par ZIP)
+
+Le mécanisme « sauvegarde + alignement » ci-dessus n'existe que depuis le
+lanceur v2. Une installation née d'un **ZIP GitHub** avec un lanceur v1 ne
+peut PAS se mettre à jour toute seule : son ancienne logique renonce dès que
+l'historique local diverge — le correctif ne peut donc pas lui arriver par
+la mise à jour automatique (problème de l'œuf et de la poule). Un seul
+remède, UNE fois : transformer le dossier en vrai clone git.
+
+Dans PowerShell (menu Démarrer → « PowerShell »), fenêtre Hermes fermée :
+
+```powershell
+$pat   = 'votre-jeton-github'
+$ancien= 'F:\CH\hermes_ui-main\hermes_ui-main'
+$neuf  = 'F:\CH\hermes_ui'
+git clone https://x-access-token:$pat@github.com/auriannedrumont-eng/hermes_ui.git $neuf
+git -C $neuf remote set-url origin https://github.com/auriannedrumont-eng/hermes_ui.git
+Copy-Item "$ancien\db"    "$neuf\db"    -Recurse -ErrorAction SilentlyContinue
+Copy-Item "$ancien\tools" "$neuf\tools" -Recurse -ErrorAction SilentlyContinue
+```
+
+Puis double-cliquez sur `Hermes-Web.bat` dans le NOUVEAU dossier (`$neuf`) :
+premier démarrage complet (dépendances + build, une dizaine de minutes),
+ensuite les mises à jour repartent toutes seules. Ce qui est conservé de
+l'ancien dossier : `db\` (conversations, clés, pièces jointes — tout ce qui
+vous appartient) et `tools\` (outils portables, pour ne pas les retélécharger).
+L'ancien dossier reste en place, intact : il peut être supprimé quand le
+nouveau vous convient. Les connexions GitHub suivantes passent par le
+gestionnaire d'identifiants de git (une fenêtre de connexion la première
+fois, plus ensuite).
+
 L'état de session vit dans `desktop\runtime\` (verrou, PIDs, Caddyfile
 généré), les journaux dans `desktop\logs\`, les outils portables dans
 `tools\` — les trois ignorés par git.

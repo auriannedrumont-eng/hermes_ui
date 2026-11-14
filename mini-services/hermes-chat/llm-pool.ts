@@ -20,7 +20,7 @@ import {
   type TurnCallbacks,
   type TurnRequest,
 } from "./demo-engine";
-import { pickActiveKey, providerCapabilities } from "./providers";
+import { pickActiveKey, providerCapabilities, looksLikeZaiJwt } from "./providers";
 import { readAttachmentDataUrl } from "./uploads";
 
 // ── Types publics du pool ─────────────────────────────────────────────
@@ -78,6 +78,23 @@ const KNOWN_LLM_BASES: Record<string, string> = {
   Groq: "https://api.groq.com/openai/v1",
 };
 
+// Surface « coding » de z.ai : la SEULE que les clés GLM Coding Plan
+// (jetons JWT « eyJ… ») acceptent — surface OpenAI-compatible (chat
+// completions + liste des modèles), cf. docs.z.ai/devpack (Tool
+// Integration). Une clé Coding Plan testée sur paas/v4 est refusée.
+const ZAI_CODING_BASE = "https://api.z.ai/api/coding/paas/v4";
+
+// Repli documenté si la surface coding n'expose pas /models : modèles GLM
+// cités par la documentation du Coding Plan (glm-5.3, glm-5.3-flash, glm-5.2
+// et glm-4.6/4.5) — la liste vivante reste prioritaire dès qu'elle répond.
+const ZAI_CODING_FALLBACK_MODELS = [
+  "glm-5.3",
+  "glm-5.3-flash",
+  "glm-5.2",
+  "glm-4.6",
+  "glm-4.5",
+];
+
 function trimSlash(s: string): string {
   return s.replace(/\/+$/, "");
 }
@@ -129,6 +146,40 @@ function resolveLlmEndpoint(row: ProviderRow): LlmEndpoint | null {
   if (!base) return null;
   if (!safeBase(base)) return null;
   return { base: trimSlash(base), style, auth, extraHeaders, keyless, providerLabel };
+}
+
+/** z.ai : une clé Coding Plan (JWT) ne parle qu'à la surface « coding » —
+ *  l'endpoint est réécrit pour la clé effectivement choisie. Les clés API
+ *  (format xxxxxxxx.yyyyyyyy) restent sur la surface standard paas/v4.
+ *  Une adresse EXPLICITEMENT saisie (proxy, serveur local) garde son
+ *  origine — seul le chemin passe à la surface coding. */
+function routeZaiCoding(endpoint: LlmEndpoint, secret: string | null): LlmEndpoint {
+  if (endpoint.providerLabel !== "z.ai" || !secret || !looksLikeZaiJwt(secret)) {
+    return endpoint;
+  }
+  if (endpoint.base === ZAI_CODING_BASE) return endpoint;
+  if (endpoint.base === "https://api.z.ai/api/paas/v4") {
+    return {
+      ...endpoint,
+      base: ZAI_CODING_BASE,
+      style: "openai",
+      auth: "bearer",
+      extraHeaders: undefined,
+    };
+  }
+  // Origine explicite conservée, chemin codé en dur vers la surface coding.
+  try {
+    const u = new URL(endpoint.base);
+    return {
+      ...endpoint,
+      base: `${u.origin}/api/coding/paas/v4`,
+      style: "openai",
+      auth: "bearer",
+      extraHeaders: undefined,
+    };
+  } catch {
+    return endpoint;
+  }
 }
 
 // ── Erreurs du pool ────────────────────────────────────────────────────
@@ -235,7 +286,9 @@ export function createLlmPool(store: Store): LlmPoolApi {
     return out;
   }
 
-  /** Liste des modèles d'un fournisseur (cache, GET /models, 8 s). */
+  /** Liste des modèles d'un fournisseur (cache, GET /models, 8 s). Les
+   *  clés Coding Plan de z.ai interrogent la surface coding ; si elle
+   *  n'expose pas de liste, le repli documenté sert de liste vivante. */
   async function providerModels(
     row: ProviderRow,
     endpoint: LlmEndpoint,
@@ -245,18 +298,22 @@ export function createLlmPool(store: Store): LlmPoolApi {
     let result: ModelOption[] | null = null;
     try {
       const key = endpoint.keyless ? null : pickKey(row);
-      const res = await fetch(`${endpoint.base}/models`, {
+      const routed = routeZaiCoding(endpoint, key?.secret ?? null);
+      const zaiJwt =
+        routed.providerLabel === "z.ai" &&
+        routed.base === ZAI_CODING_BASE;
+      const res = await fetch(`${routed.base}/models`, {
         headers: {
-          ...(endpoint.auth === "bearer" && key
+          ...(routed.auth === "bearer" && key
             ? { Authorization: `Bearer ${key.secret}` }
             : {}),
-          ...(endpoint.auth === "x-api-key" && key ? { "x-api-key": key.secret } : {}),
-          ...(endpoint.extraHeaders ?? {}),
+          ...(routed.auth === "x-api-key" && key ? { "x-api-key": key.secret } : {}),
+          ...(routed.extraHeaders ?? {}),
         },
         signal: AbortSignal.timeout(8000),
       });
       if (res.ok) {
-        result = parseModelList(await res.json(), endpoint.providerLabel);
+        result = parseModelList(await res.json(), routed.providerLabel);
       } else if (!warned.has(`${row.id}:models`)) {
         warned.add(`${row.id}:models`);
         console.warn(
@@ -269,6 +326,29 @@ export function createLlmPool(store: Store): LlmPoolApi {
         console.warn(
           `[hermes-chat] ${row.name} injoignable pour la liste des modèles — fournisseur ignoré`
         );
+      }
+    }
+    // Repli z.ai Coding Plan : la liste vivante a échoué (surface sans
+    // /models ou indisponible) — les modèles documentés du plan prennent
+    // le relais pour ne jamais bloquer la sélection de l'utilisatrice.
+    if (!result || result.length === 0) {
+      const keyForFallback = endpoint.keyless ? null : pickKey(row);
+      if (
+        endpoint.providerLabel === "z.ai" &&
+        keyForFallback &&
+        looksLikeZaiJwt(keyForFallback.secret)
+      ) {
+        if (!warned.has(`${row.id}:fallback`)) {
+          warned.add(`${row.id}:fallback`);
+          console.warn(
+            `[hermes-chat] ${row.name} : liste coding indisponible — repli documenté (${ZAI_CODING_FALLBACK_MODELS.join(", ")})`
+          );
+        }
+        result = ZAI_CODING_FALLBACK_MODELS.map((id) => ({
+          id,
+          label: id,
+          provider: endpoint.providerLabel,
+        }));
       }
     }
     modelsCache.set(row.id, result);
@@ -566,11 +646,14 @@ export function createLlmPool(store: Store): LlmPoolApi {
         );
       }
       const secret = key?.secret ?? null;
+      // z.ai Coding Plan : la clé choisie décide de la surface (coding vs
+      // paas/v4) — le routage se fait ici, clé en main.
+      const turnEndpoint = routeZaiCoding(chosen.endpoint, secret);
       try {
         const result =
-          chosen.endpoint.style === "anthropic"
-            ? await streamAnthropicTurn(chosen.endpoint, secret, modelId, req, cb)
-            : await streamOpenAiTurn(chosen.endpoint, secret, modelId, req, cb);
+          turnEndpoint.style === "anthropic"
+            ? await streamAnthropicTurn(turnEndpoint, secret, modelId, req, cb)
+            : await streamOpenAiTurn(turnEndpoint, secret, modelId, req, cb);
         if (key) store.markKeyUsed(key.id);
         console.log(
           `[hermes-chat] tour fournisseur : ${chosen.endpoint.providerLabel}/${result.model}` +
@@ -638,6 +721,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
       const key = a.endpoint.keyless ? null : pickKey(a.row);
       if (!a.endpoint.keyless && !key) continue;
       const secret = key?.secret ?? null;
+      const sumEndpoint = routeZaiCoding(a.endpoint, secret);
       const prompt =
         "Résume la conversation suivante pour la suite d'une session de chat avec un agent. " +
         "Conserve : le sujet et l'objectif, les décisions prises, les fichiers/artefacts produits " +
@@ -655,8 +739,8 @@ export function createLlmPool(store: Store): LlmPoolApi {
           ...(a.endpoint.extraHeaders ?? {}),
         };
         let text = "";
-        if (a.endpoint.style === "anthropic") {
-          const res = await fetch(`${a.endpoint.base}/messages`, {
+        if (sumEndpoint.style === "anthropic") {
+          const res = await fetch(`${sumEndpoint.base}/messages`, {
             method: "POST",
             headers,
             body: JSON.stringify({
@@ -673,7 +757,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
             .join("\n")
             .trim();
         } else {
-          const res = await fetch(`${a.endpoint.base}/chat/completions`, {
+          const res = await fetch(`${sumEndpoint.base}/chat/completions`, {
             method: "POST",
             headers,
             body: JSON.stringify({

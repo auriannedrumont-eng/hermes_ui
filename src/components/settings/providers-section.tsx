@@ -48,7 +48,7 @@ const TEXTS: Record<
     sub: "Vos comptes d'accès aux modèles de langage. Plusieurs clés par fournisseur : quand l'une atteint sa limite, la suivante prend le relais.",
     addLabel: "Ajouter un fournisseur",
     addHint:
-      "Les fournisseurs connus (z.ai, opencode, OpenRouter, Anthropic, Mistral, Ollama…) sont reconnus ; pour les autres, collez simplement leur adresse.",
+      "Fournisseurs connus : z.ai (clé API ou abonnement GLM Coding Plan), opencode, OpenRouter, Anthropic, Mistral, Ollama… Pour les autres, collez leur adresse.",
     addPlaceholder: "Nom ou adresse du fournisseur",
   },
   service: {

@@ -192,6 +192,21 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   },
 ];
 
+// ── Clés z.ai : deux familles, deux surfaces ─────────────────────────
+// z.ai distribue deux sortes de secrets (docs.z.ai/devpack — Tool
+// Integration) :
+//  • clé API (format xxxxxxxx.yyyyyyyy) : ouvre la surface standard
+//    https://api.z.ai/api/paas/v4 (OpenAI-compatible) ;
+//  • clé « GLM Coding Plan » (abonnement, jeton JWT « eyJ… » utilisé dans
+//    Claude Code, opencode, Cline…) : n'ouvre QUE les surfaces « coding »
+//    (https://api.z.ai/api/coding/paas/v4). Testée sur la mauvaise surface,
+//    une clé valide est refusée (401 « token expired or incorrect ») —
+//    d'où le routage ci-dessous.
+export function looksLikeZaiJwt(secret: string): boolean {
+  const s = secret.trim();
+  return /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*$/.test(s);
+}
+
 /** Résout un nom ou une adresse saisie contre le catalogue. */
 export function resolveKnownProvider(
   input: string,
@@ -290,21 +305,45 @@ export async function testProviderKey(
       return { status: "error", statusLabel: "adresse de base invalide" };
     }
   }
+  // z.ai : une clé Coding Plan (JWT) est testée sur la surface « coding »
+  // qui seule l'accepte (cf. looksLikeZaiJwt) — une clé API reste sur
+  // la surface standard paas/v4.
+  const zaiJwt = Boolean(caps?.name === "z.ai" && secret && looksLikeZaiJwt(secret));
+  let test = caps ? caps.test : null;
+  if (caps && zaiJwt) {
+    test = {
+      url: "https://api.z.ai/api/coding/paas/v4/models",
+      method: "GET",
+      auth: "bearer",
+    };
+  }
   // Fournisseur personnalisé : convention /models avec Bearer
-  const test = caps
-    ? caps.test
-    : baseUrl
-      ? {
-          url: `${baseUrl.replace(/\/+$/, "")}/models`,
-          method: "GET" as const,
-          auth: "bearer" as const,
-        }
-      : null;
+  if (!test && baseUrl) {
+    test = {
+      url: `${baseUrl.replace(/\/+$/, "")}/models`,
+      method: "GET",
+      auth: "bearer",
+    };
+  }
   if (!test) {
     return {
       status: "error",
       statusLabel: "aucun test connu pour ce fournisseur",
     };
+  }
+  // Adresse explicite fournie : son ORIGINE remplace celle du test connu
+  // (le test doit interroger ce que le moteur utilisera réellement —
+  // opencode auto-hébergé, proxy, etc.), le chemin connu est conservé.
+  if (baseUrl) {
+    try {
+      const tb = new URL(test.url);
+      const ob = new URL(baseUrl);
+      if (tb.origin !== ob.origin) {
+        test = { ...test, url: ob.origin + tb.pathname };
+      }
+    } catch {
+      /* baseUrl invalide : déjà signalé ci-dessus */
+    }
   }
   try {
     const res = await fetch(test.url, {
@@ -318,15 +357,40 @@ export async function testProviderKey(
       signal: AbortSignal.timeout(7000),
     });
     if (res.status === 200) {
-      let models: number | null = null;
+      let json: unknown = null;
       try {
-        models = countModels(await res.json());
+        json = await res.json();
       } catch {
         /* corps non JSON — pas grave */
       }
+      // Piège z.ai : certaines surfaces renvoient l'erreur d'authentification
+      // dans un corps JSON HTTP 200 ({"code":401,"success":false} observé sur
+      // la surface Anthropic) — un 200 n'est PAS une garantie de réussite.
+      if (
+        json &&
+        typeof json === "object" &&
+        !Array.isArray(json) &&
+        !Array.isArray((json as any).data) &&
+        !Array.isArray((json as any).models) &&
+        ((json as any).success === false ||
+          (typeof (json as any).code === "number" && (json as any).code !== 0))
+      ) {
+        const code = (json as any).code;
+        return {
+          status: "error",
+          statusLabel:
+            code === 1001 || code === 401 ? "clé refusée" : `réponse inattendue (code ${code})`,
+        };
+      }
+      const models = countModels(json);
       return {
         status: "ok",
-        statusLabel: models !== null ? `${models} modèles` : "connecté",
+        statusLabel:
+          models !== null
+            ? `${models} modèles${zaiJwt ? " (Coding Plan)" : ""}`
+            : zaiJwt
+              ? "clé Coding Plan connectée"
+              : "connecté",
       };
     }
     if (res.status === 429)
