@@ -54,6 +54,17 @@ export default function HermesWebPage() {
   /** Sheet « Prompt système de la conversation » (F-11). */
   const [promptOpen, setPromptOpen] = useState(false);
   const providersApi = useProviders();
+  /** F-09 — une clé Tavily/Exa active rend le toggle « Web » du composer actionnable. */
+  const webSearchAvailable = useMemo(
+    () =>
+      providersApi.providers.some(
+        (p) =>
+          p.kind === "service" &&
+          /tavily|exa/i.test(p.name) &&
+          p.keys.some((k) => k.status === "ok" || k.status === "untested"),
+      ),
+    [providersApi.providers],
+  );
   const sidebarRef = useRef<ImperativePanelHandle>(null);
 
   // ── Partage public lecture seule (F-13) ────────────────────────────────
@@ -424,6 +435,9 @@ export default function HermesWebPage() {
             onExpertChange={chat.setExpert}
             permissionsMode={chat.permissionsMode}
             onPermissionsChange={chat.setPermissionsMode}
+            webSearch={chat.webSearch}
+            onToggleWebSearch={chat.toggleWebSearch}
+            webSearchAvailable={webSearchAvailable}
             contextBase={chat.contextBase}
             canCompact={chat.canCompact}
             compactRunning={chat.compacting}

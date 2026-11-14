@@ -104,6 +104,11 @@ export function useHermesChat() {
   const [expert, setExpertState] = useState<ExpertSettings>({});
   /** Autorisations : reset sur « ask » à chaque session — jamais restauré. */
   const [permissionsMode, setPermissionsMode] = useState<PermissionsMode>("ask");
+  /** F-09/F-12 — recherche web du tour (Tavily/Exa), persistée (hermes.tools.web). */
+  const [webSearch, setWebSearchState] = useState<boolean>(
+    () => readClientSetting<boolean>("hermes.tools.web") === true
+  );
+  const webSearchRef = useRef(webSearch);
   /** État de compaction de la conversation active. */
   const [compactInfo, setCompactInfo] = useState<CompactInfo | null>(null);
   /** Compaction en cours (synthèse LLM côté service). */
@@ -147,6 +152,10 @@ export function useHermesChat() {
   useEffect(() => {
     permissionsRef.current = permissionsMode;
   }, [permissionsMode]);
+
+  useEffect(() => {
+    webSearchRef.current = webSearch;
+  }, [webSearch]);
 
   // ── Prompt système de la conversation active (F-11) ───────────────────
   // Suit le bus du service ; le changement de conversation recharge l'état.
@@ -970,6 +979,7 @@ export function useHermesChat() {
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
           ...expertRef.current,
+          webSearch: webSearchRef.current,
         },
         // Ack (revue 2026-11-13) : refus propre si un tour est déjà en vol
         // sur cette conversation (le serveur n'entrelace plus deux streams).
@@ -1005,6 +1015,7 @@ export function useHermesChat() {
         effort: effortRef.current ?? undefined,
         permissionsMode: permissionsRef.current,
         ...expertRef.current,
+        webSearch: webSearchRef.current,
       };
       const resync = (res: { ok?: boolean; error?: string } | null) => {
         if (!res?.ok) openConversation(conversationId);
@@ -1073,6 +1084,15 @@ export function useHermesChat() {
     [openConversation, streaming]
   );
 
+  /** F-09/F-12 — bascule la recherche web du tour (persistée hermes.tools.web). */
+  const toggleWebSearch = useCallback(() => {
+    setWebSearchState((v) => {
+      const next = !v;
+      writeClientSetting("hermes.tools.web", next);
+      return next;
+    });
+  }, []);
+
   /** F-17 — active/coupe la comparaison ; à l'activation, pré-remplit le
    *  côté A avec le modèle courant et le côté B avec le premier modèle
    *  différent du catalogue. La paire est mémorisée dans le registre. */
@@ -1138,6 +1158,7 @@ export function useHermesChat() {
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
           ...expertRef.current,
+          webSearch: webSearchRef.current,
         },
         (res: { ok?: boolean; error?: string }) => {
           if (!res?.ok) openConversation(conversationId);
@@ -1530,6 +1551,9 @@ export function useHermesChat() {
     setEffort,
     permissionsMode,
     setPermissionsMode: changePermissions,
+    // F-09/F-12 — recherche web du tour (Tavily/Exa)
+    webSearch,
+    toggleWebSearch,
     contextBase,
     // ── Prompt système de la conversation active (F-11) ───────────
     promptInfo,

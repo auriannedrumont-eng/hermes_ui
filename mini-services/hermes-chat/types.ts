@@ -10,6 +10,15 @@ export interface ToolEvent {
   at: string;
 }
 
+// ── Sources citées par un tour avec recherche web (F-09/F-12) ──────────
+export interface WebSource {
+  /** Rang de citation, 1-based (le modèle cite sous la forme [n]). */
+  n: number;
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 // ── Pièces jointes multimédia (le protocole Hermes les supporte) ──────
 export type AttachmentKind = "image" | "audio" | "video" | "pdf" | "file";
 
@@ -71,6 +80,9 @@ export interface ChatMessage {
   // ── Jetons & coût (F-21) — rempli quand l'API du fournisseur le renvoie ──
   /** Jetons consommés par le tour (réels si fournis par l'API). */
   usage?: { input?: number; output?: number; cost?: number };
+  // ── Recherche web (F-12) — sources citées par ce tour ──
+  /** Résultats injectés dans le contexte du tour, affichés cliquables. */
+  sources?: WebSource[];
   // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
   /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
   versions?: { group: string; index: number; count: number };

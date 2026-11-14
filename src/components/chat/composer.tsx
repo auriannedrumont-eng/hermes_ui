@@ -6,8 +6,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
+  Bot,
   Columns2,
   CornerDownLeft,
+  Globe,
+  Image as ImageIcon,
   Loader2,
   Mic,
   Paperclip,
@@ -80,6 +83,11 @@ interface ComposerProps {
   onToggleCompare: () => void;
   onSetCompareSlot: (slot: "a" | "b", id: string) => void;
   mode: GatewayMode | null;
+  /** F-09/F-12 — recherche web du tour (Tavily/Exa). */
+  webSearch: boolean;
+  onToggleWebSearch: () => void;
+  /** Une clé Tavily/Exa active existe côté service. */
+  webSearchAvailable: boolean;
   selectedModel: string | null;
   onSelectModel: (id: string) => void;
   /** Effort de raisonnement courant (valeur brute du fournisseur). */
@@ -126,6 +134,9 @@ export function Composer({
   compareModels,
   onToggleCompare,
   onSetCompareSlot,
+  webSearch,
+  onToggleWebSearch,
+  webSearchAvailable,
   mode,
   selectedModel,
   onSelectModel,
@@ -663,6 +674,60 @@ export function Composer({
                 onExpertChange={onExpertChange}
               />
             )}
+
+            {/* F-09 — capacités du tour : recherche web actionnable via les
+                clés de services ; agent et images attendent la gateway. */}
+            <span
+              className="mx-0.5 hidden h-5 w-px bg-border/60 sm:block"
+              aria-hidden="true"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onToggleWebSearch}
+              disabled={!webSearchAvailable || mode !== "demo"}
+              title={
+                mode !== "demo"
+                  ? "Recherche web : gérée par l'agent Hermes quand la gateway est branchée"
+                  : webSearchAvailable
+                    ? webSearch
+                      ? "Couper la recherche web (Tavily/Exa)"
+                      : "Recherche web (Tavily/Exa) : les résultats sont injectés dans le contexte du tour, sources citées sous la réponse"
+                    : "Recherche web : ajoutez une clé Tavily ou Exa dans Paramètres → Clés de services"
+              }
+              aria-pressed={webSearch}
+              aria-label="Recherche web"
+              className={
+                webSearch
+                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes hover:bg-hermes/25 disabled:opacity-45"
+                  : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-45"
+              }
+            >
+              <Globe className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">Web</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled
+              title="Génération d'images : nécessite la gateway (moteur réel)"
+              aria-label="Génération d'images (à venir)"
+              className="h-[34px] w-[34px] shrink-0 rounded-full text-muted-foreground opacity-45"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled
+              title="Agent (outils) : nécessite la gateway (moteur réel)"
+              aria-label="Agent (à venir)"
+              className="h-[34px] w-[34px] shrink-0 rounded-full text-muted-foreground opacity-45"
+            >
+              <Bot className="h-4 w-4" />
+            </Button>
           </div>
           <div className="flex items-center gap-1.5">
             <p className="hidden items-center gap-1.5 text-[11.5px] text-muted-foreground lg:flex">

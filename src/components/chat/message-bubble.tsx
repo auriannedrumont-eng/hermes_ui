@@ -47,7 +47,7 @@ import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import { estimateTokens } from "@/lib/tokens";
 import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
 import { useModelPricing } from "@/hooks/use-pricing";
-import type { Artifact, ChatMessage, ToolEvent } from "@/lib/chat-types";
+import type { Artifact, ChatMessage, ToolEvent, WebSource } from "@/lib/chat-types";
 
 function ToolEventRow({ event }: { event: ToolEvent }) {
   return (
@@ -296,6 +296,27 @@ function FeedbackControl({
           « {message.feedbackComment} »
         </span>
       ) : null}
+    </div>
+  );
+}
+
+// ── Sources citées (F-12) — rangée cliquable sous la réponse ───────────
+function SourcesRow({ sources }: { sources: WebSource[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11.5px]">
+      <span className="text-muted-foreground">Sources :</span>
+      {sources.map((s) => (
+        <a
+          key={s.n}
+          href={s.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`${s.title}\n${s.snippet}`}
+          className="max-w-[280px] truncate rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-muted-foreground transition-colors hover:border-hermes/60 hover:text-hermes"
+        >
+          [{s.n}] {s.title}
+        </a>
+      ))}
     </div>
   );
 }
@@ -646,6 +667,11 @@ export function MessageBubble({
             {isLastAssistant && onRegenerate ?
               " — « Régénérer » pour la compléter" : ""}
           </p>
+        ) : null}
+
+        {/* F-12 — sources de la recherche web : cliquables, titre au survol */}
+        {!isStreaming && message.sources?.length ? (
+          <SourcesRow sources={message.sources} />
         ) : null}
 
         {/* F-21 — jetons & coût du message (repliable) : réels quand

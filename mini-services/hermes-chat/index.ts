@@ -39,6 +39,11 @@ import { Store, type ArtifactRow, type ExtensionRow, type KeyRow, type ProviderR
 import { HermesConnector } from "./hermes-connector";
 import { createLlmPool } from "./llm-pool";
 import {
+  runWebSearch,
+  webSearchSection,
+  type WebSource,
+} from "./web-search";
+import {
   buildSnapshot,
   generateShareToken,
   isValidShareToken,
@@ -1507,10 +1512,26 @@ io.on("connection", (socket) => {
         if (typeof cb === "function") cb({ error: `${canonicalName} est déjà dans la liste` });
         return;
       }
-      const baseUrl =
+      let baseUrl =
         "known" in resolved
           ? (resolved.known.defaultBaseUrl ?? null)
           : resolved.custom.baseUrl;
+      // Adresse explicite fournie : elle gagne sur l'adresse canonique
+      // (surcharger un fournisseur connu — passerelle d'entreprise, tests).
+      // https requis, ou http strictement local (même règle que le test de clé).
+      const explicit = (payload?.baseUrl ?? "").trim();
+      if (explicit && /^https?:\/\//i.test(explicit)) {
+        try {
+          const u = new URL(explicit);
+          const local =
+            u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
+          if (u.protocol === "https:" || (u.protocol === "http:" && local)) {
+            baseUrl = explicit.replace(/\/+$/, "");
+          }
+        } catch {
+          /* adresse invalide : adresse canonique conservée */
+        }
+      }
       const row = store.createProvider({ name: canonicalName, kind, baseUrl });
       if (typeof cb === "function") cb({ provider: providerWire(row, []) });
       broadcastProviders();
@@ -1821,6 +1842,8 @@ io.on("connection", (socket) => {
       attachments?: Attachment[];
       modelId?: string | null;
       settings?: TurnSettings;
+      /** F-09/F-12 : recherche web du tour (clés Tavily/Exa, mode démo). */
+      webSearch?: boolean;
       /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
       variant?: "a" | "b";
       /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
@@ -1927,6 +1950,55 @@ io.on("connection", (socket) => {
       },
     });
 
+    // ── F-09/F-12 : recherche web du tour (clés de services Tavily/Exa) ──
+    // Best effort : un échec n'annule jamais le tour, l'événement outil
+    // l'affiche honnêtement dans la bulle (et le modèle répond sans contexte).
+    let webSources: WebSource[] | undefined;
+    const emitTool = (event: {
+      name: string;
+      status: "running" | "done" | "error";
+      detail?: string;
+    }) => {
+      const toolEvent: ToolEvent = { ...event, at: new Date().toISOString() };
+      toolEvents.push(toolEvent);
+      socket.emit("stream:tool", {
+        conversationId,
+        messageId,
+        event: toolEvent,
+        ...(variant ? { variant } : {}),
+      });
+    };
+    if (opts.webSearch) {
+      if (connector.mode === "gateway") {
+        emitTool({
+          name: "Recherche web",
+          status: "done",
+          detail: "gérée par l'agent Hermes (gateway)",
+        });
+      } else {
+        emitTool({
+          name: "Recherche web",
+          status: "running",
+          detail: opts.content.slice(0, 80),
+        });
+        const outcome = await runWebSearch(store, opts.content);
+        if (outcome.sources?.length) {
+          webSources = outcome.sources;
+          emitTool({
+            name: "Recherche web",
+            status: "done",
+            detail: `${outcome.sources.length} sources (${outcome.provider})`,
+          });
+        } else {
+          emitTool({
+            name: "Recherche web",
+            status: "error",
+            detail: outcome.error ?? "aucun résultat",
+          });
+        }
+      }
+    }
+
     try {
       const result = await connector.runTurn(
         {
@@ -1949,9 +2021,12 @@ io.on("connection", (socket) => {
           // Instructions système du tour (F-11/F-19) : composées par le
           // service en mode démo ; en mode gateway, le prompt de conversation
           // part seul (la gateway garde ses instructions de base).
+          // F-12 : les résultats de recherche web sont ajoutés en fin de
+          // prompt système du tour démo (pool ou LLM intégré).
           systemPrompt:
             connector.mode === "demo"
-              ? demoSystemPrompt(conversationId)
+              ? demoSystemPrompt(conversationId) +
+                (webSources ? webSearchSection(webSources) : "")
               : store.getConversationPrompt(conversationId)?.content ?? null,
         },
         {
@@ -2056,6 +2131,8 @@ io.on("connection", (socket) => {
         variant,
         // F-21 : jetons réels quand l'API les renvoie (pool de clés)
         usage: result.usage,
+        // F-12 : sources de la recherche web du tour
+        sources: webSources,
         ...(opts.versionGroup
           ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
           : {}),
@@ -2073,6 +2150,7 @@ io.on("connection", (socket) => {
         stopped: stopped || undefined,
         variant,
         usage: result.usage,
+        sources: webSources,
         ...(opts.versionGroup
           ? { versions: { group: opts.versionGroup, index: versionIndex ?? 1, count: versionIndex ?? 1 } }
           : {}),
@@ -2103,6 +2181,9 @@ io.on("connection", (socket) => {
           model: usedModel,
           stopped: stopped || undefined,
           variant,
+          // F-12 : la recherche a eu lieu avant l'échec — le partiel garde
+          // ses sources (l'événement outil est déjà dans toolEvents).
+          sources: webSources,
           ...(opts.versionGroup
             ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
             : {}),
@@ -2163,6 +2244,8 @@ io.on("connection", (socket) => {
         seed?: unknown;
         // Comparaison (F-17) : deux ids de modèles distincts
         compare?: string[];
+        // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
+        webSearch?: boolean;
       },
       cb?: (data: unknown) => void
     ) => {
@@ -2245,6 +2328,7 @@ io.on("connection", (socket) => {
         attachments: attachments.length ? attachments : undefined,
         modelId: payload?.model ?? null,
         settings: turnSettings,
+        webSearch: payload?.webSearch === true,
       });
     }
   );
@@ -2266,6 +2350,8 @@ io.on("connection", (socket) => {
         // F-17 : régénérer UN côté ("a"/"b") ou les deux (compare)
         variant?: "a" | "b";
         compare?: string[];
+        // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
+        webSearch?: boolean;
       },
       cb?: (data: unknown) => void
     ) => {
@@ -2335,6 +2421,7 @@ io.on("connection", (socket) => {
         attachments: lastUser.attachments,
         modelId: payload?.model ?? null,
         settings: turnSettings,
+        webSearch: payload?.webSearch === true,
         variant,
         versionGroup: variant === "a" ? groups.a : variant === "b" ? groups.b : groups.plain,
       });
@@ -2358,6 +2445,8 @@ io.on("connection", (socket) => {
         seed?: unknown;
         // Comparaison (F-17) : relance les deux variantes après édition
         compare?: string[];
+        // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
+        webSearch?: boolean;
       },
       cb?: (data: unknown) => void
     ) => {
@@ -2426,6 +2515,7 @@ io.on("connection", (socket) => {
         attachments: result.message.attachments,
         modelId: payload?.model ?? null,
         settings: turnSettings,
+        webSearch: payload?.webSearch === true,
       });
     }
   );

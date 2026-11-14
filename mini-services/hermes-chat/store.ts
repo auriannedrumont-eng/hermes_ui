@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ShareRow } from "./shares";
 import type { SystemPromptRow } from "./prompts";
+import type { WebSource } from "./web-search";
 import type {
   Artifact,
   ArtifactKind,
@@ -216,6 +217,12 @@ export class Store {
     }
     try {
       this.db.exec("ALTER TABLE messages ADD COLUMN usage_cost REAL");
+    } catch {
+      /* colonne déjà présente */
+    }
+    // Migration douce (F-12) : sources citées par un tour avec recherche web.
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN sources TEXT");
     } catch {
       /* colonne déjà présente */
     }
@@ -969,6 +976,7 @@ export class Store {
               cost: (r.usage_cost as number | null) ?? undefined,
             }
           : undefined,
+      sources: r.sources ? (JSON.parse(r.sources) as WebSource[]) : undefined,
     }));
   }
 
@@ -1002,7 +1010,7 @@ export class Store {
     const createdAt = msg.createdAt ?? new Date().toISOString();
     this.db
       .query(
-        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active, usage_input, usage_output, usage_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active, usage_input, usage_output, usage_cost, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         id,
@@ -1021,7 +1029,8 @@ export class Store {
         msg.versionActive ?? (msg.versionGroup ? 1 : null),
         msg.usage?.input ?? null,
         msg.usage?.output ?? null,
-        msg.usage?.cost ?? null
+        msg.usage?.cost ?? null,
+        msg.sources ? JSON.stringify(msg.sources) : null
       );
     return { ...msg, id, createdAt } as ChatMessage;
   }
@@ -1138,6 +1147,7 @@ export class Store {
               cost: (r.usage_cost as number | null) ?? undefined,
             }
           : undefined,
+      sources: r.sources ? (JSON.parse(r.sources) as WebSource[]) : undefined,
     };
   }
 
