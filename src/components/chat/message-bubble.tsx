@@ -141,6 +141,76 @@ function useSpeech(content: string) {
   return { supported, speaking, toggle };
 }
 
+/** F-16 — lecture continue pendant le stream : parle les phrases complètes
+ *  au fil de l'eau (file native speechSynthesis), s'arrête au clic ou au
+ *  démontage. Les très courtes phrases sont ignorées (bruit), les blocs de
+ *  code lus comme « bloc de code », mêmes règles de nettoyage que useSpeech. */
+function useContinuousSpeech(content: string, active: boolean) {
+  const supported =
+    typeof window !== "undefined" && "speechSynthesis" in window;
+  const [speaking, setSpeaking] = useState(false);
+  const spokenCountRef = useRef(0);
+  const spokenCharsRef = useRef(0);
+
+  // Arrêt propre au démontage de la bulle
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // Alimentation au fil du stream : uniquement pendant la lecture. Les
+  // phrases déjà énoncées ne sont jamais rejouées (spokenCount avance),
+  // une coupure n'annule que la file en attente.
+  useEffect(() => {
+    if (!active || !supported || !speaking) return;
+    const synth = window.speechSynthesis;
+    // Nettoyage du markdown (idem useSpeech) — la propriété de préfixe est
+    // préservée : le texte nettoyé ne fait que croître au fil des deltas.
+    const plain = content
+      .replace(/```[\s\S]*?```/g, " bloc de code ")
+      .replace(/[#*_`>|~\[\]]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!plain) return;
+    // Phrases complètes uniquement (terminées par . ! ? …), courtes ignorées
+    const sentences = plain
+      .split(/(?<=[.!?…])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 20);
+    const fresh = sentences.slice(spokenCountRef.current);
+    for (const s of fresh) {
+      // Garde-fou : jamais plus de 4 000 caractères lus par réponse
+      if (spokenCharsRef.current >= 4000) break;
+      const utterance = new SpeechSynthesisUtterance(
+        s.slice(0, 4000 - spokenCharsRef.current)
+      );
+      utterance.lang = "fr-FR";
+      utterance.rate = 1.02;
+      spokenCharsRef.current += s.length;
+      synth.speak(utterance);
+    }
+    spokenCountRef.current = sentences.length;
+  }, [content, active, supported, speaking]);
+
+  const toggle = () => {
+    if (!supported) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    // Activation : l'effet ci-dessus alimente la file au contenu courant
+    // (les phrases complètes déjà présentes partent d'un coup, puis le
+    // stream nourrit la file delta après delta).
+    setSpeaking(true);
+  };
+
+  return { supported, speaking, toggle };
+}
+
 interface ActionButtonProps {
   label: string;
   onClick: () => void;
@@ -448,6 +518,11 @@ export function MessageBubble({
   const [editValue, setEditValue] = useState("");
   const editRef = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeech(isStreaming ? "" : message.content);
+  // F-16 — lecture continue pendant le stream (bouton dans la bulle vivante)
+  const continuous = useContinuousSpeech(
+    isStreaming ? (streamingContent ?? "") : "",
+    isStreaming
+  );
   // Réglage « Afficher le raisonnement » (fork.ui.showReasoning) — suivi
   // en direct via le bus `hermes-ui:settings-changed`. Initialisation
   // paresseuse (lecture au 1er rendu), l'effet ne fait que s'abonner.
@@ -656,6 +731,34 @@ export function MessageBubble({
           <p className="text-[12.5px] italic text-muted-foreground">
             {streamingStatus}
           </p>
+        ) : null}
+
+        {/* F-16 — lecture continue pendant le stream : parle les phrases
+            complètes au fil de l'eau. Coupé = silence immédiat. */}
+        {isStreaming && content && continuous.supported ? (
+          <button
+            type="button"
+            onClick={continuous.toggle}
+            aria-pressed={continuous.speaking}
+            className={
+              "flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-1 py-0.5 text-[12px] transition-colors " +
+              (continuous.speaking
+                ? "text-hermes"
+                : "text-muted-foreground hover:text-hermes")
+            }
+          >
+            {continuous.speaking ? (
+              <>
+                <VolumeX className="h-3.5 w-3.5" aria-hidden />
+                Couper la lecture
+              </>
+            ) : (
+              <>
+                <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                Lire en continu
+              </>
+            )}
+          </button>
         ) : null}
 
         {/* Réponse interrompue par l'utilisateur (bouton Stop) : le partiel
