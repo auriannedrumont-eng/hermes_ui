@@ -35,7 +35,7 @@
 | F-06 | **Composer** | Entrée=envoi, Maj+Entrée ; brouillon persistant ; auto-resize ; compteur de contexte | **Terminé** | Composer v2 (FORK.md §7.3) : brouillons `hermes.draft.<id>`, jauge + popover de décomposition, compaction, permissions |
 | F-07 | **Upload fichiers** | Drag & drop, collage, prévisualisation, suppression | **Terminé** | `onDrop`/`onPaste` du composer, `attachments.tsx`, `uploads.ts` (15 Mo, ASR auto des audios) |
 | F-08 | **Sélecteur de modèle** | Dans le composer ; mémorisé | **Terminé** | `model-picker.tsx` (cmdk, favoris) ; mémorisation **globale** (`hermes.model`), pas par conversation — assumé |
-| F-09 | **Toggles capacités** | Recherche web / agent / images — 1 clic depuis le composer | À faire | Dépend des toolsets du moteur (post-gateway) ; en démo, rien à brancher |
+| F-09 | **Toggles capacités** | Recherche web / agent / images — 1 clic depuis le composer | **Partiel** | Livré le 2026-11-14 : toggle « Web » (recherche Tavily/Exa via le porte-clés, résultats injectés + citations) ; « Image » et « Agent » verrouillés « nécessite la gateway » (moteur réel) — à débloquer au branchement |
 
 ### P1 — Vite après
 
@@ -43,7 +43,7 @@
 |----|---------|----------|--------|----------------|
 | F-10 | **Slash commands** | `/traduire`, `/résumer` + templates | **Terminé** | `prompt-library.ts` + suggestions `/` du composer (Tab/Entrée pour appliquer) |
 | F-11 | **Prompt système / conversation** | Panneau, presets | **Terminé** | Livré le 2026-11-13 : panneau d'édition par conversation (sheet 460 px, bouton « prompt » de l'en-tête), bibliothèque de presets éditables (section Hermes du volet, 5 seeds), table additive `system_prompts`, événements `system-prompt:*` / `system-prompts:*`, effet au prochain tour (composé base + F-19 + F-11 côté service, `system_prompt` dans `api_turn_v1.settings` en gateway), jauge de contexte + pastille d'en-tête |
-| F-12 | **Citations web** | Sources cliquables | À faire | Dépend du browsing agent (FORK.md §7.5, « plus tard ») |
+| F-12 | **Citations web** | Sources cliquables | **Terminé (démo)** | Livré le 2026-11-14 : résultats numérotés [n] injectés dans le contexte du tour avec consigne de citation, rangée « Sources : » cliquable sous la réponse, persistance `messages.sources` ; en gateway, le browsing est géré par l'agent Hermes lui-même |
 | F-13 | **Partage / export** | Lien public ; export MD/PDF/image | **Terminé** | Livré le 2026-11-13 : lien public lecture seule `/shared/<token>` (snapshot **figé** à la création, table additive `shares`, token opaque 24 car., un seul lien actif par conversation), menu « Partager » de l'en-tête (copie, ouverture de la vue publique, révocation → 410 Gone), export **image PNG plein page du fil** (pipeline chrome-headless-shell), `data.json` public sans id interne, page `noindex`. Export local MD/JSON/PDF livré précédemment (`export.ts`). |
 | F-14 | **Édition avec branchement** | Éditer crée une branche ; navigation versions | **Terminé** (volet versions) | Livré le 2026-11-13 : régénérer ne supprime plus — chaque réponse a des versions conservées, navigation ‹ n/m › dans le fil (version affichée = version envoyée au modèle), par côté en comparaison ; suppression d'une version = promotion de la précédente. Choix documenté : l'édition d'un message utilisateur reste « fork explicite » (bouton Branche) plutôt qu'un arbre de branches implicites. |
 | F-15 | **Panneau artefacts** | HTML/graphiques en panneau latéral | **Terminé** | `artifact-panel.tsx` : split view ≈ 45 %, rendus code/MD/CSV/JSON/SVG/PDF/HTML (pipeline Chrome), versioning + diff |
@@ -62,7 +62,7 @@
 
 | ID | Feature | Critères | Statut | Preuve / écart |
 |----|---------|----------|--------|----------------|
-| F-21 | **Compteur tokens/coût** | Par message, repliable | Partiel | Jauge de contexte + popover par poste (`tokens.ts`, heuristique car/jetons). Manque : coût par message |
+| F-21 | **Compteur tokens/coût** | Par message, repliable | **Terminé** | Livré le 2026-11-14 : usage réel persisté quand l'API le renvoie (`messages.usage_input/output/cost`), tarifs déclarés par l'utilisatrice (`hermes.pricing`, jamais pré-remplis — le fournisseur fait foi), carte repliable par bulle — coût facturé (OpenRouter) > estimé selon tarifs > « tarifs non renseignés » ; estimation ~ en repli sans usage réel. Jauge de contexte + popover par poste (`tokens.ts`) inchangés. |
 | F-22 | **Mode expert** | Température, max tokens, seed | **Terminé** | Livré le 2026-11-13 (douzième session, suite) : section repliable « Mode expert » dans le popover du sélecteur (température curseur **0–1** — le moteur démo rejette au-delà, erreur 1210 vérifiée ; plafond 1–8192 ; graine 32 bits) ; registre `hermes.expert.*` + payloads `chat:send`/`regenerate`/`edit` ; `sanitizeExpertSettings` côté service (clamps, non-numériques ignorés) ; injectés au LLM démo **pour de vrai** (`maxTokens=3` → « Le renard », troncation vérifiée) et transmis dans `api_turn_v1.settings` en gateway. QA `test-expert-flow.ts` 14/14. |
 | F-23 | **Raccourcis clavier** | Nouveau chat, recherche, focus composer | **Terminé** | Cmd/Ctrl+K palette (nouveau chat, stop, régénérer, épingler, exports, modèles, recherche), Cmd/Ctrl+Maj+O nouveau chat, Échap = stop / fermer panneau |
 | F-24 | **Feedback intégré** | 👍/👎 + commentaire | **Terminé** | Livré le 2026-11-13 : boutons 👍/👎 + popover commentaire sur chaque réponse assistant (`message-bubble.tsx`, re-clic = efface, commentaire ≤ 2 000 car.) ; colonnes additives `messages.feedback_rating`/`feedback_comment`, événement `feedback:set` + broadcast `feedback:changed`, mise à jour optimiste côté hook. **Local : jamais envoyé au modèle** (consigné §7.9). Non-transporté au fork (une branche repart sans retours) — assumé. |
@@ -346,6 +346,53 @@ touche ni les versions de B ni sa réponse affichée.
   `src/` ; eslint propre (au passage : init paresseuse du réglage
   « afficher le raisonnement » dans `message-bubble`, `set-state-in-effect`).
 
+## Chantier du 2026-11-14 — v2.3 « le moteur démo consomme les clés fournisseurs »
+
+Réponse à la demande de l'utilisatrice : après ajout d'une clé z.ai (testée positive),
+les modèles n'apparaissaient pas dans le sélecteur et l'envoi échouait
+(« .z-ai-config ») — le moteur démo parlait au SDK du bac à sable, ignorait
+le porte-clés. Désormais, en mode démo, les tours partent sur l'API du
+fournisseur à clé active et le sélecteur devient vivant.
+
+- **Service** (`llm-pool.ts` nouveau) : `pickActiveKey`/`markKeyUsed` enfin
+  consommés ; OpenAI-compatible (z.ai, OpenRouter, Mistral, OpenAI, DeepSeek,
+  Groq, Ollama keyless, personnalisés) + adaptateur Anthropic ; 401/429 → clé
+  déclassée puis retente ; usage capturé passivement ; retente vision
+  automatique ; compaction via le pool ; erreur SDK « .z-ai-config » rendue
+  pédagogique. Connecteur : `attachPool`/`invalidateModels`, `TurnOutcome
+  {engine, provider, usage}` ; broadcast `models:changed` sur toute mutation
+  du porte-clés ; message persisté « modèle · fournisseur ».
+- **Client** : `models:list` source `"providers"` (groupes par fournisseur,
+  pied honnête), alignement de la sélection sur `defaultModel`, hook
+  `models:changed`, `modelIdFromLabel` tolère le suffixe fournisseur.
+- **QA** `scripts/test-pool-flow.ts` **24/24** via faux serveur local
+  (listes vivantes, filtrage non-chat, clé refusée → déclassement + erreur
+  claire sans repli silencieux, tour streamé, stop en plein vol, retente
+  vision, repli catalogue/SDK sans fournisseur).
+
+## Chantier du 2026-11-14 — F-21 « jetons & coût par message »
+
+- **Service** : colonnes additives `messages.usage_input/output/cost`
+  transportées (append/get/fork + partiel d'erreur), miroir `ChatMessage.usage`.
+- **Client** : `src/lib/pricing.ts` (libellés « id · fournisseur », coûts,
+  formats $), hook `use-pricing` (abonnement socket unique partagé), carte
+  repliable sous chaque réponse, bloc « Tarifs des modèles » du volet
+  (`hermes.pricing` — jamais pré-remplis, le fournisseur fait foi).
+- **QA** `scripts/test-cost-flow.ts` **21/21**.
+
+## Chantier du 2026-11-14 — F-09/F-12 « recherche web + citations »
+
+- **Service** (`web-search.ts` nouveau) : recherche via la première clé
+  Tavily/Exa, événement outil « Recherche web » running → done/error,
+  injection en fin de prompt système du tour démo (consigne [n]),
+  `messages.sources` persistées ; best effort (échec ≠ tour échoué) ; en
+  gateway : événement explicatif, aucune injection. `providers:add` accepte
+  une adresse explicite (`baseUrl`).
+- **Client** : toggle « Web » du composer (selon disponibilité d'une clé ;
+  Image/Agent verrouillés « nécessite la gateway »), état `hermes.tools.web`,
+  `SourcesRow` cliquable.
+- **QA** `scripts/test-web-flow.ts` **14/14**.
+
 ## Ordre de démarrage recommandé (suite)
 
 1. ~~Valider le volet v4 implémenté~~ **premiers retours intégrés le 2026-11-14**
@@ -355,12 +402,14 @@ touche ni les versions de B ni sa réponse affichée.
 3. ~~F-13~~ **livré le 2026-11-13** (ci-dessus).
 4. ~~F-24~~ **livré le 2026-11-13** (ci-dessus).
 5. ~~F-18~~ **livré le 2026-11-13** (ci-dessus).
-6. **F-09 / F-12** (toggles capacités, citations) — bloqués sur les toolsets du moteur ;
-   à revoir une fois la gateway branchée (les clés de services sont désormais gérées
-   dans le volet Paramètres).
-7. **F-21** (coût par message) reste le seul « Partiel » améliorable ;
+6. ~~**F-09 / F-12**~~ **livrés le 2026-11-14** en démo via les clés de services
+   (recherche web + citations) ; « Image » et « Agent » attendent la gateway.
+7. ~~**F-21** (coût par message)~~ **livré le 2026-11-14** ;
    ~~**F-17** (comparaison modèles)~~ et ~~**F-14** (navigation versions)~~
    **livrés le 2026-11-13** (ci-dessus).
+8. **v2.3 découverte moteur** (Outils, Skills, Hermes .md, Profils, Système) :
+   structure cible déjà en place, données réelles au branchement de la gateway ;
+   la lecture continue pendant le stream (F-16) reste optionnelle.
 
 ## Notes de passation
 
