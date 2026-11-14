@@ -156,18 +156,20 @@ async function main() {
   // ── Scénario 3 : régénérer UN SEUL côté ─────────────────────────────
   console.log("Scénario 3 — régénération du seul côté a");
   {
+    // F-14 : la régénération ne supprime plus — l'ancienne réponse passe
+    // inactive (messages:superseded, plus de messages:removed).
     const removed: string[] = [];
     const onRemoved = (p: { conversationId: string; messageIds: string[] }) => {
       if (p.conversationId === convId) removed.push(...p.messageIds);
     };
-    socket.on("messages:removed", onRemoved);
+    socket.on("messages:superseded", onRemoved);
     const end = waitCompareEnd(convId, 1);
     const ack: any = await emit("chat:regenerate", { conversationId: convId, variant: "a", model: MODEL_A });
     check("ack positif", ack?.ok === true);
     const cap = await end;
-    socket.off("messages:removed", onRemoved);
+    socket.off("messages:superseded", onRemoved);
     check("1 seul done, de variante a", cap.variants.length === 1 && cap.variants[0] === "a");
-    check("seule la réponse a a été retirée", removed.length === 1 && removed[0] === idA, removed.join(","));
+    check("seule la réponse a a été superseded (conservée inactive)", removed.length === 1 && removed[0] === idA, removed.join(","));
     const msgs: any = await emit("conversations:open", { id: convId });
     const list = msgs.messages ?? [];
     const keptB = list.find((m: any) => m.id === idB);
