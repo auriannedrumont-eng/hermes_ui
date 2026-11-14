@@ -178,9 +178,12 @@ function extensionsWire(): ExtensionView[] {
 function broadcastProviders(): void {
   // v2.3 : les listes vivantes dépendent du porte-clés — invalidation des
   // caches puis signal aux clients (le hook recharge models:list).
+  // v2.4 : le hello est rediffusé aussi — la carte de statut de la sidebar
+  // (« vos clés répondent ») suit le porte-clés en direct.
   connector.invalidateModels();
   io.emit("providers:changed", { providers: providersWire() });
   io.emit("models:changed", {});
+  io.emit("hello", helloPayload());
 }
 
 function broadcastExtensions(): void {
@@ -704,7 +707,9 @@ const store = new Store();
 const connector = new HermesConnector();
 // v2.3 : le moteur consomme le porte-clés du volet Paramètres — en mode
 // démo, les tours partent sur l'API du fournisseur à clé active.
-connector.attachPool(createLlmPool(store));
+// v2.4 : référence conservée pour la carte de statut honnête (hello).
+const pool = createLlmPool(store);
+connector.attachPool(pool);
 
 // Presets de départ semés une seule fois si la bibliothèque est vide (F-11).
 store.seedPromptPresetsIfNeeded(SEED_PRESETS);
@@ -782,12 +787,17 @@ function systemPromptSize(conversationId?: string): number {
 }
 
 function helloPayload() {
+  // Fournisseurs LLM réellement actionnables (clé active ou keyless) : sans
+  // eux, le message « définissez HERMES_GATEWAY_URL » reste légitime ; avec
+  // eux, la sidebar affiche un état honnête (vos clés répondent).
+  const engineProviders = pool.activeProviderNames();
   return {
     app: "hermes-web",
     version: "1.2.0",
     mode: connector.mode,
     model: connector.model,
     gatewayUrl: connector.gatewayUrl,
+    engineProviders,
     // Taille réelle des instructions système du moteur démo (base + F-18 + F-19) ;
     // la gateway garde les siennes (le client retombe sur son estimation).
     systemPromptChars: connector.mode === "demo" ? systemPromptSize() : null,

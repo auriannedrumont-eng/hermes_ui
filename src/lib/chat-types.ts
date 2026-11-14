@@ -145,6 +145,9 @@ export interface ServerHello {
   mode: GatewayMode;
   model: string;
   gatewayUrl: string | null;
+  /** Fournisseurs LLM actionnables (clé active ou keyless) — la carte de
+   *  statut de la sidebar s appuie dessus pour un état honnête. v2.4. */
+  engineProviders?: string[] | null;
   /** Taille des instructions système (estimation honnête de la jauge). */
   systemPromptChars?: number | null;
   /** Révision git du dépôt déployé (null = installation sans git). v2.4. */

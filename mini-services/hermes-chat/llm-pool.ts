@@ -51,6 +51,9 @@ export interface LlmPoolApi {
   summarize(history: { role: "user" | "assistant"; content: string }[]): Promise<string | null>;
   /** Vide les caches de liste (appelé quand le porte-clés change). */
   invalidate(): void;
+  /** Noms des fournisseurs LLM actionnables (clé active ou keyless) —
+   *  alimente la carte de statut honnête de la sidebar (v2.4). */
+  activeProviderNames(): string[];
 }
 
 // ── Endpoints LLM connus ───────────────────────────────────────────────
@@ -66,6 +69,7 @@ interface LlmEndpoint {
 
 const KNOWN_LLM_BASES: Record<string, string> = {
   "z.ai": "https://api.z.ai/api/paas/v4",
+  opencode: "https://opencode.ai/inference/openai/v1",
   OpenRouter: "https://openrouter.ai/api/v1",
   Anthropic: "https://api.anthropic.com/v1",
   Mistral: "https://api.mistral.ai/v1",
@@ -157,7 +161,9 @@ function parseModelList(json: unknown, provider: string): ModelOption[] {
     if (typeof id !== "string" || !id || NON_CHAT.test(id)) continue;
     if (out.some((x) => x.id === id)) continue;
     const label =
-      typeof m === "object" && m ? ((m as any).display_name ?? (m as any).label) : undefined;
+      typeof m === "object" && m
+        ? ((m as any).display_name ?? (m as any).label ?? (m as any).name)
+        : undefined;
     out.push({
       id,
       label: typeof label === "string" && label ? label : id,
@@ -702,5 +708,11 @@ export function createLlmPool(store: Store): LlmPoolApi {
     modelsCache.clear();
   }
 
-  return { listModels, runTurn, summarize, invalidate };
+  function activeProviderNames(): string[] {
+    const names = new Set<string>();
+    for (const { endpoint } of activeLlmProviders()) names.add(endpoint.providerLabel);
+    return [...names];
+  }
+
+  return { listModels, runTurn, summarize, invalidate, activeProviderNames };
 }

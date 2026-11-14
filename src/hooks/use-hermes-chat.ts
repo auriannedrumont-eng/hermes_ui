@@ -424,6 +424,9 @@ export function useHermesChat() {
       setConnected(false);
       setStreamsRecord({});
     };
+    // v2.4 : le service rediffuse le hello quand le porte-clés change —
+    // la carte de statut de la sidebar suit l état réel du moteur en direct.
+    const onHello = (info: ServerHello) => setServerInfo(info);
 
     const onStreamStart = (p: {
       conversationId: string;
@@ -777,6 +780,7 @@ export function useHermesChat() {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("hello", onHello);
     socket.on("stream:start", onStreamStart);
     socket.on("stream:delta", onStreamDelta);
     socket.on("stream:reasoning", onStreamReasoning);
@@ -821,6 +825,7 @@ export function useHermesChat() {
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("hello", onHello);
       socket.off("stream:start", onStreamStart);
       socket.off("stream:delta", onStreamDelta);
       socket.off("stream:reasoning", onStreamReasoning);
@@ -1626,6 +1631,8 @@ export function useHermesChat() {
     connected,
     mode: (serverInfo?.mode ?? null) as GatewayMode | null,
     serverModel: serverInfo?.model ?? null,
+    // v2.4 — fournisseurs LLM actionnables (carte de statut honnête).
+    engineProviders: serverInfo?.engineProviders ?? null,
     serverVersion: serverInfo?.version ?? null,
     // v2.4 (Paramètres → Système) — sondes réelles du hello.
     serverRevision: serverInfo?.appRevision ?? null,

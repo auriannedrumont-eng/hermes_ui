@@ -68,6 +68,8 @@ interface SidebarProps {
   activeId: string | null;
   mode: GatewayMode | null;
   serverModel: string | null;
+  /** Fournisseurs LLM actionnables (v2.4) — carte de statut honnête. */
+  engineProviders: string[] | null;
   connected: boolean;
   isBusy: boolean;
   onNew: (projectId?: string | null) => void;
@@ -480,6 +482,7 @@ export function Sidebar({
   activeId,
   mode,
   serverModel,
+  engineProviders,
   connected,
   isBusy,
   onNew,
@@ -518,6 +521,11 @@ export function Sidebar({
   });
   const [sortMode, setSortMode] = useState<string>(() => readClientSetting<string>("fork.projects.sort"));
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
+
+  // Carte de statut honnête (v2.4) : sans gateway, le moteur intégré répond
+  // dès qu au moins un fournisseur a une clé active — on ne dit plus « démo »
+  // quand les tours partent réellement sur les API des fournisseurs.
+  const poolActive = (engineProviders?.length ?? 0) > 0;
 
   // ── Application immédiate des réglages (page Paramètres) ──────────────
   // Tri des projets et repliage suivent le bus `hermes-ui:settings-changed`.
@@ -1025,7 +1033,7 @@ export function Sidebar({
               className={`h-2 w-2 shrink-0 rounded-full ${
                 !connected
                   ? "bg-muted-foreground/50"
-                  : mode === "gateway"
+                  : mode === "gateway" || (mode === "demo" && poolActive)
                     ? "bg-emerald-500"
                     : "bg-hermes"
               }`}
@@ -1036,7 +1044,9 @@ export function Sidebar({
                 ? "Hors ligne"
                 : mode === "gateway"
                   ? "Gateway Hermes connectée"
-                  : "Mode démo · LLM intégré"}
+                  : poolActive
+                    ? "Moteur intégré · vos clés répondent"
+                    : "Mode démo · LLM intégré"}
             </p>
             {/* Entrée unique des paramètres (décision v1 confirmée v3) */}
             <button
@@ -1050,12 +1060,25 @@ export function Sidebar({
             </button>
           </div>
           <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
-            {serverModel ? `${serverModel} · ` : ""}
-            Définissez{" "}
-            <code className="break-all rounded bg-background/60 px-1 py-px font-mono text-[10.5px]">
-              HERMES_GATEWAY_URL
-            </code>{" "}
-            pour brancher l&apos;agent Hermes.
+            {!connected ? (
+              "Reconnexion automatique en cours…"
+            ) : mode === "gateway" ? (
+              (serverModel ?? "")
+            ) : poolActive ? (
+              <>
+                Clés actives : {engineProviders!.join(", ")} — les réponses
+                viennent de leurs API.
+              </>
+            ) : (
+              <>
+                Ajoutez une clé dans Paramètres → Fournisseurs &amp; clés, ou
+                définissez{" "}
+                <code className="break-all rounded bg-background/60 px-1 py-px font-mono text-[10.5px]">
+                  HERMES_GATEWAY_URL
+                </code>{" "}
+                pour brancher l&apos;agent Hermes.
+              </>
+            )}
           </p>
         </div>
       </div>

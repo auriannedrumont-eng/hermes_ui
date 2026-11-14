@@ -14,6 +14,8 @@ import type { GatewayMode } from "@/lib/chat-types";
 
 interface SystemSectionProps {
   mode: GatewayMode | null;
+  /** Fournisseurs LLM actionnables (v2.4) — pastille « moteur intégré » honnête. */
+  engineProviders?: string[] | null;
   serverVersion: string | null;
   /** Révision git du déploiement (null = installation sans git). */
   appRevision: string | null;
@@ -37,6 +39,7 @@ function fmtBytes(bytes: number): string {
 
 export function SystemSection({
   mode,
+  engineProviders = null,
   serverVersion,
   appRevision,
   chromeHeadless,
@@ -72,6 +75,9 @@ export function SystemSection({
   };
 
   const demo = mode !== "gateway";
+  // v2.4 : « démo » seulement si aucune clé fournisseur ne peut répondre —
+  // sinon le moteur intégré est RÉEL (tours sur les API des fournisseurs).
+  const poolActive = (engineProviders?.length ?? 0) > 0;
 
   return (
     <section>
@@ -111,17 +117,23 @@ export function SystemSection({
             <div className="text-[13px] font-semibold">Moteur</div>
             <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
               {demo
-                ? gatewayUrl
-                  ? `Gateway non branchée (${gatewayUrl}). Les réponses viennent de vos clés fournisseurs.`
-                  : "Mode démo — les réponses viennent de vos clés fournisseurs (z.ai, etc.)."
+                ? poolActive
+                  ? `Moteur intégré — les réponses partent sur l'API de vos fournisseurs (clés actives : ${engineProviders!.join(", ")}).`
+                  : gatewayUrl
+                    ? `Gateway non branchée (${gatewayUrl}). Aucune clé fournisseur active : ajoutez-en une (Fournisseurs) pour de vraies réponses.`
+                    : "Aucune clé fournisseur active : les tours sont simulés par le LLM intégré. Ajoutez une clé (Fournisseurs) ou branchez la gateway Hermes."
                 : "Gateway Hermes connectée — les réponses viennent du moteur réel."}
             </div>
           </div>
-          <Pastille
-            tone={demo ? "warn" : "ok"}
-            label={demo ? "démo" : "gateway"}
-            className="flex-none"
-          />
+          {demo ? (
+            poolActive ? (
+              <Pastille tone="ok" label="moteur" className="flex-none" />
+            ) : (
+              <Pastille tone="warn" label="démo" className="flex-none" />
+            )
+          ) : (
+            <Pastille tone="ok" label="gateway" className="flex-none" />
+          )}
         </div>
         <div className="flex items-center gap-3 border-t border-border/60 py-[11px]">
           <div className="min-w-0 flex-1">

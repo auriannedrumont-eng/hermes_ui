@@ -49,6 +49,23 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
       auth: "bearer",
     },
   },
+  // NB : AVANT l'entrée OpenAI — l'adresse d'opencode contient « openai »
+  // (https://opencode.ai/inference/openai/v1) et doit être reconnue comme
+  // opencode, pas comme OpenAI. Console opencode : des dizaines de modèles
+  // (Claude, GPT, Gemini, GLM…) sous une même clé ; surface OpenAI-compatible
+  // pour les tours, liste des modèles sur /inference/v1/models (vérifié).
+  {
+    match: /opencode/i,
+    name: "opencode",
+    tagline: "des dizaines de modèles sous un seul compte (Console opencode)",
+    kind: "llm",
+    defaultBaseUrl: "https://opencode.ai/inference/openai/v1",
+    test: {
+      url: "https://opencode.ai/inference/v1/models",
+      method: "GET",
+      auth: "bearer",
+    },
+  },
   {
     match: /openrouter/i,
     name: "OpenRouter",

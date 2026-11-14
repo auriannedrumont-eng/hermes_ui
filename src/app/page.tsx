@@ -333,6 +333,7 @@ export default function HermesWebPage() {
       activeId={chat.activeId}
       mode={chat.mode}
       serverModel={chat.serverModel}
+      engineProviders={chat.engineProviders}
       connected={chat.connected}
       isBusy={chat.isBusy}
       onNew={handleNew}
@@ -505,6 +506,7 @@ export default function HermesWebPage() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         mode={chat.mode}
+        engineProviders={chat.engineProviders}
         connected={chat.connected}
         models={chat.models}
         selectedModel={chat.selectedModel}

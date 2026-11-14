@@ -104,6 +104,8 @@ interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: GatewayMode | null;
+  /** Fournisseurs LLM actionnables (v2.4) — pastille « moteur intégré » honnête. */
+  engineProviders?: string[] | null;
   connected: boolean;
   /** Catalogue vivant (service) pour la ligne « Modèle de conversation ». */
   models: ModelOption[];
@@ -553,6 +555,7 @@ export function SettingsPanel({
   open,
   onOpenChange,
   mode,
+  engineProviders = null,
   connected,
   models,
   selectedModel,
@@ -580,6 +583,9 @@ export function SettingsPanel({
   }, [open, api]);
 
   const isDemo = connected && mode === "demo";
+  // v2.4 : « démo » seulement si AUCUN fournisseur n a de clé active —
+  // sinon le moteur intégré répond réellement via les API des fournisseurs.
+  const poolActive = (engineProviders?.length ?? 0) > 0;
   const extUpdate = api.extensions.some((e) => e.updateAvailable);
 
   // Navigation interne du volet (liens croisés des sections v2.4).
@@ -632,6 +638,7 @@ export function SettingsPanel({
         return (
           <SystemSection
             mode={mode}
+            engineProviders={engineProviders}
             serverVersion={serverVersion ?? null}
             appRevision={appRevision}
             chromeHeadless={chromeHeadless}
@@ -692,10 +699,17 @@ export function SettingsPanel({
             </div>
             <div className="mt-auto px-2 pt-2 text-[10.5px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
               {isDemo ? (
-                <span className="inline-flex items-center gap-1.5" title="Réponses simulées par le LLM intégré">
-                  <i className="size-[6px] rounded-full bg-amber-500" aria-hidden />
-                  mode démo
-                </span>
+                poolActive ? (
+                  <span className="inline-flex items-center gap-1.5" title="Réponses via l'API de vos fournisseurs">
+                    <i className="size-[6px] rounded-full bg-emerald-500" aria-hidden />
+                    moteur intégré
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5" title="Réponses simulées par le LLM intégré">
+                    <i className="size-[6px] rounded-full bg-amber-500" aria-hidden />
+                    mode démo
+                  </span>
+                )
               ) : (
                 <span className="inline-flex items-center gap-1.5" title="Gateway Hermes connectée">
                   <i className="size-[6px] rounded-full bg-emerald-500" aria-hidden />
@@ -733,15 +747,27 @@ export function SettingsPanel({
             {/* Pied : état démo + modifications en attente (v4) */}
             <div className="flex flex-none items-center gap-2.5 border-t border-border bg-background px-5 py-[9px] min-[1100px]:px-[34px]">
               {isDemo ? (
+                poolActive ? (
+                  <div className="group relative flex min-w-0 cursor-help items-center gap-[7px] text-[11.5px] text-muted-foreground">
+                    <span className="size-[7px] flex-none rounded-full bg-emerald-500" />
+                    <span className="truncate">Moteur intégré</span>
+                    <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-[10px] bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                      Les réponses partent sur l&apos;API de vos fournisseurs
+                      (clés actives : {engineProviders!.join(", ")}). Ajoutez ou
+                      retirez des clés dans la section Fournisseurs.
+                    </span>
+                  </div>
+                ) : (
                 <div className="group relative flex min-w-0 cursor-help items-center gap-[7px] text-[11.5px] text-muted-foreground">
                   <span className="size-[7px] flex-none rounded-full bg-amber-500" />
                   <span className="truncate">Mode démo</span>
                   <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-[10px] bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                    Réponses simulées par le LLM intégré. Une fois la gateway Hermes
-                    branchée, cette pastille disparaît et les sections moteur
-                    s&apos;activent.
+                    Réponses simulées par le LLM intégré. Ajoutez la clé d&apos;un
+                    fournisseur (section Fournisseurs) ou branchez la gateway
+                    Hermes pour de vraies réponses.
                   </span>
                 </div>
+                )
               ) : (
                 <span className="min-w-0" />
               )}
