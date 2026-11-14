@@ -1,62 +1,31 @@
 #!/bin/bash
-# Génère le patch git (diff original -> version artefacts) et l'archive livrable
+# Génère les livrables d'une session de travail (cf. FORK.md §10) :
+#   1. les patchs git (git format-patch) depuis un point de départ ;
+#   2. un bundle git (historique complet de main) ;
+#   3. l'archive zip des fichiers seuls de la branche publish (téléversement
+#      GitHub sans git — « Add file » → « Upload files »).
+# Usage :
+#   bash scripts/package-livrables.sh [base]     # base = commit de départ des patchs
+#   OUT=… bash scripts/package-livrables.sh base # répertoire de sortie personnalisé
+# Sans argument, seuls le bundle et le zip sont produits (pas de patchs).
 set -e
-ORIG=/tmp/orig/hermes_ui
-NEW=/home/z/my-project
-OUT=/home/z/my-project/download
+cd "$(dirname "$0")/.."
 
+BASE_REF="${1:-}"
+OUT="${OUT:-download/livrables}"
 mkdir -p "$OUT"
 
-# 1. Patch unifié : fichiers modifiés/ajoutés (runtime exclu)
-cd "$ORIG"
-git apply --check /dev/null 2>/dev/null || true
-{
-  echo "Patch Hermes Web — fonctionnalité Artefacts (split view, chrome-headless-shell, versioning)"
-  echo "Base : https://github.com/auriannedrumont-eng/hermes_ui (commit 23826d7)"
-  echo "Généré le $(date '+%d %B %Y')"
-  echo ""
-  echo "Fichiers modifiés :"
-  for f in mini-services/hermes-chat/index.ts mini-services/hermes-chat/store.ts mini-services/hermes-chat/types.ts mini-services/hermes-chat/demo-engine.ts mini-services/hermes-chat/README.md src/app/page.tsx src/hooks/use-hermes-chat.ts src/lib/chat-types.ts src/components/chat/message-bubble.tsx src/components/chat/message-list.tsx; do
-    echo "  M $f"
-  done
-  echo "Fichiers ajoutés :"
-  for f in mini-services/hermes-chat/artifacts.ts mini-services/hermes-chat/render.ts src/lib/artifact-utils.ts src/components/chat/artifact-card.tsx src/components/chat/artifact-panel.tsx; do
-    echo "  A $f"
-  done
-  echo "=============================================================="
-  echo ""
-  # Diff des fichiers modifiés et ajoutés (nouveaux fichiers via /dev/null)
-  for f in mini-services/hermes-chat/index.ts mini-services/hermes-chat/store.ts mini-services/hermes-chat/types.ts mini-services/hermes-chat/demo-engine.ts mini-services/hermes-chat/README.md mini-services/hermes-chat/artifacts.ts mini-services/hermes-chat/render.ts src/app/page.tsx src/hooks/use-hermes-chat.ts src/lib/chat-types.ts src/lib/artifact-utils.ts src/components/chat/artifact-card.tsx src/components/chat/artifact-panel.tsx src/components/chat/message-bubble.tsx src/components/chat/message-list.tsx; do
-    if [ -f "$ORIG/$f" ]; then
-      diff -u --label "a/$f" --label "b/$f" "$ORIG/$f" "$NEW/$f" || true
-    else
-      diff -u --label "/dev/null" --label "b/$f" /dev/null "$NEW/$f" || true
-    fi
-  done
-} > "$OUT/hermes-ui-artefacts.patch"
+if [ -n "$BASE_REF" ]; then
+  echo "— patchs git ($BASE_REF..main) —"
+  git format-patch -o "$OUT" "$BASE_REF..main"
+fi
 
-wc -l "$OUT/hermes-ui-artefacts.patch"
+echo "— bundle (historique complet de main) —"
+git bundle create "$OUT/hermes_ui-main.bundle" main 2>/dev/null
 
-# 2. Archive du projet complet (sans runtime : node_modules, .next, logs, base)
-cd "$NEW"
-tar -czf "$OUT/hermes-ui-avec-artefacts.tar.gz" \
-  --exclude='node_modules' \
-  --exclude='.next' \
-  --exclude='.git' \
-  --exclude='.zscripts/*.log' \
-  --exclude='.zscripts/dev.pid' \
-  --exclude='dev.log' \
-  --exclude='db/*.sqlite-shm' \
-  --exclude='db/*.sqlite-wal' \
-  --exclude='db/artifacts' \
-  --exclude='db/uploads' \
-  --exclude='.ref-hermes_ui' \
-  Caddyfile components.json eslint.config.mjs next.config.ts package.json postcss.config.mjs tailwind.config.ts tsconfig.json bun.lock \
-  prisma public src mini-services scripts examples tests upload/benchmark-extracted db/download-readme 2>/dev/null \
-  || tar -czf "$OUT/hermes-ui-avec-artefacts.tar.gz" \
-  --exclude='node_modules' --exclude='.next' --exclude='.git' \
-  Caddyfile components.json eslint.config.mjs next.config.ts package.json postcss.config.mjs tailwind.config.ts tsconfig.json bun.lock \
-  prisma public src mini-services scripts examples tests
+echo "— zip des fichiers seuls (branche publish) —"
+git archive --format=zip -o "$OUT/hermes_ui-a-televerser.zip" publish
 
-ls -lh "$OUT" | tail -4
-echo "OK"
+echo
+ls -lh "$OUT" | tail -6
+echo "OK — livrables dans $OUT"
