@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PwaRegister } from "@/components/pwa-register";
+import { SingleTabGuard } from "@/components/single-tab-guard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,6 +70,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <PwaRegister />
+          <SingleTabGuard />
         </ThemeProvider>
       </body>
     </html>

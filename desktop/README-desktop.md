@@ -34,8 +34,10 @@ pouvez le renommer, le déplacer, il fonctionnera.
 
 ## Ce que l'icône unique fait, dans l'ordre
 
-1. Si Hermes tourne déjà → ouvre simplement une nouvelle fenêtre navigateur
-   (aucune pile dupliquée).
+1. Si Hermes tourne déjà → le navigateur rouvre sur l’onglet existant :
+   celui-ci est actualisé (il charge la toute dernière version) et le
+   nouvel onglet se referme de lui-même — plus d’onglets qui s’empilent
+   (détail ci-dessous, « Un seul onglet »).
 2. Outils manquants → téléchargés et installés dans `tools\` (ordre de
    préférence : déjà sur le PATH système, sinon déjà dans `tools\`, sinon
    téléchargement). Node v22.20.0 (LTS) et Bun en zip officiels, Caddy en
@@ -78,6 +80,25 @@ pouvez le renommer, le déplacer, il fonctionnera.
 
 Sur arrêt brutal, la base est quand même sûre : SQLite est en mode WAL,
 **récupéré automatiquement au démarrage suivant** — aucune donnée perdue.
+
+### Un seul onglet
+
+Relancer l’icône pendant qu’Hermes est déjà ouvert n’empile plus les
+onglets : la page détecte sa jumelle, l’onglet EXISTANT se rafraîchit (il
+récupère la toute dernière version ; les conversations vivent dans la
+base, rien ne se perd) et le nouvel onglet affiche un bandeau discret puis
+tente de se fermer tout seul. Si le navigateur refuse de fermer une page
+ouverte par le système (protection normale), le bandeau indique de la
+fermer à la main ; le bouton « Garder cette page ouverte » la laisse
+utilisable — elle prendra automatiquement le relais si l’autre onglet
+disparaît.
+
+La toute première fois, l’ancien onglet peut être resté à l’ancienne
+version (sans la détection) : il ne comprendra pas le signal — fermez-le
+une fois à la main ; ensuite, tout est automatique. Les fenêtres
+installées en application (PWA, mode autonome) sont volontairement hors du
+dispositif : elles se comportent comme des applications, pas comme des
+onglets.
 
 ### Autres cas couverts à l'ouverture
 
