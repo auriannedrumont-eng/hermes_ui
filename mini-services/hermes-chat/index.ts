@@ -11,7 +11,8 @@
 //   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
 //   custom-instructions:get/set,
 //   memory:get/set-enabled/set-auto/set-notes,
-//   share:get/create/revoke, feedback:set
+//   share:get/create/revoke, feedback:set,
+//   system:renderCache/clearRenderCache (v2.4 — profils de rendu Chrome)
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
 //   stream:done, stream:error, message:appended, message:deleted,
@@ -101,7 +102,36 @@ import {
   artifactThumbPath,
   toWireArtifact,
 } from "./artifacts";
-import { chromeRenderer } from "./render";
+import { chromeRenderer, chromeHeadlessStatus, chromeProfileStats, clearChromeProfiles } from "./render";
+
+/** Révision git du dépôt déployé (null si installation sans git — zip
+ *  téléversé, bundle) : affichée telle quelle dans Paramètres → Système. */
+function readAppRevision(): string | null {
+  try {
+    const gitDir = join(import.meta.dir, "..", "..", ".git");
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const direct = /^[0-9a-f]{40}$/i.test(head) ? head : null;
+    if (direct) return direct.slice(0, 7);
+    const m = head.match(/^ref:\s*(\S+)/);
+    if (!m) return null;
+    try {
+      return readFileSync(join(gitDir, m[1]), "utf8").trim().slice(0, 7) || null;
+    } catch {
+      // Référence compactée (packed-refs) : sans équivalent ref lâche.
+      try {
+        const packed = readFileSync(join(gitDir, "packed-refs"), "utf8");
+        const line = packed.split("\n").find((l) => l.endsWith(" " + m[1]));
+        const sha = line?.split(" ")[0] ?? "";
+        return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : null;
+      } catch {
+        return null;
+      }
+    }
+  } catch {
+    return null;
+  }
+}
+const APP_REVISION = readAppRevision();
 
 // ── Vues « wire » fournisseurs & extensions (Paramètres v2.2) ──────────
 // Les secrets ne partent jamais : seules les vues masquées circulent.
@@ -761,6 +791,10 @@ function helloPayload() {
     // Taille réelle des instructions système du moteur démo (base + F-18 + F-19) ;
     // la gateway garde les siennes (le client retombe sur son estimation).
     systemPromptChars: connector.mode === "demo" ? systemPromptSize() : null,
+    // v2.4 (Paramètres → Système) : révision du dépôt et binaire de rendu,
+    // sondes réelles — jamais simulées.
+    appRevision: APP_REVISION,
+    chromeHeadless: chromeHeadlessStatus(),
     // Mémoire active (F-18) : le client affiche un état honnête.
     memoryChars: store.getSettingBool(MEMORY_ENABLED_KEY, true)
       ? (store.getSetting(MEMORY_NOTES_KEY) ?? "").trim().length
@@ -1165,6 +1199,20 @@ io.on("connection", (socket) => {
       io.emit("settings:changed", { key, value });
     }
   );
+
+  // ── Système (v2.4) : profils de rendu Chrome — sonde réelle ─────────
+  // Le cache des rendus, ce sont les profils « hermes-chrome-* » du tmp :
+  // régénérés à chaque rendu, purgés au démarrage du service. Jamais de
+  // données simulées — count/bytes viennent du système de fichiers.
+  socket.on("system:renderCache", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function") cb({ ...chromeProfileStats() });
+  });
+
+  socket.on("system:clearRenderCache", (cb?: (data: unknown) => void) => {
+    const { removed, kept } = clearChromeProfiles();
+    if (typeof cb === "function")
+      cb({ ...chromeProfileStats(), removed, kept });
+  });
 
   // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────
 
@@ -2608,7 +2656,10 @@ io.on("connection", (socket) => {
         if (typeof cb === "function") cb({ error: "Rien à compacter : la conversation est trop courte" });
         return;
       }
-      if (typeof cb === "function") cb({ ok: true, started: true });
+      // v2.4 : UN SEUL ack, À LA FIN (avec le compact). L'ack « started »
+      // intermédiaire a été retiré : socket.io n'accepte qu'un ack par
+      // requête (le second appel, même id, est ignoré par le client) —
+      // la compaction automatique de sendMessage repose sur cet ack final.
       try {
         const history = messages.map((m) => ({ role: m.role, content: m.content }));
         const summary = await connector.summarize(history);
@@ -2624,11 +2675,18 @@ io.on("connection", (socket) => {
         );
         const compact = compactInfoWire(conversationId);
         io.emit("conversation:compacted", { conversationId, compact });
+        if (typeof cb === "function") cb({ ok: true, compact, done: true });
       } catch (err) {
         console.warn(
           "[hermes-chat] compaction impossible :",
           err instanceof Error ? err.message : err
         );
+        if (typeof cb === "function") {
+          cb({
+            ok: false,
+            error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,
+          });
+        }
         socket.emit("stream:error", {
           conversationId,
           error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,

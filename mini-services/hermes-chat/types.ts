@@ -249,6 +249,10 @@ export interface ServerHello {
   gatewayUrl: string | null;
   /** Taille des instructions système (estimation honnête de la jauge). */
   systemPromptChars?: number | null;
+  /** Révision git du dépôt déployé (null = installation sans git). v2.4. */
+  appRevision?: string | null;
+  /** Binaire chrome-headless-shell présent ou absent (sonde réelle). v2.4. */
+  chromeHeadless?: "present" | "absent";
 }
 
 // ── Fournisseurs & clés (chantier « Paramètres v2.2 ») ─────────────────

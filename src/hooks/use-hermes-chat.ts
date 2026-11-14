@@ -12,6 +12,7 @@ import {
   SYSTEM_PROMPT_ESTIMATE,
   type ContextRow,
 } from "@/lib/tokens";
+import { shouldAutoCompact, clampCompactThreshold } from "@/lib/compaction";
 import type {
   Artifact,
   Attachment,
@@ -113,6 +114,15 @@ export function useHermesChat() {
   const [compactInfo, setCompactInfo] = useState<CompactInfo | null>(null);
   /** Compaction en cours (synthèse LLM côté service). */
   const [compacting, setCompacting] = useState(false);
+  /** Miroir ref de `compacting` (garde anti-double-tour immédiate, v2.4). */
+  const compactingRef = useRef(false);
+  /** Dernière base de contexte connue (v2.4 — décision de résumé automatique
+   *  au moment d'envoyer ; synchro par effet après chaque rendu). */
+  const contextBaseRef = useRef<{
+    rows: ContextRow[];
+    historyCount: number;
+    windowTokens: number;
+  } | null>(null);
   // ── Prompt système de la conversation active (F-11) ─────────────────
   /** Prompt actif de la conversation ouverte (null si aucun) — suit le bus
    *  `system-prompt:changed` du service ; la page lit/écrit via le hook dédié. */
@@ -263,6 +273,9 @@ export function useHermesChat() {
             next.seed = typeof value === "number" ? value : undefined;
           return next;
         });
+      } else if (key === "hermes.tools.web") {
+        // v2.4 : appliqué par un profil — la bascule du composer suit en direct.
+        setWebSearchState(value === true);
       }
     });
   }, []);
@@ -941,10 +954,64 @@ export function useHermesChat() {
     }
   }, []);
 
+  /** v2.4 — déclenche la compaction et attend l'ack FINAL du service
+   *  (contract v2.4 : {ok:true, compact, done} à la fin, {ok:false, error}
+   *  en échec ; l'ack « started » initial est ignoré). Best effort : en cas
+   *  d'échec ou de timeout (60 s), le tour part quand même — le service
+   *  retombera sur l'historique récent (limite 30 entrées), comme avant. */
+  const autoCompactBeforeSend = useCallback(
+    (conversationId: string) =>
+      new Promise<void>((resolve) => {
+        const socket = getSocket();
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          compactingRef.current = false;
+          setCompacting(false);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          toast({
+            title: "Résumé automatique lent",
+            description: "Le tour part sans attendre la fin du résumé.",
+          });
+          finish();
+        }, 60_000);
+        compactingRef.current = true;
+        setCompacting(true);
+        socket.emit("conversation:compact", { conversationId }, (res: {
+          ok?: boolean;
+          done?: boolean;
+          started?: boolean;
+          error?: string;
+        } = {}) => {
+          if (res?.done) {
+            toast({
+              title: "Résumé automatique créé",
+              description: "La conversation continue, allégée en tête de session.",
+            });
+            finish();
+          } else if (res && (res.ok === false || res.error)) {
+            toast({
+              title: "Résumé automatique impossible",
+              description: res.error ?? "Le tour part sur l'historique récent.",
+              variant: "destructive",
+            });
+            finish();
+          }
+          // started (ok:true) : la compaction tourne — on attend la fin.
+        });
+      }),
+    [toast]
+  );
+
   const sendMessage = useCallback(
     async (text: string, attachments: Attachment[] = []) => {
       const content = text.trim();
-      if ((!content && attachments.length === 0) || streaming) return;
+      if ((!content && attachments.length === 0) || streaming || compactingRef.current)
+        return;
 
       let conversationId = activeIdRef.current;
       if (!conversationId) {
@@ -965,6 +1032,32 @@ export function useHermesChat() {
       setMessages((prev) => [...prev, optimistic]);
 
       const socket = getSocket();
+
+      // v2.4 — conversations longues : résumé automatique avant le tour.
+      // Même mesure que la jauge du composer (base du tour + brouillon) contre
+      // la fenêtre du modèle. Le résumé part sur l'historique SANS ce message
+      // (il n'est pas encore en base) — le service l'ajoutera après.
+      const base = contextBaseRef.current;
+      if (base) {
+        const draftTokens = estimateTokens(content);
+        const usedTokens =
+          base.rows.reduce((acc, r) => acc + r.tokens, 0) + draftTokens;
+        if (
+          shouldAutoCompact({
+            enabled:
+              readClientSetting<boolean>("hermes.compaction.auto") === true,
+            thresholdPct: clampCompactThreshold(
+              readClientSetting<number>("hermes.compaction.threshold")
+            ),
+            windowTokens: base.windowTokens,
+            usedTokens,
+            messageCount: base.historyCount,
+          })
+        ) {
+          await autoCompactBeforeSend(conversationId);
+        }
+      }
+
       // F-17 : mode comparaison — un message, deux modèles, deux réponses.
       const pair = activeComparePair;
       socket.emit(
@@ -992,7 +1085,7 @@ export function useHermesChat() {
         }
       );
     },
-    [newConversation, streaming, activeComparePair]
+    [newConversation, streaming, activeComparePair, autoCompactBeforeSend]
   );
 
   const stopGeneration = useCallback(() => {
@@ -1466,6 +1559,18 @@ export function useHermesChat() {
     };
   }, [models, selectedModel, serverInfo, messages, compactInfo, promptInfo]);
 
+  // v2.4 — miroir ref de la base de contexte (décision de résumé automatique
+  // dans sendMessage, lecture fraiche au moment du clic).
+  useEffect(() => {
+    contextBaseRef.current = contextBase
+      ? {
+          rows: contextBase.rows,
+          historyCount: contextBase.historyCount,
+          windowTokens: contextBase.windowTokens,
+        }
+      : null;
+  }, [contextBase]);
+
   /** Peut-on compacter : conversation ouverte, ≥ 2 messages, tour au repos. */
   const canCompact = Boolean(activeId) && messages.length >= 2 && !streaming;
 
@@ -1522,6 +1627,10 @@ export function useHermesChat() {
     mode: (serverInfo?.mode ?? null) as GatewayMode | null,
     serverModel: serverInfo?.model ?? null,
     serverVersion: serverInfo?.version ?? null,
+    // v2.4 (Paramètres → Système) — sondes réelles du hello.
+    serverRevision: serverInfo?.appRevision ?? null,
+    chromeHeadless: serverInfo?.chromeHeadless ?? null,
+    gatewayUrl: serverInfo?.gatewayUrl ?? null,
     conversations,
     projects,
     activeId,

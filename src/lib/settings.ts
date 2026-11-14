@@ -125,6 +125,65 @@ export const HERMES_SETTINGS: SettingDef[] = [
     scope: "client",
     category: "Agent Hermes",
   },
+  // ── Conversations longues (v2.4) : résumé automatique avant le tour ──
+  {
+    key: "hermes.compaction.auto",
+    type: "boolean",
+    default: false,
+    label: "Résumé automatique",
+    description:
+      "Quand la conversation approche de la limite de la fenêtre, Hermes la " +
+      "résume et poursuit — rien n'est coupé.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.compaction.threshold",
+    type: "number",
+    default: 80,
+    label: "Seuil du résumé",
+    description:
+      "Déclenche le résumé à ce niveau de remplissage de la fenêtre (50 à 95 %). " +
+      "Plus haut : des conversations plus longues avant le résumé, au prix d'un " +
+      "coût par message plus élevé.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  // ── Clés internes du hook — au registre pour être réellement persistées ──
+  // Correctif v2.4 : hermes.tools.web (F-09) et hermes.compare.models (F-17)
+  // étaient écrits via writeClientSetting, qui ignore silencieusement les clés
+  // hors registre — la persistance documentée ne fonctionnait pas (réglages
+  // perdus au rechargement). Aucune ligne d'interface ne les liste (pannes
+  // du volet hardcoded, cf. InterfacePane).
+  {
+    key: "hermes.tools.web",
+    type: "boolean",
+    default: false,
+    label: "Recherche web du tour",
+    description:
+      "Bascule « Web » du composer — les résultats Tavily/Exa sont injectés " +
+      "dans le contexte du tour (interne, F-09/F-12).",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.compare.models",
+    type: "string",
+    default: "[]",
+    label: "Paire de comparaison",
+    description: "Paire [a, b] mémorisée du mode comparaison (interne, F-17).",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.profiles.applied",
+    type: "string",
+    default: null,
+    label: "Profil appliqué",
+    description: "Id du dernier profil appliqué en un clic (interne, v2.4).",
+    scope: "client",
+    category: "Agent Hermes",
+  },
 ];
 
 // ── Réglages propres au fork ───────────────────────────────────────────

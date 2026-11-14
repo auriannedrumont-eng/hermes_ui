@@ -5,12 +5,11 @@
 // simples sous les libellés.
 //
 // Sections livrées : Interface (registres client, effet immédiat),
-// Modèles (catalogue vivant du service), Fournisseurs / Clés de services
-// (porte-clés, test réel), Extensions (dépôts GitHub + serveurs) et
-// Hermes (prompt système : bibliothèque de presets + instructions
-// personnalisées globales, F-11 / F-19). Les autres sections moteur
-// (Outils, Skills, Profils, Système) affichent leur structure cible
-// sans données simulées (v2.3+).
+// Modèles (catalogue vivant du service + tarifs), Fournisseurs / Clés de
+// services (porte-clés, test réel), Extensions (dépôts GitHub + serveurs),
+// Hermes (presets + instructions + mémoire + conversations longues) et
+// — v2.4 — Outils, Skills, Profils, Système (statuts et sondes réels,
+// jamais simulés ; le moteur reste verrouillé « gateway »).
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -64,6 +63,10 @@ import type { ProvidersApi } from "@/hooks/use-providers";
 import { ProvidersSection } from "@/components/settings/providers-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
 import { HermesSection } from "@/components/settings/hermes-section";
+import { ToolsSection } from "@/components/settings/tools-section";
+import { SkillsSection } from "@/components/settings/skills-section";
+import { ProfilesSection } from "@/components/settings/profiles-section";
+import { SystemSection } from "@/components/settings/system-section";
 import { cn } from "@/lib/utils";
 
 // ── Libellés FR des valeurs brutes du registre (présentation seule) ──
@@ -128,6 +131,12 @@ interface SettingsPanelProps {
   };
   /** Version du service (hello) — pied du rail. */
   serverVersion?: string | null;
+  /** v2.4 (section Système) — sondes réelles du hello. */
+  appRevision?: string | null;
+  chromeHeadless?: "present" | "absent" | null;
+  gatewayUrl?: string | null;
+  /** v2.4 (section Outils) — même calcul que la bascule « Web » du composer. */
+  webSearchAvailable?: boolean;
 }
 
 // ── Contrôle segmenté (fond muted, pilule active en relief) ──────────
@@ -197,52 +206,6 @@ function SettingRow({
       </div>
       {children}
     </div>
-  );
-}
-
-// ── Section « à venir » (structure cible, aucune donnée simulée) ─────
-function SoonPane({
-  title,
-  sub,
-  items,
-}: {
-  title: string;
-  sub: string;
-  items: { name: string; desc: string }[];
-}) {
-  return (
-    <section>
-      <h1 className="text-[19px] font-bold tracking-tight">{title}</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
-        {sub}
-      </p>
-      <div className="rounded-[14px] border border-dashed border-border px-4 py-1">
-        {items.map((it, i) => (
-          <div
-            key={it.name}
-            className={cn(
-              "flex items-center gap-3 py-[11px]",
-              i > 0 && "border-t border-border/60"
-            )}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold">{it.name}</div>
-              <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
-                {it.desc}
-              </div>
-            </div>
-            <span className="flex-none rounded-full bg-amber-500/12 px-2 py-0.5 text-[9.5px] font-semibold text-amber-600 dark:text-amber-500">
-              à venir
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-3 text-[11.5px] leading-relaxed text-muted-foreground">
-        Le contenu de cette section sera piloté par le schéma découvert du moteur
-        (<code className="rounded bg-muted px-1 font-mono text-[10px]">settings:schema</code>) —
-        en mode démo, le mini-service en simulera la surface complète (FORK.md §7.4).
-      </p>
-    </section>
   );
 }
 
@@ -598,6 +561,10 @@ export function SettingsPanel({
   promptsApi,
   memoryApi,
   serverVersion,
+  appRevision = null,
+  chromeHeadless = null,
+  gatewayUrl = null,
+  webSearchAvailable = false,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>("interface");
 
@@ -614,6 +581,11 @@ export function SettingsPanel({
 
   const isDemo = connected && mode === "demo";
   const extUpdate = api.extensions.some((e) => e.updateAvailable);
+
+  // Navigation interne du volet (liens croisés des sections v2.4).
+  const goto = (id: string) => {
+    if (SECTIONS.some((s) => s.id === id)) setSection(id as SectionId);
+  };
 
   const pane = () => {
     switch (section) {
@@ -641,53 +613,29 @@ export function SettingsPanel({
             onSetMemoryEnabled={memoryApi.setEnabled}
             onSetMemoryAuto={memoryApi.setAuto}
             onSaveMemoryNotes={memoryApi.saveNotes}
+            models={models}
+            selectedModel={selectedModel}
           />
         );
       case "outils":
         return (
-          <SoonPane
-            title="Outils"
-            sub="Ce qu'Hermes peut faire, outil par outil — les changements s'appliqueront au prochain message."
-            items={[
-              { name: "Recherche & lecture", desc: "recherche web (via Tavily, Exa…), navigateur, vision" },
-              { name: "Création", desc: "génération d'images, vidéo, synthèse vocale" },
-              { name: "Exécution & fichiers", desc: "terminal, fichiers, exécution de code" },
-            ]}
+          <ToolsSection
+            webSearchAvailable={webSearchAvailable}
+            onNavigate={goto}
           />
         );
       case "skills":
-        return (
-          <SoonPane
-            title="Skills"
-            sub="Des procédures réutilisables, cherchables, éditables dans ce volet."
-            items={[
-              { name: "Bibliothèque de skills", desc: "recherche, sources (dépôts importés ou locaux), activation" },
-              { name: "Éditeur intégré", desc: "chaque skill s'ouvre et s'enregistre ici — effet au rechargement" },
-              { name: "Contrôle qualité", desc: "dernière vérification et source, en langage clair" },
-            ]}
-          />
-        );
+        return <SkillsSection onNavigate={goto} />;
       case "profils":
-        return (
-          <SoonPane
-            title="Profils"
-            sub="Des préréglages complets — modèle, effort, permissions, skills — applicables en un clic."
-            items={[
-              { name: "Éditeur de profils", desc: "nom, modèle par défaut, effort, permissions, sélection de skills" },
-              { name: "Appliquer / Dupliquer", desc: "effet immédiat via le bus client, sans dépendance moteur" },
-            ]}
-          />
-        );
+        return <ProfilesSection />;
       case "systeme":
         return (
-          <SoonPane
-            title="Système"
-            sub="Exécution, sauvegardes et mises à jour — moteur, interface, extensions."
-            items={[
-              { name: "Exécution", desc: "backend du terminal (local, docker, ssh), timeout, sandbox réseau" },
-              { name: "Sauvegardes", desc: "snapshot avant mise à jour (rapide, complète, off)" },
-              { name: "Mises à jour", desc: "moteur selon la gateway ; interface par recette git (FORK.md §10)" },
-            ]}
+          <SystemSection
+            mode={mode}
+            serverVersion={serverVersion ?? null}
+            appRevision={appRevision}
+            chromeHeadless={chromeHeadless}
+            gatewayUrl={gatewayUrl}
           />
         );
     }

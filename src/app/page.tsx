@@ -499,7 +499,8 @@ export default function HermesWebPage() {
       />
 
       {/* Volet Paramètres v4 (860 px, rail) — Interface, Modèles,
-          Fournisseurs, Clés de services, Extensions, Hermes… */}
+          Fournisseurs, Clés de services, Extensions, Hermes, Outils,
+          Skills, Profils, Système… */}
       <SettingsPanel
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -512,6 +513,10 @@ export default function HermesWebPage() {
         promptsApi={promptsApi}
         memoryApi={memoryApi}
         serverVersion={chat.serverVersion}
+        appRevision={chat.serverRevision}
+        chromeHeadless={chat.chromeHeadless}
+        gatewayUrl={chat.gatewayUrl}
+        webSearchAvailable={webSearchAvailable}
       />
 
       {/* Sheet « Prompt système de la conversation » (F-11) */}

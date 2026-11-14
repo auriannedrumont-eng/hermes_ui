@@ -14,6 +14,7 @@ import {
   writeFileSync,
   unlinkSync,
   rmSync,
+  statSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -319,21 +320,73 @@ export class ChromeRenderer {
   }
 }
 
-/** Nettoie les profils chrome orphelins de ce service (best effort). */
-try {
-  const tmp = tmpdir();
-  for (const dir of readdirSync(tmp)) {
-    if (dir.startsWith("hermes-chrome-")) {
-      try {
-        rmSync(join(tmp, dir), { recursive: true, force: true, maxRetries: 0 });
-      } catch {
-        /* profil encore utilisé par un chrome vivant */
-      }
+/** Profils de rendu « hermes-chrome-* » déposés par ce service dans le tmp. */
+function listChromeProfiles(): string[] {
+  try {
+    const tmp = tmpdir();
+    return readdirSync(tmp)
+      .filter((d) => d.startsWith("hermes-chrome-"))
+      .map((d) => join(tmp, d));
+  } catch {
+    return [];
+  }
+}
+
+/** Sonde du binaire de rendu (Paramètres → Système, hello aux clients). */
+export function chromeHeadlessStatus(): "present" | "absent" {
+  for (const c of CHROME_CANDIDATES) {
+    if (c && existsSync(c)) return "present";
+  }
+  return "absent";
+}
+
+/** Place occupée par les profils de rendu (affichée avant/nettoyage après). */
+export function chromeProfileStats(): { count: number; bytes: number } {
+  let count = 0;
+  let bytes = 0;
+  for (const dir of listChromeProfiles()) {
+    count += 1;
+    try {
+      const walk = (p: string) => {
+        for (const ent of readdirSync(p, { withFileTypes: true })) {
+          const full = join(p, ent.name);
+          if (ent.isDirectory()) walk(full);
+          else {
+            try {
+              bytes += statSync(full).size;
+            } catch {
+              /* fichier parti de sous l'appel */
+          }
+          }
+        }
+      };
+      walk(dir);
+    } catch {
+      /* profil disparu de sous l'appel */
     }
   }
-} catch {
-  /* /tmp illisible — sans conséquence */
+  return { count, bytes };
 }
+
+/** Nettoie les profils chrome orphelins de ce service (best effort). */
+export function clearChromeProfiles(): { removed: number; kept: number } {
+  let removed = 0;
+  let kept = 0;
+  for (const dir of listChromeProfiles()) {
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 0 });
+      removed += 1;
+    } catch {
+      kept += 1; /* profil encore utilisé par un chrome vivant */
+    }
+  }
+  return { removed, kept };
+}
+
+// Au chargement du module : purge des profils de l'incarnation précédente
+// (hot-reload, redémarrage) — un chrome orphelin ne doit jamais verrouiller
+// le profil du suivant.
+clearChromeProfiles();
 
 /** Singleton du service. */
 export const chromeRenderer = new ChromeRenderer();

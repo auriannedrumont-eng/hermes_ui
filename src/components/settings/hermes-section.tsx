@@ -1,16 +1,24 @@
 // Section « Hermes » du volet Paramètres v4 — F-11 / F-19 / F-18 livrés :
 // bibliothèque de presets de prompt système (éditeur intégré), instructions
-// personnalisées globales et mémoire utilisateur (consultable, éditable,
-// effaçable). Les autres chantiers Hermes (fichiers .md moteur, compaction)
-// restent « à venir » en bas de section — ils dépendent de la découverte moteur.
+// personnalisées globales, mémoire utilisateur (consultable, éditable,
+// effaçable) et — v2.4 — conversations longues (résumé automatique avec
+// seuil, fenêtre suivie). Les fichiers .md moteur et le comportement
+// (initiatives) restent « à venir » — ils dépendent de la découverte moteur.
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Pencil, Sparkle, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, MessagesSquare, Pencil, Sparkle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { MemoryCard } from "@/components/settings/memory-card";
-import type { MemoryState, SystemPromptPreset } from "@/lib/chat-types";
+import type { MemoryState, ModelOption, SystemPromptPreset } from "@/lib/chat-types";
+import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
+import { contextWindowOf, formatK } from "@/lib/tokens";
+import {
+  COMPACT_THRESHOLD_MAX,
+  COMPACT_THRESHOLD_MIN,
+  clampCompactThreshold,
+} from "@/lib/compaction";
 
 interface HermesSectionProps {
   presets: SystemPromptPreset[];
@@ -24,6 +32,9 @@ interface HermesSectionProps {
   onSetMemoryEnabled: (enabled: boolean) => Promise<boolean>;
   onSetMemoryAuto: (autoLearn: boolean) => Promise<boolean>;
   onSaveMemoryNotes: (value: string) => Promise<boolean>;
+  /** v2.4 — fenêtre du modèle sélectionné (carte Conversations longues). */
+  models: ModelOption[];
+  selectedModel: string | null;
 }
 
 /** Éditeur d'un preset (création ou modification) — ligne dépliable du volet. */
@@ -79,6 +90,134 @@ function PresetEditor({
   );
 }
 
+/** Carte « Conversations longues » (v2.4) — résumé automatique avec seuil.
+ *  Le résumé lui-même est réel (événement conversation:compact existant) ;
+ *  la décision appartient au client au moment d'envoyer (src/lib/compaction). */
+function ConversationsLonguesCard({
+  models,
+  selectedModel,
+}: {
+  models: ModelOption[];
+  selectedModel: string | null;
+}) {
+  // Réglages suivis en direct via le bus (même discipline que InterfacePane).
+  const [rev, setRev] = useState(0);
+  useEffect(() => onSettingsChanged(() => setRev((r) => r + 1)), []);
+
+  const { auto, threshold } = useMemo(
+    () => ({
+      auto: readClientSetting<boolean>("hermes.compaction.auto") === true,
+      threshold: clampCompactThreshold(
+        readClientSetting<number>("hermes.compaction.threshold")
+      ),
+    }),
+    [rev]
+  );
+
+  const model = models.find((m) => m.id === selectedModel) ?? null;
+  const { windowTokens, estimated } = contextWindowOf(model);
+
+  return (
+    <div
+      className={cn(
+        "rounded-[14px] border px-4 py-3 transition-colors",
+        auto ? "border-border" : "border-border/60"
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[13.5px] font-semibold">
+            <MessagesSquare className="size-[14px] text-hermes" strokeWidth={2.2} />
+            Conversations longues
+          </div>
+          <div className="mt-px text-[12px] leading-snug text-muted-foreground">
+            Quand la conversation approche de la limite, Hermes la résume et
+            poursuit — rien n&apos;est coupé.
+          </div>
+        </div>
+        {/* Interrupteur résumé automatique */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={auto}
+          aria-label={auto ? "Couper le résumé automatique" : "Activer le résumé automatique"}
+          title={
+            auto
+              ? "Couper le résumé automatique"
+              : "Activer le résumé automatique"
+          }
+          onClick={() =>
+            writeClientSetting("hermes.compaction.auto", !auto)
+          }
+          className={cn(
+            "relative h-[22px] w-[38px] cursor-pointer rounded-full transition-colors",
+            auto ? "bg-hermes" : "bg-muted"
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-[2px] size-[18px] rounded-full bg-white shadow-sm transition-all",
+              auto ? "left-[18px]" : "left-[2px]"
+            )}
+          />
+        </button>
+      </div>
+
+      {/* Fenêtre du modèle : information suivie (jamais réglée à la main) */}
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-[10px] border border-border/70 bg-muted/30 px-3 py-2">
+        <span className="min-w-0">
+          <span className="block text-[12.5px] font-medium">Fenêtre du modèle</span>
+          <span className="mt-px block text-[11px] leading-snug text-muted-foreground">
+            Elle suit le modèle choisi (section Modèles) — détectée automatiquement,
+            aucune valeur à régler à la main.
+          </span>
+        </span>
+        <span className="flex-none text-[12px] font-semibold tabular-nums text-muted-foreground">
+          {formatK(windowTokens)} jetons
+          {estimated ? " (estimée)" : ""}
+        </span>
+      </div>
+
+      {/* Seuil : visible seulement quand le résumé automatique est actif */}
+      {auto ? (
+        <div className="mt-2 rounded-[10px] border border-border/70 bg-muted/30 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[12.5px] font-medium">Seuil du résumé</span>
+            <span className="text-[12px] font-semibold tabular-nums text-hermes">
+              {threshold} %
+            </span>
+          </div>
+          <input
+            type="range"
+            min={COMPACT_THRESHOLD_MIN}
+            max={COMPACT_THRESHOLD_MAX}
+            step={5}
+            value={threshold}
+            onChange={(e) =>
+              writeClientSetting(
+                "hermes.compaction.threshold",
+                clampCompactThreshold(Number(e.target.value))
+              )
+            }
+            aria-label="Seuil du résumé automatique"
+            className="mt-2 w-full accent-[var(--hermes)]"
+          />
+          <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            Déclenche le résumé à ce niveau de remplissage de la fenêtre. Plus
+            haut : des conversations plus longues avant le résumé, au prix d&apos;un
+            coût par message plus élevé.
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-2 text-[11px] leading-snug text-muted-foreground">
+        Vous pouvez aussi lancer le résumé à la main : jauge de contexte (anneau
+        de la barre de saisie) → « Compacter ».
+      </div>
+    </div>
+  );
+}
+
 export function HermesSection({
   presets,
   customInstructions,
@@ -91,6 +230,8 @@ export function HermesSection({
   onSetMemoryEnabled,
   onSetMemoryAuto,
   onSaveMemoryNotes,
+  models,
+  selectedModel,
 }: HermesSectionProps) {
   // Éditeur ouvert : preset existant (id) ou création (null)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -212,6 +353,14 @@ export function HermesSection({
         />
       </div>
 
+      {/* ── Conversations longues (v2.4) ──────────────────────────── */}
+      <div className="mt-4">
+        <ConversationsLonguesCard
+          models={models}
+          selectedModel={selectedModel}
+        />
+      </div>
+
       {/* ── Bibliothèque de presets (F-11) ───────────────────────────── */}
       <div className="mt-6">
         <div className="flex items-center justify-between">
@@ -303,12 +452,12 @@ export function HermesSection({
       <div className="mt-6 rounded-[14px] border border-dashed border-border px-4 py-1">
         {[
           {
-            name: "Fichiers .md",
-            desc: "SOUL.md, AGENTS.md, AGENTS.override.md, CLAUDE.md — éditables",
+            name: "Fichiers .md moteur",
+            desc: "SOUL.md, AGENTS.md… — éditables ici, effet au rechargement du moteur",
           },
           {
-            name: "Compaction & comportement",
-            desc: "seuils de résumé, approbations d'écriture mémoire",
+            name: "Comportement du moteur",
+            desc: "initiatives de fond, tâches planifiées, délégation, historique des sessions",
           },
         ].map((it, i) => (
           <div
