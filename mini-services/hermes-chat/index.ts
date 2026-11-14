@@ -17,7 +17,7 @@
 //   stream:done, stream:error, message:appended, message:deleted,
 //   conversations:created, conversations:pinned,
 //   artifact:created, artifact:delta, artifact:updated,
-//   settings:changed, providers:changed, extensions:changed,
+//   settings:changed, providers:changed, models:changed, extensions:changed,
 //   system-prompt:changed, system-prompts:changed, custom-instructions:changed,
 //   share:changed, feedback:changed,
 //   memory:changed
@@ -37,6 +37,7 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { Store, type ArtifactRow, type ExtensionRow, type KeyRow, type ProviderRow } from "./store";
 import { HermesConnector } from "./hermes-connector";
+import { createLlmPool } from "./llm-pool";
 import {
   buildSnapshot,
   generateShareToken,
@@ -140,7 +141,11 @@ function extensionsWire(): ExtensionView[] {
 }
 
 function broadcastProviders(): void {
+  // v2.3 : les listes vivantes dépendent du porte-clés — invalidation des
+  // caches puis signal aux clients (le hook recharge models:list).
+  connector.invalidateModels();
   io.emit("providers:changed", { providers: providersWire() });
+  io.emit("models:changed", {});
 }
 
 function broadcastExtensions(): void {
@@ -662,6 +667,9 @@ io.use((socket, next) => {
 
 const store = new Store();
 const connector = new HermesConnector();
+// v2.3 : le moteur consomme le porte-clés du volet Paramètres — en mode
+// démo, les tours partent sur l'API du fournisseur à clé active.
+connector.attachPool(createLlmPool(store));
 
 // Presets de départ semés une seule fois si la bibliothèque est vide (F-11).
 store.seedPromptPresetsIfNeeded(SEED_PRESETS);
@@ -1999,7 +2007,12 @@ io.on("connection", (socket) => {
       contentAcc = result.content || contentAcc;
       reasoningAcc = result.reasoning || reasoningAcc;
       if (result.model) {
-        usedModel = connector.mode === "demo" ? `${result.model} (démo)` : result.model;
+        usedModel =
+          result.engine === "pool" && result.provider
+            ? `${result.model} · ${result.provider}`
+            : connector.mode === "demo"
+              ? `${result.model} (démo)`
+              : result.model;
       }
       if (lastSent < contentAcc.length) {
         socket.emit("stream:delta", {

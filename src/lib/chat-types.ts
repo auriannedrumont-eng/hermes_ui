@@ -45,7 +45,7 @@ export const GENERIC_EFFORTS = ["off", "low", "medium", "high", "max"];
 export interface ModelsResult {
   models: ModelOption[];
   defaultModel: string | null;
-  source: "gateway" | "catalogue";
+  source: "gateway" | "catalogue" | "providers";
 }
 
 export interface ChatMessage {

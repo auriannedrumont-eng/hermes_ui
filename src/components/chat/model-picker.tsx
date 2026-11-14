@@ -49,7 +49,7 @@ function readFavoriteIds(): string[] {
 interface ModelPickerProps {
   models: ModelOption[];
   selectedModel: string | null;
-  source: "gateway" | "catalogue" | null;
+  source: "gateway" | "catalogue" | "providers" | null;
   mode: "gateway" | "demo" | null;
   disabled?: boolean;
   /** Variante compacte (dans le composer). */
@@ -230,10 +230,11 @@ export function ModelPicker({
   );
   const favoriteIdSet = useMemo(() => new Set(favorites.map((m) => m.id)), [favorites]);
 
-  // ── Groupes : par fournisseur en mode gateway, liste à plat sinon ──────
+  // ── Groupes : par fournisseur en gateway ou en pool vivant (v2.3) ──
   const grouped = useMemo(() => {
     const rest = filtered.filter((m) => !favoriteIdSet.has(m.id));
-    if (source === "gateway" && mode === "gateway") {
+    const byProvider = (source === "gateway" && mode === "gateway") || source === "providers";
+    if (byProvider) {
       const groups = new Map<string, ModelOption[]>();
       for (const m of rest) {
         const k = m.provider || "Gateway";
@@ -409,7 +410,9 @@ export function ModelPicker({
             {providers.size > 1 ? " fournisseurs — " : " fournisseur — "}
             {source === "gateway" && mode === "gateway"
               ? "modèles exposés par la gateway Hermes"
-              : "catalogue Hermes (Nous Research)"}
+              : source === "providers"
+                ? "modèles vivants de vos clés — Paramètres → Fournisseurs & clés"
+                : "catalogue Hermes — ajoutez une clé pour des modèles vivants"}
           </p>
 
           {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné */}

@@ -43,7 +43,7 @@ export interface ModelOption {
 export interface ModelsResult {
   models: ModelOption[];
   defaultModel: string;
-  source: "gateway" | "catalogue";
+  source: "gateway" | "catalogue" | "providers";
 }
 
 export interface ChatMessage {

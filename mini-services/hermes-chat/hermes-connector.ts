@@ -8,6 +8,7 @@
 import WebSocket from "ws";
 import { DemoEngine } from "./demo-engine";
 import { catalogModelsResult } from "./models";
+import type { LlmPoolApi, PoolTurnResult, TurnUsage } from "./llm-pool";
 import type { Attachment, GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./demo-engine";
 
@@ -80,12 +81,49 @@ function parseModelOptions(data: any): ModelOption[] {
   return out;
 }
 
+/** Erreur du LLM intégré rendue pédagogique : sur un poste sans bac à sable
+ *  Z.ai, le SDK échoue faute de .z-ai-config — on oriente vers les clés. */
+function friendlyDemoError(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/z-ai-config|Configuration file not found/i.test(msg)) {
+    return new Error(
+      "Le moteur de démo intégré n'est pas disponible sur cette machine (fichier .z-ai-config absent). " +
+        "Ouvrez Paramètres → Fournisseurs & clés et ajoutez une clé : les réponses viendront alors de l'API du fournisseur."
+    );
+  }
+  return err instanceof Error ? err : new Error(msg);
+}
+
+/** Résultat d'un tour, augmenté du moteur qui l'a produit. */
+export interface TurnOutcome {
+  content: string;
+  reasoning: string;
+  model: string;
+  /** Moteur qui a répondu : pool de clés fournisseurs, LLM intégré (SDK), ou gateway. */
+  engine?: "pool" | "sdk" | "gateway";
+  /** Fournisseur du pool (p. ex. « z.ai ») quand engine = "pool". */
+  provider?: string;
+  /** Jetons consommés par le tour (F-21), quand l'API les renvoie. */
+  usage?: TurnUsage;
+}
+
 export class HermesConnector {
   mode: GatewayMode = "demo";
   gatewayUrl: string | null = GATEWAY_URL;
   model = "Hermes 4 70B (démo)";
   private demo = new DemoEngine();
   private modelsCache: ModelsResult | null = null;
+  private pool: LlmPoolApi | null = null;
+
+  /** Branche le pool de clés fournisseurs (v2.3) — appelé par le service. */
+  attachPool(pool: LlmPoolApi): void {
+    this.pool = pool;
+  }
+
+  /** Le porte-clés a changé : les listes vivantes sont invalidées. */
+  invalidateModels(): void {
+    this.pool?.invalidate();
+  }
 
   async init(): Promise<void> {
     if (!GATEWAY_URL) {
@@ -97,11 +135,16 @@ export class HermesConnector {
     if (reachable) this.model = "hermes (gateway)";
   }
 
-  /** Liste des modèles : depuis la gateway si joignable, sinon le catalogue. */
+  /** Liste des modèles : gateway si joignable, sinon pool vivant, sinon catalogue. */
   async listModels(): Promise<ModelsResult> {
     if (this.mode === "gateway" && GATEWAY_URL) {
       const fromGateway = await this.fetchGatewayModels();
       if (fromGateway && fromGateway.models.length > 0) return fromGateway;
+    }
+    // Mode démo : les fournisseurs à clé active exposent leurs vrais modèles.
+    if (this.pool) {
+      const pooled = await this.pool.listModels();
+      if (pooled && pooled.models.length > 0) return pooled;
     }
     if (this.modelsCache?.source === "catalogue") return this.modelsCache;
     const result = catalogModelsResult();
@@ -172,7 +215,7 @@ export class HermesConnector {
     });
   }
 
-  async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<{ content: string; reasoning: string; model: string }> {
+  async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<TurnOutcome> {
     if (this.mode === "gateway" && GATEWAY_URL) {
       try {
         return await this.runGatewayTurn(req, cb);
@@ -180,17 +223,47 @@ export class HermesConnector {
         cb.onStatus("Gateway Hermes injoignable — basculement en mode démo…");
       }
     }
-    const result = await this.demo.runTurn(req, cb);
-    const label = result.model || this.model;
-    this.model = `${label} (démo)`;
-    return { ...result, model: label };
+    // Pool de clés fournisseurs d'abord (v2.3). Une erreur du pool ne retombe
+    // PAS silencieusement sur le SDK : l'utilisatrice croirait parler au
+    // modèle sélectionné. Repli SDK uniquement quand aucun fournisseur actif
+    // n'existe (pool.runTurn → null).
+    if (this.pool) {
+      const pooled: PoolTurnResult | null = await this.pool.runTurn(req, cb);
+      if (pooled) {
+        this.model = `${pooled.model} · ${pooled.provider}`;
+        return {
+          content: pooled.content,
+          reasoning: pooled.reasoning,
+          model: pooled.model,
+          engine: "pool",
+          provider: pooled.provider,
+          usage: pooled.usage,
+        };
+      }
+    }
+    try {
+      const result = await this.demo.runTurn(req, cb);
+      const label = result.model || this.model;
+      this.model = `${label} (démo)`;
+      return { ...result, model: label, engine: "sdk" };
+    } catch (err) {
+      throw friendlyDemoError(err);
+    }
   }
 
-  /** Synthèse de compaction (moteur intégré, gateway sans état pour ce faire). */
+  /** Synthèse de compaction : pool si possible, LLM intégré sinon. */
   async summarize(
     history: { role: "user" | "assistant"; content: string }[]
   ): Promise<string> {
-    return this.demo.summarize(history);
+    if (this.pool) {
+      const pooled = await this.pool.summarize(history);
+      if (pooled) return pooled;
+    }
+    try {
+      return await this.demo.summarize(history);
+    } catch (err) {
+      throw friendlyDemoError(err);
+    }
   }
 
   // Protocole de tour Hermes (cf. gateway/session_api_turn.py) :
@@ -202,7 +275,7 @@ export class HermesConnector {
   private runGatewayTurn(
     req: TurnRequest,
     cb: TurnCallbacks
-  ): Promise<{ content: string; reasoning: string; model: string }> {
+  ): Promise<TurnOutcome> {
     return new Promise((resolve, reject) => {
       let settled = false;
       let content = "";
@@ -228,6 +301,7 @@ export class HermesConnector {
             content,
             reasoning,
             model: req.model || "hermes (gateway)",
+            engine: "gateway",
           });
       };
 

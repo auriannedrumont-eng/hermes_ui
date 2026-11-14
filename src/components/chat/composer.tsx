@@ -73,7 +73,7 @@ interface ComposerProps {
   /** Clé du brouillon (id de conversation ou "new"). */
   draftKey: string;
   models: ModelOption[];
-  modelsSource: "gateway" | "catalogue" | null;
+  modelsSource: "gateway" | "catalogue" | "providers" | null;
   /** F-17 — comparaison de modèles : état, paire choisie et actions. */
   compareEnabled: boolean;
   compareModels: { a: string | null; b: string | null };

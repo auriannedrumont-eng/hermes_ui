@@ -321,11 +321,14 @@ export function useHermesChat() {
     return [a, b] as [string, string];
   }, [compareEnabled, compareModels]);
 
-  /** Retrouve l'id d'un modèle depuis le libellé d'une réponse (« … (démo) »). */
+  /** Retrouve l'id d'un modèle depuis le libellé d'une réponse (« … (démo) »,
+   *  « glm-4.6 · z.ai » — v2.3 : le suffixe fournisseur est retiré). */
   const modelIdFromLabel = useCallback(
     (label?: string) => {
       if (!label) return null;
-      const clean = label.replace(/\s*\(démo\)$/, "");
+      const clean = label
+        .replace(/\s*\(démo\)$/, "")
+        .replace(/\s*·\s*[^·]+$/, "");
       return models.find((m) => m.label === clean)?.id ?? null;
     },
     [models]
@@ -746,6 +749,10 @@ export function useHermesChat() {
       );
     };
 
+    // v2.3 : le porte-clés a changé côté service (clé ajoutée/retirée/testée)
+    // — les listes vivantes sont rechargées, la sélection s'aligne dessus.
+    const onModelsChanged = () => fetchModels();
+
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("stream:start", onStreamStart);
@@ -785,6 +792,7 @@ export function useHermesChat() {
     socket.on("artifact:created", onArtifactCreated);
     socket.on("artifact:delta", onArtifactDelta);
     socket.on("artifact:updated", onArtifactUpdated);
+    socket.on("models:changed", onModelsChanged);
 
     if (socket.connected) onConnect();
 
@@ -817,6 +825,7 @@ export function useHermesChat() {
       socket.off("artifact:created", onArtifactCreated);
       socket.off("artifact:delta", onArtifactDelta);
       socket.off("artifact:updated", onArtifactUpdated);
+      socket.off("models:changed", onModelsChanged);
     };
   }, [refreshConversations, fetchProjects, fetchModels, fetchArtifacts]);
 

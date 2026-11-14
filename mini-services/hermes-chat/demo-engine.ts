@@ -7,6 +7,10 @@ import { readAttachmentDataUrl } from "./uploads";
 import { composeDemoSystemPrompt } from "./prompts";
 import type { Attachment, TurnSettings } from "./types";
 
+// Le pool de clés fournisseurs (llm-pool.ts) partage ces analyseurs :
+// même contrat SSE que le SDK, mêmes notes de pièces jointes — cf. les
+// `export function` correspondants plus bas.
+
 // Compose les instructions du tour démo (base + custom + conversation).
 export { composeDemoSystemPrompt as composeSystemPrompt };
 
@@ -81,7 +85,8 @@ function chunkToString(chunk: unknown): string {
   return JSON.stringify(chunk);
 }
 
-function parseSseLine(line: string): any | null {
+/** Analyse une ligne SSE « data: … » (partagée avec le pool de clés). */
+export function parseSseLine(line: string): any | null {
   if (!line.startsWith("data:")) return null;
   const payload = line.slice(5).trim();
   if (!payload || payload === "[DONE]") return null;
@@ -99,7 +104,7 @@ function formatBytes(n: number): string {
 }
 
 /** Note textuelle pour les pièces jointes non image (audio, vidéo, pdf, fichiers). */
-function attachmentNote(attachments: Attachment[]): string {
+export function attachmentNote(attachments: Attachment[]): string {
   const others = attachments.filter((a) => a.kind !== "image");
   if (!others.length) return "";
   const lines = others.map((a) => {
