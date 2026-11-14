@@ -70,6 +70,9 @@ export interface ChatMessage {
   // ── Comparaison de modèles (F-17) — réponse de la variante a ou b ──
   /** Variante du tour de comparaison (absent = message hors comparaison). */
   variant?: "a" | "b";
+  // ── Jetons & coût (F-21) — rempli quand l'API du fournisseur le renvoie ──
+  /** Jetons consommés par le tour (réels si fournis par l'API). */
+  usage?: { input?: number; output?: number; cost?: number };
   // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
   /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
   versions?: { group: string; index: number; count: number };

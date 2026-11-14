@@ -53,6 +53,13 @@ import {
   type Project,
   type SystemPromptPreset,
 } from "@/lib/chat-types";
+import {
+  PRICING_KEY,
+  type PricingMap,
+  parseModelLabel,
+} from "@/lib/pricing";
+import { useModelPricing } from "@/hooks/use-pricing";
+import { getSocket } from "@/lib/socket";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { ProvidersSection } from "@/components/settings/providers-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
@@ -398,6 +405,35 @@ function ModelesPane({
   const activeEffort =
     effort && effortOptions.some((o) => o.value === effort) ? effort : null;
 
+  // Tarifs (F-21) : déclarés ici, appliqués au coût des réponses.
+  const pricing = useModelPricing();
+  const [tarifModel, setTarifModel] = useState<string>("");
+  const [tarifInput, setTarifInput] = useState("");
+  const [tarifOutput, setTarifOutput] = useState("");
+
+  const savePricing = (next: PricingMap) => {
+    getSocket().emit("settings:set", {
+      key: PRICING_KEY,
+      value: JSON.stringify(next),
+    });
+  };
+  const parseFloatFr = (raw: string): number | null => {
+    const n = Number(raw.trim().replace(",", "."));
+    return raw.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const tarifIn = parseFloatFr(tarifInput);
+  const tarifOut = parseFloatFr(tarifOutput);
+  const canAdd = !!tarifModel && tarifIn !== null && tarifOut !== null;
+  const addTarif = () => {
+    if (!canAdd) return;
+    savePricing({ ...pricing, [tarifModel]: { input: tarifIn!, output: tarifOut! } });
+    setTarifModel("");
+    setTarifInput("");
+    setTarifOutput("");
+  };
+  const labelOf = (id: string) =>
+    models.find((m) => m.id === id)?.label ?? parseModelLabel(id)?.id ?? id;
+
   const windowLabel = (m: ModelOption) => {
     if (!m.contextWindow) return m.provider;
     const cw = m.contextWindow;
@@ -452,6 +488,92 @@ function ModelesPane({
           onChange={(v) => writeClientSetting("hermes.reasoning.effort", v)}
         />
       </SettingRow>
+
+      {/* F-21 — tarifs déclarés par l'utilisatrice : le coût des réponses
+          est calculé à partir d'EUX (jamais deviné) et affiché par bulle. */}
+      <div className="border-b border-border py-3">
+        <div className="text-[13.5px] font-medium">Tarifs des modèles</div>
+        <p className="mt-px max-w-[520px] text-[12px] leading-snug text-muted-foreground">
+          $ par million de jetons, entrée et sortie — le coût de chaque réponse
+          sera affiché sous la bulle. Rien n&apos;est pré-rempli : le fournisseur fait
+          foi ; aucune donnée ne quitte votre machine.
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <Select value={tarifModel || undefined} onValueChange={setTarifModel}>
+            <SelectTrigger
+              aria-label="Modèle à tarifer"
+              className="h-8 w-[210px] max-w-full rounded-[10px] bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
+            >
+              <SelectValue placeholder="Modèle à tarifer" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[240px]">
+              {models.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="py-2">
+                  {m.label} · {m.provider}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <label className="sr-only" htmlFor="tarif-input">Tarif entrée ($/M jetons)</label>
+          <input
+            id="tarif-input"
+            inputMode="decimal"
+            placeholder="entrée $/M"
+            value={tarifInput}
+            onChange={(e) => setTarifInput(e.target.value)}
+            className="h-8 w-[110px] rounded-[10px] border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
+          />
+          <label className="sr-only" htmlFor="tarif-output">Tarif sortie ($/M jetons)</label>
+          <input
+            id="tarif-output"
+            inputMode="decimal"
+            placeholder="sortie $/M"
+            value={tarifOutput}
+            onChange={(e) => setTarifOutput(e.target.value)}
+            className="h-8 w-[110px] rounded-[10px] border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
+          />
+          <button
+            type="button"
+            onClick={addTarif}
+            disabled={!canAdd}
+            className="h-8 cursor-pointer rounded-[10px] bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Ajouter
+          </button>
+        </div>
+        {Object.keys(pricing).length > 0 ? (
+          <ul className="mt-2.5 grid gap-1">
+            {Object.entries(pricing).map(([id, p]) => (
+              <li
+                key={id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12px]"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">{labelOf(id)}</span>
+                <span className="flex-none tabular-nums text-muted-foreground">
+                  entrée {p.input.toLocaleString("fr-FR")} · sortie {p.output.toLocaleString("fr-FR")} $/M
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Retirer le tarif de ${labelOf(id)}`}
+                  onClick={() => {
+                    const next = { ...pricing };
+                    delete next[id];
+                    savePricing(next);
+                  }}
+                  className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-[11.5px] text-muted-foreground">
+            Aucun tarif déclaré — les réponses afficheront leur coût dès qu&apos;un
+            tarif sera renseigné (ou tel que facturé par le fournisseur).
+          </p>
+        )}
+      </div>
 
       <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground">
         <Database className="mt-[1px] size-[13px] flex-none" strokeWidth={2} />

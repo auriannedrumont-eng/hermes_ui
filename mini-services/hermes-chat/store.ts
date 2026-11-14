@@ -202,6 +202,23 @@ export class Store {
     } catch {
       /* colonne déjà présente */
     }
+    // Migration douce (F-21) : usage par message — jetons réellement facturés
+    // (input/output) et coût facturé par le fournisseur quand il le renvoie.
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN usage_input INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN usage_output INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN usage_cost REAL");
+    } catch {
+      /* colonne déjà présente */
+    }
     // Migration douce : colonne des conversations épinglées
     try {
       this.db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
@@ -944,6 +961,14 @@ export class Store {
       feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
       feedbackComment: r.feedback_comment ?? undefined,
       variant: (r.variant as "a" | "b" | null) ?? undefined,
+      usage:
+        r.usage_input != null || r.usage_output != null || r.usage_cost != null
+          ? {
+              input: (r.usage_input as number | null) ?? undefined,
+              output: (r.usage_output as number | null) ?? undefined,
+              cost: (r.usage_cost as number | null) ?? undefined,
+            }
+          : undefined,
     }));
   }
 
@@ -977,7 +1002,7 @@ export class Store {
     const createdAt = msg.createdAt ?? new Date().toISOString();
     this.db
       .query(
-        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active, usage_input, usage_output, usage_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         id,
@@ -993,7 +1018,10 @@ export class Store {
         msg.variant ?? null,
         msg.versionGroup ?? null,
         msg.versionIndex ?? null,
-        msg.versionActive ?? (msg.versionGroup ? 1 : null)
+        msg.versionActive ?? (msg.versionGroup ? 1 : null),
+        msg.usage?.input ?? null,
+        msg.usage?.output ?? null,
+        msg.usage?.cost ?? null
       );
     return { ...msg, id, createdAt } as ChatMessage;
   }
@@ -1102,6 +1130,14 @@ export class Store {
       feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
       feedbackComment: r.feedback_comment ?? undefined,
       variant: (r.variant as "a" | "b" | null) ?? undefined,
+      usage:
+        r.usage_input != null || r.usage_output != null || r.usage_cost != null
+          ? {
+              input: (r.usage_input as number | null) ?? undefined,
+              output: (r.usage_output as number | null) ?? undefined,
+              cost: (r.usage_cost as number | null) ?? undefined,
+            }
+          : undefined,
     };
   }
 

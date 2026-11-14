@@ -2054,6 +2054,8 @@ io.on("connection", (socket) => {
         model: usedModel,
         stopped: stopped || undefined,
         variant,
+        // F-21 : jetons réels quand l'API les renvoie (pool de clés)
+        usage: result.usage,
         ...(opts.versionGroup
           ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
           : {}),
@@ -2070,6 +2072,7 @@ io.on("connection", (socket) => {
         createdAt: new Date().toISOString(),
         stopped: stopped || undefined,
         variant,
+        usage: result.usage,
         ...(opts.versionGroup
           ? { versions: { group: opts.versionGroup, index: versionIndex ?? 1, count: versionIndex ?? 1 } }
           : {}),

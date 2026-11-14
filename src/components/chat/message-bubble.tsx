@@ -44,6 +44,9 @@ import { AttachmentsList } from "@/components/chat/attachments";
 import { ArtifactCard } from "@/components/chat/artifact-card";
 import { stripArtifactBlocks, downloadArtifactZip } from "@/lib/artifact-utils";
 import { onSettingsChanged, readClientSetting } from "@/lib/settings";
+import { estimateTokens } from "@/lib/tokens";
+import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
+import { useModelPricing } from "@/hooks/use-pricing";
 import type { Artifact, ChatMessage, ToolEvent } from "@/lib/chat-types";
 
 function ToolEventRow({ event }: { event: ToolEvent }) {
@@ -292,6 +295,82 @@ function FeedbackControl({
         <span className="ml-1.5 max-w-[220px] truncate text-[10.5px] italic text-muted-foreground/80">
           « {message.feedbackComment} »
         </span>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Jetons & coût (F-21) — repliable, sous chaque réponse assistant ────
+// Jetons réels quand l'API les renvoie (pool de clés), estimation de la sortie
+// sinon. Coût : facturé par le fournisseur s'il le renvoie (OpenRouter),
+// sinon estimé à partir des tarifs déclarés dans le volet Modèles — jamais
+// deviné : sans tarifs, on le dit.
+function UsageRow({ message }: { message: ChatMessage }) {
+  const pricing = useModelPricing();
+  const [open, setOpen] = useState(false);
+  const usage = message.usage;
+  const modelInfo = parseModelLabel(message.model);
+  const modelPricing = modelInfo ? pricing[modelInfo.id] : undefined;
+
+  const real = usage != null;
+  const input = usage?.input;
+  const output = usage?.output ?? estimateTokens(message.content);
+  const total = (input ?? 0) + output;
+
+  const cost = usage?.cost ?? (real ? estimateCost(usage ?? {}, modelPricing) : null);
+  const costBasis: "facturé" | "estimé" | null =
+    usage?.cost != null ? "facturé" : cost != null ? "estimé" : null;
+
+  const summary = [
+    real ? `${formatTokens(total)} jetons` : `≈ ${formatTokens(output)} jetons (estimation)`,
+    costBasis === "facturé"
+      ? `facturé ${formatUsd(cost!)}`
+      : costBasis === "estimé"
+        ? `≈ ${formatUsd(cost!)}`
+        : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="pt-0.5 text-[11.5px] text-muted-foreground">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:text-foreground"
+      >
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+        <span className="tabular-nums">{summary}</span>
+      </button>
+      {open ? (
+        <div className="ml-4 mt-1.5 grid max-w-[420px] gap-1 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 leading-relaxed">
+          <div className="flex justify-between gap-6">
+            <span>Jetons d&apos;entrée</span>
+            <span className="tabular-nums">{input != null ? formatTokens(input) : "— (non renvoyé)"}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span>Jetons de sortie</span>
+            <span className="tabular-nums">
+              {usage?.output != null
+                ? formatTokens(usage.output)
+                : `≈ ${formatTokens(output)} (estimation)`}
+            </span>
+          </div>
+          <div className="mt-0.5 flex justify-between gap-6 border-t border-border/60 pt-1">
+            <span>Coût</span>
+            <span className="tabular-nums">
+              {costBasis === "facturé"
+                ? `${formatUsd(cost!)} (facturé par le fournisseur)`
+                : costBasis === "estimé"
+                  ? `≈ ${formatUsd(cost!)} (selon vos tarifs)`
+                  : "tarifs non renseignés — Paramètres → Modèles"}
+            </span>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -568,6 +647,10 @@ export function MessageBubble({
               " — « Régénérer » pour la compléter" : ""}
           </p>
         ) : null}
+
+        {/* F-21 — jetons & coût du message (repliable) : réels quand
+            l'API les renvoie, estimation honnête sinon. */}
+        {!isStreaming ? <UsageRow message={message} /> : null}
 
         {/* Cartes d'artefacts — compactes, jamais plein format dans le flux */}
         {cards.length > 0 && onOpenArtifact ? (
