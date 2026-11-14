@@ -13,7 +13,10 @@
 #   hermes (sous-dossier tools\) : Node.js v22 LTS, Bun, Caddy, puis
 #   dependances npm/bun, client Prisma et build de production. Sans admin,
 #   sans registre, sans ecrire hors du dossier : il reste mobile (cle USB
-#   comprise). Les fois suivantes, le double-clic est immediat.
+#   comprise). Les fois suivantes, le double-clic est immediat : verification
+#   silencieuse des mises a jour GitHub (dossier clone en git : fusion
+#   rapide, jamais bloquante, dependances/build refaits seulement si
+#   necessaire), puis demarrage de la pile.
 #
 # Securite de fermeture :
 #   • Tous les processus sont places dans un Job Object noyau avec
@@ -254,6 +257,97 @@ function Start-Component([string]$file, [string[]]$argList, [string]$workDir, [s
 # ── Dependances ─────────────────────────────────────────────────────────
 function Test-Command([string]$name) { return [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 
+# ── Mise a jour automatique depuis GitHub ───────────────────────────────
+# Chaque demarrage a froid verifie si de nouveaux commits ont ete pousses
+# sur GitHub ; le cas echeant le dossier avance au dernier commit par
+# fusion RAPIDE uniquement (fast-forward : aucun fichier local modifie
+# n est jamais ecrase ; fusion impossible -> version locale conservee et
+# signalee). Dependances reinstallees et interface reconstruite UNIQUEMENT
+# si les fichiers concernes ont change (un push de documentation seule ne
+# reconstruit rien). Jamais bloquant : git absent, dossier non clone,
+# pas de reseau, connexion GitHub refusee -> message + demarrage avec la
+# version presente. La premiere verification peut ouvrir une fenetre
+# GitHub demandant de se connecter : c est le gestionnaire d identifiants
+# de git (Git Credential Manager), il ne la rouvrira plus ensuite.
+$Script:UpdateChangedFiles = @()
+
+# Appelle git en absorbant stderr (avec $ErrorActionPreference = Stop un
+# « 2>&1 » brut interromprait le script sous PowerShell 5.1) ; renvoie
+# @{ Code = code de sortie ; Text = sortie compilee }.
+function Invoke-Git([string[]]$GitArgs) {
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & git -C $Root @GitArgs 2>&1
+        $text = ($out | ForEach-Object { [string]$_ }) -join "`n"
+        return @{ Code = $LASTEXITCODE; Text = $text }
+    } finally { $ErrorActionPreference = $old }
+}
+
+# La mise a jour a-t-elle touche l un des fichiers listes ?
+function Test-FilesChanged([string[]]$Paths) {
+    foreach ($p in $Paths) { if ($Script:UpdateChangedFiles -contains $p) { return $true } }
+    return $false
+}
+
+function Update-FromGit {
+    if (-not (Test-Command 'git')) {
+        Log "• mise a jour auto : git n est pas installe — Hermes demarre avec la version presente"
+        return
+    }
+    if (-not (Test-Path (Join-Path $Root '.git'))) {
+        Log "• mise a jour auto : le dossier n est pas un clone git — ignoree"
+        return
+    }
+    $r = Invoke-Git @('remote', 'get-url', 'origin')
+    if ($r.Code -ne 0 -or $r.Text.Trim() -notmatch '^https?://') {
+        Log "• mise a jour auto : pas de depot GitHub distant — ignoree"
+        return
+    }
+    # Ne jamais rester bloque sur une demande de saisie console ; la
+    # connexion GitHub passe par la fenetre du gestionnaire d identifiants.
+    $env:GIT_TERMINAL_PROMPT = '0'
+    $r = Invoke-Git @('rev-parse', 'HEAD')
+    if ($r.Code -ne 0) { Log "• mise a jour auto : etat du depot illisible — ignoree"; return }
+    $before = $r.Text.Trim()
+    Log "• verification des mises a jour sur GitHub..."
+    $r = Invoke-Git @('fetch', '--quiet', 'origin')
+    if ($r.Code -ne 0) {
+        Log "  pas de mise a jour recuperee (reseau ou connexion GitHub) — version locale conservee"
+        return
+    }
+    $r = Invoke-Git @('rev-parse', '@{u}')
+    if ($r.Code -ne 0) { Log "  pas de branche distante suivie — mise a jour ignoree"; return }
+    $upstream = $r.Text.Trim()
+    if ($upstream -eq $before) { Log "  a jour : aucune nouvelle version"; return }
+    $r = Invoke-Git @('merge', '--ff-only', $upstream)
+    if ($r.Code -ne 0) {
+        Log "  ATTENTION : nouvelle version disponible mais non appliquee (fichiers locaux modifies ?) — version locale conservee"
+        return
+    }
+    $r = Invoke-Git @('diff', '--name-only', $before, $upstream)
+    $Script:UpdateChangedFiles = @($r.Text -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    Log ("  mise a jour appliquee : {0} fichier(s) recupere(s) de GitHub" -f $Script:UpdateChangedFiles.Count)
+    # Interface a reconstruire ? seulement si son code ou sa configuration
+    # a change (src/, public/, configs racine) — sinon le build actuel reste
+    # valable et le demarrage reste rapide.
+    $cfgTouched = Test-FilesChanged @('package.json', 'package-lock.json', 'next.config.ts',
+                                      'postcss.config.mjs', 'tailwind.config.ts', 'tsconfig.json',
+                                      'components.json')
+    $srcTouched = @($Script:UpdateChangedFiles | Where-Object { $_ -match '^(src|public)/' }).Count -gt 0
+    if ($cfgTouched -or $srcTouched) {
+        if (Test-Path (Join-Path $Root '.next')) {
+            Log "  code de l interface modifie : il sera reconstruit apres la mise a jour..."
+            Remove-Item -Recurse -Force (Join-Path $Root '.next') -ErrorAction SilentlyContinue
+        }
+        $flag = Join-Path $ToolsDir 'build-echoue.flag'
+        if (Test-Path $flag) {
+            Remove-Item $flag -Force -ErrorAction SilentlyContinue
+            Log "  (marqueur de build echoue efface : le build de la nouvelle version sera retente)"
+        }
+    }
+}
+
 # ── Installation portable automatique (tout dans <projet>\tools\) ───────
 # Ordre de resolution pour chaque outil : 1) deja sur le PATH systeme,
 # 2) deja installe dans tools\ (installation portable precedente),
@@ -374,17 +468,25 @@ function Ensure-PortableSetup {
         if (-not (Test-Command $t)) { Die "l outil « $t » reste introuvable apres l installation" }
     }
 
+    # ── 3bis. Mise a jour automatique depuis GitHub (AVANT dependances et
+    # build : elles tiendront compte des fichiers recus) ──
+    Update-FromGit
+
     # ── 4. Dependances npm de l interface ──
-    if (-not (Test-Path (Join-Path $Root 'node_modules'))) {
-        Log "• installation des dependances de l interface (npm install, quelques minutes)..."
+    $npmDepsChanged = Test-FilesChanged @('package.json', 'package-lock.json')
+    if ((-not (Test-Path (Join-Path $Root 'node_modules'))) -or $npmDepsChanged) {
+        if ($npmDepsChanged) { Log "• dependances de l interface modifiees par la mise a jour -> reinstallation (npm install)..." }
+        else { Log "• installation des dependances de l interface (npm install, quelques minutes)..." }
         $code = Invoke-Live $npmCmd @('install', '--no-audit', '--no-fund') $Root
         if ($code -ne 0) { Die "npm install a echoue (code $code) — relancez, ou verifiez votre connexion" }
     }
 
     # ── 5. Dependances bun du mini-service ──
     $chatDir = Join-Path $Root 'mini-services\hermes-chat'
-    if (-not (Test-Path (Join-Path $chatDir 'node_modules'))) {
-        Log "• installation des dependances du mini-service (bun install)..."
+    $bunDepsChanged = Test-FilesChanged @('mini-services/hermes-chat/package.json', 'mini-services/hermes-chat/bun.lock')
+    if ((-not (Test-Path (Join-Path $chatDir 'node_modules'))) -or $bunDepsChanged) {
+        if ($bunDepsChanged) { Log "• dependances du mini-service modifiees par la mise a jour -> reinstallation (bun install)..." }
+        else { Log "• installation des dependances du mini-service (bun install)..." }
         $code = Invoke-Live (Join-Path $bunDir 'bun.exe') @('install') $chatDir
         if ($code -ne 0) { Die "bun install a echoue (code $code) — relancez, ou verifiez votre connexion" }
     }

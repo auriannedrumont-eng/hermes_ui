@@ -10,7 +10,9 @@
   administrateur, **rien n'est écrit hors du dossier**. Comptez quelques
   minutes (téléchargements + installations) avec la progression affichée
   dans la fenêtre.
-- **Double-clics suivants** : démarrage quasi instantané de la pile
+- **Double-clics suivants** : vérification silencieuse des mises à jour
+  GitHub (dossier cloné en git : nouveaux commits récupérés par fusion
+  rapide, jamais bloquante), démarrage quasi instantané de la pile
   (mini-service chat, interface Next.js, passerelle Caddy) puis ouverture
   du navigateur.
 - **Fermer la fenêtre du lanceur (ou Ctrl-C)** : arrêt propre de toute la
@@ -38,15 +40,25 @@ pouvez le renommer, le déplacer, il fonctionnera.
    préférence : déjà sur le PATH système, sinon déjà dans `tools\`, sinon
    téléchargement). Node v22.20.0 (LTS) et Bun en zip officiels, Caddy en
    exe officiel.
-3. `node_modules` manquants → `npm install` (interface) et `bun install`
-   (mini-service), sortie en direct dans la fenêtre.
-4. **Build de production** de l'interface
-   (`next build` + copies `static`/`public`, une seule fois). Si le build
+3. **Mise à jour automatique** (si le dossier est un clone git) : les
+   derniers commits poussés sur GitHub sont récupérés et appliqués par
+   fusion rapide — un fichier local modifié n'est jamais écrasé. La
+   première fois, une fenêtre GitHub peut demander de se connecter (c'est
+   le gestionnaire d'identifiants de git ; il retient ensuite).
+   Dépendances et build sont refaits **seulement si nécessaire** — un push
+   de documentation seule ne déclenche aucune reconstruction. Sans réseau
+   ou sans git : Hermes démarre quand même avec la version présente.
+4. `node_modules` manquants **ou dépendances modifiées par la mise à
+   jour** → `npm install` (interface) et `bun install` (mini-service),
+   sortie en direct dans la fenêtre.
+5. **Build de production** de l'interface
+   (`next build` + copies `static`/`public`, une seule fois — refait
+   automatiquement après une mise à jour qui touche le code). Si le build
    échoue : bascule en mode développement et pose un marqueur
    `tools\build-echoue.flag` (effacez-le pour retenter).
-5. Démarrage de la pile : mini-service → interface → passerelle, navigateur
+6. Démarrage de la pile : mini-service → interface → passerelle, navigateur
    ouvert sur `http://127.0.0.1:81/` (ou 8081/8181… si le port est pris).
-6. Surveillance : un composant qui plante est relancé (3 essais), puis
+7. Surveillance : un composant qui plante est relancé (3 essais), puis
    arrêt général propre si ça persiste.
 
 ### Fermeture — tous les cas couverts
@@ -103,6 +115,7 @@ et Caddy via votre gestionnaire de paquets.
 | « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
 | Téléchargement qui échoue | relancez (idempotent) ; vérifiez la connexion / le proxy |
 | Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` |
+| Mise à jour non appliquée | `desktop\logs\launcher.log` (cause en clair) ; réseau, connexion GitHub (fenêtre au 1er lancement) ou fichiers locaux modifiés — Hermes démarre alors avec la version présente |
 | Page blanche / erreur | `desktop\logs\interface-err.log` |
 | Chat ne répond pas | `desktop\logs\mini-service-err.log` |
 | Page inaccessible | `desktop\logs\passerelle-err.log` |
