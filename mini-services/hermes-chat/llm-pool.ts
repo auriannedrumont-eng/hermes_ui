@@ -20,7 +20,7 @@ import {
   type TurnCallbacks,
   type TurnRequest,
 } from "./demo-engine";
-import { pickActiveKey, providerCapabilities, looksLikeZaiJwt } from "./providers";
+import { pickActiveKey, providerCapabilities, looksLikeZaiJwt, explainQuotaError } from "./providers";
 import { readAttachmentDataUrl } from "./uploads";
 
 // ── Types publics du pool ─────────────────────────────────────────────
@@ -261,37 +261,9 @@ async function readErrorBody(res: Response): Promise<string> {
   return raw.slice(0, 200) || `(corps vide)`;
 }
 
-/**
- * 429 : la raison renvoyée par le fournisseur, traduite quand elle est
- * reconnue (corps réels observés en production) :
- *  • z.ai code 1113 « Insufficient balance or no resource package » → le
- *    compte n'a pas de crédit : aucune génération possible, recharger ;
- *  • opencode « FreeUsageLimitError » → quota gratuit épuisé, abonnement
- *    nécessaire pour continuer ;
- *  • « Too many requests / rate limit » → simple limite de débit, réessayer.
- * Sinon le message d'origine accompagne l'erreur telle quelle (honnêteté :
- * c'est le fournisseur qui parle). `short` sert d'étiquette sur la carte clé.
- */
-function rateLimitWhy(detail: string): { long: string; short: string } {
-  if (/insufficient balance|no resource package/i.test(detail))
-    return {
-      long: "solde insuffisant : rechargez le compte chez le fournisseur",
-      short: "solde insuffisant (recharge requise)",
-    };
-  if (/free usage limit/i.test(detail))
-    return {
-      long: "quota gratuit épuisé : un abonnement payant du fournisseur est nécessaire",
-      short: "quota gratuit épuisé",
-    };
-  if (/too many requests|rate limit/i.test(detail))
-    return {
-      long: "trop de requêtes à la minute : réessayez dans un instant",
-      short: "trop de requêtes (réessayez)",
-    };
-  if (!detail || detail === "(corps vide)")
-    return { long: "", short: "limite atteinte à l'usage" };
-  return { long: detail, short: detail.slice(0, 80) };
-}
+// Traduction des 429 partagée avec le test de clé (providers.ts) —
+// `long` accompagne l'erreur du tour, `short` étiquette la carte clé.
+const rateLimitWhy = explainQuotaError;
 
 /** Modèle de repli pour un tour multimodal, si la liste en expose un. */
 const VISION_MODEL = /(-v\b|vision|glm-4v|glm-4\.5v|glm-4\.6v)/i;

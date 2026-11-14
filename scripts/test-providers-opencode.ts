@@ -43,31 +43,46 @@ function emitAck(s: any, event: string, payload?: unknown): Promise<any> {
 }
 
 // ── Faux opencode (OpenAI-compatible) sur localhost ────────────────────
+// Même layout que le VRAI opencode.ai (vérifié en direct, 2026-11-15) :
+//   • GET  /inference/v1/models               — surface du test de clé ;
+//   • GET  /inference/openai/v1/models        — liste pour le moteur ;
+//   • POST /inference/openai/v1/chat/completions — tours (SSE) + sonde
+//     de génération du test de clé (mini-génération 1 jeton).
+// Le moteur remplace l'ORIGINE de l'adresse saisie par celle du faux
+// serveur en conservant les chemins canoniques (cf. resolveLlmEndpoint).
 function startMock(): Promise<{ server: Server; sawAuth: string[]; sawBody: any[] }> {
   const sawAuth: string[] = [];
   const sawBody: any[] = [];
+  const MODELS_BODY = {
+    object: "list",
+    data: [
+      { id: "big-pickle", object: "model", name: "Big Pickle", type: "chat", limit: { context: 200000 } },
+      { id: "tiny-pickle", object: "model", name: "Tiny Pickle", type: "chat", limit: { context: 100000 } },
+      { id: "embed-pickle", object: "model", name: "Embed Pickle", type: "embedding" },
+    ],
+  };
   const server = createServer((req, res) => {
     const url = req.url ?? "";
     sawAuth.push(String(req.headers.authorization ?? ""));
-    if (req.method === "GET" && url === "/v1/models") {
+    if (req.method === "GET" && (url === "/inference/v1/models" || url === "/inference/openai/v1/models")) {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          object: "list",
-          data: [
-            { id: "big-pickle", object: "model", name: "Big Pickle", type: "chat", limit: { context: 200000 } },
-            { id: "tiny-pickle", object: "model", name: "Tiny Pickle", type: "chat", limit: { context: 100000 } },
-            { id: "embed-pickle", object: "model", name: "Embed Pickle", type: "embedding" },
-          ],
-        })
-      );
+      res.end(JSON.stringify(MODELS_BODY));
       return;
     }
-    if (req.method === "POST" && url === "/v1/chat/completions") {
+    if (req.method === "POST" && url === "/inference/openai/v1/chat/completions") {
       let raw = "";
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
         try { sawBody.push(JSON.parse(raw)); } catch { sawBody.push(null); }
+        // Sonde du test de clé (1 jeton, pas de flux) : réponse simple.
+        try {
+          const body = JSON.parse(raw);
+          if (body?.max_tokens === 1 && body?.stream === false) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "" } }] }));
+            return;
+          }
+        } catch { /* requête non JSON : on streame quand même */ }
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         const sse = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
         sse({ model: "big-pickle", choices: [{ delta: { reasoning_content: "Je raisonne." } }] });

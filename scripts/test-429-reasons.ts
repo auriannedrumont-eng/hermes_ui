@@ -10,8 +10,11 @@
 //   [D] corps vide — comportement historique conservé mot pour mot ;
 //   [E] raison inconnue — le message du fournisseur est repris tel quel ;
 //   [S] chemin de réussite — un 200 streamé passe toujours (non-régression).
-// Vérifie pour chaque cas le message du tour (stream:error) ET l'étiquette
-// posée sur la carte de la clé (providers:list → keys[].statusLabel).
+// Vérifie pour chaque cas le message du tour (stream:error), l'étiquette
+// posée sur la carte de la clé (providers:list → keys[].statusLabel) ET,
+// depuis le correctif « test honnête », que le BOUTON « Tester » révèle
+// lui aussi le problème de compte (mini-génération de 1 jeton — la liste
+// des modèles seule réussissait même sur un compte à sec).
 import { io } from "socket.io-client";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
@@ -76,6 +79,16 @@ function startMock(): Promise<{
         let raw = "";
         req.on("data", (c) => (raw += c));
         req.on("end", () => {
+          // Sonde du test de clé (1 jeton, pas de flux) : JSON simple,
+          // comme le ferait le vrai z.ai sur un compte sain.
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed?.max_tokens === 1 && parsed?.stream === false) {
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "" } }] }));
+              return;
+            }
+          } catch { /* requête non JSON : on streame quand même */ }
           res.writeHead(200, { "Content-Type": "text/event-stream" });
           const sse = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
           sse({ model: MODEL_ID, choices: [{ delta: { content: "Réponse saine du faux z.ai." } }] });
@@ -199,10 +212,16 @@ async function main() {
       keyId = key?.key?.id ?? null;
       check("clé ajoutée", Boolean(keyId));
 
+      // Compte sain au moment du test : la sonde de génération (1 jeton)
+      // doit passer — c'est elle qui prouve que le compte peut générer,
+      // pas seulement lister des modèles.
+      mock!.body.value = "__OK__";
       const test = await emitAck(socket, "providers:test-key", { keyId });
-      check("test de clé → ok (le 429 ne concerne que la génération)",
-        test?.ok === true && test?.key?.status === "ok",
-        JSON.stringify(test?.key ?? test).slice(0, 80));
+      check(
+        "test de clé → ok, compte actif (sonde de génération)",
+        test?.ok === true && test?.key?.status === "ok" && /compte actif/.test(String(test?.key?.statusLabel ?? "")),
+        JSON.stringify(test?.key ?? test).slice(0, 100)
+      );
     }
 
     // ── Scénarios 429 ──────────────────────────────────────────────────
@@ -213,6 +232,7 @@ async function main() {
       wantLong: string;   // attendu dans le message d'erreur du tour
       exact?: string;     // … ou message EXACT (corps vide)
       wantShort: string;  // étiquette attendue sur la carte de la clé
+      probeLabel?: string; // étiquette du BOUTON Tester pendant le 429
     }[] = [
       {
         id: "A",
@@ -220,6 +240,7 @@ async function main() {
         json: true,
         wantLong: "solde insuffisant : rechargez le compte chez le fournisseur",
         wantShort: "solde insuffisant (recharge requise)",
+        probeLabel: "clé valide — solde insuffisant, rechargez le compte",
       },
       {
         id: "B",
@@ -227,6 +248,7 @@ async function main() {
         json: true,
         wantLong: "quota gratuit épuisé : un abonnement payant du fournisseur est nécessaire",
         wantShort: "quota gratuit épuisé",
+        probeLabel: "clé valide — quota gratuit épuisé (abonnement requis)",
       },
       {
         id: "C",
@@ -240,7 +262,7 @@ async function main() {
         body: "",
         json: false,
         exact: "z.ai : limite z.ai atteinte (HTTP 429) — plus aucune clé disponible",
-        wantShort: "limite atteinte à l'usage",
+        wantShort: "limite atteinte",
       },
       {
         id: "E",
@@ -253,13 +275,15 @@ async function main() {
 
     for (const sc of scenarios) {
       console.log(`\n[${sc.id}] Corps 429 : ${sc.body ? sc.body.slice(0, 70) + "…" : "(vide)"}`);
-      mock!.body.value = sc.body;
-      mock!.json.value = sc.json;
 
-      // Remet la clé en service (le tour précédent l'a épuisée).
+      // Remet la clé en service : compte sain au moment du test de clé
+      // (la sonde de génération doit passer), le 429 n'arrive qu'au tour.
+      mock!.body.value = "__OK__";
       const retest = await emitAck(socket, "providers:test-key", { keyId });
       check("clé remise en service (test → ok)", retest?.key?.status === "ok");
 
+      mock!.body.value = sc.body;
+      mock!.json.value = sc.json;
       const conv = await emitAck(socket, "conversations:create");
       const cid = conv?.conversation?.id;
       const out = await runTurn(socket, cid);
@@ -273,13 +297,31 @@ async function main() {
           out.slice(0, 160)
         );
       }
-      const k = await keyOf(socket, keyId!);
+      let k = await keyOf(socket, keyId!);
       check("clé marquée épuisée", k?.status === "exhausted", k?.status);
       check(
         `étiquette de la carte clé = « ${sc.wantShort} »`,
         k?.statusLabel === sc.wantShort,
         JSON.stringify(k?.statusLabel)
       );
+
+      // Correctif « test honnête » : le bouton Tester, pressé PENDANT le 429,
+      // révèle lui aussi le problème (la liste seule passerait) — exactement
+      // le piège vécu : « clé testée ailleurs, refusée par l'interface ».
+      const retest429 = await emitAck(socket, "providers:test-key", { keyId });
+      const k429 = await keyOf(socket, keyId!);
+      check(
+        "bouton Tester pendant le 429 → épuisée (pas de faux « ok »)",
+        retest429?.key?.status === "exhausted" && k429?.status === "exhausted",
+        `${retest429?.key?.status} / ${k429?.status}`
+      );
+      if (sc.probeLabel)
+        check(
+          `libellé du bouton Tester = « ${sc.probeLabel.slice(0, 40)}… »`,
+          k429?.statusLabel === sc.probeLabel,
+          JSON.stringify(k429?.statusLabel)
+        );
+      k = k429;
     }
 
     // ── [S] Chemin de réussite intact ──────────────────────────────────
@@ -294,9 +336,15 @@ async function main() {
       check("tour réussi, contenu du faux z.ai reçu", out === "DONE::Réponse saine du faux z.ai.", out.slice(0, 100));
       const k = await keyOf(socket, keyId!);
       check("clé toujours « ok » après un tour réussi", k?.status === "ok", k?.statusLabel);
-      check("le faux serveur a bien servi les 429 puis le 200",
-        (mock!.hits.get("chat") ?? 0) === scenarios.length + 1,
-        `chat=${mock!.hits.get("chat") ?? 0}`);
+      // Appels /chat/completions attendus : sonde initiale [P] (1) + par
+      // scénario (sonde de remise en service + tour + sonde pendant le 429,
+      // soit 3) + sonde et tour de [S] (2).
+      const expectedChat = 1 + scenarios.length * 3 + 2;
+      check(
+        "le faux serveur a bien servi les 429 puis les 200",
+        (mock!.hits.get("chat") ?? 0) === expectedChat,
+        `chat=${mock!.hits.get("chat") ?? 0} (attendu ${expectedChat})`
+      );
     }
   } catch (err) {
     failures++;

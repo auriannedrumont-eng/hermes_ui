@@ -283,6 +283,151 @@ function countModels(json: unknown): number | null {
   return null;
 }
 
+/** « 1 modèle », « 3 modèles » — l'accord français se voit sur la carte. */
+function frModels(n: number): string {
+  return `${n} modèle${n > 1 ? "s" : ""}`;
+}
+
+/** Extraits les identifiants de modèles d'une réponse /models. */
+function modelIds(json: unknown): string[] {
+  const arr = Array.isArray(json)
+    ? json
+    : json && typeof json === "object"
+      ? ((json as any).data ?? (json as any).models ?? (json as any).results)
+      : null;
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((m) => (m && typeof m === "object" ? String((m as any).id ?? "") : ""))
+    .filter(Boolean);
+}
+
+/** Lit un corps d'erreur en texte court (best effort, jamais jetant). */
+async function readBodySnippet(res: Response): Promise<string> {
+  try {
+    const raw = await res.text();
+    return raw.slice(0, 300) || "(corps vide)";
+  } catch {
+    return "(corps vide)";
+  }
+}
+
+/**
+ * Traduit la RAISON d'une limite (corps réels observés en production) :
+ *  • z.ai code 1113 « Insufficient balance or no resource package » → le
+ *    compte n'a pas de crédit : aucune génération possible, recharger ;
+ *  • opencode « FreeUsageLimitError » → quota gratuit épuisé : les modèles
+ *    gratuits ne tournent que dans l'application opencode, l'API demande
+ *    l'abonnement OpenCode Go ;
+ *  • « Too many requests / rate limit » → simple limite de débit, réessayer.
+ * Sinon le message d'origine accompagne l'erreur telle quelle (honnêteté :
+ * c'est le fournisseur qui parle). `short` sert d'étiquette sur la carte clé.
+ * Partagée entre le test de clé (ici) et le moteur de tours (llm-pool.ts).
+ */
+export function explainQuotaError(detail: string): {
+  kind: "balance" | "free_limit" | "rate" | null;
+  long: string;
+  short: string;
+} {
+  if (/insufficient balance|no resource package/i.test(detail))
+    return {
+      kind: "balance",
+      long: "solde insuffisant : rechargez le compte chez le fournisseur",
+      short: "solde insuffisant (recharge requise)",
+    };
+  if (/free usage limit/i.test(detail))
+    return {
+      kind: "free_limit",
+      long: "quota gratuit épuisé : un abonnement payant du fournisseur est nécessaire",
+      short: "quota gratuit épuisé",
+    };
+  if (/too many requests|rate limit/i.test(detail))
+    return {
+      kind: "rate",
+      long: "trop de requêtes à la minute : réessayez dans un instant",
+      short: "trop de requêtes (réessayez)",
+    };
+  if (!detail || detail === "(corps vide)")
+    return { kind: null, long: "", short: "limite atteinte" };
+  return { kind: null, long: detail, short: detail.slice(0, 80) };
+}
+
+/**
+ * Test approfondi z.ai / opencode : la liste des modèles RÉUSSIT même quand
+ * le compte ne peut pas générer le moindre jeton — solde nul chez z.ai
+ * (code 1113, observé : la clé est valide, c'est le compte qui est vide) et
+ * quota gratuit épuisé chez opencode (FreeUsageLimitError). Une
+ * mini-génération (1 jeton, modèle flash/gratuit de préférence) révèle la
+ * vérité dès le bouton « Tester » — coût sur un compte sain : dérisoire.
+ * Renvoie null quand le résultat est imprévu (on garde alors le verdict de
+ * la liste des modèles, déjà acquis) ou que le réseau l'a empêché.
+ */
+async function probeGeneration(
+  url: string,
+  secret: string,
+  model: string,
+  okLabel: string,
+): Promise<KeyTestResult | null> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "ok" }],
+        max_tokens: 1,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (res.ok) {
+      // Piège z.ai : un 200 peut porter une erreur dans le corps.
+      let j: unknown = null;
+      try {
+        j = await res.json();
+      } catch {
+        /* corps non JSON : un 200 de chat reste un 200 */
+      }
+      const err = (j as any)?.error;
+      if (err) {
+        const detail = typeof err === "string" ? err : JSON.stringify(err);
+        const why = explainQuotaError(detail);
+        if (why.kind) return { status: "exhausted", statusLabel: `clé valide — ${why.short}` };
+        return null;
+      }
+      return { status: "ok", statusLabel: okLabel };
+    }
+    if (res.status === 429) {
+      const detail = await readBodySnippet(res);
+      const why = explainQuotaError(detail);
+      if (why.kind === "balance")
+        return {
+          status: "exhausted",
+          statusLabel: "clé valide — solde insuffisant, rechargez le compte",
+          detail,
+        };
+      if (why.kind === "free_limit")
+        return {
+          status: "exhausted",
+          statusLabel: "clé valide — quota gratuit épuisé (abonnement requis)",
+          detail,
+        };
+      return {
+        status: "exhausted",
+        statusLabel: why.short || "limite atteinte à l'usage",
+        detail,
+      };
+    }
+    if (res.status === 401 || res.status === 403)
+      return { status: "error", statusLabel: "clé refusée à l'usage" };
+    return null; // imprévu (404, 500…) : verdict de la liste conservé
+  } catch {
+    return null; // réseau/délai : la liste a déjà prouvé la joignabilité
+  }
+}
+
 /** Teste une clé : appel réseau réel, timeout court, résultat honnête. */
 export async function testProviderKey(
   name: string,
@@ -386,18 +531,59 @@ export async function testProviderKey(
         };
       }
       const models = countModels(json);
+      // Test approfondi z.ai / opencode : la liste des modèles réussit
+      // même sur un compte incapable de générer (solde nul, quota gratuit
+      // épuisé — cas réels) ; la mini-génération dit la vérité, cf.
+      // probeGeneration. L'ORIGINE du test (déjà celle du moteur potentiel)
+      // est respectée.
+      const ids = modelIds(json);
+      if (caps && secret && ids.length > 0) {
+        let probeUrl: string | null = null;
+        let model: string | null = null;
+        let okLabel = "";
+        try {
+          const origin = new URL(test.url).origin;
+          if (caps.name === "z.ai") {
+            probeUrl =
+              origin + (zaiJwt ? "/api/coding/paas/v4/chat/completions" : "/api/paas/v4/chat/completions");
+            // Modèle le moins cher de préférence (flash) — coût dérisoire.
+            model = ids.find((m) => /flash/i.test(m)) ?? ids[0];
+            okLabel = `${frModels(models ?? ids.length)}${zaiJwt ? " (Coding Plan)" : ""} — compte actif`;
+          } else if (caps.name === "opencode") {
+            probeUrl = origin + "/inference/openai/v1/chat/completions";
+            // Modèle gratuit de préférence (free / pickle : prix 0 chez eux).
+            model = ids.find((m) => /free|pickle/i.test(m)) ?? ids[0];
+            okLabel = `${frModels(models ?? ids.length)} — compte actif`;
+          }
+        } catch {
+          /* test.url déjà validé par le fetch ci-dessus */
+        }
+        if (probeUrl && model) {
+          const probed = await probeGeneration(probeUrl, secret, model, okLabel);
+          if (probed) return probed;
+        }
+      }
       return {
         status: "ok",
         statusLabel:
           models !== null
-            ? `${models} modèles${zaiJwt ? " (Coding Plan)" : ""}`
+            ? `${frModels(models)}${zaiJwt ? " (Coding Plan)" : ""}`
             : zaiJwt
               ? "clé Coding Plan connectée"
               : "connecté",
       };
     }
-    if (res.status === 429)
-      return { status: "exhausted", statusLabel: "limite atteinte" };
+    if (res.status === 429) {
+      // La raison du 429 se lit dans le corps (solde nul, quota épuisé,
+      // débit…) : « limite atteinte » seul est trompeur.
+      const detail = await readBodySnippet(res);
+      const why = explainQuotaError(detail);
+      return {
+        status: "exhausted",
+        statusLabel: why.kind ? why.short : "limite atteinte",
+        detail: why.kind ? detail : undefined,
+      };
+    }
     if (res.status === 401 || res.status === 403)
       return { status: "error", statusLabel: "clé refusée" };
     return {

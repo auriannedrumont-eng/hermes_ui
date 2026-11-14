@@ -69,7 +69,9 @@ async function main() {
     createdProviderIds.push(custom.provider.id);
     check(
       "providers:add adresse personnalisée",
-      custom.provider.baseUrl === "https://api.exemple.io",
+      // Le chemin collé est conservé (vLLM/LM Studio servent /v1) —
+      // convention alignée sur le moteur depuis la v2.4 (706257f).
+      custom.provider.baseUrl === "https://api.exemple.io/v1",
       `${custom.provider.name} · ${custom.provider.baseUrl}`
     );
   } else {
