@@ -42,7 +42,11 @@ pouvez le renommer, le déplacer, il fonctionnera.
    exe officiel.
 3. **Mise à jour automatique** (si le dossier est un clone git) : les
    derniers commits poussés sur GitHub sont récupérés et appliqués par
-   fusion rapide — un fichier local modifié n'est jamais écrasé. La
+   fusion rapide. Si le dossier contient des différences locales (anciens
+   fichiers modifiés, restes d'une extraction zip), elles sont **mises de
+   côté en sécurité** (`desktop\runtime\maj-sauvegarde-…\`) puis la
+   version GitHub est appliquée — vos données (conversations, réglages,
+   clés) vivent ailleurs et ne sont jamais touchées. La
    première fois, une fenêtre GitHub peut demander de se connecter (c'est
    le gestionnaire d'identifiants de git ; il retient ensuite).
    Dépendances et build sont refaits **seulement si nécessaire** — un push
@@ -55,7 +59,9 @@ pouvez le renommer, le déplacer, il fonctionnera.
    (`next build` + copies `static`/`public`, une seule fois — refait
    automatiquement après une mise à jour qui touche le code). Si le build
    échoue : bascule en mode développement et pose un marqueur
-   `tools\build-echoue.flag` (effacez-le pour retenter).
+   `tools\build-echoue.flag` **qui mémorise la version en cause** — une
+   nouvelle version (mise à jour) retente automatiquement le build, la
+   même version ne retente pas en boucle (effacez le fichier pour forcer).
 6. Démarrage de la pile : mini-service → interface → passerelle, navigateur
    ouvert sur `http://127.0.0.1:81/` (ou 8081/8181… si le port est pris).
 7. Surveillance : un composant qui plante est relancé (3 essais), puis
@@ -75,7 +81,9 @@ Sur arrêt brutal, la base est quand même sûre : SQLite est en mode WAL,
 
 ### Autres cas couverts à l'ouverture
 
-- Session précédente plantée (verrou périmé) → nettoyage puis démarrage.
+- Session précédente plantée (verrou périmé) → nettoyage des restes
+  **avant** la mise à jour et le build (un ancien serveur encore vivant
+  verrouillerait le dossier du build), puis démarrage.
 - Demi-pile (service vivant, interface morte…) → composants sains adoptés,
   manquants démarrés ; l'arrêt ne touche que ce qu'Hermes a lancé.
 - Ports 81/3000 occupés par autre chose → repli automatique (8081/8181…,
@@ -114,8 +122,8 @@ et Caddy via votre gestionnaire de paquets.
 |---|---|
 | « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
 | Téléchargement qui échoue | relancez (idempotent) ; vérifiez la connexion / le proxy |
-| Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` |
-| Mise à jour non appliquée | `desktop\logs\launcher.log` (cause en clair) ; réseau, connexion GitHub (fenêtre au 1er lancement) ou fichiers locaux modifiés — Hermes démarre alors avec la version présente |
+| Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` (une nouvelle version retente d'elle-même) |
+| Mise à jour non appliquée | `desktop\logs\launcher.log` (cause en clair) ; les différences locales sont sauvegardées dans `desktop\runtime\maj-sauvegarde-…\` puis la version GitHub est appliquée. Vos données (conversations, clés) ne sont jamais touchées |
 | Page blanche / erreur | `desktop\logs\interface-err.log` |
 | Chat ne répond pas | `desktop\logs\mini-service-err.log` |
 | Page inaccessible | `desktop\logs\passerelle-err.log` |

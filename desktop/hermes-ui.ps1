@@ -13,10 +13,12 @@
 #   hermes (sous-dossier tools\) : Node.js v22 LTS, Bun, Caddy, puis
 #   dependances npm/bun, client Prisma et build de production. Sans admin,
 #   sans registre, sans ecrire hors du dossier : il reste mobile (cle USB
-#   comprise). Les fois suivantes, le double-clic est immediat : verification
-#   silencieuse des mises a jour GitHub (dossier clone en git : fusion
-#   rapide, jamais bloquante, dependances/build refaits seulement si
-#   necessaire), puis demarrage de la pile.
+#   comprise). Les fois suivantes, le double-clic est immediat : nettoyage
+#   des restes d'une session plantee AVANT toute chose (un ancien serveur
+#   vivant verrouillerait .next et ferait echouer le build), verification
+#   silencieuse des mises a jour GitHub (fusion rapide ; en cas d'ecart
+#   local, sauvegarde des fichiers modifies puis alignement sur GitHub),
+#   dependances/build refaits seulement si necessaire, puis demarrage.
 #
 # Securite de fermeture :
 #   • Tous les processus sont places dans un Job Object noyau avec
@@ -259,16 +261,20 @@ function Test-Command([string]$name) { return [bool](Get-Command $name -ErrorAct
 
 # ── Mise a jour automatique depuis GitHub ───────────────────────────────
 # Chaque demarrage a froid verifie si de nouveaux commits ont ete pousses
-# sur GitHub ; le cas echeant le dossier avance au dernier commit par
-# fusion RAPIDE uniquement (fast-forward : aucun fichier local modifie
-# n est jamais ecrase ; fusion impossible -> version locale conservee et
-# signalee). Dependances reinstallees et interface reconstruite UNIQUEMENT
-# si les fichiers concernes ont change (un push de documentation seule ne
-# reconstruit rien). Jamais bloquant : git absent, dossier non clone,
-# pas de reseau, connexion GitHub refusee -> message + demarrage avec la
-# version presente. La premiere verification peut ouvrir une fenetre
-# GitHub demandant de se connecter : c est le gestionnaire d identifiants
-# de git (Git Credential Manager), il ne la rouvrira plus ensuite.
+# sur GitHub ; le cas echeant le dossier avance au dernier commit. Fusion
+# RAPIDE quand c est possible (fast-forward) ; sinon (fichiers locaux
+# modifies, fichiers parasites d'une extraction zip, historique local
+# different) les fichiers locaux differents sont COPIES EN SAUVEGARDE
+# dans desktop\runtime\maj-sauvegarde-<date>\ puis le dossier est aligne
+# sur GitHub — si la sauvegarde echoue, on ne touche a rien (version
+# locale conservee). Dependances reinstallees et interface reconstruite
+# UNIQUEMENT si les fichiers concernes ont change (un push de
+# documentation seule ne reconstruit rien). Jamais bloquant : git absent,
+# dossier non clone, pas de reseau, connexion GitHub refusee -> message +
+# demarrage avec la version presente. La premiere verification peut ouvrir
+# une fenetre GitHub demandant de se connecter : c est le gestionnaire
+# d identifiants de git (Git Credential Manager), il ne la rouvrira plus
+# ensuite.
 $Script:UpdateChangedFiles = @()
 
 # Appelle git en absorbant stderr (avec $ErrorActionPreference = Stop un
@@ -288,6 +294,15 @@ function Invoke-Git([string[]]$GitArgs) {
 function Test-FilesChanged([string[]]$Paths) {
     foreach ($p in $Paths) { if ($Script:UpdateChangedFiles -contains $p) { return $true } }
     return $false
+}
+
+# Revision git courante du dossier ('' si git absent ou dossier non clone).
+function Get-RepoRevision {
+    if (-not (Test-Command 'git')) { return '' }
+    if (-not (Test-Path (Join-Path $Root '.git'))) { return '' }
+    $r = Invoke-Git @('rev-parse', 'HEAD')
+    if ($r.Code -ne 0) { return '' }
+    return $r.Text.Trim()
 }
 
 function Update-FromGit {
@@ -322,8 +337,80 @@ function Update-FromGit {
     if ($upstream -eq $before) { Log "  a jour : aucune nouvelle version"; return }
     $r = Invoke-Git @('merge', '--ff-only', $upstream)
     if ($r.Code -ne 0) {
-        Log "  ATTENTION : nouvelle version disponible mais non appliquee (fichiers locaux modifies ?) — version locale conservee"
-        return
+        # Fusion directe impossible : fichiers locaux modifies, fichiers
+        # parasites d une extraction zip ou historique local different
+        # (anciens patchs). Le depot GitHub est la reference du projet :
+        # on met les fichiers locaux differents de cote (copie de securite
+        # dans desktop\runtime\), puis on aligne le dossier sur GitHub.
+        # Echec de la sauvegarde -> on ne touche a rien.
+        Log "  fusion directe impossible (fichiers locaux modifies ou historique local different)..."
+        $aligned = $false
+        try {
+            # Liste des fichiers a sauvegarder : modifications en cours et
+            # fichiers non suivis (status) + fichiers differents ou absents
+            # cote GitHub (commits locaux) — tout ce que l alignement
+            # remplacerait ou ferait disparaitre.
+            $paths = @{}
+            $st = Invoke-Git @('status', '--porcelain')
+            if ($st.Code -eq 0) {
+                foreach ($l in ($st.Text -split "`n")) {
+                    # NB : TrimEnd seulement — l espace de TETE fait partie du
+                    # format (XY<espace>chemin), un Trim complet decalerait
+                    # le chemin d un caractere.
+                    $l = $l.TrimEnd()
+                    if ($l.Length -gt 3) {
+                        $p = $l.Substring(3)
+                        if ($p -match ' -> ') { $p = ($p -split ' -> ')[-1] }
+                        $paths[$p] = $true
+                    }
+                }
+            }
+            $df = Invoke-Git @('diff', '--name-status', 'HEAD', $upstream)
+            if ($df.Code -eq 0) {
+                foreach ($l in ($df.Text -split "`n")) {
+                    $l = $l.Trim()
+                    if ($l) {
+                        $f = $l -split "`t"
+                        if ($f.Count -ge 2 -and ($f[0] -match '^(M|D)')) {
+                            $p = $f[-1]
+                            if ($p -match ' -> ') { $p = ($p -split ' -> ')[-1] }
+                            $paths[$p] = $true
+                        }
+                    }
+                }
+            }
+            if ($paths.Count -gt 0) {
+                $backupDir = Join-Path $RuntimeDir ('maj-sauvegarde-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+                New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+                foreach ($p in @($paths.Keys)) {
+                    $src = Join-Path $Root $p
+                    if (Test-Path $src -PathType Leaf) {
+                        $dst = Join-Path $backupDir $p
+                        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+                        Copy-Item -Path $src -Destination $dst -Force -ErrorAction SilentlyContinue
+                    } elseif (Test-Path $src -PathType Container) {
+                        # dossier entier (ex. repertoire parasite d une extraction)
+                        $dst = Join-Path $backupDir ($p.TrimEnd('\','/'))
+                        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+                        Copy-Item -Path $src -Destination $dst -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                }
+                @(
+                    'Fichiers mis de cote par la mise a jour automatique d Hermes Web.',
+                    ('Date : ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')),
+                    'La version de GitHub a ete appliquee au dossier ; ces copies',
+                    'locales (vos modifications d avant la mise a jour) sont conservees ici.'
+                ) | Set-Content -Path (Join-Path $backupDir 'LISEZMOI.txt') -Encoding ASCII
+                Log ("  sauvegarde : {0} fichier(s) copies dans desktop\runtime\{1}" -f $paths.Count, (Split-Path -Leaf $backupDir))
+            }
+            $r2 = Invoke-Git @('reset', '--hard', $upstream)
+            if ($r2.Code -eq 0) { $aligned = $true }
+        } catch { }
+        if (-not $aligned) {
+            Log "  ATTENTION : nouvelle version disponible mais non appliquee — version locale conservee"
+            return
+        }
+        Log "  version GitHub appliquee (dossier aligne sur le depot distant)"
     }
     $r = Invoke-Git @('diff', '--name-only', $before, $upstream)
     $Script:UpdateChangedFiles = @($r.Text -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -501,7 +588,22 @@ function Ensure-PortableSetup {
 function Ensure-Build([string]$nodeDir) {
     if (Test-Path (Join-Path $Root '.next\standalone\server.js')) { return }
     $flag = Join-Path $ToolsDir 'build-echoue.flag'
-    if (Test-Path $flag) { Log "• build production saute (tentative precedente echouee — effacez $flag pour reessayer)"; return }
+    if (Test-Path $flag) {
+        # Le marqueur memorise la revision git qui avait echoue : pas de
+        # reprise en boucle pour une meme version, mais une version nouvelle
+        # (apres mise a jour, ou marqueur ancien sans revision) a droit a
+        # une nouvelle tentative — au redemarrage suivant, le marqueur se
+        # reecrit avec la revision : le retentatif reste donc borne.
+        $flagRev = ''
+        try { $flagRev = [string](Get-Content $flag -ErrorAction SilentlyContinue | Select-Object -First 1) } catch { }
+        $curRev = Get-RepoRevision
+        if ((-not $curRev) -or ($flagRev -and ($flagRev -eq $curRev))) {
+            Log "• build production saute (tentative precedente echouee — effacez $flag pour reessayer)"
+            return
+        }
+        Remove-Item $flag -Force -ErrorAction SilentlyContinue
+        Log "• build retente : la version a change depuis l echec precedent"
+    }
     Log "• build de production de l interface (1 a 3 minutes, une seule fois)..."
     $nextBin = Join-Path $Root 'node_modules\next\dist\bin\next'
     $code = Invoke-Live (Join-Path $nodeDir 'node.exe') @($nextBin, 'build') $Root
@@ -513,7 +615,9 @@ function Ensure-Build([string]$nodeDir) {
         }
         Log "  OK build production pret"
     } else {
-        New-Item -ItemType File -Path $flag -Force | Out-Null
+        $revForFlag = Get-RepoRevision
+        if ($revForFlag) { Set-Content -Path $flag -Value $revForFlag -Encoding ASCII }
+        else { New-Item -ItemType File -Path $flag -Force | Out-Null }
         Log "  ATTENTION build echoue (code $code) — l interface demarrera en mode developpement ; detail dans les messages ci-dessus"
     }
 }
@@ -689,17 +793,23 @@ function Do-Start {
         return
     }
 
-    # Installation portable automatique de tout ce qui manque (idempotente)
-    Ensure-PortableSetup
-    Initialize-JobObject
-
     # Verrou perime (plantage precedent) : nettoie les restes eventuels
+    # AVANT la mise a jour et le build — un ancien serveur encore vivant
+    # garderait .next verrouille et ferait echouer la reconstruction
+    # (erreur EBUSY observee : rmdir de .next\standalone refuse).
     if (Test-Path $StateFile) {
         Log "Verrou d'une session precedente trouve — nettoyage des restes eventuels."
-        Stop-Tree 'UI_PID' $MUii; Stop-Tree 'CHAT_PID' $MChat; Stop-Tree 'GW_PID' $MGw
+        Stop-Tree 'GW_PID'   $MGw
+        Stop-Tree 'UI_PID'   $MUii
+        Stop-Tree 'CHAT_PID' $MChat
+        Wait-Gone $MUii 10; Wait-Gone $MChat 10; Wait-Gone $MGw 10
         Start-Sleep -Seconds 1
         $Script:State = @{}; Save-State
     }
+
+    # Installation portable automatique de tout ce qui manque (idempotente)
+    Ensure-PortableSetup
+    Initialize-JobObject
 
     # Choix des ports AVANT le moindre demarrage (tout ou rien)
     $gw = Pick-Port $GwPorts
