@@ -18,7 +18,7 @@ import { once } from "node:events";
 const TOKEN = "test-jeton-service-ABC123-xyz789";
 const SOCK_URL = "http://localhost:3303";
 const FILES_URL = "http://localhost:3304";
-const DB_DIR = "/home/z/my-project/hermes_ui/db-test-integration";
+const DB_DIR = "/home/z/my-project/db-test-integration";
 
 let failures = 0;
 function check(label: string, ok: boolean, extra = "") {
@@ -43,7 +43,7 @@ async function startService(): Promise<ChildProcess> {
     HERMES_CHAT_DB: `${DB_DIR}/hermes-chat.sqlite`, // base de test isolée
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project/hermes_ui",
+    cwd: "/home/z/my-project",
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

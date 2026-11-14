@@ -139,9 +139,33 @@ function resolveLlmEndpoint(row: ProviderRow): LlmEndpoint | null {
       base = `${caps.defaultBaseUrl ?? "http://localhost:11434"}/v1`;
     }
   }
-  // L'adresse saisie par l'utilisatrice gagne sur l'adresse canonique.
+  // L'adresse saisie par l'utilisatrice gagne sur l'adresse canonique —
+  // même convention que le test de clé (providers.ts) : pour un fournisseur
+  // CONNU, seule l'ORIGINE est remplacée (proxy, auto-hébergé, faux serveur
+  // QA), le chemin canonique fait partie du contrat (/api/paas/v4 chez z.ai,
+  // /inference/openai/v1 chez opencode, /v1 chez Anthropic…). Fournisseur
+  // personnalisé : l'adresse est la base complète (convention OpenAI,
+  // base + /chat/completions). Ollama (sans clé) : l'adresse désigne le
+  // serveur, la surface /v1 du moteur est conservée.
+  // Sans cette règle, le bouton « Tester » validait {origine}/api/paas/v4/models
+  // pendant que le moteur appelait {origine}/models — deux adresses différentes
+  // pour la même clé (constaté avec la clé z.ai réelle, 2026-11-15).
   if (row.base_url && /^https?:\/\//i.test(row.base_url)) {
-    base = trimSlash(row.base_url);
+    const explicit = trimSlash(row.base_url);
+    const canonical = caps && caps.kind === "llm" ? KNOWN_LLM_BASES[caps.name] : undefined;
+    if (keyless) {
+      base = /\/v1$/.test(explicit) ? explicit : `${explicit}/v1`;
+    } else if (canonical) {
+      try {
+        const e = new URL(explicit);
+        const c = new URL(canonical);
+        base = `${e.origin}${c.pathname}`;
+      } catch {
+        base = explicit;
+      }
+    } else {
+      base = explicit;
+    }
   }
   if (!base) return null;
   if (!safeBase(base)) return null;
@@ -235,6 +259,38 @@ async function readErrorBody(res: Response): Promise<string> {
     /* corps non JSON */
   }
   return raw.slice(0, 200) || `(corps vide)`;
+}
+
+/**
+ * 429 : la raison renvoyée par le fournisseur, traduite quand elle est
+ * reconnue (corps réels observés en production) :
+ *  • z.ai code 1113 « Insufficient balance or no resource package » → le
+ *    compte n'a pas de crédit : aucune génération possible, recharger ;
+ *  • opencode « FreeUsageLimitError » → quota gratuit épuisé, abonnement
+ *    nécessaire pour continuer ;
+ *  • « Too many requests / rate limit » → simple limite de débit, réessayer.
+ * Sinon le message d'origine accompagne l'erreur telle quelle (honnêteté :
+ * c'est le fournisseur qui parle). `short` sert d'étiquette sur la carte clé.
+ */
+function rateLimitWhy(detail: string): { long: string; short: string } {
+  if (/insufficient balance|no resource package/i.test(detail))
+    return {
+      long: "solde insuffisant : rechargez le compte chez le fournisseur",
+      short: "solde insuffisant (recharge requise)",
+    };
+  if (/free usage limit/i.test(detail))
+    return {
+      long: "quota gratuit épuisé : un abonnement payant du fournisseur est nécessaire",
+      short: "quota gratuit épuisé",
+    };
+  if (/too many requests|rate limit/i.test(detail))
+    return {
+      long: "trop de requêtes à la minute : réessayez dans un instant",
+      short: "trop de requêtes (réessayez)",
+    };
+  if (!detail || detail === "(corps vide)")
+    return { long: "", short: "limite atteinte à l'usage" };
+  return { long: detail, short: detail.slice(0, 80) };
 }
 
 /** Modèle de repli pour un tour multimodal, si la liste en expose un. */
@@ -430,8 +486,14 @@ export function createLlmPool(store: Store): LlmPoolApi {
       const detail = await readErrorBody(res);
       if (res.status === 401 || res.status === 403)
         throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
-      if (res.status === 429)
-        throw new PoolAuthError(`limite ${endpoint.providerLabel} atteinte (HTTP 429)`, true, "limite atteinte à l'usage");
+      if (res.status === 429) {
+        const why = rateLimitWhy(detail);
+        throw new PoolAuthError(
+          `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
+          true,
+          why.short,
+        );
+      }
       throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
     }
     if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
@@ -524,8 +586,14 @@ export function createLlmPool(store: Store): LlmPoolApi {
       const detail = await readErrorBody(res);
       if (res.status === 401 || res.status === 403)
         throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
-      if (res.status === 429)
-        throw new PoolAuthError(`limite ${endpoint.providerLabel} atteinte (HTTP 429)`, true, "limite atteinte à l'usage");
+      if (res.status === 429) {
+        const why = rateLimitWhy(detail);
+        throw new PoolAuthError(
+          `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
+          true,
+          why.short,
+        );
+      }
       throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
     }
     if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);

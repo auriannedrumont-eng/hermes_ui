@@ -218,11 +218,14 @@ export function resolveKnownProvider(
   if (!raw) return null;
   const known = KNOWN_PROVIDERS.find((p) => p.match.test(raw));
   if (known) return { known };
-  // Adresse collée : fournisseur personnalisé (convention OpenAI-compatible)
+  // Adresse collée : fournisseur personnalisé (convention OpenAI-compatible).
+  // Le chemin collé fait partie de l'adresse (vLLM/LM Studio servent /v1,
+  // certains proxies un préfixe) — ne garder que l'origine faisait appel au
+  // moteur à la racine au lieu de l'adresse saisie.
   if (/^https?:\/\//i.test(raw)) {
     try {
       const u = new URL(raw);
-      return { custom: { name: u.hostname, baseUrl: u.origin } };
+      return { custom: { name: u.hostname, baseUrl: raw.replace(/\/+$/, "") } };
     } catch {
       return null;
     }

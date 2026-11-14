@@ -23,7 +23,7 @@ import {
 
 const TOKEN = "test-jeton-opencode-ABC123";
 const SOCK_URL = "http://localhost:3313";
-const DB_DIR = "/home/z/my-project/hermes_ui/db-test-opencode";
+const DB_DIR = "/home/z/my-project/db-test-opencode";
 const MOCK_PORT = 3315;
 const MOCK_KEY = "sk-faux-opencode-0123456789";
 const MOCK_CONTENT = "Réponse du faux opencode : la chaîne complète fonctionne.";
@@ -98,7 +98,7 @@ function startService(): Promise<ChildProcess> {
     HERMES_CHAT_DB: join(DB_DIR, "hermes-chat.sqlite"),
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project/hermes_ui",
+    cwd: "/home/z/my-project",
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

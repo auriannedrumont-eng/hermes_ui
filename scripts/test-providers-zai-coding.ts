@@ -27,7 +27,7 @@ import { looksLikeZaiJwt } from "../mini-services/hermes-chat/providers";
 
 const TOKEN = "test-jeton-zai-ABC123";
 const SOCK_URL = "http://localhost:3317";
-const DB_DIR = "/home/z/my-project/hermes_ui/db-test-zai";
+const DB_DIR = "/home/z/my-project/db-test-zai";
 const MOCK_PORT = 3319;
 // Jeton factice au format JWT (les clés Coding Plan réelles en sont).
 const MOCK_JWT =
@@ -142,7 +142,7 @@ function startService(): Promise<ChildProcess> {
     HERMES_CHAT_DB: join(DB_DIR, "hermes-chat.sqlite"),
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project/hermes_ui",
+    cwd: "/home/z/my-project",
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

@@ -3,12 +3,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { mkdirSync, rmSync, existsSync, statSync } from "node:fs";
 
-const DB_DIR = "/home/z/my-project/hermes_ui/db-test-shutdown";
+const DB_DIR = "/home/z/my-project/db-test-shutdown";
 rmSync(DB_DIR, { recursive: true, force: true });
 mkdirSync(DB_DIR, { recursive: true });
 
 const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-  cwd: "/home/z/my-project/hermes_ui",
+  cwd: "/home/z/my-project",
   env: {
     ...process.env,
     HERMES_SERVICE_TOKEN: "tok-debug",
