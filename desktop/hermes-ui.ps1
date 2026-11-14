@@ -379,12 +379,6 @@ function Ensure-PortableSetup {
         Log "• installation des dependances de l interface (npm install, quelques minutes)..."
         $code = Invoke-Live $npmCmd @('install', '--no-audit', '--no-fund') $Root
         if ($code -ne 0) { Die "npm install a echoue (code $code) — relancez, ou verifiez votre connexion" }
-        # client Prisma : @prisma/client doit etre genere pour compiler
-        Log "• generation du client Prisma..."
-        $prismaBin = Join-Path $Root 'node_modules\prisma\build\index.js'
-        if (Test-Path $prismaBin) {
-            [void](Invoke-Live (Join-Path $nodeDir 'node.exe') @($prismaBin, 'generate') $Root)
-        }
     }
 
     # ── 5. Dependances bun du mini-service ──

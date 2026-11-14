@@ -5,7 +5,7 @@
 
 - **1er double-clic** : installe automatiquement tout ce qui manque **à
   l'intérieur du dossier hermes** (sous-dossier `tools\`) — Node.js v22 LTS,
-  Bun, Caddy, puis les dépendances npm/bun, le client Prisma et le build de
+  Bun, Caddy, puis les dépendances npm/bun et le build de
   production de l'interface. Aucune ligne de commande, aucun droit
   administrateur, **rien n'est écrit hors du dossier**. Comptez quelques
   minutes (téléchargements + installations) avec la progression affichée
@@ -40,7 +40,7 @@ pouvez le renommer, le déplacer, il fonctionnera.
    exe officiel.
 3. `node_modules` manquants → `npm install` (interface) et `bun install`
    (mini-service), sortie en direct dans la fenêtre.
-4. Client Prisma généré, puis **build de production** de l'interface
+4. **Build de production** de l'interface
    (`next build` + copies `static`/`public`, une seule fois). Si le build
    échoue : bascule en mode développement et pose un marqueur
    `tools\build-echoue.flag` (effacez-le pour retenter).
