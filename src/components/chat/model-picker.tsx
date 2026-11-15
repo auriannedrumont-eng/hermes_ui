@@ -1,11 +1,12 @@
-// Sélecteur de modèle — chantier « Composer v2 » :
-// popover cmdk avec recherche (nom, id, fournisseur — insensible à la casse
-// et aux accents), section Favoris (hermes.models.favorites), groupes par
-// fournisseur en mode gateway, et échelle d'effort de raisonnement portée
-// par le modèle (repli générique off·low·medium·high·max).
+// Sélecteur de modèle — popover cmdk épuré : recherche (nom, id, fournisseur —
+// insensible à la casse et aux accents), section Favoris (hermes.models.favorites)
+// alimentée par l'étoile de chaque ligne (bascule ici même — fin du panneau mort
+// « géré depuis les paramètres »), groupes par fournisseur, échelle d'effort
+// portée par le modèle (repli générique off·low·medium·high·max) et mode expert
+// (F-22). Les notes explicatives vivent dans l'InfoTip — idiome unique du repo.
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { Check, ChevronDown, Search, Sparkles, Star, Zap } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
@@ -23,7 +24,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { readClientSetting, writeClientSetting } from "@/lib/settings";
+import { InfoTip } from "@/components/shared/info-tip";
+import {
+  onSettingsChanged,
+  readClientSetting,
+  writeClientSetting,
+} from "@/lib/settings";
 import { GENERIC_EFFORTS, type ExpertSettings, type ModelOption } from "@/lib/chat-types";
 
 const FAVORITES_KEY = "hermes.models.favorites";
@@ -37,15 +43,22 @@ function norm(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-/** Favoris du registre : ids JSON, ids disparus ignorés silencieusement. */
-function readFavoriteIds(): string[] {
+/** Favoris : ids JSON — entrées non-chaîne ou JSON invalide ignorés. */
+function parseFavoriteIds(value: unknown): string[] {
+  if (typeof value !== "string") return [];
   try {
-    const raw = readClientSetting<string>(FAVORITES_KEY) ?? "[]";
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === "string")
+      : [];
   } catch {
     return [];
   }
+}
+
+/** Favoris du registre : ids disparus ignorés silencieusement à la lecture. */
+function readFavoriteIds(): string[] {
+  return parseFavoriteIds(readClientSetting<string>(FAVORITES_KEY) ?? "[]");
 }
 
 interface ModelPickerProps {
@@ -97,27 +110,33 @@ function ExpertPanel({
   ).length;
   return (
     <div className="border-t border-border/60 px-3.5 py-2.5">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="flex w-full cursor-pointer items-center justify-between text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span className="flex items-center gap-1.5">
+      {/* Ligne titre : le chevron (devant, sens disclosure) porte l'état —
+          les mots « déplier/replier » redondants sont tombés (épuration).
+          L'InfoTip est hors du bouton (jamais de bouton dans un bouton). */}
+      <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-foreground"
+        >
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
           Mode expert
           {activeCount > 0 ? (
             <span className="rounded-full bg-hermes/10 px-1.5 py-px text-[11px] font-medium text-hermes-text">
               {activeCount} actif{activeCount > 1 ? "s" : ""}
             </span>
           ) : null}
-        </span>
-        <span className="flex items-center gap-1.5 text-[11px] font-medium">
-          {expanded ? "replier" : "déplier"}
-          <ChevronDown
-            className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
-          />
-        </span>
-      </button>
+        </button>
+        <InfoTip>
+          Température, plafond de jetons et graine — champs vides = valeurs par
+          défaut du fournisseur. Envoyés dans{" "}
+          <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>
+          , ignorés sans dommage si non supportés.
+        </InfoTip>
+      </div>
       {expanded ? (
         <div className="mt-2 space-y-2.5">
           <div>
@@ -171,11 +190,6 @@ function ExpertPanel({
               className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
             />
           </div>
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            Champs vides = valeurs par défaut du fournisseur. Envoyés dans{" "}
-            <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>{" "}
-            — ignorés sans dommage si non supportés.
-          </p>
         </div>
       ) : null}
     </div>
@@ -200,6 +214,23 @@ export function ModelPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  // Favoris partagés entre pickers (A/B du mode comparaison) : écriture locale
+  // + reprise sur le bus des réglages (hermes-ui:settings-changed).
+  useEffect(
+    () =>
+      onSettingsChanged(({ key, value }) => {
+        if (key === FAVORITES_KEY) setFavoriteIds(parseFavoriteIds(value));
+      }),
+    []
+  );
+
+  const toggleFavorite = (id: string) => {
+    const next = favoriteIds.includes(id)
+      ? favoriteIds.filter((f) => f !== id)
+      : [...favoriteIds, id];
+    setFavoriteIds(next);
+    writeClientSetting(FAVORITES_KEY, JSON.stringify(next));
+  };
 
   const list = useMemo(() => (Array.isArray(models) ? models : []), [models]);
   const current = useMemo(
@@ -230,9 +261,12 @@ export function ModelPicker({
   const favoriteIdSet = useMemo(() => new Set(favorites.map((m) => m.id)), [favorites]);
 
   // ── Groupes : par fournisseur en gateway ou en pool vivant (v2.3) ──
+  // En grouped, le fournisseur porte le titre de section : la ligne mono ne
+  // le répète pas. En flat (catalogue/démo), une seule section : il complète l'id.
+  const byProvider =
+    (source === "gateway" && mode === "gateway") || source === "providers";
   const grouped = useMemo(() => {
     const rest = filtered.filter((m) => !favoriteIdSet.has(m.id));
-    const byProvider = (source === "gateway" && mode === "gateway") || source === "providers";
     if (byProvider) {
       const groups = new Map<string, ModelOption[]>();
       for (const m of rest) {
@@ -243,7 +277,7 @@ export function ModelPicker({
       return [...groups.entries()];
     }
     return rest.length ? [["", rest] as [string, ModelOption[]]] : [];
-  }, [filtered, favoriteIdSet, source, mode]);
+  }, [filtered, favoriteIdSet, byProvider]);
 
   const providers = useMemo(
     () => new Set(filtered.map((m) => m.provider || "Gateway")),
@@ -267,6 +301,7 @@ export function ModelPicker({
 
   const renderModel = (m: ModelOption) => {
     const isSelected = m.id === selectedModel;
+    const isFavorite = favoriteIds.includes(m.id);
     return (
       <CommandItem
         key={m.id}
@@ -275,7 +310,7 @@ export function ModelPicker({
         onSelect={() => pick(m.id)}
         role="menuitemradio"
         aria-checked={isSelected}
-        className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left"
+        className="group/item flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left"
       >
         <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
           {isSelected ? <Check className="h-4 w-4 text-hermes-text" /> : null}
@@ -283,9 +318,6 @@ export function ModelPicker({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-[14px] font-medium">{m.label}</span>
-            {favoriteIds.includes(m.id) ? (
-              <Star className="h-3 w-3 shrink-0 fill-warning text-warning" />
-            ) : null}
             {m.badge ? (
               <span
                 className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[11px] font-medium ${
@@ -304,10 +336,40 @@ export function ModelPicker({
               {m.description}
             </span>
           ) : null}
-          <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground/70">
-            {m.id} · {m.provider}
+          <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground/70">
+            {byProvider ? m.id : `${m.id} · ${m.provider}`}
           </span>
         </span>
+        {/* Étoile favori : révélée au survol / sélection / focus, pleine si
+            favorite. Clic et Entrée/Espace isolés de cmdk (sinon la ligne
+            serait sélectionnée en même temps que l'étoile basculée). */}
+        <button
+          type="button"
+          aria-label={
+            isFavorite
+              ? `Retirer « ${m.label} » des favoris`
+              : `Ajouter « ${m.label} » aux favoris`
+          }
+          aria-pressed={isFavorite}
+          title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFavorite(m.id);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+          }}
+          className={`mt-px flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-opacity ${
+            isFavorite
+              ? "text-warning opacity-100 hover:bg-warning/10"
+              : "text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/item:opacity-100 group-data-[selected=true]/item:opacity-100"
+          }`}
+        >
+          <Star
+            className={`h-3.5 w-3.5 ${isFavorite ? "fill-warning" : ""}`}
+            strokeWidth={2}
+          />
+        </button>
       </CommandItem>
     );
   };
@@ -316,7 +378,8 @@ export function ModelPicker({
     <Popover
       open={open}
       onOpenChange={(o) => {
-        // Les favoris sont relus à chaque ouverture (gérés depuis les paramètres)
+        // Relus à chaque ouverture : le registre est la source de vérité,
+        // l'étoile de ce picker (ou un autre picker ouvert) l'écrit.
         if (o) setFavoriteIds(readFavoriteIds());
         setOpen(o);
       }}
@@ -355,19 +418,16 @@ export function ModelPicker({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <Command shouldFilter={false} className="overflow-hidden rounded-xl">
-          <div className="flex items-center gap-1.5 px-3.5 pt-3 pb-1 text-[11px] font-medium text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-hermes-text" />
-            Choisir un modèle
-          </div>
-          <div className="px-2 pb-1">
+          {/* Pas d'en-tête : la recherche dit déjà quoi faire (épuration). */}
+          <div className="px-2 pt-3 pb-1">
             <div className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-2.5 focus-within:border-hermes focus-within:ring-2 focus-within:ring-hermes/20">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <CommandPrimitive.Input
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Rechercher par nom, id ou fournisseur…"
+                placeholder="Rechercher un modèle…"
                 className="h-9 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-muted-foreground"
-                aria-label="Rechercher un modèle"
+                aria-label="Rechercher un modèle par nom, id ou fournisseur"
               />
               <kbd className="rounded border border-border bg-card px-1.5 py-px font-mono text-[11px] text-muted-foreground">
                 esc
@@ -403,21 +463,33 @@ export function ModelPicker({
             )}
           </CommandList>
 
-          <p className="border-t border-border/60 px-3.5 py-2 text-[11px] leading-snug text-muted-foreground">
-            {filtered.length}
-            {filtered.length > 1 ? " modèles" : " modèle"} · {providers.size}
-            {providers.size > 1 ? " fournisseurs — " : " fournisseur — "}
-            {source === "gateway" && mode === "gateway"
-              ? "modèles exposés par la gateway Hermes"
-              : source === "providers"
-                ? "modèles vivants de vos clés — Paramètres → Fournisseurs & clés"
-                : "catalogue Hermes — ajoutez une clé pour des modèles vivants"}
+          <p className="flex items-center gap-1.5 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground">
+            <span>
+              {filtered.length}
+              {filtered.length > 1 ? " modèles" : " modèle"} · {providers.size}
+              {providers.size > 1 ? " fournisseurs" : " fournisseur"}
+            </span>
+            <InfoTip>
+              {source === "gateway" && mode === "gateway"
+                ? "Modèles exposés par la gateway Hermes."
+                : source === "providers"
+                  ? "Modèles vivants de vos clés — Paramètres → Fournisseurs & clés."
+                  : "Catalogue Hermes — ajoutez une clé dans Paramètres pour des modèles vivants."}
+            </InfoTip>
           </p>
 
           {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné */}
           <div className={bare ? "hidden" : "border-t border-border/60 px-3.5 py-2.5"}>
             <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-              <span>Effort de raisonnement</span>
+              <span className="flex items-center gap-1.5">
+                Effort de raisonnement
+                <InfoTip>
+                  Échelle portée par le modèle sélectionné — repli générique
+                  off·low·medium·high·max. La valeur part dans{" "}
+                  <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>
+                  , ignorée sans dommage si le fournisseur ne la supporte pas.
+                </InfoTip>
+              </span>
               <span className="text-[11px] font-medium">{effortScaleLabel}</span>
             </div>
             <Segmented
@@ -431,10 +503,6 @@ export function ModelPicker({
               className="w-full"
               classNameItem="flex-1 capitalize"
             />
-            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-              Envoyé dans <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>{" "}
-              — ignoré sans dommage si le fournisseur ne le supporte pas.
-            </p>
           </div>
 
           {/* Mode expert (F-22) : température / plafond de sortie / graine */}

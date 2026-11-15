@@ -39,7 +39,7 @@ import { Slider } from "@/components/ui/slider";
 import { Segmented } from "@/components/shared/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { InfoTip } from "@/components/settings/info-tip";
+import { InfoTip } from "@/components/shared/info-tip";
 import {
   getSettingDef,
   onSettingsChanged,
