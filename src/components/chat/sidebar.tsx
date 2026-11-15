@@ -38,6 +38,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
+import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -159,7 +161,7 @@ function ConversationItem({
               setRenamingId(null);
             }
           }}
-          className="h-8 border-none bg-transparent text-[13px] focus-visible:ring-0"
+          className="h-8 border-none bg-transparent text-[12.5px] focus-visible:ring-0"
           aria-label="Nouveau titre"
         />
         <Button
@@ -195,15 +197,15 @@ function ConversationItem({
           aria-current={isActive ? "page" : undefined}
         >
           {c.pinned ? (
-            <Pin className="h-4 w-4 shrink-0 rotate-45 text-hermes" aria-label="Épinglée" />
+            <Pin className="h-4 w-4 shrink-0 rotate-45 text-hermes-text" aria-label="Épinglée" />
           ) : (
             <MessageSquare
               className={`h-4 w-4 shrink-0 ${
-                isActive ? "text-hermes" : "text-muted-foreground"
+                isActive ? "text-hermes-text" : "text-muted-foreground"
               }`}
             />
           )}
-          <span className="truncate text-[13.5px]">{c.title}</span>
+          <span className="truncate text-[14px]">{c.title}</span>
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -249,14 +251,14 @@ function ConversationItem({
                   <DropdownMenuItem onClick={() => onMove(c.id, null)}>
                     <Inbox className="h-3.5 w-3.5" />
                     <span className="flex-1 truncate">Sans projet</span>
-                    {!c.projectId ? <Check className="h-3.5 w-3.5 text-hermes" /> : null}
+                    {!c.projectId ? <Check className="h-3.5 w-3.5 text-hermes-text" /> : null}
                   </DropdownMenuItem>
                   {projects.map((p) => (
                     <DropdownMenuItem key={p.id} onClick={() => onMove(c.id, p.id)}>
                       <Folder className="h-3.5 w-3.5" />
                       <span className="flex-1 truncate">{p.name}</span>
                       {c.projectId === p.id ? (
-                        <Check className="h-3.5 w-3.5 text-hermes" />
+                        <Check className="h-3.5 w-3.5 text-hermes-text" />
                       ) : null}
                     </DropdownMenuItem>
                   ))}
@@ -357,7 +359,7 @@ function ProjectGroup({
     <div className="mb-1">
       {renamingProject ? (
         <div className="flex items-center gap-1 rounded-lg bg-sidebar-accent px-2 py-1">
-          <Folder className="h-4 w-4 shrink-0 text-hermes" />
+          <Folder className="h-4 w-4 shrink-0 text-hermes-text" />
           <Input
             autoFocus
             value={projectRenameValue}
@@ -366,7 +368,7 @@ function ProjectGroup({
               if (e.key === "Enter") onCommitProjectRename();
               else if (e.key === "Escape") onCancelProjectRename();
             }}
-            className="h-8 border-none bg-transparent text-[13px] focus-visible:ring-0"
+            className="h-8 border-none bg-transparent text-[12.5px] focus-visible:ring-0"
             aria-label="Nouveau nom du projet"
           />
           <Button
@@ -409,9 +411,9 @@ function ProjectGroup({
             ) : (
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             )}
-            <Folder className="h-4 w-4 shrink-0 text-hermes" aria-hidden="true" />
+            <Folder className="h-4 w-4 shrink-0 text-hermes-text" aria-hidden="true" />
             <span className="truncate text-[12.5px] font-semibold">{project.name}</span>
-            <span className="ml-1 shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10.5px] tabular-nums text-muted-foreground">
+            <span className="ml-1 shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[11px] tabular-nums text-muted-foreground">
               {conversations.length}
             </span>
           </button>
@@ -451,7 +453,7 @@ function ProjectGroup({
       )}
       {!collapsed ? (
         conversations.length === 0 ? (
-          <p className="px-3 py-2 text-[12px] italic text-muted-foreground">
+          <p className="px-3 py-2 text-[12.5px] italic text-muted-foreground">
             Glissez une conversation ici
           </p>
         ) : (
@@ -499,6 +501,9 @@ export function Sidebar({
   onOpenSettings,
 }: SidebarProps) {
   const [query, setQuery] = useState("");
+  // Gardes de destruction (C5.1) : cibles des dialogues de confirmation.
+  const [deleteConvTarget, setDeleteConvTarget] = useState<ConversationMeta | null>(null);
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [messageHits, setMessageHits] = useState<SearchHit[]>([]);
@@ -571,7 +576,7 @@ export function Sidebar({
       } finally {
         setSearching(false);
       }
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [q, isSearching, onSearchMessages]);
 
@@ -640,7 +645,10 @@ export function Sidebar({
     onOpen,
     onRename,
     onTogglePin,
-    onDelete,
+    onDelete: (id: string) => {
+      const c = conversations.find((x) => x.id === id);
+      if (c) setDeleteConvTarget(c);
+    },
     onMove: onMoveConversation,
     projects,
   };
@@ -673,12 +681,7 @@ export function Sidebar({
   };
 
   const handleDeleteProject = (p: Project) => {
-    const count = conversationsByProject.get(p.id)?.length ?? 0;
-    const msg =
-      count > 0
-        ? `Supprimer le projet « ${p.name} » ? Ses ${count} conversation${count > 1 ? "s" : ""} seront conservées et déplacées dans « Sans projet ».`
-        : `Supprimer le projet « ${p.name} » ?`;
-    if (window.confirm(msg)) onDeleteProject(p.id);
+    setDeleteProjectTarget(p);
   };
 
   // ── Drag & drop ───────────────────────────────────────────────────
@@ -725,7 +728,10 @@ export function Sidebar({
     onOpen,
     onRename,
     onTogglePin,
-    onDelete,
+    onDelete: (id: string) => {
+      const c = conversations.find((x) => x.id === id);
+      if (c) setDeleteConvTarget(c);
+    },
     onMove: onMoveConversation,
     projects,
   };
@@ -769,7 +775,7 @@ export function Sidebar({
                 }
               }}
               placeholder="Nom du projet…"
-              className="h-8 border-none bg-transparent text-[13px] focus-visible:ring-0"
+              className="h-8 border-none bg-transparent text-[12.5px] focus-visible:ring-0"
               aria-label="Nom du nouveau projet"
             />
             <Button
@@ -798,7 +804,7 @@ export function Sidebar({
           <Button
             variant="ghost"
             onClick={() => setCreatingProject(true)}
-            className="h-8 w-full justify-start gap-2 rounded-xl px-2 text-[13px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="h-8 w-full justify-start gap-2 rounded-xl px-2 text-[12.5px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <FolderPlus className="h-4 w-4" />
             Nouveau projet
@@ -815,7 +821,7 @@ export function Sidebar({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher…"
             aria-label="Rechercher dans les conversations et les messages"
-            className="h-9 rounded-xl border-transparent bg-sidebar-accent pl-9 text-[13px] focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-9 rounded-xl border-transparent bg-sidebar-accent pl-9 text-[12.5px] focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
       </div>
@@ -883,7 +889,7 @@ export function Sidebar({
                         <span className="block truncate text-[12.5px] font-medium">
                           {hit.conversationTitle}
                         </span>
-                        <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
                           {hit.role === "user" ? "Vous : " : "Hermes : "}
                           {hit.excerpt}
                         </span>
@@ -952,13 +958,13 @@ export function Sidebar({
                 </DropZone>
               ) : null}
               {!hasProjects && pinned.length === 0 && conversations.length === 0 ? (
-                <p className="px-2 pt-6 text-center text-[13px] text-muted-foreground">
+                <p className="px-2 pt-6 text-center text-[12.5px] text-muted-foreground">
                   Pas encore de conversation.
                 </p>
               ) : null}
             </>
           ) : conversations.length === 0 ? (
-            <p className="px-2 pt-6 text-center text-[13px] text-muted-foreground">
+            <p className="px-2 pt-6 text-center text-[12.5px] text-muted-foreground">
               Pas encore de conversation.
             </p>
           ) : (
@@ -1015,11 +1021,11 @@ export function Sidebar({
           {activeDrag ? (
             <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar px-2.5 py-1.5 shadow-lg">
               {activeDrag.type === "project" ? (
-                <Folder className="h-4 w-4 shrink-0 text-hermes" />
+                <Folder className="h-4 w-4 shrink-0 text-hermes-text" />
               ) : (
                 <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
               )}
-              <span className="truncate text-[13px]">{activeDrag.label}</span>
+              <span className="truncate text-[12.5px]">{activeDrag.label}</span>
             </div>
           ) : null}
         </DragOverlay>
@@ -1034,7 +1040,7 @@ export function Sidebar({
                 !connected
                   ? "bg-muted-foreground/50"
                   : mode === "gateway" || (mode === "demo" && poolActive)
-                    ? "bg-emerald-500"
+                    ? "bg-success"
                     : "bg-hermes"
               }`}
               aria-hidden="true"
@@ -1059,7 +1065,7 @@ export function Sidebar({
               <Settings className="size-[14px]" />
             </button>
           </div>
-          <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
             {!connected ? (
               "Reconnexion automatique en cours…"
             ) : mode === "gateway" ? (
@@ -1073,7 +1079,7 @@ export function Sidebar({
               <>
                 Ajoutez une clé dans Paramètres → Fournisseurs &amp; clés, ou
                 définissez{" "}
-                <code className="break-all rounded bg-background/60 px-1 py-px font-mono text-[10.5px]">
+                <code className="break-all rounded bg-background/60 px-1 py-px font-mono text-[11px]">
                   HERMES_GATEWAY_URL
                 </code>{" "}
                 pour brancher l&apos;agent Hermes.
@@ -1082,6 +1088,44 @@ export function Sidebar({
           </p>
         </div>
       </div>
+
+      {/* Gardes de destruction (C5.1) — une seule façon de confirmer */}
+      <ConfirmDestructiveDialog
+        open={!!deleteConvTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteConvTarget(null);
+        }}
+        title={deleteConvTarget ? `Supprimer « ${deleteConvTarget.title} » ?` : ""}
+        description="La conversation, son historique et le journal de versions de ses fichiers seront supprimés définitivement."
+        confirmLabel="Supprimer la conversation"
+        onConfirm={() => {
+          if (deleteConvTarget) onDelete(deleteConvTarget.id);
+          setDeleteConvTarget(null);
+        }}
+      />
+      <ConfirmDestructiveDialog
+        open={!!deleteProjectTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteProjectTarget(null);
+        }}
+        title={deleteProjectTarget ? `Supprimer le projet « ${deleteProjectTarget.name} » ?` : ""}
+        description={
+          deleteProjectTarget
+            ? (() => {
+                const count =
+                  conversationsByProject.get(deleteProjectTarget.id)?.length ?? 0;
+                return count > 0
+                  ? `Ses ${count} conversation${count > 1 ? "s" : ""} seront conservées et déplacées dans « Sans projet ».`
+                  : "Le projet sera supprimé. Ses conversations, s'il y en a, resteront dans « Sans projet ».";
+              })()
+            : undefined
+        }
+        confirmLabel="Supprimer le projet"
+        onConfirm={() => {
+          if (deleteProjectTarget) onDeleteProject(deleteProjectTarget.id);
+          setDeleteProjectTarget(null);
+        }}
+      />
     </div>
   );
 }

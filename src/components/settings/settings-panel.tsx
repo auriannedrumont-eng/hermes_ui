@@ -157,7 +157,7 @@ function Segment({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="flex flex-none gap-0.5 rounded-[9px] bg-muted p-[2.5px]"
+      className="flex flex-none gap-0.5 rounded-md bg-muted p-[2.5px]"
     >
       {options.map((o) => (
         <button
@@ -167,9 +167,9 @@ function Segment({
           aria-checked={o.value === value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "cursor-pointer rounded-[7px] px-[9px] py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-all hover:text-foreground",
+            "cursor-pointer rounded-sm px-[9px] py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-all hover:text-foreground",
             "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
-            o.value === value && "bg-card font-semibold text-hermes shadow-sm"
+            o.value === value && "bg-card font-semibold text-hermes-text shadow-sm"
           )}
         >
           {o.label}
@@ -199,9 +199,9 @@ function SettingRow({
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-medium">{label}</div>
+        <div className="text-[14px] font-medium">{label}</div>
         {description ? (
-          <div className="mt-px max-w-[480px] text-[12px] leading-snug text-muted-foreground">
+          <div className="mt-px max-w-[480px] text-[12.5px] leading-snug text-muted-foreground">
             {description}
           </div>
         ) : null}
@@ -243,7 +243,7 @@ function InterfacePane({ projects }: { projects: Project[] }) {
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Interface</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Le confort de cette interface — appliqué dès le clic.
       </p>
 
@@ -277,7 +277,7 @@ function InterfacePane({ projects }: { projects: Project[] }) {
             onValueChange={([v]) => writeClientSetting("fork.ui.sidebar.width", v)}
             className="flex-1"
           />
-          <span className="w-[38px] flex-none text-right text-[11.5px] font-semibold tabular-nums text-hermes">
+          <span className="w-[38px] flex-none text-right text-[11px] font-semibold tabular-nums text-hermes-text">
             {Math.round(values.width ?? 19)} %
           </span>
         </div>
@@ -293,7 +293,7 @@ function InterfacePane({ projects }: { projects: Project[] }) {
         >
           <SelectTrigger
             aria-label="Ordre des projets"
-            className="h-8 w-[150px] max-w-full rounded-[10px] bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
+            className="h-8 w-[150px] max-w-full rounded-md bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
           >
             <SelectValue placeholder="Récents" />
           </SelectTrigger>
@@ -409,7 +409,7 @@ function ModelesPane({
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Modèles</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Qui répond, qui travaille en arrière-plan, et avec quel effort.
       </p>
 
@@ -423,7 +423,7 @@ function ModelesPane({
         >
           <SelectTrigger
             aria-label="Modèle de conversation"
-            className="h-8 w-[230px] max-w-full rounded-[10px] bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
+            className="h-8 w-[230px] max-w-full rounded-md bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
           >
             <SelectValue placeholder="Modèle du service" />
           </SelectTrigger>
@@ -431,8 +431,8 @@ function ModelesPane({
             {models.map((m) => (
               <SelectItem key={m.id} value={m.id} className="py-2">
                 <span className="flex flex-col items-start gap-0.5">
-                  <span className="text-[13px] font-medium">{m.label}</span>
-                  <span className="font-mono text-[10.5px] text-muted-foreground">
+                  <span className="text-[12.5px] font-medium">{m.label}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">
                     {windowLabel(m)}
                   </span>
                 </span>
@@ -457,8 +457,8 @@ function ModelesPane({
       {/* F-21 — tarifs déclarés par l'utilisatrice : le coût des réponses
           est calculé à partir d'EUX (jamais deviné) et affiché par bulle. */}
       <div className="border-b border-border py-3">
-        <div className="text-[13.5px] font-medium">Tarifs des modèles</div>
-        <p className="mt-px max-w-[520px] text-[12px] leading-snug text-muted-foreground">
+        <div className="text-[14px] font-medium">Tarifs des modèles</div>
+        <p className="mt-px max-w-[520px] text-[12.5px] leading-snug text-muted-foreground">
           $ par million de jetons, entrée et sortie — le coût de chaque réponse
           sera affiché sous la bulle. Rien n&apos;est pré-rempli : le fournisseur fait
           foi ; aucune donnée ne quitte votre machine.
@@ -467,7 +467,7 @@ function ModelesPane({
           <Select value={tarifModel || undefined} onValueChange={setTarifModel}>
             <SelectTrigger
               aria-label="Modèle à tarifer"
-              className="h-8 w-[210px] max-w-full rounded-[10px] bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
+              className="h-8 w-[210px] max-w-full rounded-md bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
             >
               <SelectValue placeholder="Modèle à tarifer" />
             </SelectTrigger>
@@ -486,7 +486,7 @@ function ModelesPane({
             placeholder="entrée $/M"
             value={tarifInput}
             onChange={(e) => setTarifInput(e.target.value)}
-            className="h-8 w-[110px] rounded-[10px] border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
+            className="h-8 w-[110px] rounded-md border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
           />
           <label className="sr-only" htmlFor="tarif-output">Tarif sortie ($/M jetons)</label>
           <input
@@ -495,13 +495,13 @@ function ModelesPane({
             placeholder="sortie $/M"
             value={tarifOutput}
             onChange={(e) => setTarifOutput(e.target.value)}
-            className="h-8 w-[110px] rounded-[10px] border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
+            className="h-8 w-[110px] rounded-md border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
           />
           <button
             type="button"
             onClick={addTarif}
             disabled={!canAdd}
-            className="h-8 cursor-pointer rounded-[10px] bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             Ajouter
           </button>
@@ -511,7 +511,7 @@ function ModelesPane({
             {Object.entries(pricing).map(([id, p]) => (
               <li
                 key={id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12px]"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12.5px]"
               >
                 <span className="min-w-0 flex-1 truncate font-medium">{labelOf(id)}</span>
                 <span className="flex-none tabular-nums text-muted-foreground">
@@ -533,14 +533,14 @@ function ModelesPane({
             ))}
           </ul>
         ) : (
-          <p className="mt-2 text-[11.5px] text-muted-foreground">
+          <p className="mt-2 text-[11px] text-muted-foreground">
             Aucun tarif déclaré — les réponses afficheront leur coût dès qu&apos;un
             tarif sera renseigné (ou tel que facturé par le fournisseur).
           </p>
         )}
       </div>
 
-      <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground">
+      <p className="mt-6 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted-foreground">
         <Database className="mt-[1px] size-[13px] flex-none" strokeWidth={2} />
         Le modèle d&apos;arrière-plan (travaux invisibles) et le modèle de secours
         arriveront avec la découverte du moteur (v2.3). La place dont Hermes dispose
@@ -664,10 +664,10 @@ export function SettingsPanel({
             className="flex flex-none flex-col gap-2 border-border bg-background p-3 max-[1100px]:flex-row max-[1100px]:overflow-x-auto max-[1100px]:border-b min-[1100px]:w-[208px] min-[1100px]:border-r"
           >
             <div className="flex items-center gap-2 px-1 pb-1 max-[1100px]:hidden">
-              <span className="flex size-[22px] items-center justify-center rounded-[7px] bg-hermes/10 text-hermes">
-                <Sparkle className="size-[13px]" strokeWidth={2.2} />
+              <span className="flex size-[22px] items-center justify-center rounded-sm bg-hermes/10 text-hermes-text">
+                <Sparkle className="size-[13px]" strokeWidth={2} />
               </span>
-              <b className="text-[13px] font-semibold tracking-tight">Paramètres</b>
+              <b className="text-[12.5px] font-semibold tracking-tight">Paramètres</b>
             </div>
             <div className="flex flex-col gap-0.5 max-[1100px]:flex-row max-[1100px]:gap-1">
               {SECTIONS.map(({ id, icon: Icon, label }) => {
@@ -679,7 +679,7 @@ export function SettingsPanel({
                     onClick={() => setSection(id)}
                     aria-current={active ? "true" : undefined}
                     className={cn(
-                      "flex flex-none cursor-pointer items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                      "flex flex-none cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
                       active && "bg-muted font-semibold text-foreground"
                     )}
@@ -688,7 +688,7 @@ export function SettingsPanel({
                     <span className="whitespace-nowrap">{label}</span>
                     {id === "extensions" && extUpdate ? (
                       <i
-                        className="ml-auto size-[7px] flex-none rounded-full bg-amber-500 max-[1100px]:ml-1"
+                        className="ml-auto size-[7px] flex-none rounded-full bg-warning max-[1100px]:ml-1"
                         title="Mise à jour disponible"
                         aria-label="Mise à jour disponible"
                       />
@@ -697,22 +697,22 @@ export function SettingsPanel({
                 );
               })}
             </div>
-            <div className="mt-auto px-2 pt-2 text-[10.5px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
+            <div className="mt-auto px-2 pt-2 text-[11px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
               {isDemo ? (
                 poolActive ? (
                   <span className="inline-flex items-center gap-1.5" title="Réponses via l'API de vos fournisseurs">
-                    <i className="size-[6px] rounded-full bg-emerald-500" aria-hidden />
+                    <i className="size-[6px] rounded-full bg-success" aria-hidden />
                     moteur intégré
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5" title="Réponses simulées par le LLM intégré">
-                    <i className="size-[6px] rounded-full bg-amber-500" aria-hidden />
+                    <i className="size-[6px] rounded-full bg-warning" aria-hidden />
                     mode démo
                   </span>
                 )
               ) : (
                 <span className="inline-flex items-center gap-1.5" title="Gateway Hermes connectée">
-                  <i className="size-[6px] rounded-full bg-emerald-500" aria-hidden />
+                  <i className="size-[6px] rounded-full bg-success" aria-hidden />
                   gateway
                 </span>
               )}
@@ -730,7 +730,7 @@ export function SettingsPanel({
                   type="button"
                   title="Fermer (Échap)"
                   aria-label="Fermer les paramètres"
-                  className="flex size-[30px] cursor-pointer items-center justify-center rounded-[9px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+                  className="flex size-[30px] cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
                 >
                   <X className="size-4" strokeWidth={2} />
                 </button>
@@ -748,20 +748,20 @@ export function SettingsPanel({
             <div className="flex flex-none items-center gap-2.5 border-t border-border bg-background px-5 py-[9px] min-[1100px]:px-[34px]">
               {isDemo ? (
                 poolActive ? (
-                  <div className="group relative flex min-w-0 cursor-help items-center gap-[7px] text-[11.5px] text-muted-foreground">
-                    <span className="size-[7px] flex-none rounded-full bg-emerald-500" />
+                  <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="size-[7px] flex-none rounded-full bg-success" />
                     <span className="truncate">Moteur intégré</span>
-                    <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-[10px] bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                    <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                       Les réponses partent sur l&apos;API de vos fournisseurs
                       (clés actives : {engineProviders!.join(", ")}). Ajoutez ou
                       retirez des clés dans la section Fournisseurs.
                     </span>
                   </div>
                 ) : (
-                <div className="group relative flex min-w-0 cursor-help items-center gap-[7px] text-[11.5px] text-muted-foreground">
-                  <span className="size-[7px] flex-none rounded-full bg-amber-500" />
+                <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="size-[7px] flex-none rounded-full bg-warning" />
                   <span className="truncate">Mode démo</span>
-                  <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-[10px] bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                     Réponses simulées par le LLM intégré. Ajoutez la clé d&apos;un
                     fournisseur (section Fournisseurs) ou branchez la gateway
                     Hermes pour de vraies réponses.
@@ -774,7 +774,7 @@ export function SettingsPanel({
               {api.pendingEngineCount > 0 ? (
                 <span
                   title="Modifications moteur pas encore appliquées — pris en compte au prochain redémarrage"
-                  className="ml-auto flex h-6 flex-none cursor-help items-center gap-[5px] rounded-full bg-hermes/10 px-2.5 text-[11px] font-semibold text-hermes"
+                  className="ml-auto flex h-6 flex-none cursor-help items-center gap-1 rounded-full bg-hermes/10 px-2.5 text-[11px] font-semibold text-hermes-text"
                 >
                   {api.pendingEngineCount} en attente
                 </span>

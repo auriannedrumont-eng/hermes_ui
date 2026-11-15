@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import type { ConversationMeta, GatewayMode, ShareView } from "@/lib/chat-types";
 
 function ThemeToggle() {
@@ -85,6 +86,8 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   // Copie du lien : feedback inline « Lien copié » (toast inutile ici)
   const [copied, setCopied] = useState(false);
+  // Garde de destruction (C5.1) : la révocation du lien public se confirme.
+  const [revokeOpen, setRevokeOpen] = useState(false);
   const copyLink = async () => {
     if (!share) return;
     try {
@@ -114,50 +117,45 @@ export function ChatHeader({
         <p className="truncate text-[14px] font-medium">
           {activeConversation ? activeConversation.title : "Hermes"}
         </p>
-        {/* Prompt système actif (F-11) : pastille cliquable près du titre */}
-        {hasPrompt && onOpenPrompt ? (
+        {/* Prompt système (F-11) : la pastille est l'entrée unique de
+            l'éditeur (C7 — le bouton d'en-tête jumeau est retiré). Tiera
+            quand un prompt est actif, invite en pointillés sinon. */}
+        {onOpenPrompt ? (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   onClick={onOpenPrompt}
-                  aria-label="Prompt système de la conversation"
-                  className="inline-flex size-[22px] cursor-pointer items-center justify-center rounded-[7px] bg-hermes/10 text-hermes transition-colors hover:bg-hermes/20"
+                  aria-label={
+                    hasPrompt
+                      ? "Prompt système actif — éditer"
+                      : "Définir le prompt système"
+                  }
+                  className={cn(
+                    "inline-flex size-[22px] cursor-pointer items-center justify-center rounded-sm transition-colors",
+                    hasPrompt
+                      ? "bg-hermes/10 text-hermes-text hover:bg-hermes/20"
+                      : "border border-dashed border-border text-muted-foreground hover:border-hermes/40 hover:text-foreground"
+                  )}
                 >
-                  <Sparkle className="size-[12px]" strokeWidth={2.2} />
+                  <Sparkle className="size-[12px]" strokeWidth={2} />
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                Prompt système actif sur cette conversation — cliquez pour l&apos;éditer
+                {hasPrompt
+                  ? "Prompt système actif sur cette conversation — cliquez pour l'éditer"
+                  : "Aucun prompt système — cliquez pour le définir"}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         ) : null}
       </div>
 
-      {/* Prompt système (F-11) : bouton d'accès à l'éditeur */}
-      {onOpenPrompt ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "h-8 rounded-xl px-2.5 text-[12px] font-medium gap-1.5",
-            hasPrompt
-              ? "text-hermes hover:text-hermes"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-          onClick={onOpenPrompt}
-          aria-label="Prompt système de la conversation"
-        >
-          <Sparkle className="h-3.5 w-3.5" strokeWidth={2.2} />
-          <span className="hidden sm:inline">prompt</span>
-        </Button>
-      ) : null}
 
       {mode === "gateway" && connected ? (
-        <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400 sm:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+        <span className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success sm:flex">
+          <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
           Gateway
         </span>
       ) : null}
@@ -165,7 +163,7 @@ export function ChatHeader({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="flex h-8 items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 text-[11.5px] font-medium text-amber-600 dark:text-amber-400">
+              <span className="flex h-8 items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 text-[11px] font-medium text-warning">
                 <WifiOff className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Hors ligne</span>
               </span>
@@ -185,7 +183,7 @@ export function ChatHeader({
               className={cn(
                 "h-9 w-9 rounded-xl",
                 share
-                  ? "text-hermes hover:text-hermes"
+                  ? "text-hermes-text hover:text-hermes-text"
                   : "text-muted-foreground hover:text-foreground"
               )}
               aria-label="Partager la conversation"
@@ -202,7 +200,7 @@ export function ChatHeader({
               <>
                 <DropdownMenuItem onClick={() => void copyLink()}>
                   {copied ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    <Check className="h-3.5 w-3.5 text-success" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
@@ -218,8 +216,8 @@ export function ChatHeader({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={onShareRevoke}
-                  className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                  onSelect={() => setRevokeOpen(true)}
+                  className="text-destructive focus:text-destructive dark:focus:text-destructive"
                 >
                   <Unlink className="h-3.5 w-3.5" />
                   Révoquer le lien
@@ -229,13 +227,13 @@ export function ChatHeader({
               <DropdownMenuItem onClick={() => void onShareCreate()}>
                 <Link2 className="h-3.5 w-3.5" />
                 Créer un lien public
-                <span className="ml-auto text-[10px] text-muted-foreground">
+                <span className="ml-auto text-[11px] text-muted-foreground">
                   figé à la création
                 </span>
               </DropdownMenuItem>
             )}
             {share ? (
-              <p className="px-2 pt-1.5 pb-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+              <p className="px-2 pt-1.5 pb-0.5 text-[11px] leading-relaxed text-muted-foreground">
                 {share.messageCount} message(s) · créé le{" "}
                 {new Date(share.createdAt).toLocaleDateString("fr-FR")} — le
                 contenu est un instantané : la conversation peut continuer sans
@@ -280,6 +278,17 @@ export function ChatHeader({
       ) : null}
 
       <ThemeToggle />
+      <ConfirmDestructiveDialog
+        open={revokeOpen}
+        onOpenChange={setRevokeOpen}
+        title="Révoquer le lien public ?"
+        description="La page partagée cessera de fonctionner immédiatement. La conversation reste intacte côté local."
+        confirmLabel="Révoquer le lien"
+        onConfirm={() => {
+          onShareRevoke();
+          setRevokeOpen(false);
+        }}
+      />
     </header>
   );
 }

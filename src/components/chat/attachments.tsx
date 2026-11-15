@@ -115,9 +115,9 @@ function AudioAttachment({ attachment }: { attachment: Attachment }) {
   return (
     <div className="max-w-sm rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
       <div className="flex items-center gap-3">
-        <FileAudio className="h-5 w-5 shrink-0 text-hermes" />
+        <FileAudio className="h-5 w-5 shrink-0 text-hermes-text" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-medium">{attachment.name}</p>
+          <p className="truncate text-[12.5px] font-medium">{attachment.name}</p>
           <audio
             src={serviceUrl(attachment.url)}
             controls
@@ -129,9 +129,9 @@ function AudioAttachment({ attachment }: { attachment: Attachment }) {
       </div>
       {attachment.transcript ? (
         <div className="mt-2 flex gap-2 rounded-lg bg-background/60 px-2.5 py-2">
-          <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-hermes" aria-hidden="true" />
+          <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
           <div>
-            <p className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Transcription automatique
             </p>
             <p className="mt-0.5 whitespace-pre-wrap text-[12.5px] leading-relaxed">
@@ -151,12 +151,12 @@ function PdfAttachment({ attachment }: { attachment: Attachment }) {
   return (
     <div className="max-w-md">
       <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-hermes/10 text-hermes">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-hermes/10 text-hermes-text">
           <FileText className="h-4.5 w-4.5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium">{attachment.name}</span>
-          <span className="block text-[11.5px] text-muted-foreground">
+          <span className="block truncate text-[12.5px] font-medium">{attachment.name}</span>
+          <span className="block text-[11px] text-muted-foreground">
             PDF · {formatBytes(attachment.size)}
           </span>
         </span>
@@ -166,7 +166,7 @@ function PdfAttachment({ attachment }: { attachment: Attachment }) {
           size="sm"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="h-8 gap-1 rounded-lg px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          className="h-8 gap-1 rounded-lg px-2 text-[12.5px] text-muted-foreground hover:text-foreground"
         >
           {open ? "Masquer" : "Aperçu"}
           <ChevronDown
@@ -202,12 +202,12 @@ function FileAttachment({ attachment }: { attachment: Attachment }) {
       className="flex max-w-xs items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 transition-colors hover:bg-muted/60"
       aria-label={`Télécharger ${attachment.name}`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-hermes/10 text-hermes">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-hermes/10 text-hermes-text">
         {kindIcon(attachment.kind, "h-4.5 w-4.5")}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-[13px] font-medium">{attachment.name}</span>
-        <span className="block text-[11.5px] text-muted-foreground">
+        <span className="block truncate text-[12.5px] font-medium">{attachment.name}</span>
+        <span className="block text-[11px] text-muted-foreground">
           {attachment.kind === "pdf" ? "PDF" : attachment.kind === "file" ? "Fichier" : attachment.kind}
           {" · "}
           {formatBytes(attachment.size)}
@@ -278,7 +278,7 @@ export function PendingAttachmentChip({
           className="h-10 w-10 shrink-0 rounded-lg object-cover"
         />
       ) : (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hermes/10 text-hermes">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hermes/10 text-hermes-text">
           {kindIcon(kind, "h-4.5 w-4.5")}
         </span>
       )}

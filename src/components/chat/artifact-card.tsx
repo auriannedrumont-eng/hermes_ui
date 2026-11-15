@@ -117,14 +117,14 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate font-mono text-[13px] font-medium">{artifact.name}</p>
+            <p className="truncate font-mono text-[12.5px] font-medium">{artifact.name}</p>
             {artifact.version > 1 ? (
               // F-26 : le badge EST la porte du journal des versions (design
               // validé : un seul point d'entrée, pas de bouton de plus).
               <VersionPopover artifact={artifact}>
                 <Badge
                   variant="outline"
-                  className="h-4 shrink-0 cursor-pointer rounded px-1 font-mono text-[10px] text-hermes transition-colors hover:border-hermes/60 hover:bg-hermes/10"
+                  className="h-4 shrink-0 cursor-pointer rounded px-1 font-mono text-[11px] text-hermes-text transition-colors hover:border-hermes/60 hover:bg-hermes/10"
                   title="Historique des versions"
                 >
                   v{artifact.version}
@@ -132,10 +132,10 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
               </VersionPopover>
             ) : null}
           </div>
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
             {isGenerating || isRendering ? (
               <>
-                <Loader2 className="h-3 w-3 shrink-0 animate-spin text-hermes" />
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin text-hermes-text" />
                 <span className="truncate">
                   {artifact.statusLabel ??
                     (isGenerating ? `Génération de ${artifact.name}…` : "Rendu…")}
@@ -168,7 +168,7 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 rounded-lg text-hermes"
+              className="h-7 w-7 rounded-lg text-hermes-text"
               onClick={() => onRetry(artifact.id)}
               aria-label="Réessayer le rendu"
               title="Réessayer"
@@ -206,7 +206,7 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
 
       {/* Zone d'aperçu */}
       {isError ? (
-        <div className="flex items-center gap-2 border-t border-border/60 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+        <div className="flex items-center gap-2 border-t border-border/60 bg-destructive/5 px-3 py-2 text-[12.5px] text-destructive">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{artifact.error ?? "Le rendu a échoué."}</span>
         </div>
@@ -220,23 +220,23 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
             onError={() => setImgError(true)}
           />
           {artifact.renderedBy ? (
-            <span className="absolute bottom-1.5 right-1.5 rounded-md bg-background/85 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground backdrop-blur-sm">
+            <span className="absolute bottom-1.5 right-1.5 rounded-md bg-background/85 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
               Rendu Chrome
             </span>
           ) : null}
         </div>
       ) : showStream ? (
         <div className="border-t border-border/60 bg-muted/40 px-3 py-2">
-          <pre className="overflow-hidden font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+          <pre className="overflow-hidden font-mono text-[11px] leading-relaxed text-muted-foreground">
             <code>{codePreviewTail(streamingContent!)}</code>
           </pre>
         </div>
       ) : isGenerating || isRendering ? (
         <div className="border-t border-border/60">
-          <div className="flex h-16 items-center justify-center gap-2 bg-muted/30 text-[12px] text-muted-foreground">
+          <div className="flex h-16 items-center justify-center gap-2 bg-muted/30 text-[12.5px] text-muted-foreground">
             {isRendering && artifact.kind === "html" ? (
               <>
-                <Table className="h-3.5 w-3.5 text-hermes" />
+                <Table className="h-3.5 w-3.5 text-hermes-text" />
                 {artifact.statusLabel ?? "Rendu de l'aperçu (Chrome)…"}
               </>
             ) : (
@@ -253,7 +253,7 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
         </div>
       ) : artifact.preview ? (
         <div className="border-t border-border/60 bg-muted/30 px-3 py-1.5">
-          <pre className="overflow-hidden font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+          <pre className="overflow-hidden font-mono text-[11px] leading-relaxed text-muted-foreground">
             <code>
               {artifact.preview.split("\n").slice(0, 3).join("\n").slice(0, 220)}
             </code>

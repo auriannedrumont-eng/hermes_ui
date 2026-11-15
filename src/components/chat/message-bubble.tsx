@@ -38,6 +38,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import { HermesAvatar } from "@/components/chat/hermes-logo";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AttachmentsList } from "@/components/chat/attachments";
@@ -52,7 +53,7 @@ import type { Artifact, ChatMessage, ToolEvent, WebSource } from "@/lib/chat-typ
 function ToolEventRow({ event }: { event: ToolEvent }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12.5px]">
-      <Wrench className="h-3.5 w-3.5 shrink-0 text-hermes" />
+      <Wrench className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
       <span className="font-mono">{event.name}</span>
       {event.detail ? (
         <span className="truncate text-muted-foreground">— {event.detail}</span>
@@ -62,7 +63,7 @@ function ToolEventRow({ event }: { event: ToolEvent }) {
       ) : (
         <Check
           className={`ml-auto h-3.5 w-3.5 shrink-0 ${
-            event.status === "error" ? "text-destructive" : "text-emerald-500"
+            event.status === "error" ? "text-destructive" : "text-success"
           }`}
         />
       )}
@@ -86,7 +87,7 @@ function ReasoningBlock({
           className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted"
           aria-expanded={open}
         >
-          <Brain className="h-3.5 w-3.5 text-hermes" />
+          <Brain className="h-3.5 w-3.5 text-hermes-text" />
           Raisonnement
           <ChevronDown
             className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
@@ -94,7 +95,7 @@ function ReasoningBlock({
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <p className="mt-2 whitespace-pre-wrap border-l-2 border-hermes/50 pl-3 text-[13px] italic leading-relaxed text-muted-foreground">
+        <p className="mt-2 whitespace-pre-wrap border-l-2 border-hermes/50 pl-3 text-[12.5px] italic leading-relaxed text-muted-foreground">
           {reasoning}
         </p>
       </CollapsibleContent>
@@ -213,7 +214,9 @@ function useContinuousSpeech(content: string, active: boolean) {
 
 interface ActionButtonProps {
   label: string;
-  onClick: () => void;
+  /* Optionnel : quand le bouton sert de déclencheur à ConfirmDestructiveDialog,
+     l'action est portée par le dialogue, pas par le bouton. */
+  onClick?: () => void;
   icon: React.ReactNode;
   disabled?: boolean;
   active?: boolean;
@@ -236,11 +239,11 @@ function ActionButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`h-7 gap-1.5 rounded-lg px-2 text-[12px] ${
+      className={`h-7 gap-1.5 rounded-lg px-2 text-[12.5px] ${
         destructive
           ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           : active
-            ? "text-hermes"
+            ? "text-hermes-text"
             : "text-muted-foreground"
       }`}
     >
@@ -304,15 +307,15 @@ function FeedbackControl({
             size="sm"
             aria-label="Commenter ce feedback"
             title="Commenter ce feedback"
-            className={`h-7 gap-1.5 rounded-lg px-2 text-[12px] ${
-              message.feedbackComment ? "text-hermes" : "text-muted-foreground"
+            className={`h-7 gap-1.5 rounded-lg px-2 text-[12.5px] ${
+              message.feedbackComment ? "text-hermes-text" : "text-muted-foreground"
             }`}
           >
             <MessageSquareText className="h-3.5 w-3.5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-3" aria-describedby={undefined}>
-          <p className="mb-2 text-[12px] font-semibold leading-snug">
+          <p className="mb-2 text-[12.5px] font-semibold leading-snug">
             Commentaire {rating ? (rating === "up" ? "positif 👍" : "négatif 👎") : ""}
             <span className="ml-1 font-normal text-muted-foreground">
               — local, jamais envoyé au modèle
@@ -352,7 +355,7 @@ function FeedbackControl({
               size="sm"
               onClick={saveComment}
               disabled={!rating || (!draft.trim() && !message.feedbackComment)}
-              className="h-7 rounded-lg bg-hermes px-2.5 text-[12px] text-hermes-foreground hover:opacity-90"
+              className="h-7 rounded-lg bg-hermes-strong px-2.5 text-[12.5px] text-hermes-foreground hover:bg-hermes-strong/90"
             >
               <Check className="h-3.5 w-3.5" />
               Enregistrer
@@ -362,7 +365,7 @@ function FeedbackControl({
       </Popover>
       {/* Commentaire existant : visible discrètement sous la rangée */}
       {message.feedbackComment && rating ? (
-        <span className="ml-1.5 max-w-[220px] truncate text-[10.5px] italic text-muted-foreground/80">
+        <span className="ml-1.5 max-w-[220px] truncate text-[11px] italic text-muted-foreground/80">
           « {message.feedbackComment} »
         </span>
       ) : null}
@@ -373,7 +376,7 @@ function FeedbackControl({
 // ── Sources citées (F-12) — rangée cliquable sous la réponse ───────────
 function SourcesRow({ sources }: { sources: WebSource[] }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11.5px]">
+    <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
       <span className="text-muted-foreground">Sources :</span>
       {sources.map((s) => (
         <a
@@ -382,7 +385,7 @@ function SourcesRow({ sources }: { sources: WebSource[] }) {
           target="_blank"
           rel="noopener noreferrer"
           title={`${s.title}\n${s.snippet}`}
-          className="max-w-[280px] truncate rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-muted-foreground transition-colors hover:border-hermes/60 hover:text-hermes"
+          className="max-w-[280px] truncate rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-muted-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
         >
           [{s.n}] {s.title}
         </a>
@@ -424,7 +427,7 @@ function UsageRow({ message }: { message: ChatMessage }) {
     .join(" · ");
 
   return (
-    <div className="pt-0.5 text-[11.5px] text-muted-foreground">
+    <div className="pt-0.5 text-[11px] text-muted-foreground">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -599,14 +602,14 @@ export function MessageBubble({
               }}
               rows={2}
               aria-label="Modifier le message"
-              className="w-full resize-none bg-transparent text-[14.5px] leading-relaxed focus:outline-none"
+              className="w-full resize-none bg-transparent text-[14px] leading-relaxed focus:outline-none"
             />
             <div className="mt-2 flex items-center justify-end gap-1.5">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setEditing(false)}
-                className="h-7 rounded-lg px-2.5 text-[12px] text-muted-foreground"
+                className="h-7 rounded-lg px-2.5 text-[12.5px] text-muted-foreground"
               >
                 <X className="h-3.5 w-3.5" />
                 Annuler
@@ -615,7 +618,7 @@ export function MessageBubble({
                 size="sm"
                 onClick={submitEdit}
                 disabled={!editValue.trim() || isBusy}
-                className="h-7 rounded-lg bg-hermes px-2.5 text-[12px] text-hermes-foreground hover:opacity-90"
+                className="h-7 rounded-lg bg-hermes-strong px-2.5 text-[12.5px] text-hermes-foreground hover:bg-hermes-strong/90"
               >
                 <Check className="h-3.5 w-3.5" />
                 Envoyer et relancer
@@ -633,7 +636,7 @@ export function MessageBubble({
           </div>
         ) : null}
         {!editing ? (
-          <div className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/msg:opacity-100">
+          <div className="flex items-center gap-0.5 opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100 group-hover/msg:opacity-100 max-md:opacity-100">
             <ActionButton
               label={copied ? "Copié" : "Copier"}
               onClick={copy}
@@ -657,11 +660,18 @@ export function MessageBubble({
               />
             ) : null}
             {onDelete ? (
-              <ActionButton
-                label="Supprimer"
-                onClick={() => onDelete(message.id)}
-                destructive
-                icon={<Trash2 className="h-3.5 w-3.5" />}
+              <ConfirmDestructiveDialog
+                trigger={
+                  <ActionButton
+                    label="Supprimer"
+                    destructive
+                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                  />
+                }
+                title="Supprimer ce message ?"
+                description="Il disparaîtra de cette conversation, ainsi que le journal de versions de ses fichiers."
+                confirmLabel="Supprimer le message"
+                onConfirm={() => onDelete(message.id)}
               />
             ) : null}
           </div>
@@ -741,10 +751,10 @@ export function MessageBubble({
             onClick={continuous.toggle}
             aria-pressed={continuous.speaking}
             className={
-              "flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-1 py-0.5 text-[12px] transition-colors " +
+              "flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-1 py-0.5 text-[12.5px] transition-colors " +
               (continuous.speaking
-                ? "text-hermes"
-                : "text-muted-foreground hover:text-hermes")
+                ? "text-hermes-text"
+                : "text-muted-foreground hover:text-hermes-text")
             }
           >
             {continuous.speaking ? (
@@ -764,7 +774,7 @@ export function MessageBubble({
         {/* Réponse interrompue par l'utilisateur (bouton Stop) : le partiel
             reste dans le fil, clairement marqué — pas de faux « complet ». */}
         {!isStreaming && message.stopped ? (
-          <p className="flex items-center gap-1.5 pt-0.5 text-[12px] text-muted-foreground">
+          <p className="flex items-center gap-1.5 pt-0.5 text-[12.5px] text-muted-foreground">
             <Square className="h-2.5 w-2.5 shrink-0 fill-current" aria-hidden="true" />
             Réponse interrompue
             {isLastAssistant && onRegenerate ?
@@ -797,7 +807,7 @@ export function MessageBubble({
               <button
                 type="button"
                 onClick={() => downloadArtifactZip(cards)}
-                className="flex w-fit items-center gap-1.5 rounded-lg px-1 py-0.5 text-[12px] text-muted-foreground transition-colors hover:text-hermes"
+                className="flex w-fit items-center gap-1.5 rounded-lg px-1 py-0.5 text-[12.5px] text-muted-foreground transition-colors hover:text-hermes-text"
               >
                 <Package className="h-3.5 w-3.5" />
                 Tout télécharger ({cards.length} fichiers, .zip)
@@ -809,14 +819,14 @@ export function MessageBubble({
         {/* F-14 — navigation entre versions : ‹ index/count ›, visible
             en permanence (contrôle de lecture, pas une action au survol). */}
         {!isStreaming && message.versions && message.versions.count > 1 && onSetVersion ? (
-          <div className="flex items-center gap-0.5 pt-0.5 text-[11.5px] text-muted-foreground">
+          <div className="flex items-center gap-0.5 pt-0.5 text-[11px] text-muted-foreground">
             <button
               type="button"
               aria-label="Version précédente"
               title="Version précédente"
               disabled={message.versions.index <= 1 || isBusy}
               onClick={() => onSetVersion(message, message.versions!.index - 1)}
-              className="flex h-5.5 w-5.5 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+              className="flex h-5.5 w-5.5 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
@@ -829,7 +839,7 @@ export function MessageBubble({
               title="Version suivante"
               disabled={message.versions.index >= message.versions.count || isBusy}
               onClick={() => onSetVersion(message, message.versions!.index + 1)}
-              className="flex h-5.5 w-5.5 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+              className="flex h-5.5 w-5.5 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -840,7 +850,7 @@ export function MessageBubble({
         ) : null}
 
         {!isStreaming ? (
-          <div className="flex items-center gap-0.5 pt-0.5 opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100 group-hover/msg:opacity-100">
+          <div className="flex items-center gap-0.5 pt-0.5 opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100 group-hover/msg:opacity-100 max-md:opacity-100">
             <ActionButton
               label={copied ? "Copié" : "Copier"}
               onClick={copy}
@@ -884,15 +894,22 @@ export function MessageBubble({
               />
             ) : null}
             {onDelete ? (
-              <ActionButton
-                label="Supprimer"
-                onClick={() => onDelete(message.id)}
-                destructive
-                icon={<Trash2 className="h-3.5 w-3.5" />}
+              <ConfirmDestructiveDialog
+                trigger={
+                  <ActionButton
+                    label="Supprimer"
+                    destructive
+                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                  />
+                }
+                title="Supprimer ce message ?"
+                description="Il disparaîtra de cette conversation, ainsi que le journal de versions de ses fichiers."
+                confirmLabel="Supprimer le message"
+                onConfirm={() => onDelete(message.id)}
               />
             ) : null}
             {message.model ? (
-              <span className="ml-1 font-mono text-[10.5px] text-muted-foreground/70">
+              <span className="ml-1 font-mono text-[11px] text-muted-foreground/70">
                 {message.model}
               </span>
             ) : null}

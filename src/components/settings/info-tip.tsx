@@ -50,9 +50,9 @@ export function InfoTip({ children, below = false, className }: InfoTipProps) {
       type="button"
       aria-label="Plus d'informations"
       className={cn(
-        "group relative inline-flex h-4 w-4 shrink-0 cursor-help select-none items-center justify-center rounded-full border border-border bg-card align-middle text-[10px] font-bold leading-none text-muted-foreground transition-colors",
-        "hover:border-hermes hover:text-hermes focus-visible:border-hermes focus-visible:text-hermes focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hermes",
-        open && "border-hermes text-hermes",
+        "group relative inline-flex h-4 w-4 shrink-0 cursor-help select-none items-center justify-center rounded-full border border-border bg-card align-middle text-[11px] font-bold leading-none text-muted-foreground transition-colors",
+        "hover:border-hermes hover:text-hermes-text focus-visible:border-hermes focus-visible:text-hermes-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hermes",
+        open && "border-hermes text-hermes-text",
         className
       )}
       onClick={(e) => {
@@ -70,7 +70,7 @@ export function InfoTip({ children, below = false, className }: InfoTipProps) {
       <span
         role="tooltip"
         className={cn(
-          "pointer-events-none absolute left-1/2 z-[70] w-max max-w-[250px] -translate-x-1/2 rounded-[10px] bg-foreground px-[11px] py-2 text-left text-[11px] font-normal leading-relaxed text-background opacity-0 shadow-lg transition-[opacity,transform] duration-150",
+          "pointer-events-none absolute left-1/2 z-[70] w-max max-w-[250px] -translate-x-1/2 rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] font-normal leading-relaxed text-background opacity-0 shadow-lg transition-[opacity,transform] duration-150",
           "after:absolute after:left-1/2 after:-translate-x-1/2 after:border-5 after:border-transparent after:content-['']",
           below
             ? "after:bottom-full after:border-b-foreground top-[calc(100%+9px)] -translate-y-1 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:opacity-100"

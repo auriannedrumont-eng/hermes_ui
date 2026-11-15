@@ -224,7 +224,7 @@ export function MessageList({
             <span className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-hermes text-hermes-foreground">
               <HermesLogo className="h-9 w-9" />
             </span>
-            <h1 className="text-center text-[26px] font-semibold tracking-tight sm:text-[30px]">
+            <h1 className="text-center text-[19px] font-semibold tracking-tight sm:text-[19px]">
               Bonjour.
             </h1>
             <p className="mt-1.5 text-center text-[15px] text-muted-foreground">
@@ -237,12 +237,12 @@ export function MessageList({
                   onClick={() => onSuggestion(s.prompt)}
                   className="group flex items-start gap-3 rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-hermes/50 hover:shadow-sm"
                 >
-                  <s.icon className="mt-0.5 h-4.5 w-4.5 shrink-0 text-hermes" />
+                  <s.icon className="mt-0.5 h-4.5 w-4.5 shrink-0 text-hermes-text" />
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] font-medium">
+                    <span className="block text-[14px] font-medium">
                       {s.title}
                     </span>
-                    <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
+                    <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">
                       {s.prompt}
                     </span>
                   </span>
@@ -333,7 +333,7 @@ export function MessageList({
               >
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-destructive">
+                  <p className="text-[12.5px] font-medium text-destructive">
                     La génération a échoué
                   </p>
                   <p className="mt-0.5 break-words text-[12.5px] text-muted-foreground">
@@ -345,7 +345,7 @@ export function MessageList({
                       variant="outline"
                       onClick={onRetryError}
                       disabled={isBusy}
-                      className="h-7 rounded-lg px-2.5 text-[12px]"
+                      className="h-7 rounded-lg px-2.5 text-[12.5px]"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
                       Réessayer
@@ -354,7 +354,7 @@ export function MessageList({
                       size="sm"
                       variant="ghost"
                       onClick={onDismissError}
-                      className="h-7 rounded-lg px-2.5 text-[12px] text-muted-foreground"
+                      className="h-7 rounded-lg px-2.5 text-[12.5px] text-muted-foreground"
                     >
                       Masquer
                     </Button>
@@ -420,20 +420,20 @@ function ComparePair({
       {slots.map(({ variant, cell }) => (
         <div
           key={variant}
-          className="flex min-w-0 flex-col rounded-2xl border border-border/70 bg-card/40 p-2.5"
+          className="group/msg flex min-w-0 flex-col rounded-2xl border border-border/70 bg-card/40 p-2.5"
         >
           <div className="mb-1.5 flex items-center gap-1.5 px-0.5">
             <span
               className={
                 variant === "a"
-                  ? "flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes"
+                  ? "flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes-text"
                   : "flex h-5 min-w-5 items-center justify-center rounded-md bg-primary/15 px-1 text-[11px] font-bold text-primary"
               }
               aria-label={`Modèle ${variant.toUpperCase()}`}
             >
               {variant.toUpperCase()}
             </span>
-            <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
               {cell?.message?.model ?? cell?.stream?.status ?? "Réponse…"}
             </span>
             <button
@@ -485,7 +485,7 @@ function ComparePair({
               onRetryArtifact={onRetryArtifact}
             />
           ) : (
-            <div className="flex min-h-16 items-center justify-center rounded-xl border border-dashed border-border text-[12px] text-muted-foreground">
+            <div className="flex min-h-16 items-center justify-center rounded-xl border border-dashed border-border text-[12.5px] text-muted-foreground">
               Réponse en attente
             </div>
           )}

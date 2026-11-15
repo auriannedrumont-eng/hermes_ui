@@ -197,7 +197,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : versions.length === 0 ? (
-            <p className="px-3 py-6 text-center text-[12px] text-muted-foreground">
+            <p className="px-3 py-6 text-center text-[12.5px] text-muted-foreground">
               Aucune version enregistrée.
             </p>
           ) : (
@@ -212,7 +212,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
                   aria-selected={isSelected}
                   tabIndex={0}
                   className={cn(
-                    "group/row flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[12px] outline-none transition-colors",
+                    "group/row flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] outline-none transition-colors",
                     isSelected ? "bg-accent" : "hover:bg-accent/60",
                     isCurrent && !isSelected && "bg-muted/50"
                   )}
@@ -240,7 +240,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
                       className={cn(
                         "h-3.5 w-3.5 transition-colors",
                         v.pinned
-                          ? "fill-amber-400 text-amber-400"
+                          ? "fill-warning text-warning"
                           : "text-muted-foreground/40 opacity-0 group-hover/row:opacity-100"
                       )}
                     />
@@ -255,7 +255,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
                   <span
                     className={cn(
                       "shrink-0 font-mono text-[11px]",
-                      isCurrent ? "font-semibold text-hermes" : "text-muted-foreground"
+                      isCurrent ? "font-semibold text-hermes-text" : "text-muted-foreground"
                     )}
                   >
                     v{v.version}
@@ -275,7 +275,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
                         if (e.key === "Escape") setEditingId(null);
                       }}
                       placeholder="Étiquette…"
-                      className="h-6 flex-1 px-2 text-[12px]"
+                      className="h-6 flex-1 px-2 text-[12.5px]"
                       maxLength={80}
                       aria-label={`Étiquette de v${v.version}`}
                     />
@@ -297,7 +297,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
             variant="default"
             disabled={!selected || !current || selected.version === current.version || restoring}
             onClick={restore}
-            className="h-7 gap-1.5 px-2.5 text-[12px]"
+            className="h-7 gap-1.5 px-2.5 text-[12.5px]"
           >
             {restoring ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -312,7 +312,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
             size="sm"
             variant="ghost"
             onClick={download}
-            className="h-7 gap-1.5 px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
+            className="h-7 gap-1.5 px-2.5 text-[12.5px] text-muted-foreground hover:text-foreground"
           >
             <Download className="h-3.5 w-3.5" />
             Télécharger

@@ -82,40 +82,40 @@ export function SystemSection({
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Système</h1>
-      <p className="mt-1 mb-2 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-2 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Versions, exécution des commandes, journaux.
       </p>
 
       {/* ── Interface & service — sondes réelles ─────────────────────── */}
-      <div className="mt-4 rounded-[14px] border border-border px-4 py-1">
+      <div className="mt-4 rounded-xl border border-border px-4 py-1">
         <div className="flex items-center gap-3 py-[11px]">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold">Service</div>
-            <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+            <div className="text-[12.5px] font-semibold">Service</div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
               Le mini-service qui répond derrière cette interface.
             </div>
           </div>
-          <span className="flex-none text-[12px] font-medium tabular-nums text-muted-foreground">
+          <span className="flex-none text-[12.5px] font-medium tabular-nums text-muted-foreground">
             {serverVersion ? `v${serverVersion}` : "—"}
           </span>
         </div>
         <div className="flex items-center gap-3 border-t border-border/60 py-[11px]">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold">Révision de l&apos;interface</div>
-            <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+            <div className="text-[12.5px] font-semibold">Révision de l&apos;interface</div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
               {appRevision
                 ? "Révision git du déploiement installé sur cette machine."
                 : "Installation sans git (archive téléversée) — la révision ne peut pas être lue."}
             </div>
           </div>
-          <span className="flex-none font-mono text-[12px] font-medium tabular-nums text-muted-foreground">
+          <span className="flex-none font-mono text-[12.5px] font-medium tabular-nums text-muted-foreground">
             {appRevision ?? "inconnue"}
           </span>
         </div>
         <div className="flex items-center gap-3 border-t border-border/60 py-[11px]">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold">Moteur</div>
-            <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+            <div className="text-[12.5px] font-semibold">Moteur</div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
               {demo
                 ? poolActive
                   ? `Moteur intégré — les réponses partent sur l'API de vos fournisseurs (clés actives : ${engineProviders!.join(", ")}).`
@@ -137,8 +137,8 @@ export function SystemSection({
         </div>
         <div className="flex items-center gap-3 border-t border-border/60 py-[11px]">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold">Rendu (chrome-headless)</div>
-            <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+            <div className="text-[12.5px] font-semibold">Rendu (chrome-headless)</div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
               Vignettes des artefacts, PDF et images des conversations partagées.
             </div>
           </div>
@@ -151,21 +151,21 @@ export function SystemSection({
       </div>
 
       {/* ── Profils de rendu — sonde réelle + purge ───────────────────── */}
-      <div className="mt-4 rounded-[14px] border border-border px-4 py-3">
+      <div className="mt-4 rounded-xl border border-border px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[13px] font-semibold">Profils de rendu</div>
-            <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+            <div className="text-[12.5px] font-semibold">Profils de rendu</div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
               Régénérés à chaque rendu, purgés aussi à chaque démarrage du service.
             </div>
           </div>
-          <span className="flex-none text-[12px] font-medium tabular-nums text-muted-foreground">
+          <span className="flex-none text-[12.5px] font-medium tabular-nums text-muted-foreground">
             {stats ? `${stats.count} · ${fmtBytes(stats.bytes)}` : "…"}
           </span>
         </div>
         <div className="mt-2.5 flex items-center justify-between gap-2">
           {cleared ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] font-medium text-emerald-700 dark:text-emerald-400">
+            <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-success">
               <Check className="size-[13px] flex-none" strokeWidth={2.5} />
               <span className="truncate">{cleared}</span>
             </span>
@@ -178,7 +178,7 @@ export function SystemSection({
             type="button"
             onClick={clear}
             disabled={clearing || !stats || stats.count === 0}
-            className="inline-flex h-[30px] flex-none cursor-pointer items-center gap-1.5 rounded-[9px] px-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-red-400"
+            className="inline-flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-destructive"
           >
             <Trash2 className="size-[13px]" strokeWidth={2} />
             {clearing ? "Nettoyage…" : "Nettoyer maintenant"}
@@ -189,7 +189,7 @@ export function SystemSection({
       {/* ── Moteur Hermes — verrouillé « gateway », jamais simulé ─────── */}
       <div className="mt-4">
         <h2 className="text-[14px] font-semibold tracking-tight">Moteur Hermes</h2>
-        <div className={cn("mt-2 rounded-[14px] border border-dashed border-border px-4 py-1")}>
+        <div className={cn("mt-2 rounded-xl border border-dashed border-border px-4 py-1")}>
           {[
             {
               name: "Version & mises à jour",
@@ -212,8 +212,8 @@ export function SystemSection({
               )}
             >
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold">{it.name}</div>
-                <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+                <div className="text-[12.5px] font-semibold">{it.name}</div>
+                <div className="mt-px text-[11px] leading-snug text-muted-foreground">
                   {it.desc}
                 </div>
               </div>
@@ -221,7 +221,7 @@ export function SystemSection({
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
           Ces réglages pilotent le moteur réel : ils s&apos;activeront au branchement de
           la gateway (FORK.md §4). Rien n&apos;est simulé en attendant.
         </p>

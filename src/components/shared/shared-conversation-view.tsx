@@ -48,7 +48,7 @@ export function SharedConversationView({ token }: { token: string }) {
   if (state.status === "loading") {
     return (
       <Shell>
-        <div className="py-24 text-center text-[13px] text-muted-foreground">
+        <div className="py-24 text-center text-[12.5px] text-muted-foreground">
           Chargement de la conversation partagée…
         </div>
       </Shell>
@@ -67,16 +67,16 @@ export function SharedConversationView({ token }: { token: string }) {
               ? "Ce lien de partage a été révoqué"
               : "Lien de partage introuvable"}
           </h1>
-          <p className="max-w-[380px] text-[13px] leading-relaxed text-muted-foreground">
+          <p className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
             {state.reason === "revoked"
               ? "L'auteur de la conversation a retiré l'accès public. Les messages ne sont plus consultables."
               : "Ce lien n'existe pas ou a expiré. Vérifiez l'adresse reçue."}
           </p>
           <Link
             href="/"
-            className="mt-2 inline-flex items-center gap-2 rounded-[10px] border border-border px-4 py-2 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted"
+            className="mt-2 inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted"
           >
-            <ArrowLeft className="size-[14px]" strokeWidth={2.2} />
+            <ArrowLeft className="size-[14px]" strokeWidth={2} />
             Ouvrir Hermes Web
           </Link>
         </div>
@@ -91,7 +91,7 @@ export function SharedConversationView({ token }: { token: string }) {
           <h1 className="text-[17px] font-bold tracking-tight">
             Impossible de charger le partage
           </h1>
-          <p className="max-w-[380px] text-[13px] leading-relaxed text-muted-foreground">
+          <p className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
             Le service Hermes est injoignable. Réessayez dans un instant.
           </p>
         </div>
@@ -104,10 +104,10 @@ export function SharedConversationView({ token }: { token: string }) {
     <Shell>
       <article>
         <header className="mb-7 border-b border-border/70 pb-5">
-          <h1 className="text-[21px] font-bold leading-tight tracking-tight">
+          <h1 className="text-[19px] font-bold leading-tight tracking-tight">
             {data.title}
           </h1>
-          <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
             <Eye className="size-[13px]" strokeWidth={2} />
             Lecture seule · {data.messageCount} message(s) · partagé le{" "}
             {new Date(data.sharedAt).toLocaleString("fr-FR")}
@@ -128,7 +128,7 @@ export function SharedConversationView({ token }: { token: string }) {
               {m.role === "assistant" ? (
                 <MarkdownContent content={m.content} />
               ) : (
-                <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed">
+                <p className="whitespace-pre-wrap text-[14px] leading-relaxed">
                   {m.content}
                 </p>
               )}
@@ -150,9 +150,9 @@ export function SharedConversationView({ token }: { token: string }) {
           ))}
         </div>
 
-        <footer className="mt-10 border-t border-border/70 pt-4 text-center text-[11.5px] text-muted-foreground">
+        <footer className="mt-10 border-t border-border/70 pt-4 text-center text-[11px] text-muted-foreground">
           Conversation partagée depuis{" "}
-          <Link href="/" className="font-semibold text-hermes hover:underline">
+          <Link href="/" className="font-semibold text-hermes-text hover:underline">
             Hermes Web
           </Link>
           <button
@@ -163,7 +163,7 @@ export function SharedConversationView({ token }: { token: string }) {
               window.open(url, "_blank", "noopener");
             }}
           >
-            <Share2 className="size-[11px]" strokeWidth={2.2} />
+            <Share2 className="size-[11px]" strokeWidth={2} />
             Exporter en image (PNG)
           </button>
         </footer>
@@ -178,9 +178,9 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-app-full bg-background text-foreground">
       <div className="border-b border-border/60 bg-card/60">
         <div className="mx-auto flex h-13 max-w-3xl items-center gap-2 px-4 py-2.5">
-          <Link href="/" className="flex items-center gap-2 text-[13px] font-semibold">
-            <span className="flex size-[22px] items-center justify-center rounded-[7px] bg-hermes/10 text-hermes">
-              <Share2 className="size-[12px]" strokeWidth={2.2} />
+          <Link href="/" className="flex items-center gap-2 text-[12.5px] font-semibold">
+            <span className="flex size-[22px] items-center justify-center rounded-sm bg-hermes/10 text-hermes-text">
+              <Share2 className="size-[12px]" strokeWidth={2} />
             </span>
             Hermes Web
           </Link>

@@ -135,62 +135,51 @@ function ExtensionRow({
   return (
     <div
       className={cn(
-        "mb-2.5 overflow-hidden rounded-[14px] border border-border bg-card",
-        !ext.enabled && "opacity-70"
+        "mb-2.5 overflow-hidden rounded-xl border border-border bg-card",
+        !ext.enabled && "opacity-40"
       )}
     >
-      {/* En-tête cliquable (dépliage) */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes"
-      >
-        <span className="flex size-[30px] flex-none items-center justify-center rounded-[10px] bg-muted">
-          {isRepo ? (
-            <Globe className="size-[15px]" strokeWidth={2} />
-          ) : (
-            <Cloud className="size-[15px]" strokeWidth={2} />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <b className="flex items-center gap-1.5 text-[14px] font-semibold tracking-tight">
-            {ext.name}
-            {ext.pinned ? (
-              <Pin className="size-[11px] text-amber-600 dark:text-amber-500" strokeWidth={2.4} aria-label="Version épinglée" />
-            ) : null}
-          </b>
-          <span className="block truncate text-[12px] text-muted-foreground">{sub}</span>
-        </span>
-        <Pastille tone={tone} label={statusLabel} className="mt-[9px] self-start" />
-        <span
-          role="switch"
-          aria-checked={ext.enabled}
-          aria-label={`Activer ${ext.name}`}
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleToggle(!ext.enabled);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.stopPropagation();
-              e.preventDefault();
-              void handleToggle(!ext.enabled);
-            }
-          }}
-          className="flex flex-none items-center"
+      {/* En-tête restructuré façon ConversationItem (C2.1) : une zone
+          d'ouverture dédiée, le Switch HORS du bouton — plus de double
+          annonce, plus de double handler, une seule tabulation par fonction. */}
+      <div className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
         >
-          <Switch checked={ext.enabled} onCheckedChange={(v) => void handleToggle(v)} />
-        </span>
-        <ChevronRight
-          className={cn(
-            "size-[15px] flex-none text-muted-foreground transition-transform",
-            open && "rotate-90"
-          )}
-          strokeWidth={2.2}
+          <span className="flex size-[30px] flex-none items-center justify-center rounded-md bg-muted">
+            {isRepo ? (
+              <Globe className="size-[15px]" strokeWidth={2} />
+            ) : (
+              <Cloud className="size-[15px]" strokeWidth={2} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <b className="flex items-center gap-1.5 text-[14px] font-semibold tracking-tight">
+              {ext.name}
+              {ext.pinned ? (
+                <Pin className="size-[11px] text-warning" strokeWidth={2} aria-label="Version épinglée" />
+              ) : null}
+            </b>
+            <span className="block truncate text-[12.5px] text-muted-foreground">{sub}</span>
+          </span>
+          <Pastille tone={tone} label={statusLabel} className="mt-[9px] self-start" />
+          <ChevronRight
+            className={cn(
+              "size-[15px] flex-none text-muted-foreground transition-transform",
+              open && "rotate-90"
+            )}
+            strokeWidth={2}
+          />
+        </button>
+        <Switch
+          checked={ext.enabled}
+          onCheckedChange={(v) => void handleToggle(v)}
+          aria-label={`Activer ${ext.name}`}
         />
-      </button>
+      </div>
 
       {/* Corps déplié : actions + dernières modifications */}
       {open ? (
@@ -201,10 +190,10 @@ function ExtensionRow({
                 type="button"
                 onClick={handleUpdate}
                 disabled={busy !== null}
-                className="flex h-[28px] cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-60"
+                className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
               >
                 {busy === "update" ? (
-                  <Loader2 className="size-[12px] animate-spin" strokeWidth={2.2} />
+                  <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                 ) : null}
                 Mettre à jour
               </button>
@@ -215,10 +204,10 @@ function ExtensionRow({
                 onClick={handleCheck}
                 disabled={busy !== null || ext.pinned}
                 title={ext.pinned ? "Version épinglée — détachez-la pour vérifier" : undefined}
-                className="flex h-[28px] cursor-pointer items-center gap-1.5 rounded-[9px] border border-border px-3 text-[12px] font-medium transition-colors hover:border-hermes hover:text-hermes focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] font-medium transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {busy === "check" ? (
-                  <Loader2 className="size-[12px] animate-spin" strokeWidth={2.2} />
+                  <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                 ) : null}
                 Vérifier
               </button>
@@ -227,12 +216,12 @@ function ExtensionRow({
               <button
                 type="button"
                 onClick={handlePin}
-                className="flex h-[28px] cursor-pointer items-center gap-1.5 rounded-[9px] border border-border px-3 text-[12px] font-medium transition-colors hover:border-hermes hover:text-hermes focus-visible:outline-2 focus-visible:outline-hermes"
+                className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] font-medium transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes"
               >
                 {ext.pinned ? (
-                  <PinOff className="size-[12px]" strokeWidth={2.2} />
+                  <PinOff className="size-[12px]" strokeWidth={2} />
                 ) : (
-                  <Pin className="size-[12px]" strokeWidth={2.2} />
+                  <Pin className="size-[12px]" strokeWidth={2} />
                 )}
                 {ext.pinned ? "Retirer l'épingle" : "Épingler"}
               </button>
@@ -240,9 +229,9 @@ function ExtensionRow({
             <button
               type="button"
               onClick={handleRemove}
-              className="ml-auto flex h-[28px] cursor-pointer items-center gap-1.5 rounded-[9px] px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:outline-2 focus-visible:outline-red-500"
+              className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
             >
-              <Trash2 className="size-[12px]" strokeWidth={2.2} />
+              <Trash2 className="size-[12px]" strokeWidth={2} />
               Retirer
             </button>
           </div>
@@ -251,11 +240,11 @@ function ExtensionRow({
           {isRepo ? (
             commits && commits.length > 0 ? (
               <div className="mt-3">
-                <div className="mb-1 text-[10.5px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                <div className="mb-1 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                   Dernières modifications
                 </div>
                 {commits.slice(0, 5).map((c) => (
-                  <div key={c.sha} className="flex items-baseline gap-2.5 py-[3px] text-[12px]">
+                  <div key={c.sha} className="flex items-baseline gap-2.5 py-[3px] text-[12.5px]">
                     <span className="w-[62px] flex-none text-[11px] text-muted-foreground">
                       {timeAgo(c.date)}
                     </span>
@@ -264,7 +253,7 @@ function ExtensionRow({
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-[11.5px] text-muted-foreground">
+              <p className="mt-3 text-[11px] text-muted-foreground">
                 « Vérifier » rapatrie les dernières modifications du dépôt.
               </p>
             )
@@ -331,7 +320,7 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Extensions</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Dépôts et serveurs ajoutés, qui apportent de nouveaux pouvoirs à Hermes. Désactiver
         garde la configuration ; tout décharger.
       </p>
@@ -346,7 +335,7 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
         />
       ))}
       {api.extensions.length === 0 ? (
-        <p className="mb-4 rounded-[14px] border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
+        <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
           Aucune extension pour l&apos;instant — importez un dépôt GitHub ou ajoutez un serveur.
         </p>
       ) : null}
@@ -357,7 +346,7 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
       </div>
 
       {showRepo ? (
-        <div className="mt-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
+        <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
           <input
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
@@ -366,9 +355,9 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
             }}
             placeholder="Adresse du dépôt (https://github.com/…)"
             aria-label="Adresse du dépôt GitHub"
-            className="h-[34px] w-full rounded-[9px] border border-border bg-background px-3 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+            className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
           />
-          <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
             Hermes analysera le dépôt et détectera ce qu&apos;il apporte : outils, skills,
             serveur.
           </p>
@@ -377,10 +366,10 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
               type="button"
               onClick={handleImport}
               disabled={!repoUrl.trim() || importing}
-              className="flex h-[31px] cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3.5 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
             >
               {importing ? (
-                <Loader2 className="size-[12px] animate-spin" strokeWidth={2.2} />
+                <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
               ) : null}
               {importing ? "Analyse…" : "Importer"}
             </button>
@@ -389,7 +378,7 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
       ) : null}
 
       {showMcp ? (
-        <div className="mt-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
+        <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
           <input
             value={mcpUrl}
             onChange={(e) => setMcpUrl(e.target.value)}
@@ -398,14 +387,14 @@ export function ExtensionsSection({ api }: { api: ProvidersApi }) {
             }}
             placeholder="Adresse du serveur, ou commande de lancement"
             aria-label="Adresse du serveur MCP"
-            className="h-[34px] w-full rounded-[9px] border border-border bg-background px-3 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+            className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
           />
           <div className="mt-2.5 flex justify-end">
             <button
               type="button"
               onClick={handleAddMcp}
               disabled={!mcpUrl.trim()}
-              className="h-[31px] cursor-pointer rounded-[9px] bg-hermes px-3.5 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-8 cursor-pointer rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
             >
               Ajouter
             </button>

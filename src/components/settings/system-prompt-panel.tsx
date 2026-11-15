@@ -149,14 +149,14 @@ function PromptPanelBody({
     <div className="flex h-app-full w-full flex-col overflow-hidden">
       {/* ── En-tête ─────────────────────────────────────────────── */}
       <div className="flex flex-none items-center gap-2.5 px-5 pt-5 min-[640px]:px-6">
-        <span className="flex size-[26px] items-center justify-center rounded-[8px] bg-hermes/10 text-hermes">
-          <Sparkle className="size-[14px]" strokeWidth={2.2} />
+        <span className="flex size-[26px] items-center justify-center rounded-sm bg-hermes/10 text-hermes-text">
+          <Sparkle className="size-[14px]" strokeWidth={2} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15.5px] font-bold tracking-tight">
+          <h2 className="text-[15px] font-bold tracking-tight">
             Prompt de la conversation
           </h2>
-          <p className="truncate text-[11.5px] text-muted-foreground">
+          <p className="truncate text-[11px] text-muted-foreground">
             {conversationTitle ?? "Nouvelle conversation"}
           </p>
         </div>
@@ -165,7 +165,7 @@ function PromptPanelBody({
           title="Fermer (Échap)"
           aria-label="Fermer le prompt système"
           onClick={onClose}
-          className="flex size-[30px] cursor-pointer items-center justify-center rounded-[9px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+          className="flex size-[30px] cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           <X className="size-4" strokeWidth={2} />
         </button>
@@ -187,7 +187,7 @@ function PromptPanelBody({
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Presets de la bibliothèque
                   </span>
-                  <span className="text-[10.5px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     {presets.length}
                   </span>
                 </div>
@@ -199,9 +199,9 @@ function PromptPanelBody({
                       title={p.content.slice(0, 120)}
                       onClick={() => applyPreset(p)}
                       className={cn(
-                        "inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11.5px] font-medium transition-colors hover:border-hermes/60 hover:text-hermes focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-hermes",
+                        "inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] font-medium transition-colors hover:border-hermes/60 hover:text-hermes-text focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-hermes",
                         activePresetId === p.id
-                          ? "border-hermes/60 bg-hermes/10 text-hermes"
+                          ? "border-hermes/60 bg-hermes/10 text-hermes-text"
                           : "text-muted-foreground"
                       )}
                     >
@@ -224,9 +224,9 @@ function PromptPanelBody({
                 aria-label="Prompt système de la conversation"
                 placeholder="Ex. : Tu réponds en une phrase, toujours en français, sans liste…"
                 spellCheck={false}
-                className="min-h-[220px] flex-1 resize-none rounded-[12px] border border-border bg-background px-3.5 py-3 font-mono text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus-visible:border-hermes/60 focus-visible:ring-2 focus-visible:ring-hermes/30"
+                className="min-h-[220px] flex-1 resize-none rounded-lg border border-border bg-background px-3.5 py-3 font-mono text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus-visible:border-hermes/60 focus-visible:ring-2 focus-visible:ring-hermes/30"
               />
-              <div className="mt-1.5 flex items-center justify-between text-[10.5px] text-muted-foreground">
+              <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>
                   {presetTitle ? (
                     <>
@@ -240,9 +240,9 @@ function PromptPanelBody({
                   className={cn(
                     "tabular-nums",
                     remaining < 0
-                      ? "font-semibold text-red-600 dark:text-red-400"
+                      ? "font-semibold text-destructive"
                       : remaining < 800
-                        ? "text-amber-600 dark:text-amber-500"
+                        ? "text-warning"
                         : undefined
                   )}
                 >
@@ -254,13 +254,13 @@ function PromptPanelBody({
 
             {/* Enregistrer comme preset */}
             {creating ? (
-              <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-border px-3 py-2.5">
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
                 <input
                   value={newPresetName}
                   onChange={(e) => setNewPresetName(e.target.value)}
                   placeholder="Nom du preset"
                   aria-label="Nom du nouveau preset"
-                  className="h-8 min-w-0 flex-1 rounded-[9px] border border-border bg-background px-2.5 text-[12.5px] outline-none focus-visible:border-hermes/60"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 text-[12.5px] outline-none focus-visible:border-hermes/60"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void saveAsPreset();
                     if (e.key === "Escape") setCreating(false);
@@ -270,7 +270,7 @@ function PromptPanelBody({
                   type="button"
                   onClick={() => void saveAsPreset()}
                   disabled={!newPresetName.trim() || !draft.trim()}
-                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Check className="size-3.5" strokeWidth={2.5} />
                   Créer
@@ -278,7 +278,7 @@ function PromptPanelBody({
                 <button
                   type="button"
                   onClick={() => setCreating(false)}
-                  className="size-8 cursor-pointer rounded-[9px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="size-8 cursor-pointer rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label="Annuler la création"
                 >
                   <X className="size-3.5 mx-auto" strokeWidth={2} />
@@ -289,9 +289,9 @@ function PromptPanelBody({
                 type="button"
                 onClick={() => setCreating(true)}
                 disabled={!draft.trim()}
-                className="inline-flex w-fit cursor-pointer items-center gap-[7px] text-[12.5px] font-semibold text-hermes transition-opacity hover:opacity-75 disabled:opacity-40"
+                className="inline-flex w-fit cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:opacity-75 disabled:opacity-40"
               >
-                <FileText className="size-[13px]" strokeWidth={2.2} />
+                <FileText className="size-[13px]" strokeWidth={2} />
                 Enregistrer dans la bibliothèque…
               </button>
             )}
@@ -308,7 +308,7 @@ function PromptPanelBody({
                   setPresetTitle(null);
                   setDirty(false);
                 }}
-                className="inline-flex cursor-pointer items-center gap-[7px] text-[12px] font-medium text-muted-foreground transition-colors hover:text-red-600 dark:hover:text-red-400"
+                className="inline-flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-destructive dark:hover:text-destructive"
               >
                 <Trash2 className="size-[13px]" strokeWidth={2} />
                 Retirer
@@ -320,7 +320,7 @@ function PromptPanelBody({
             )}
             <div className="flex items-center gap-2.5">
               {dirty ? (
-                <span className="text-[10.5px] text-amber-600 dark:text-amber-500">
+                <span className="text-[11px] text-warning">
                   Non enregistré
                 </span>
               ) : null}
@@ -328,7 +328,7 @@ function PromptPanelBody({
                 type="button"
                 onClick={save}
                 disabled={!canSave}
-                className="inline-flex h-[34px] cursor-pointer items-center gap-2 rounded-[10px] bg-hermes px-4 text-[12.5px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-hermes-strong px-4 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Check className="size-[14px]" strokeWidth={2.5} />
                 Enregistrer · prochain tour

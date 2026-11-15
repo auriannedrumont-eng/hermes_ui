@@ -20,22 +20,22 @@ export function Pastille({
   title?: string;
 }) {
   const dot = {
-    ok: "bg-emerald-500",
-    warn: "bg-amber-500",
-    err: "bg-red-500",
+    ok: "bg-success",
+    warn: "bg-warning",
+    err: "bg-destructive",
     off: "bg-border",
   }[tone];
   const text = {
     ok: "text-muted-foreground",
-    warn: "text-amber-600 dark:text-amber-500",
-    err: "text-red-600 dark:text-red-500",
+    warn: "text-warning",
+    err: "text-destructive",
     off: "text-muted-foreground",
   }[tone];
   return (
     <span
       title={title}
       className={cn(
-        "inline-flex flex-none items-center gap-[6px] text-[11px] font-semibold whitespace-nowrap",
+        "inline-flex flex-none items-center gap-1.5 text-[11px] font-semibold whitespace-nowrap",
         text,
         className
       )}
@@ -60,7 +60,7 @@ export function AddLine({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex cursor-pointer items-center gap-[7px] text-[12.5px] font-semibold text-hermes transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
+        "inline-flex cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
         className
       )}
     >

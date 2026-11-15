@@ -104,12 +104,12 @@ function ExpertPanel({
         <span className="flex items-center gap-1.5">
           Mode expert
           {activeCount > 0 ? (
-            <span className="rounded-full bg-hermes/10 px-1.5 py-px text-[9.5px] font-medium text-hermes">
+            <span className="rounded-full bg-hermes/10 px-1.5 py-px text-[11px] font-medium text-hermes-text">
               {activeCount} actif{activeCount > 1 ? "s" : ""}
             </span>
           ) : null}
         </span>
-        <span className="flex items-center gap-1.5 text-[10.5px] font-medium">
+        <span className="flex items-center gap-1.5 text-[11px] font-medium">
           {expanded ? "replier" : "déplier"}
           <ChevronDown
             className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -139,7 +139,7 @@ function ExpertPanel({
               aria-label="Température"
               className="mt-1 h-1.5 w-full cursor-pointer accent-[var(--hermes)]"
             />
-            <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
               0 = déterministe · 1 = créatif (le moteur démo refuse au-delà).
             </p>
           </div>
@@ -157,7 +157,7 @@ function ExpertPanel({
                 onExpertChange({ maxTokens: expertClamp("maxTokens", e.target.value) })
               }
               aria-label="Plafond de jetons de la réponse"
-              className="h-7 w-24 rounded-[8px] border border-border bg-background px-2 text-right text-[11.5px] tabular-nums outline-none focus-visible:border-hermes/60"
+              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
             />
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -169,12 +169,12 @@ function ExpertPanel({
               value={expert.seed ?? ""}
               onChange={(e) => onExpertChange({ seed: expertClamp("seed", e.target.value) })}
               aria-label="Graine de reproductibilité"
-              className="h-7 w-24 rounded-[8px] border border-border bg-background px-2 text-right text-[11.5px] tabular-nums outline-none focus-visible:border-hermes/60"
+              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
             />
           </div>
-          <p className="text-[10.5px] leading-snug text-muted-foreground">
+          <p className="text-[11px] leading-snug text-muted-foreground">
             Champs vides = valeurs par défaut du fournisseur. Envoyés dans{" "}
-            <code className="rounded bg-muted px-1 font-mono text-[10px]">api_turn_v1.settings</code>{" "}
+            <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>{" "}
             — ignorés sans dommage si non supportés.
           </p>
         </div>
@@ -279,20 +279,20 @@ export function ModelPicker({
         className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left"
       >
         <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
-          {isSelected ? <Check className="h-4 w-4 text-hermes" /> : null}
+          {isSelected ? <Check className="h-4 w-4 text-hermes-text" /> : null}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
-            <span className="truncate text-[13.5px] font-medium">{m.label}</span>
+            <span className="truncate text-[14px] font-medium">{m.label}</span>
             {favoriteIds.includes(m.id) ? (
-              <Star className="h-3 w-3 shrink-0 fill-amber-500 text-amber-500" />
+              <Star className="h-3 w-3 shrink-0 fill-warning text-warning" />
             ) : null}
             {m.badge ? (
               <span
-                className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-medium ${
+                className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[11px] font-medium ${
                   m.badge === "Défaut"
                     ? "bg-muted text-muted-foreground"
-                    : "bg-hermes/10 text-hermes"
+                    : "bg-hermes/10 text-hermes-text"
                 }`}
               >
                 {m.badge === "Flagship" ? <Zap className="h-2.5 w-2.5" /> : null}
@@ -301,11 +301,11 @@ export function ModelPicker({
             ) : null}
           </span>
           {m.description ? (
-            <span className="mt-0.5 block truncate text-[11.5px] leading-snug text-muted-foreground">
+            <span className="mt-0.5 block truncate text-[11px] leading-snug text-muted-foreground">
               {m.description}
             </span>
           ) : null}
-          <span className="mt-0.5 block font-mono text-[10.5px] text-muted-foreground/70">
+          <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground/70">
             {m.id} · {m.provider}
           </span>
         </span>
@@ -329,7 +329,7 @@ export function ModelPicker({
           className={
             compact
               ? "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              : "h-9 gap-1.5 rounded-xl px-2.5 text-[13.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              : "h-9 gap-1.5 rounded-xl px-2.5 text-[14px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
           }
           aria-label={
             slotLabel
@@ -338,11 +338,11 @@ export function ModelPicker({
           }
         >
           {slotLabel ? (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes">
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes-text">
               {slotLabel}
             </span>
           ) : compact ? (
-            <Sparkles className="h-3.5 w-3.5 shrink-0 text-hermes" />
+            <Sparkles className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
           ) : null}
           <span className="max-w-40 truncate sm:max-w-none">{label}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
@@ -356,8 +356,8 @@ export function ModelPicker({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <Command shouldFilter={false} className="overflow-hidden rounded-xl">
-          <div className="flex items-center gap-1.5 px-3.5 pt-3 pb-1 text-[11.5px] font-medium text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-hermes" />
+          <div className="flex items-center gap-1.5 px-3.5 pt-3 pb-1 text-[11px] font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-hermes-text" />
             Choisir un modèle
           </div>
           <div className="px-2 pb-1">
@@ -367,16 +367,16 @@ export function ModelPicker({
                 value={query}
                 onValueChange={setQuery}
                 placeholder="Rechercher par nom, id ou fournisseur…"
-                className="h-9 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+                className="h-9 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-muted-foreground"
                 aria-label="Rechercher un modèle"
               />
-              <kbd className="rounded border border-border bg-card px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+              <kbd className="rounded border border-border bg-card px-1.5 py-px font-mono text-[11px] text-muted-foreground">
                 esc
               </kbd>
             </div>
           </div>
           <CommandList className="max-h-[252px] overflow-y-auto p-1">
-            <CommandEmpty className="py-5 text-center text-[13px] text-muted-foreground">
+            <CommandEmpty className="py-5 text-center text-[12.5px] text-muted-foreground">
               Aucun modèle ne correspond à «&nbsp;{query.trim()}&nbsp;»
             </CommandEmpty>
 
@@ -384,7 +384,7 @@ export function ModelPicker({
               <CommandGroup
                 heading={
                   <span className="flex items-center gap-1.5">
-                    <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                    <Star className="h-3 w-3 fill-warning text-warning" />
                     Favoris
                   </span>
                 }
@@ -419,10 +419,10 @@ export function ModelPicker({
           <div className={bare ? "hidden" : "border-t border-border/60 px-3.5 py-2.5"}>
             <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
               <span>Effort de raisonnement</span>
-              <span className="text-[10.5px] font-medium">{effortScaleLabel}</span>
+              <span className="text-[11px] font-medium">{effortScaleLabel}</span>
             </div>
             <div
-              className="flex gap-0.5 rounded-[9px] bg-muted p-[3px]"
+              className="flex gap-0.5 rounded-md bg-muted p-[3px]"
               role="radiogroup"
               aria-label="Effort de raisonnement"
             >
@@ -436,9 +436,9 @@ export function ModelPicker({
                     onEffortChange(e);
                     writeClientSetting(EFFORT_KEY, e);
                   }}
-                  className={`flex-1 cursor-pointer rounded-[7px] border-0 bg-transparent px-2 py-[5px] text-[11.5px] font-medium capitalize transition-colors ${
+                  className={`flex-1 cursor-pointer rounded-sm border-0 bg-transparent px-2 py-[5px] text-[11px] font-medium capitalize transition-colors ${
                     e === activeEffort
-                      ? "bg-card font-semibold text-hermes shadow-sm"
+                      ? "bg-card font-semibold text-hermes-text shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -447,7 +447,7 @@ export function ModelPicker({
               ))}
             </div>
             <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-              Envoyé dans <code className="rounded bg-muted px-1 font-mono text-[10.5px]">api_turn_v1.settings</code>{" "}
+              Envoyé dans <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>{" "}
               — ignoré sans dommage si le fournisseur ne le supporte pas.
             </p>
           </div>

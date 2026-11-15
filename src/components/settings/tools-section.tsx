@@ -36,7 +36,7 @@ function ToolGroup({
   return (
     <div className="mt-4 first:mt-0">
       <h2 className="text-[14px] font-semibold tracking-tight">{title}</h2>
-      <div className="mt-2 rounded-[14px] border border-border px-4 py-1">
+      <div className="mt-2 rounded-xl border border-border px-4 py-1">
         {rows.map((it, i) => (
           <div
             key={it.name}
@@ -46,8 +46,8 @@ function ToolGroup({
             )}
           >
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold">{it.name}</div>
-              <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+              <div className="text-[12.5px] font-semibold">{it.name}</div>
+              <div className="mt-px text-[11px] leading-snug text-muted-foreground">
                 {it.desc}
               </div>
             </div>
@@ -55,7 +55,7 @@ function ToolGroup({
               <button
                 type="button"
                 onClick={() => onNavigate(it.action!.section)}
-                className="flex-none cursor-pointer rounded-[8px] px-2 py-1 text-[11.5px] font-semibold text-hermes transition-colors hover:bg-hermes/10"
+                className="flex-none cursor-pointer rounded-sm px-2 py-1 text-[11px] font-semibold text-hermes-text transition-colors hover:bg-hermes/10"
               >
                 {it.action.label}
               </button>
@@ -72,7 +72,7 @@ export function ToolsSection({ webSearchAvailable, onNavigate }: ToolsSectionPro
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Outils</h1>
-      <p className="mt-1 mb-2 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-2 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Ce qu&apos;Hermes peut faire, outil par outil. Les changements
         s&apos;appliquent au prochain message.
       </p>
@@ -153,7 +153,7 @@ export function ToolsSection({ webSearchAvailable, onNavigate }: ToolsSectionPro
         ]}
       />
 
-      <p className="mt-3 text-[11.5px] leading-relaxed text-muted-foreground">
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
         Les outils marqués «&nbsp;gateway&nbsp;» s&apos;activeront au branchement du moteur
         réel (Hermes). Tout le reste est déjà livré — sans donnée simulée.
       </p>

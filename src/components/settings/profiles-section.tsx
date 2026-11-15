@@ -89,7 +89,7 @@ export function ProfilesSection() {
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Profils</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Des préréglages complets — modèle, effort, permissions, recherche web —
         applicables en un clic.
       </p>
@@ -97,7 +97,7 @@ export function ProfilesSection() {
       <div className="flex items-center justify-between">
         <div className="min-w-0">
           <h2 className="text-[14px] font-semibold tracking-tight">Vos profils</h2>
-          <p className="mt-px text-[12px] leading-snug text-muted-foreground">
+          <p className="mt-px text-[12.5px] leading-snug text-muted-foreground">
             «&nbsp;Créer&nbsp;» capture les réglages actuels ; «&nbsp;Appliquer&nbsp;» les
             remet en place instantanément.
           </p>
@@ -114,14 +114,14 @@ export function ProfilesSection() {
       </div>
 
       {flash ? (
-        <div className="mt-2.5 flex items-center gap-2 rounded-[10px] border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+        <div className="mt-2.5 flex items-center gap-2 rounded-md border border-success/30 bg-success/8 px-3 py-2 text-[12.5px] font-medium text-success">
           <Check className="size-[13px] flex-none" strokeWidth={2.5} />
           <span className="min-w-0 flex-1">{flash}</span>
         </div>
       ) : null}
 
       {creating ? (
-        <div className="mt-2.5 rounded-[12px] border border-hermes/30 bg-hermes/5 p-3">
+        <div className="mt-2.5 rounded-lg border border-hermes/30 bg-hermes/5 p-3">
           <div className="flex items-center gap-2">
             <input
               value={name}
@@ -140,9 +140,9 @@ export function ProfilesSection() {
               placeholder="Nom du profil (ex. « Rédaction rapide », « Analyse approfondie »)"
               aria-label="Nom du profil"
               autoFocus
-              className="h-8 min-w-0 flex-1 rounded-[9px] border border-border bg-background px-2.5 text-[12.5px] font-semibold outline-none focus-visible:border-hermes/60"
+              className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 text-[12.5px] font-semibold outline-none focus-visible:border-hermes/60"
             />
-            <span className="hidden flex-none text-[10.5px] tabular-nums text-muted-foreground sm:block">
+            <span className="hidden flex-none text-[11px] tabular-nums text-muted-foreground sm:block">
               {name.length}/60
             </span>
           </div>
@@ -157,7 +157,7 @@ export function ProfilesSection() {
                   setCreating(false);
                   setName("");
                 }}
-                className="inline-flex h-8 cursor-pointer items-center rounded-[9px] px-3 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Annuler
               </button>
@@ -165,7 +165,7 @@ export function ProfilesSection() {
                 type="button"
                 onClick={create}
                 disabled={!name.trim()}
-                className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <PlusCircle className="size-3.5" strokeWidth={2.5} />
                 Créer
@@ -175,9 +175,9 @@ export function ProfilesSection() {
         </div>
       ) : null}
 
-      <div className="mt-2.5 rounded-[14px] border border-border px-4 py-1">
+      <div className="mt-2.5 rounded-xl border border-border px-4 py-1">
         {profiles.length === 0 && !creating ? (
-          <div className="py-4 text-center text-[12px] text-muted-foreground">
+          <div className="py-4 text-center text-[12.5px] text-muted-foreground">
             Aucun profil — réglez le chat comme vous l&apos;aimez, puis «&nbsp;Créer un
             profil&nbsp;» pour le garder sous la main.
           </div>
@@ -196,12 +196,12 @@ export function ProfilesSection() {
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold">{p.name}</span>
+                    <span className="text-[12.5px] font-semibold">{p.name}</span>
                     {applied ? (
                       <Pastille tone="ok" label="appliqué" />
                     ) : null}
                   </div>
-                  <div className="mt-px line-clamp-1 text-[11.5px] leading-snug text-muted-foreground">
+                  <div className="mt-px line-clamp-1 text-[11px] leading-snug text-muted-foreground">
                     {profileSummary(p)}
                   </div>
                 </div>
@@ -210,7 +210,7 @@ export function ProfilesSection() {
                     type="button"
                     onClick={() => apply(p)}
                     title="Appliquer ce profil maintenant"
-                    className="inline-flex h-[28px] cursor-pointer items-center gap-1.5 rounded-[8px] bg-hermes px-2.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                    className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-sm bg-hermes-strong px-2.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90"
                   >
                     Appliquer
                   </button>
@@ -219,7 +219,7 @@ export function ProfilesSection() {
                     title="Dupliquer"
                     aria-label={`Dupliquer ${p.name}`}
                     onClick={() => duplicate(p)}
-                    className="flex size-[28px] cursor-pointer items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Copy className="size-[13px]" strokeWidth={2} />
                   </button>
@@ -228,7 +228,7 @@ export function ProfilesSection() {
                     title="Supprimer"
                     aria-label={`Supprimer ${p.name}`}
                     onClick={() => remove(p)}
-                    className="flex size-[28px] cursor-pointer items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                    className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                   >
                     <Trash2 className="size-[13px]" strokeWidth={2} />
                   </button>
@@ -239,7 +239,7 @@ export function ProfilesSection() {
         })}
       </div>
 
-      <p className="mt-3 text-[11.5px] leading-relaxed text-muted-foreground">
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
         L&apos;application est immédiate (bus de réglages, aucun redémarrage) et prend
         effet au prochain tour. La liste est conservée d&apos;une session à l&apos;autre.
       </p>

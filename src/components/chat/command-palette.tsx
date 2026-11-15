@@ -2,6 +2,7 @@
 // ouverture de conversation et recherche plein-texte dans les messages.
 "use client";
 
+import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { useEffect, useMemo, useState } from "react";
 import {
   Download,
@@ -90,7 +91,7 @@ export function CommandPalette({
       } catch {
         setHits([]);
       }
-    }, 350);
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [query, open, onSearchMessages]);
 
@@ -199,7 +200,7 @@ export function CommandPalette({
                   <Sparkles className="h-4 w-4" />
                   {m.label}
                   {m.id === selectedModel ? (
-                    <span className="ml-auto text-[11px] text-hermes">actif</span>
+                    <span className="ml-auto text-[11px] text-hermes-text">actif</span>
                   ) : null}
                 </CommandItem>
               ))}
@@ -219,7 +220,7 @@ export function CommandPalette({
                 >
                   <MessageSquare className="h-4 w-4" />
                   {c.pinned ? (
-                    <Pin className="h-3 w-3 rotate-45 text-hermes" aria-label="Épinglée" />
+                    <Pin className="h-3 w-3 rotate-45 text-hermes-text" aria-label="Épinglée" />
                   ) : null}
                   <span className="truncate">{c.title}</span>
                   {c.id === activeConversation?.id ? (
@@ -243,10 +244,10 @@ export function CommandPalette({
                 >
                   <Search className="h-4 w-4" />
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px]">
+                    <span className="block truncate text-[12.5px]">
                       {hit.conversationTitle}
                     </span>
-                    <span className="block truncate text-[11.5px] text-muted-foreground">
+                    <span className="block truncate text-[11px] text-muted-foreground">
                       {hit.role === "user" ? "Vous : " : "Hermes : "}
                       {hit.excerpt}
                     </span>

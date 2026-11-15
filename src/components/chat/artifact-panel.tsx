@@ -137,7 +137,7 @@ function DiffView({ oldSource, newSource }: { oldSource: string; newSource: stri
     return { add, del };
   }, [rows]);
   return (
-    <div className="font-mono text-[12px] leading-relaxed">
+    <div className="font-mono text-[12.5px] leading-relaxed">
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-700/60 bg-[#161b22] px-3 py-1.5 text-[11px] text-zinc-400">
         <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-400">
           +{stats.add}
@@ -196,7 +196,7 @@ function CsvTableView({ source }: { source: string }) {
   const [head, ...body] = rows;
   return (
     <div className="overflow-auto">
-      <table className="w-full border-collapse text-[13px]">
+      <table className="w-full border-collapse text-[12.5px]">
         <thead className="sticky top-0 bg-muted">
           <tr>
             {head.map((c, i) => (
@@ -263,10 +263,10 @@ function ImageView({
           {fit ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto bg-[repeating-conic-gradient(hsl(var(--muted))_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
+      <div className="min-h-0 flex-1 overflow-auto bg-[repeating-conic-gradient(var(--muted)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
         {isGenerating ? (
           <div className="flex h-full min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin text-hermes" />
+            <Loader2 className="h-4 w-4 animate-spin text-hermes-text" />
             {statusLabel ?? "Rendu de l'aperçu (Chrome)…"}
           </div>
         ) : (
@@ -355,7 +355,7 @@ function ArtifactBody({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-hermes" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-hermes-text" />
           {artifact.statusLabel ??
             (artifact.status === "generating"
               ? `Génération de ${artifact.name}…`
@@ -390,7 +390,7 @@ function ArtifactBody({
         <AlertTriangle className="h-8 w-8 text-destructive" />
         <div>
           <p className="font-medium">Le rendu a échoué</p>
-          <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">
+          <p className="mt-1 max-w-sm text-[12.5px] text-muted-foreground">
             {artifact.error ?? "Erreur inconnue pendant la génération de l'artefact."}
           </p>
         </div>
@@ -416,7 +416,7 @@ function ArtifactBody({
         <button
           key={m}
           onClick={() => setMode(m)}
-          className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+          className={`rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
             mode === m
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -521,7 +521,7 @@ function ArtifactBody({
           <Button
             variant="ghost"
             size="icon"
-            className={`h-7 w-7 rounded-lg ${wrap ? "text-hermes" : "text-muted-foreground"}`}
+            className={`h-7 w-7 rounded-lg ${wrap ? "text-hermes-text" : "text-muted-foreground"}`}
             onClick={() => setWrap((w) => !w)}
             aria-label="Retour à la ligne"
             title="Retour à la ligne on/off"
@@ -533,8 +533,8 @@ function ArtifactBody({
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 gap-1.5 rounded-lg px-2 text-[12px] ${
-              diff ? "text-hermes" : "text-muted-foreground"
+            className={`h-7 gap-1.5 rounded-lg px-2 text-[12.5px] ${
+              diff ? "text-hermes-text" : "text-muted-foreground"
             }`}
             onClick={() => setDiff((d) => !d)}
             aria-pressed={diff}
@@ -548,7 +548,7 @@ function ArtifactBody({
           <Button
             variant="outline"
             size="sm"
-            className="ml-auto h-7 gap-1.5 rounded-lg border-hermes/40 px-2.5 text-[12px] text-hermes hover:bg-hermes/10"
+            className="ml-auto h-7 gap-1.5 rounded-lg border-hermes/40 px-2.5 text-[12.5px] text-hermes-text hover:bg-hermes/10"
             onClick={() => downloadArtifact(artifact, "pdf")}
           >
             <FileDown className="h-3.5 w-3.5" />
@@ -601,12 +601,12 @@ function ArtifactHeaderActions({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 rounded-lg px-2 font-mono text-[12px] text-muted-foreground"
+              className="h-7 gap-1 rounded-lg px-2 font-mono text-[12.5px] text-muted-foreground"
               aria-label="Choisir la version"
               title="Versions"
             >
               v{artifact.version}
-              <Badge variant="outline" className="h-4 rounded px-1 text-[10px]">
+              <Badge variant="outline" className="h-4 rounded px-1 text-[11px]">
                 {versions.length}
               </Badge>
             </Button>
@@ -620,8 +620,8 @@ function ArtifactHeaderActions({
                 onClick={() => onSelectVersion(v)}
                 className={v.id === artifact.id ? "bg-muted font-medium" : ""}
               >
-                <span className="font-mono text-[12px]">v{v.version}</span>
-                <span className="ml-2 text-[12px] text-muted-foreground">
+                <span className="font-mono text-[12.5px]">v{v.version}</span>
+                <span className="ml-2 text-[12.5px] text-muted-foreground">
                   {new Date(v.createdAt).toLocaleString("fr-FR", {
                     day: "2-digit",
                     month: "short",
@@ -667,7 +667,7 @@ function ArtifactHeaderActions({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-lg text-hermes"
+          className="h-7 w-7 rounded-lg text-hermes-text"
           onClick={() => onRetry(artifact.id)}
           aria-label="Réessayer"
           title="Réessayer le rendu"
@@ -702,7 +702,7 @@ function ArtifactMetaLine({ artifact }: { artifact: Artifact }) {
       </span>
       {artifact.renderedBy ? (
         <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-medium">
-          <Globe className="h-3 w-3 text-hermes" />
+          <Globe className="h-3 w-3 text-hermes-text" />
           Rendu Chrome — fidélité garantie
         </span>
       ) : null}
@@ -799,7 +799,7 @@ export function ArtifactPanel({
             >
               <span className="max-w-36 truncate font-mono">{t.name}</span>
               {t.version > 1 ? (
-                <span className="rounded bg-hermes/15 px-1 font-mono text-[10px] text-hermes">
+                <span className="rounded bg-hermes/15 px-1 font-mono text-[11px] text-hermes-text">
                   v{t.version}
                 </span>
               ) : null}
@@ -924,7 +924,7 @@ export function ArtifactViewerDialog({
             </Button>
           ) : null}
           <div className="min-w-0 flex-1 text-center">
-            <p className="truncate font-mono text-[13px] font-medium">
+            <p className="truncate font-mono text-[12.5px] font-medium">
               {selected?.name ?? "—"}
             </p>
             {tabs.length > 1 ? (

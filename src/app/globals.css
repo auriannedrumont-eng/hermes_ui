@@ -39,10 +39,16 @@
   --color-card: var(--card);
   --color-hermes: var(--hermes);
   --color-hermes-foreground: var(--hermes-foreground);
+  --color-hermes-text: var(--hermes-text);
+  --color-hermes-strong: var(--hermes-strong);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-2xl: calc(var(--radius) + 10px);
 }
 
 :root {
@@ -63,11 +69,20 @@
   --accent: oklch(0.95 0.004 75);
   --accent-foreground: oklch(0.24 0.005 60);
   --destructive: oklch(0.577 0.245 27.325);
+  --warning: oklch(0.55 0.12 62);
+  --warning-foreground: oklch(0.99 0.002 80);
+  --success: oklch(0.52 0.115 163);
   --border: oklch(0.915 0.004 75);
   --input: oklch(0.915 0.004 75);
   --ring: oklch(0.66 0.17 42);
   --hermes: oklch(0.63 0.17 42);
   --hermes-foreground: oklch(0.99 0.002 80);
+  /* hermes-text : terracotta des libellés d'accent (< 14 px) — AA 5,03:1
+     sur fond clair, là où --hermes (marque, surfaces) passe sous 4,5:1.
+     hermes-strong : surface interactive des boutons primaires — AA 5,05:1
+     avec hermes-foreground. La marque elle-même (--hermes) ne bouge pas. */
+  --hermes-text: oklch(0.55 0.16 42);
+  --hermes-strong: oklch(0.55 0.16 42);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -100,11 +115,18 @@
   --accent: oklch(0.26 0.003 60);
   --accent-foreground: oklch(0.93 0.003 80);
   --destructive: oklch(0.704 0.191 22.216);
+  --warning: oklch(0.75 0.14 70);
+  --warning-foreground: oklch(0.16 0.01 45);
+  --success: oklch(0.765 0.13 163);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.72 0.16 48);
   --hermes: oklch(0.72 0.16 48);
   --hermes-foreground: oklch(0.16 0.01 45);
+  /* En sombre, la marque terracotta passe l'AA sur le charbon chaud :
+     les tokens strong/text rejoignent la marque (7,42:1 mesuré). */
+  --hermes-text: oklch(0.72 0.16 48);
+  --hermes-strong: oklch(0.72 0.16 48);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -128,7 +150,21 @@
     @apply bg-background text-foreground;
   }
 
-  /* Scrollbar discret façon ChatGPT */
+  /* Focus clavier — un seul langage (passe 3 P8, passe 2 C1.6) : liseré 2px
+     terracotta partout, décalé de 2px. Les composants ui/ qui posent leur
+     propre anneau (inputs ring 3px) le surchargent via la couche utilities. */
+  *:focus-visible {
+    outline: 2px solid var(--hermes);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbar discret façon ChatGPT — Firefox inclus (passe 2 C3.4).
+     Les valeurs non-standard (webkit) posées ailleurs utilisent le même
+     color-mix, le même rayon plein et la même largeur 8px. */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 28%, transparent) transparent;
+  }
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -180,6 +216,40 @@
 .message-in {
   animation: message-in 0.24s ease-out;
 }
+
+/* Mouvement réduit : les 3 animations maison sont coupées, les éléments
+   restent visibles à l'état final (constat passe 3 P5 : aucun garde). */
+@media (prefers-reduced-motion: reduce) {
+  .streaming-cursor,
+  .typing-dot,
+  .typing-dot:nth-child(2),
+  .typing-dot:nth-child(3),
+  .message-in {
+    animation: none;
+  }
+}
+
+/* ══ Échelles déclarées — la grammaire du repo (audit passe 2 C3, passe 3 P5-P7) ══
+   Une seule façon de faire chaque chose ; toute valeur hors échelle est un écart.
+
+   Texte (7 crans, en px)   : 11 · 12.5 · 14 · 15 · 17 · 19 · 26
+                              (les demi-graduations 10.5/11.5/13/13.5/14.5/15.5
+                              sont interdites ; les micro-textes sont ≥ 11 px)
+   Rayons (tokens Tailwind) : sm 8 · md 10 · lg 12 · xl 14 · 2xl 22 · full
+                              (--radius: 0.75rem = 12px ; xl/2xl calés dessus)
+   Hauteurs de contrôle     : h-8 (32) · h-9 (36) · h-10 (40) — l'échelle Button
+                              ; micro-contrôles (chips, champs courts) : h-6 (24)
+                              · h-7 (28) — steps standard, pas de valeurs px libres
+   Opacité désactivée       : 40 — une seule valeur dans tout le repo
+   Gaps                     : gap-1 (4) · gap-1.5 (6) · gap-2 (8) · gap-3 (12)
+   Durées de transition     : 150 · 200 · 300 ms (échelle existante, saine)
+   Trait d'icône (Lucide)   : 2 par défaut · 2.5 en accent — rien d'autre
+   Z-index                  : 50 popovers/dialogs (standard Radix) · 10/20
+                              empilements locaux · 100 toasts + garde un-onglet
+                              · 70 InfoTip au-dessus des popovers
+
+   Exception assumée : les micro-éléments < 16 px (flèches de tooltip,
+   points de légende, cases à cocher 16 px) gardent leur micro-rayon (2-4 px). */
 
 /* Hauteur plein écran avec repli : 100vh partout, 100dvh quand le
    navigateur le supporte (barres dynamiques mobiles). Les utilitaires

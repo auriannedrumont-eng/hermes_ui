@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import { Brain, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
+import { Switch } from "@/components/ui/switch";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import type { MemoryState } from "@/lib/chat-types";
 
 interface MemoryCardProps {
@@ -57,17 +59,17 @@ export function MemoryCard({
   return (
     <div
       className={cn(
-        "rounded-[14px] border px-4 py-3 transition-colors",
+        "rounded-xl border px-4 py-3 transition-colors",
         enabled ? "border-border" : "border-border/60 opacity-70"
       )}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[13.5px] font-semibold">
-            <Brain className="size-[14px] text-hermes" strokeWidth={2.2} />
+          <div className="flex items-center gap-2 text-[14px] font-semibold">
+            <Brain className="size-[14px] text-hermes-text" strokeWidth={2} />
             Mémoire
           </div>
-          <div className="mt-px text-[12px] leading-snug text-muted-foreground">
+          <div className="mt-px text-[12.5px] leading-snug text-muted-foreground">
             Ce qu&apos;Hermes retient de vous, réutilisé à chaque conversation.
           </div>
         </div>
@@ -88,31 +90,20 @@ export function MemoryCard({
                   : "vide"
             }
           />
-          {/* Interrupteur activer/désactiver */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
+          {/* Interrupteur activer/désactiver — le Switch Radix unique du repo */}
+          <Switch
+            checked={enabled}
+            onCheckedChange={(v) => void onSetEnabled(v)}
             aria-label={enabled ? "Désactiver la mémoire" : "Activer la mémoire"}
-            title={enabled ? "Désactiver la mémoire" : "Activer la mémoire"}
-            onClick={() => void onSetEnabled(!enabled)}
-            className={cn(
-              "relative h-[22px] w-[38px] cursor-pointer rounded-full transition-colors",
-              enabled ? "bg-hermes" : "bg-muted"
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-[2px] size-[18px] rounded-full bg-white shadow-sm transition-all",
-                enabled ? "left-[18px]" : "left-[2px]"
-              )}
-            />
-          </button>
+          />
         </div>
       </div>
 
       {/* Apprentissage automatique : réglage moteur (gateway), honnête en démo */}
-      <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-[10px] border border-border/70 bg-muted/30 px-3 py-2">
+      <label
+        htmlFor="memory-auto-learn"
+        className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
+      >
         <span className="min-w-0">
           <span className="block text-[12.5px] font-medium">
             Apprentissage automatique
@@ -122,12 +113,12 @@ export function MemoryCard({
             le moteur réel).
           </span>
         </span>
-        <input
-          type="checkbox"
+        <Switch
+          id="memory-auto-learn"
           checked={autoLearn}
           disabled={!enabled}
-          onChange={(e) => void onSetAuto(e.target.checked)}
-          className="size-[15px] flex-none accent-[var(--hermes)]"
+          onCheckedChange={(v) => void onSetAuto(v)}
+          aria-label="Apprentissage automatique"
         />
       </label>
 
@@ -138,24 +129,30 @@ export function MemoryCard({
         placeholder="Ex. : Je m'appelle… Je préfère… Mon projet actuel est…"
         spellCheck={false}
         disabled={!enabled}
-        className="mt-2.5 min-h-[96px] w-full resize-y rounded-[10px] border border-border bg-background px-3 py-2 text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus-visible:border-hermes/60 focus-visible:ring-2 focus-visible:ring-hermes/30 disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-2.5 min-h-[96px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus-visible:border-hermes/60 focus-visible:ring-2 focus-visible:ring-hermes/30 disabled:cursor-not-allowed disabled:opacity-40"
       />
       <div className="mt-1.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void erase()}
-            disabled={!enabled || !notesValue.trim() || saving}
-            title="Effacer tout le contenu de la mémoire"
-            className="inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[9px] px-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-red-400"
-          >
-            <Trash2 className="size-[13px]" strokeWidth={2} />
-            Effacer
-          </button>
+          <ConfirmDestructiveDialog
+            trigger={
+              <button
+                type="button"
+                disabled={!enabled || !notesValue.trim() || saving}
+                className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-destructive"
+              >
+                <Trash2 className="size-[13px]" strokeWidth={2} />
+                Effacer
+              </button>
+            }
+            title="Effacer tout le contenu de la mémoire ?"
+            description="Toutes les notes mémorisées seront supprimées définitivement."
+            confirmLabel="Effacer la mémoire"
+            onConfirm={() => void erase()}
+          />
           <span
             className={cn(
-              "text-[10.5px] tabular-nums text-muted-foreground",
-              remaining < 0 && "font-semibold text-red-600 dark:text-red-400"
+              "text-[11px] tabular-nums text-muted-foreground",
+              remaining < 0 && "font-semibold text-destructive"
             )}
           >
             {notesValue.length.toLocaleString("fr-FR")} /{" "}
@@ -166,7 +163,7 @@ export function MemoryCard({
           type="button"
           onClick={() => void saveNotes()}
           disabled={!enabled || !dirty || remaining < 0 || saving}
-          className="inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-[13px]" strokeWidth={2.5} />
           Enregistrer · prochain tour

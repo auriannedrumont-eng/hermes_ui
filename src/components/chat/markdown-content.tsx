@@ -73,7 +73,7 @@ export function MarkdownContent({ content }: { content: string }) {
             const match = /language-(\w+)/.exec(className ?? "");
             if (!match && !text.includes("\n")) {
               return (
-                <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[13px]">
+                <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12.5px]">
                   {children}
                 </code>
               );
@@ -85,14 +85,14 @@ export function MarkdownContent({ content }: { content: string }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-hermes underline underline-offset-2 hover:opacity-80"
+              className="font-medium text-hermes-text underline underline-offset-2 hover:opacity-80"
             >
               {children}
             </a>
           ),
           table: ({ children }) => (
             <div className="my-3 overflow-x-auto rounded-lg border">
-              <table className="w-full text-[13.5px]">{children}</table>
+              <table className="w-full text-[14px]">{children}</table>
             </div>
           ),
           th: ({ children }) => (

@@ -25,11 +25,11 @@ function CrossLink({
     <button
       type="button"
       onClick={() => onNavigate(section)}
-      className="flex w-full cursor-pointer items-center gap-3 rounded-[12px] border border-border bg-muted/30 px-3.5 py-3 text-left transition-colors hover:border-hermes/40 hover:bg-hermes/5"
+      className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/30 px-3.5 py-3 text-left transition-colors hover:border-hermes/40 hover:bg-hermes/5"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-semibold">{label}</span>
-        <span className="mt-px block text-[11.5px] leading-snug text-muted-foreground">
+        <span className="block text-[12.5px] font-semibold">{label}</span>
+        <span className="mt-px block text-[11px] leading-snug text-muted-foreground">
           {desc}
         </span>
       </span>
@@ -42,14 +42,14 @@ export function SkillsSection({ onNavigate }: SkillsSectionProps) {
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Skills</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Des procédures réutilisables, cherchables, éditables dans ce volet.
       </p>
 
-      <div className="rounded-[14px] border border-dashed border-border px-4 py-6 text-center">
-        <Sparkles className="mx-auto size-5 text-muted-foreground/70" strokeWidth={1.8} />
-        <div className="mt-2 text-[13px] font-semibold">Aucun skill pour l&apos;instant</div>
-        <div className="mx-auto mt-1 max-w-[400px] text-[11.5px] leading-relaxed text-muted-foreground">
+      <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
+        <Sparkles className="mx-auto size-5 text-muted-foreground/70" strokeWidth={2} />
+        <div className="mt-2 text-[12.5px] font-semibold">Aucun skill pour l&apos;instant</div>
+        <div className="mx-auto mt-1 max-w-[400px] text-[11px] leading-relaxed text-muted-foreground">
           Les skills sont des procédures du moteur Hermes. Ils apparaîtront ici
           — avec leur source et leur dernière vérification — au branchement de
           la gateway. Rien n&apos;est simulé en attendant.

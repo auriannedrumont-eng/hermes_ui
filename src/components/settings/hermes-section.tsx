@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, MessagesSquare, Pencil, Sparkle, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { MemoryCard } from "@/components/settings/memory-card";
@@ -52,13 +53,13 @@ function PresetEditor({
   const [content, setContent] = useState(initial?.content ?? "");
 
   return (
-    <div className="mt-2 rounded-[12px] border border-hermes/30 bg-hermes/5 p-3">
+    <div className="mt-2 rounded-lg border border-hermes/30 bg-hermes/5 p-3">
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Nom du preset"
         aria-label="Nom du preset"
-        className="h-8 w-full rounded-[9px] border border-border bg-background px-2.5 text-[12.5px] font-semibold outline-none focus-visible:border-hermes/60"
+        className="h-8 w-full rounded-md border border-border bg-background px-2.5 text-[12.5px] font-semibold outline-none focus-visible:border-hermes/60"
       />
       <textarea
         value={content}
@@ -66,13 +67,13 @@ function PresetEditor({
         placeholder="Instructions du preset…"
         aria-label="Instructions du preset"
         spellCheck={false}
-        className="mt-2 min-h-[120px] w-full resize-y rounded-[9px] border border-border bg-background px-3 py-2 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-hermes/60"
+        className="mt-2 min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12.5px] leading-relaxed outline-none focus-visible:border-hermes/60"
       />
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex h-8 cursor-pointer items-center rounded-[9px] px-3 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           Annuler
         </button>
@@ -80,7 +81,7 @@ function PresetEditor({
           type="button"
           onClick={() => onSubmit(title.trim(), content.trim())}
           disabled={!title.trim() || !content.trim()}
-          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-3.5" strokeWidth={2.5} />
           {initial ? "Enregistrer" : "Créer"}
@@ -120,51 +121,33 @@ function ConversationsLonguesCard({
   return (
     <div
       className={cn(
-        "rounded-[14px] border px-4 py-3 transition-colors",
+        "rounded-xl border px-4 py-3 transition-colors",
         auto ? "border-border" : "border-border/60"
       )}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[13.5px] font-semibold">
-            <MessagesSquare className="size-[14px] text-hermes" strokeWidth={2.2} />
+          <div className="flex items-center gap-2 text-[14px] font-semibold">
+            <MessagesSquare className="size-[14px] text-hermes-text" strokeWidth={2} />
             Conversations longues
           </div>
-          <div className="mt-px text-[12px] leading-snug text-muted-foreground">
+          <div className="mt-px text-[12.5px] leading-snug text-muted-foreground">
             Quand la conversation approche de la limite, Hermes la résume et
             poursuit — rien n&apos;est coupé.
           </div>
         </div>
-        {/* Interrupteur résumé automatique */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={auto}
+        {/* Interrupteur résumé automatique — le Switch Radix unique du repo */}
+        <Switch
+          checked={auto}
+          onCheckedChange={(v) =>
+            void writeClientSetting("hermes.compaction.auto", v)
+          }
           aria-label={auto ? "Couper le résumé automatique" : "Activer le résumé automatique"}
-          title={
-            auto
-              ? "Couper le résumé automatique"
-              : "Activer le résumé automatique"
-          }
-          onClick={() =>
-            writeClientSetting("hermes.compaction.auto", !auto)
-          }
-          className={cn(
-            "relative h-[22px] w-[38px] cursor-pointer rounded-full transition-colors",
-            auto ? "bg-hermes" : "bg-muted"
-          )}
-        >
-          <span
-            className={cn(
-              "absolute top-[2px] size-[18px] rounded-full bg-white shadow-sm transition-all",
-              auto ? "left-[18px]" : "left-[2px]"
-            )}
-          />
-        </button>
+        />
       </div>
 
       {/* Fenêtre du modèle : information suivie (jamais réglée à la main) */}
-      <div className="mt-3 flex items-center justify-between gap-3 rounded-[10px] border border-border/70 bg-muted/30 px-3 py-2">
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
         <span className="min-w-0">
           <span className="block text-[12.5px] font-medium">Fenêtre du modèle</span>
           <span className="mt-px block text-[11px] leading-snug text-muted-foreground">
@@ -172,7 +155,7 @@ function ConversationsLonguesCard({
             aucune valeur à régler à la main.
           </span>
         </span>
-        <span className="flex-none text-[12px] font-semibold tabular-nums text-muted-foreground">
+        <span className="flex-none text-[12.5px] font-semibold tabular-nums text-muted-foreground">
           {formatK(windowTokens)} jetons
           {estimated ? " (estimée)" : ""}
         </span>
@@ -180,10 +163,10 @@ function ConversationsLonguesCard({
 
       {/* Seuil : visible seulement quand le résumé automatique est actif */}
       {auto ? (
-        <div className="mt-2 rounded-[10px] border border-border/70 bg-muted/30 px-3 py-2">
+        <div className="mt-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[12.5px] font-medium">Seuil du résumé</span>
-            <span className="text-[12px] font-semibold tabular-nums text-hermes">
+            <span className="text-[12.5px] font-semibold tabular-nums text-hermes-text">
               {threshold} %
             </span>
           </div>
@@ -291,18 +274,18 @@ export function HermesSection({
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Hermes</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         Le comportement de l&apos;agent — instructions qui s&apos;ajoutent aux siennes.
       </p>
 
       {/* ── Instructions personnalisées (F-19) ───────────────────────── */}
-      <div className="rounded-[14px] border border-border px-4 py-3">
+      <div className="rounded-xl border border-border px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[13.5px] font-semibold">
+            <div className="text-[14px] font-semibold">
               Instructions personnalisées
             </div>
-            <div className="mt-px text-[12px] leading-snug text-muted-foreground">
+            <div className="mt-px text-[12.5px] leading-snug text-muted-foreground">
               Vos préférences durables, appliquées à toutes les conversations.
             </div>
           </div>
@@ -318,14 +301,14 @@ export function HermesSection({
           aria-label="Instructions personnalisées"
           placeholder="Ex. : Je préfère les réponses courtes et techniques. Je code en TypeScript. Utilise le vouvoiement…"
           spellCheck={false}
-          className="mt-2.5 min-h-[104px] w-full resize-y rounded-[10px] border border-border bg-background px-3 py-2 text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus-visible:border-hermes/60 focus-visible:ring-2 focus-visible:ring-hermes/30"
+          className="mt-2.5 min-h-[104px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70 focus-visible:border-hermes/60 focus-visible:ring-2 focus-visible:ring-hermes/30"
         />
         <div className="mt-1.5 flex items-center justify-between">
           <span
             className={cn(
-              "text-[10.5px] tabular-nums text-muted-foreground",
+              "text-[11px] tabular-nums text-muted-foreground",
               remaining < 0 &&
-                "font-semibold text-red-600 dark:text-red-400"
+                "font-semibold text-destructive"
             )}
           >
             {instructionsValue.length.toLocaleString("fr-FR")} /{" "}
@@ -335,7 +318,7 @@ export function HermesSection({
             type="button"
             onClick={() => void saveInstructions()}
             disabled={!instructionsDirty || remaining < 0 || saving}
-            className="inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Check className="size-[13px]" strokeWidth={2.5} />
             Enregistrer · prochain tour
@@ -368,7 +351,7 @@ export function HermesSection({
             <h2 className="text-[14px] font-semibold tracking-tight">
               Bibliothèque de prompts
             </h2>
-            <p className="mt-px text-[12px] leading-snug text-muted-foreground">
+            <p className="mt-px text-[12.5px] leading-snug text-muted-foreground">
               Des prompts prêts à appliquer à une conversation — bouton «&nbsp;prompt&nbsp;»
               de l&apos;en-tête.
             </p>
@@ -386,9 +369,9 @@ export function HermesSection({
           />
         ) : null}
 
-        <div className="mt-2.5 rounded-[14px] border border-border px-4 py-1">
+        <div className="mt-2.5 rounded-xl border border-border px-4 py-1">
           {presets.length === 0 && !creating ? (
-            <div className="py-4 text-center text-[12px] text-muted-foreground">
+            <div className="py-4 text-center text-[12.5px] text-muted-foreground">
               La bibliothèque est vide — créez un premier preset.
             </div>
           ) : null}
@@ -405,9 +388,9 @@ export function HermesSection({
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold">{p.title}</span>
+                      <span className="text-[12.5px] font-semibold">{p.title}</span>
                     </div>
-                    <div className="mt-px line-clamp-2 text-[11.5px] leading-snug text-muted-foreground">
+                    <div className="mt-px line-clamp-2 text-[11px] leading-snug text-muted-foreground">
                       {p.content}
                     </div>
                   </div>
@@ -418,7 +401,7 @@ export function HermesSection({
                       aria-label={`Modifier ${p.title}`}
                       onClick={() => (isOpen ? closeEditor() : openEditor(p))}
                       className={cn(
-                        "flex size-[28px] cursor-pointer items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                        "flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                         isOpen && "bg-muted text-foreground"
                       )}
                     >
@@ -429,7 +412,7 @@ export function HermesSection({
                       title="Supprimer ce preset"
                       aria-label={`Supprimer ${p.title}`}
                       onClick={() => void onDeletePreset(p.id)}
-                      className="flex size-[28px] cursor-pointer items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                      className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                     >
                       <Trash2 className="size-[13px]" strokeWidth={2} />
                     </button>
@@ -449,7 +432,7 @@ export function HermesSection({
       </div>
 
       {/* ── À venir : le reste de la section Hermes ─────────────────── */}
-      <div className="mt-6 rounded-[14px] border border-dashed border-border px-4 py-1">
+      <div className="mt-6 rounded-xl border border-dashed border-border px-4 py-1">
         {[
           {
             name: "Fichiers .md moteur",
@@ -468,23 +451,23 @@ export function HermesSection({
             )}
           >
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold">{it.name}</div>
-              <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+              <div className="text-[12.5px] font-semibold">{it.name}</div>
+              <div className="mt-px text-[11px] leading-snug text-muted-foreground">
                 {it.desc}
               </div>
             </div>
-            <span className="flex-none rounded-full bg-amber-500/12 px-2 py-0.5 text-[9.5px] font-semibold text-amber-600 dark:text-amber-500">
+            <span className="flex-none rounded-full bg-warning/12 px-2 py-0.5 text-[11px] font-semibold text-warning">
               à venir
             </span>
           </div>
         ))}
       </div>
-      <p className="mt-3 flex items-start gap-2 text-[11.5px] leading-relaxed text-muted-foreground">
+      <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
         <Sparkle className="mt-[2px] size-[13px] flex-none" strokeWidth={2} />
         Le prompt de chaque conversation vit dans son propre panneau (bouton
         «&nbsp;prompt&nbsp;» de l&apos;en-tête) ; les presets ci-dessus s&apos;y
         appliquent en un clic. Une fois la gateway branchée, ces réglages
-        partiront dans <code className="rounded bg-muted px-1 font-mono text-[10px]">api_turn_v1.settings</code>.
+        partiront dans <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>.
       </p>
     </section>
   );

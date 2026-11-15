@@ -12,12 +12,12 @@ export function HermesLogo({ className = "h-6 w-6" }: { className?: string }) {
         cy="16"
         r="13"
         stroke="currentColor"
-        strokeWidth="2.2"
+        strokeWidth={2}
       />
       <path
         d="M9.5 20.5c1.6-4.6 3-4.6 4.6 0 1.6-4.6 3-4.6 4.6 0 1.6-4.6 3-4.6 4.6 0"
         stroke="currentColor"
-        strokeWidth="2.2"
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />

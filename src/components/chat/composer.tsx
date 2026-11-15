@@ -6,18 +6,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
-  Bot,
   Columns2,
   CornerDownLeft,
   Globe,
-  Image as ImageIcon,
   Loader2,
   Mic,
   Paperclip,
   ShieldCheck,
   Square,
 } from "lucide-react";
+import { DRAFT_SAVE_DEBOUNCE_MS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { PendingAttachmentChip } from "@/components/chat/attachments";
 import { ContextGauge } from "@/components/chat/context-gauge";
 import { ModelPicker } from "@/components/chat/model-picker";
@@ -196,7 +201,7 @@ export function Composer({
       } catch {
         /* stockage indisponible */
       }
-    }, 300);
+    }, DRAFT_SAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [value, draftKey]);
 
@@ -411,7 +416,7 @@ export function Composer({
           setDragOver(false);
           if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-[26px] border bg-card shadow-sm transition-all focus-within:shadow-md ${
+        className={`relative rounded-2xl border bg-card shadow-sm transition-all focus-within:shadow-md ${
           dragOver
             ? "border-hermes ring-2 ring-hermes/30"
             : "border-border"
@@ -419,8 +424,8 @@ export function Composer({
       >
         {/* Indicateur de dépôt */}
         {dragOver ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[26px] bg-hermes/5">
-            <p className="rounded-full bg-background/90 px-3.5 py-1.5 text-[13px] font-medium text-hermes shadow-sm">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-hermes/5">
+            <p className="rounded-full bg-background/90 px-3.5 py-1.5 text-[12.5px] font-medium text-hermes-text shadow-sm">
               Déposez vos fichiers pour les joindre
             </p>
           </div>
@@ -443,12 +448,12 @@ export function Composer({
                       i === slashIndex ? "bg-muted/70" : "hover:bg-muted/50"
                     }`}
                   >
-                    <span className="shrink-0 rounded-md bg-hermes/10 px-1.5 py-0.5 font-mono text-[12px] font-medium text-hermes">
+                    <span className="shrink-0 rounded-md bg-hermes/10 px-1.5 py-0.5 font-mono text-[12.5px] font-medium text-hermes-text">
                       /{tpl.slash}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium">{tpl.title}</span>
-                      <span className="block truncate text-[11.5px] text-muted-foreground">
+                      <span className="block truncate text-[12.5px] font-medium">{tpl.title}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
                         {tpl.description}
                       </span>
                     </span>
@@ -545,7 +550,7 @@ export function Composer({
             aria-label="Message pour Hermes"
             rows={1}
             disabled={disabled}
-            className="max-h-[200px] min-h-[28px] flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+            className="max-h-[200px] min-h-7 flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed placeholder:text-muted-foreground focus:outline-none disabled:opacity-40"
           />
           {dictation.supported ? (
             <Button
@@ -560,7 +565,7 @@ export function Composer({
               title={dictation.error ?? undefined}
               className={`h-9 w-9 shrink-0 rounded-full ${
                 dictation.recording
-                  ? "bg-destructive text-white hover:bg-destructive/90"
+                  ? "bg-destructive text-hermes-foreground hover:bg-destructive/90"
                   : dictation.processing
                     ? "bg-muted text-muted-foreground"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
@@ -594,7 +599,7 @@ export function Composer({
               size="icon"
               disabled
               aria-label="Envoi des pièces jointes en cours"
-              className="h-9 w-9 shrink-0 rounded-full bg-hermes text-hermes-foreground"
+              className="h-9 w-9 shrink-0 rounded-full bg-hermes-strong text-hermes-foreground"
             >
               <Loader2 className="h-4 w-4 animate-spin" />
             </Button>
@@ -605,7 +610,7 @@ export function Composer({
               disabled={!canSend}
               size="icon"
               aria-label="Envoyer le message"
-              className="h-9 w-9 shrink-0 rounded-full bg-hermes text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+              className="h-9 w-9 shrink-0 rounded-full bg-hermes-strong text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:opacity-40"
             >
               <ArrowUp className="h-4.5 w-4.5" />
             </Button>
@@ -626,7 +631,7 @@ export function Composer({
               aria-pressed={compareEnabled}
               className={
                 compareEnabled
-                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes hover:bg-hermes/25"
+                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes-text hover:bg-hermes/25"
                   : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               }
             >
@@ -681,56 +686,43 @@ export function Composer({
               className="mx-0.5 hidden h-5 w-px bg-border/60 sm:block"
               aria-hidden="true"
             />
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
             <Button
               type="button"
               variant="ghost"
-              onClick={onToggleWebSearch}
-              disabled={!webSearchAvailable || mode !== "demo"}
-              title={
-                mode !== "demo"
-                  ? "Recherche web : gérée par l'agent Hermes quand la gateway est branchée"
-                  : webSearchAvailable
-                    ? webSearch
-                      ? "Couper la recherche web (Tavily/Exa)"
-                      : "Recherche web (Tavily/Exa) : les résultats sont injectés dans le contexte du tour, sources citées sous la réponse"
-                    : "Recherche web : ajoutez une clé Tavily ou Exa dans Paramètres → Clés de services"
-              }
+              onClick={() => {
+                if (webSearchAvailable && mode === "demo") onToggleWebSearch();
+              }}
+              aria-disabled={!webSearchAvailable || mode !== "demo"}
               aria-pressed={webSearch}
               aria-label="Recherche web"
               className={
                 webSearch
-                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes hover:bg-hermes/25 disabled:opacity-45"
-                  : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-45"
+                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes-text hover:bg-hermes/25 disabled:opacity-40"
+                  : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
               }
             >
               <Globe className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">Web</span>
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled
-              title="Génération d'images : nécessite la gateway (moteur réel)"
-              aria-label="Génération d'images (à venir)"
-              className="h-[34px] w-[34px] shrink-0 rounded-full text-muted-foreground opacity-45"
-            >
-              <ImageIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled
-              title="Agent (outils) : nécessite la gateway (moteur réel)"
-              aria-label="Agent (à venir)"
-              className="h-[34px] w-[34px] shrink-0 rounded-full text-muted-foreground opacity-45"
-            >
-              <Bot className="h-4 w-4" />
-            </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px]">
+                  {mode !== "demo"
+                    ? "Recherche web : gérée par l'agent Hermes quand la gateway est branchée"
+                    : webSearchAvailable
+                      ? webSearch
+                        ? "Couper la recherche web (Tavily/Exa)"
+                        : "Recherche web (Tavily/Exa) : les résultats sont injectés dans le contexte du tour, sources citées sous la réponse"
+                      : "Recherche web : ajoutez une clé Tavily ou Exa dans Paramètres → Clés de services"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
           </div>
           <div className="flex items-center gap-1.5">
-            <p className="hidden items-center gap-1.5 text-[11.5px] text-muted-foreground lg:flex">
+            <p className="hidden items-center gap-1.5 text-[11px] text-muted-foreground lg:flex">
               <CornerDownLeft className="h-3 w-3" />
               Entrée pour envoyer
             </p>
@@ -753,9 +745,9 @@ export function Composer({
                   : "Sans objet en mode démo — actif avec une gateway"
               }
               aria-label="Autorisations de l'agent"
-              className={`h-[34px] w-[34px] shrink-0 rounded-full transition-colors ${
+              className={`h-9 w-[34px] shrink-0 rounded-full transition-colors ${
                 permissionsMode === "auto"
-                  ? "bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 dark:text-amber-400"
+                  ? "bg-warning/15 text-warning hover:bg-warning/25 dark:text-warning"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               } ${mode !== "gateway" ? "opacity-45" : ""}`}
             >
@@ -780,15 +772,15 @@ export function Composer({
       {/* Bandeau « toutes permissions » : le signal survit au scroll et à l'oubli */}
       {mode === "gateway" && permissionsMode === "auto" ? (
         <div
-          className="mx-auto mt-2.5 flex w-full max-w-3xl items-center gap-2 rounded-xl bg-amber-500/12 px-3.5 py-2 text-[12.5px] font-medium"
+          className="mx-auto mt-2.5 flex w-full max-w-3xl items-center gap-2 rounded-xl bg-warning/12 px-3.5 py-2 text-[12.5px] font-medium"
           role="status"
         >
-          <ShieldCheck className="h-[15px] w-[15px] shrink-0 text-amber-600 dark:text-amber-400" />
+          <ShieldCheck className="h-[15px] w-[15px] shrink-0 text-warning" />
           Mode toutes permissions actif — l&apos;agent exécute sans confirmation
           <button
             type="button"
             onClick={() => onPermissionsChange("ask")}
-            className="ml-auto shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11.5px] font-semibold text-amber-700 underline underline-offset-2 dark:text-amber-400"
+            className="ml-auto shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11px] font-semibold text-warning underline underline-offset-2 dark:text-warning"
           >
             Désactiver
           </button>
@@ -800,7 +792,7 @@ export function Composer({
         <AlertDialogContent className="max-w-[340px]">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-[15px]">
-              <ShieldCheck className="h-[18px] w-[18px] text-amber-600 dark:text-amber-400" />
+              <ShieldCheck className="h-[18px] w-[18px] text-warning" />
               Autoriser toutes les actions ?
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -812,7 +804,7 @@ export function Composer({
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => onPermissionsChange("auto")}
-              className="bg-amber-600 text-white hover:bg-amber-600/90"
+              className="bg-warning text-hermes-foreground hover:bg-warning/90"
             >
               Autoriser
             </AlertDialogAction>
@@ -820,11 +812,11 @@ export function Composer({
         </AlertDialogContent>
       </AlertDialog>
       {dictation.error ? (
-        <p className="mt-1.5 text-center text-[11.5px] text-destructive" role="alert">
+        <p className="mt-1.5 text-center text-[11px] text-destructive" role="alert">
           {dictation.error}
         </p>
       ) : null}
-      <p className="mt-2 text-center text-[11.5px] text-muted-foreground">
+      <p className="mt-2 text-center text-[11px] text-muted-foreground">
         Hermes Web · images, audio, vidéo et PDF acceptés · les réponses sont
         générées par l&apos;agent — vérifiez les informations importantes.
       </p>

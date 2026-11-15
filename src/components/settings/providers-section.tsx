@@ -212,10 +212,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   const keyCount = provider.keys.length;
 
   return (
-    <div className="mb-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
+    <div className="mb-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
       {/* En-tête : icône + nom + pastille + endpoint */}
       <div className="flex items-center gap-2.5">
-        <span className="flex size-[30px] flex-none items-center justify-center rounded-[10px] bg-muted">
+        <span className="flex size-[30px] flex-none items-center justify-center rounded-md bg-muted">
           {isLlm ? (
             <Layers className="size-[15px]" strokeWidth={2} />
           ) : (
@@ -227,7 +227,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
             <b className="text-[14px] font-semibold tracking-tight">{provider.name}</b>
             <Pastille tone={status.tone} label={status.label} />
           </div>
-          <span className="block truncate text-[12px] text-muted-foreground" title={endpoint || undefined}>
+          <span className="block truncate text-[12.5px] text-muted-foreground" title={endpoint || undefined}>
             {provider.keyless
               ? "sur votre machine — aucune clé nécessaire"
               : endpoint
@@ -240,7 +240,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
           title={`Retirer ${provider.name}`}
           aria-label={`Retirer ${provider.name}`}
           onClick={handleRemoveProvider}
-          className="flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-[8px] text-muted-foreground/70 transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:outline-2 focus-visible:outline-red-500"
+          className="flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
         >
           <Trash2 className="size-[13px]" strokeWidth={2} />
         </button>
@@ -264,7 +264,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 <span className="w-[86px] flex-none truncate text-[12.5px] font-medium">
                   {k.label}
                 </span>
-                <code className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
+                <code className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-muted-foreground">
                   {k.masked}
                 </code>
                 <Pastille tone={tone} label={label ?? undefined} />
@@ -272,10 +272,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   type="button"
                   onClick={() => handleTest(k.id)}
                   disabled={testing.has(k.id)}
-                  className="flex h-[26px] flex-none cursor-pointer items-center gap-1.5 rounded-[8px] border border-border px-2.5 text-[11.5px] font-semibold text-foreground transition-colors hover:border-hermes hover:text-hermes focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-60"
+                  className="flex h-6 flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-border px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
                 >
                   {testing.has(k.id) ? (
-                    <Loader2 className="size-[12px] animate-spin" strokeWidth={2.2} />
+                    <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                   ) : null}
                   {testing.has(k.id) ? "Test…" : "Tester"}
                 </button>
@@ -284,7 +284,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   title={`Supprimer la clé « ${k.label} »`}
                   aria-label={`Supprimer la clé « ${k.label} »`}
                   onClick={() => handleRemoveKey(k.id, k.label)}
-                  className="flex size-[24px] flex-none cursor-pointer items-center justify-center rounded-[7px] text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:outline-2 focus-visible:outline-red-500"
+                  className="flex size-[24px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
                 >
                   <Trash2 className="size-[12px]" strokeWidth={2} />
                 </button>
@@ -308,7 +308,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   onChange={(e) => setKeyLabel(e.target.value)}
                   placeholder="Étiquette (ex. Perso)"
                   aria-label="Étiquette de la clé"
-                  className="h-[32px] w-[150px] rounded-[9px] border border-border bg-background px-2.5 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                  className="h-8 w-[150px] rounded-md border border-border bg-background px-2.5 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
                 <input
                   type="password"
@@ -319,13 +319,13 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   }}
                   placeholder="Clé (sk-…)"
                   aria-label="Valeur de la clé"
-                  className="h-[32px] min-w-[160px] flex-1 rounded-[9px] border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                  className="h-8 min-w-[160px] flex-1 rounded-md border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
                 <button
                   type="button"
                   onClick={handleAddKey}
                   disabled={!keySecret.trim() || addingKey}
-                  className="h-[32px] cursor-pointer rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {addingKey ? "Ajout…" : "Ajouter"}
                 </button>
@@ -340,7 +340,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   placeholder="https://…"
                   aria-label="Endpoint utilisé pour ce fournisseur"
                   spellCheck={false}
-                  className="h-[30px] min-w-[200px] flex-1 rounded-[9px] border border-border bg-background px-2.5 font-mono text-[11.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                  className="h-8 min-w-[200px] flex-1 rounded-md border border-border bg-background px-2.5 font-mono text-[11px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
               </div>
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
@@ -355,19 +355,19 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       <button
         type="button"
         onClick={() => setShowAdv((v) => !v)}
-        className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+        className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
       >
         <ChevronDown
           className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
-          strokeWidth={2.2}
+          strokeWidth={2}
         />
         Réglages avancés
       </button>
       {showAdv ? (
-        <div className="mt-2 rounded-[10px] bg-muted/60 px-3 py-2.5">
+        <div className="mt-2 rounded-md bg-muted/60 px-3 py-2.5">
           {/* Endpoint éditable */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[12px] font-medium">
+            <span className="text-[12.5px] font-medium">
               Adresse (endpoint)
               <span className="block text-[11px] font-normal text-muted-foreground">
                 où Hermes appelle ce fournisseur
@@ -383,13 +383,13 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 placeholder="https://…"
                 aria-label="Adresse (endpoint) du fournisseur"
                 spellCheck={false}
-                className="h-[30px] w-[min(300px,100%)] rounded-[9px] border border-border bg-background px-2.5 font-mono text-[11.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                className="h-8 w-[min(300px,100%)] rounded-md border border-border bg-background px-2.5 font-mono text-[11px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
               />
               <button
                 type="button"
                 onClick={handleSaveAdvEndpoint}
                 disabled={savingBase || !advEndpoint.trim() || advEndpoint.trim() === endpoint}
-                className="h-[30px] cursor-pointer rounded-[9px] bg-hermes px-2.5 text-[11.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-8 cursor-pointer rounded-md bg-hermes px-2.5 text-[11px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {savingBase ? "…" : "Enregistrer"}
               </button>
@@ -400,9 +400,9 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   disabled={savingBase}
                   title="Revenir à l'adresse par défaut"
                   aria-label="Revenir à l'adresse par défaut"
-                  className="flex size-[30px] cursor-pointer items-center justify-center rounded-[9px] border border-border text-muted-foreground transition-colors hover:border-hermes hover:text-hermes focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-60"
+                  className="flex size-[30px] cursor-pointer items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
                 >
-                  <RotateCcw className="size-[13px]" strokeWidth={2.2} />
+                  <RotateCcw className="size-[13px]" strokeWidth={2} />
                 </button>
               ) : null}
             </div>
@@ -411,7 +411,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
           {/* Ordre d'utilisation des clés (LLM) */}
           {isLlm && !provider.keyless ? (
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
-              <span className="text-[12px] font-medium">
+              <span className="text-[12.5px] font-medium">
                 Ordre d&apos;utilisation des clés
                 <span className="block text-[11px] font-normal text-muted-foreground">
                   comment choisir la prochaine clé quand il faut changer
@@ -420,7 +420,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
               <div
                 role="radiogroup"
                 aria-label="Ordre d'utilisation des clés"
-                className="flex flex-none gap-0.5 rounded-[9px] bg-background p-[2.5px]"
+                className="flex flex-none gap-0.5 rounded-md bg-background p-[2.5px]"
               >
                 {(Object.keys(STRATEGY_LABELS) as ProviderStrategy[]).map((s) => (
                   <button
@@ -431,9 +431,9 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                     title={STRATEGY_LABELS[s].sub}
                     onClick={() => handleStrategy(s)}
                     className={cn(
-                      "cursor-pointer rounded-[7px] px-[9px] py-[5px] text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
+                      "cursor-pointer rounded-sm px-[9px] py-[5px] text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
                       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
-                      provider.strategy === s && "bg-card font-semibold text-hermes shadow-sm"
+                      provider.strategy === s && "bg-card font-semibold text-hermes-text shadow-sm"
                     )}
                   >
                     {STRATEGY_LABELS[s].label}
@@ -520,10 +520,10 @@ function AddProviderPanel({
   const zaiSelected = selected?.name === "z.ai" || selected?.name === "z.ai Coding Plan";
 
   return (
-    <div className="mt-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
+    <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
       <label
         htmlFor="add-provider-select"
-        className="block text-[11.5px] font-semibold text-muted-foreground"
+        className="block text-[11px] font-semibold text-muted-foreground"
       >
         {kind === "llm" ? "Fournisseur" : "Service"}
       </label>
@@ -531,7 +531,7 @@ function AddProviderPanel({
         id="add-provider-select"
         value={presetValue}
         onChange={(e) => pick(e.target.value)}
-        className="mt-1 h-[34px] w-full cursor-pointer rounded-[9px] border border-border bg-background px-2.5 text-[13px] outline-none focus-visible:border-hermes"
+        className="mt-1 h-9 w-full cursor-pointer rounded-md border border-border bg-background px-2.5 text-[12.5px] outline-none focus-visible:border-hermes"
       >
         {preset === "__pending__" ? <option value="">Chargement…</option> : null}
         <optgroup label={kind === "llm" ? "Fournisseurs connus" : "Services connus"}>
@@ -547,12 +547,12 @@ function AddProviderPanel({
       </select>
 
       {selected ? (
-        <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
           {selected.tagline}
         </p>
       ) : null}
       {zaiSelected ? (
-        <p className="mt-1.5 rounded-[9px] bg-muted/70 px-2.5 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="mt-1.5 rounded-md bg-muted/70 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
           z.ai sépare l&apos;argent en deux portefeuilles étanches : l&apos;API standard se
           paie au jeton (solde rechargeable), le GLM Coding Plan est un abonnement avec ses
           propres clés. Une clé ne fonctionne que sur la surface où elle a été créée — en cas
@@ -562,7 +562,7 @@ function AddProviderPanel({
 
       <label
         htmlFor="add-provider-endpoint"
-        className="mt-2.5 block text-[11.5px] font-semibold text-muted-foreground"
+        className="mt-2.5 block text-[11px] font-semibold text-muted-foreground"
       >
         {isCustom ? "Adresse du fournisseur" : "Adresse (endpoint)"}
       </label>
@@ -576,7 +576,7 @@ function AddProviderPanel({
         placeholder="https://…"
         aria-label="Adresse (endpoint) du fournisseur"
         spellCheck={false}
-        className="mt-1 h-[32px] w-full rounded-[9px] border border-border bg-background px-2.5 font-mono text-[12px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+        className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
       />
       {!isCustom ? (
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
@@ -588,7 +588,7 @@ function AddProviderPanel({
         <button
           type="button"
           onClick={onClose}
-          className="h-[31px] cursor-pointer rounded-[9px] border border-border px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+          className="h-8 cursor-pointer rounded-md border border-border px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           Annuler
         </button>
@@ -596,7 +596,7 @@ function AddProviderPanel({
           type="button"
           onClick={handleAdd}
           disabled={adding || (isCustom && !/^https?:\/\//i.test(endpoint.trim()))}
-          className="h-[31px] cursor-pointer rounded-[9px] bg-hermes px-3.5 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-8 cursor-pointer rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {adding ? "Ajout…" : "Ajouter"}
         </button>
@@ -621,7 +621,7 @@ export function ProvidersSection({
   return (
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">{texts.title}</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
         {texts.sub}
       </p>
 
@@ -629,7 +629,7 @@ export function ProvidersSection({
         <ProviderCard key={p.id} provider={p} api={api} />
       ))}
       {list.length === 0 ? (
-        <p className="mb-4 rounded-[14px] border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
+        <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
           Aucun {kind === "llm" ? "fournisseur" : "service"} configuré pour l&apos;instant.
         </p>
       ) : null}
@@ -642,7 +642,7 @@ export function ProvidersSection({
       ) : null}
 
       {texts.note ? (
-        <p className="mt-5 flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground">
+        <p className="mt-5 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted-foreground">
           <Lock className="mt-[1px] size-[13px] flex-none" strokeWidth={2} />
           {texts.note}
         </p>
