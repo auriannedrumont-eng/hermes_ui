@@ -5,6 +5,7 @@
 //   message:edit, message:delete,
 //   models:list, attachments:upload, audio:transcribe,
 //   artifacts:list, artifact:versions, artifact:retry,
+//   artifact:restore/label/pin (F-26 — versionnage fichiers),
 //   settings:get/set,
 //   providers:list/catalog/add/remove/set-strategy/set-base/add-key/remove-key/test-key,
 //   extensions:list/add/toggle/remove/pin/check/update,
@@ -322,6 +323,13 @@ function deleteArtifactFiles(rows: ArtifactRow[]): void {
         /* déjà supprimé */
       }
     }
+  }
+}
+
+/** F-26 : applique le quota du journal (purge FIFO) et nettoie les fichiers dérivés. */
+function enforceVersionQuota(conversationId: string, keys: Iterable<string>): void {
+  for (const key of keys) {
+    deleteArtifactFiles(store.purgeArtifactVersions(conversationId, key));
   }
 }
 
@@ -1039,6 +1047,68 @@ io.on("connection", (socket) => {
       }
       if (typeof cb === "function") cb({ ok: true });
       void renderHtmlArtifact(row);
+    }
+  );
+
+  // ── Versionnage fichiers (F-26) : restaurer, étiqueter, épingler ─────
+
+  // Restaure une version antérieure : crée v(n+1) d'après vN (jamais d'écrasement).
+  socket.on(
+    "artifact:restore",
+    (
+      payload: { conversationId?: string; key?: string; version?: number },
+      cb?: (data: unknown) => void
+    ) => {
+      const id = payload?.conversationId;
+      const key = payload?.key;
+      const version = payload?.version;
+      if (!id || !key || !Number.isFinite(version)) {
+        if (typeof cb === "function") cb({ error: "conversationId, key et version requis" });
+        return;
+      }
+      const row = store.restoreArtifactVersion(id, key, version!);
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Version introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ artifact: wireArtifact(id, key, row) });
+      // Le HTML restauré repart par le pipeline de rendu ; les autres kinds
+      // sont prêts immédiatement — dans les deux cas on diffuse l'état.
+      if (row.kind === "html") void renderHtmlArtifact(row);
+      else broadcastArtifact(id, row);
+      enforceVersionQuota(id, [key]);
+    }
+  );
+
+  // Étiquette une version (double-clic dans le journal ; vide = efface)
+  socket.on(
+    "artifact:label",
+    (payload: { artifactId?: string; label?: string }, cb?: (data: unknown) => void) => {
+      const row = store.setArtifactLabel(
+        payload?.artifactId ?? "",
+        payload?.label?.trim().slice(0, 80) || null
+      );
+      if (!row) {
+        if (typeof cb === "function") cb({ error: "Artefact introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ artifact: wireArtifact(row.conversation_id, row.key, row) });
+      broadcastArtifact(row.conversation_id, row);
+    }
+  );
+
+  // Épingle / détache une version (jamais purgée par le quota)
+  socket.on(
+    "artifact:pin",
+    (payload: { artifactId?: string; pinned?: boolean }, cb?: (data: unknown) => void) => {
+      const res = store.setArtifactPinned(payload?.artifactId ?? "", !!payload?.pinned);
+      if (res.error || !res.row) {
+        if (typeof cb === "function") cb({ error: res.error ?? "Artefact introuvable" });
+        return;
+      }
+      if (typeof cb === "function")
+        cb({ artifact: wireArtifact(res.row.conversation_id, res.row.key, res.row) });
+      broadcastArtifact(res.row.conversation_id, res.row);
     }
   );
 
@@ -2263,8 +2333,9 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Clôture du suivi des artefacts (persistance définitive)
-      tracker.finalize(contentAcc, false);
+      // Clôture du suivi des artefacts (persistance définitive) + quota (F-26)
+      const finalizedRows = tracker.finalize(contentAcc, false);
+      enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
 
       // Persiste la réponse assistant (INSERT avec l'id du tour)
       store.appendMessage({
@@ -2314,8 +2385,9 @@ io.on("connection", (socket) => {
         ...(variant ? { variant } : {}),
       });
     } catch (err) {
-      // Sauvegarde du partiel déjà reçu
-      tracker.finalize(contentAcc, true);
+      // Sauvegarde du partiel déjà reçu (quota F-26 appliqué aussi aux tours interrompus)
+      const finalizedRows = tracker.finalize(contentAcc, true);
+      enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
       const stopped = controller.signal.aborted;
       let partial: ChatMessage | null = null;
       if (contentAcc || reasoningAcc) {

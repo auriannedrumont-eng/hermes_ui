@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import type { ShareRow } from "./shares";
 import type { SystemPromptRow } from "./prompts";
 import type { WebSource } from "./web-search";
+import { MAX_PINNED, MAX_VERSIONS, isIdenticalReissue, restoreLabel, restoredStatus, selectPurgeable } from "./versions";
 import type {
   Artifact,
   ArtifactKind,
@@ -39,6 +40,10 @@ export interface ArtifactRow {
   status: string;
   status_label: string | null;
   error: string | null;
+  // Versionnage fichiers (F-26) — couche humaine du journal de versions
+  label: string | null;
+  pinned: number;
+  restored_from: number | null;
   created_at: string;
 }
 
@@ -57,6 +62,9 @@ export function rowToArtifactMeta(r: ArtifactRow): Omit<Artifact, "anchorMessage
     status: r.status as Artifact["status"],
     statusLabel: r.status_label ?? undefined,
     error: r.error ?? undefined,
+    label: r.label ?? undefined,
+    pinned: !!r.pinned,
+    restoredFrom: r.restored_from ?? undefined,
     url: `/artifacts/${r.id}/download`,
     rawUrl: `/artifacts/${r.id}/raw`,
     createdAt: r.created_at,
@@ -265,6 +273,25 @@ export class Store {
     this.db.exec(
       "CREATE INDEX IF NOT EXISTS idx_artifacts_message ON artifacts(message_id)"
     );
+    // ── Versionnage fichiers (F-26) : couche humaine du journal ────────
+    // La table artifacts est déjà un journal immuable (une ligne par
+    // version) ; on y ajoute l'étiquette, l'épinglage et le marqueur de
+    // restauration. Migration douce (R2 : additives uniquement).
+    try {
+      this.db.exec("ALTER TABLE artifacts ADD COLUMN label TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE artifacts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE artifacts ADD COLUMN restored_from INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
     // ── Projets : rangement des conversations par projet (fork) ──────
     this.db.exec(`CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
@@ -567,7 +594,12 @@ export class Store {
 
   // ── Artefacts ──────────────────────────────────────────────────────────
 
-  /** Insère une version d'artefact. */
+  /** Insère une version d'artefact.
+   *  F-26 — dédoublonnage : une ré-émission au contenu strictement identique
+   *  de la version courante (`ready`) ne crée PAS de version, on renvoie la
+   *  ligne existante (le tracker réécrira le même contenu sans effet).
+   *  `label` / `restoredFrom` ne servent qu'aux versions créées hors flux
+   *  (restauration) — le flux de streaming ne les passe jamais. */
   insertArtifact(a: {
     id?: string;
     conversationId: string;
@@ -581,14 +613,18 @@ export class Store {
     status: Artifact["status"];
     statusLabel?: string | null;
     error?: string | null;
+    label?: string | null;
+    restoredFrom?: number | null;
   }): ArtifactRow {
+    const latest = this.latestArtifactRow(a.conversationId, a.key);
+    if (latest && isIdenticalReissue(latest, a.content)) return latest;
     const id = a.id ?? crypto.randomUUID();
     const version = this.nextArtifactVersion(a.conversationId, a.key);
     const created_at = new Date().toISOString();
     this.db
       .query(
-        `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -605,9 +641,23 @@ export class Store {
         a.status,
         a.statusLabel ?? null,
         a.error ?? null,
+        a.label ?? null,
+        0,
+        a.restoredFrom ?? null,
         created_at
       );
     return this.getArtifactRow(id)!;
+  }
+
+  /** Version courante d'une clé (la plus récente), null si nouvelle. */
+  private latestArtifactRow(conversationId: string, key: string): ArtifactRow | null {
+    return (
+      (this.db
+        .query(
+          "SELECT * FROM artifacts WHERE conversation_id = ? AND key = ? ORDER BY version DESC LIMIT 1"
+        )
+        .get(conversationId, key) as ArtifactRow | undefined) ?? null
+    );
   }
 
   /** Version suivante d'une clé dans la conversation (1 si nouvelle). */
@@ -685,6 +735,102 @@ export class Store {
     return rows;
   }
 
+  // ── Versionnage fichiers (F-26) : actions humaines sur le journal ───────
+
+  /** Étiquette une version (double-clic dans le journal) ; null = efface. */
+  setArtifactLabel(id: string, label: string | null): ArtifactRow | null {
+    this.db.query("UPDATE artifacts SET label = ? WHERE id = ?").run(label, id);
+    return this.getArtifactRow(id);
+  }
+
+  /** Épingle / détache une version (jamais purgée). Refuse au-delà du plafond. */
+  setArtifactPinned(
+    id: string,
+    pinned: boolean
+  ): { row: ArtifactRow | null; error?: string } {
+    const row = this.getArtifactRow(id);
+    if (!row) return { row: null, error: "Artefact introuvable" };
+    if (pinned) {
+      const r = this.db
+        .query(
+          "SELECT COUNT(*) AS n FROM artifacts WHERE conversation_id = ? AND key = ? AND pinned = 1"
+        )
+        .get(row.conversation_id, row.key) as any;
+      if ((r?.n ?? 0) >= MAX_PINNED && !row.pinned) {
+        return { row, error: `Maximum ${MAX_PINNED} versions épinglées par fichier` };
+      }
+    }
+    this.db.query("UPDATE artifacts SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
+    return { row: this.getArtifactRow(id) };
+  }
+
+  /**
+   * Restaure une version antérieure : crée v(n+1) portant le contenu de vN
+   * (jamais d'écrasement — l'historique reste linéaire et complet). La version
+   * née d'une restauration porte le libellé automatique et le marqueur ↩.
+   */
+  restoreArtifactVersion(
+    conversationId: string,
+    key: string,
+    fromVersion: number
+  ): ArtifactRow | null {
+    const src = (
+      this.db
+        .query(
+          "SELECT * FROM artifacts WHERE conversation_id = ? AND key = ? AND version = ?"
+        )
+        .get(conversationId, key, fromVersion) as ArtifactRow | undefined
+    );
+    if (!src) return null;
+    const { status, statusLabel } = restoredStatus(src.kind);
+    const id = crypto.randomUUID();
+    const version = this.nextArtifactVersion(conversationId, key);
+    this.db
+      .query(
+        `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        conversationId,
+        src.message_id,
+        key,
+        version,
+        src.kind,
+        src.name,
+        src.language,
+        src.mime,
+        src.content,
+        src.size,
+        status,
+        statusLabel,
+        null,
+        restoreLabel(fromVersion),
+        0,
+        fromVersion,
+        new Date().toISOString()
+      );
+    return this.getArtifactRow(id);
+  }
+
+  /**
+   * Applique le quota du journal : supprime les plus anciennes versions non
+   * épinglées au-delà du plafond (jamais la version courante) et renvoie les
+   * lignes supprimées (nettoyage des fichiers dérivés par l'appelant).
+   */
+  purgeArtifactVersions(
+    conversationId: string,
+    key: string,
+    keep = MAX_VERSIONS
+  ): ArtifactRow[] {
+    const versions = this.listArtifactVersions(conversationId, key);
+    const doomed = selectPurgeable(versions, keep);
+    for (const r of doomed) {
+      this.db.query("DELETE FROM artifacts WHERE id = ?").run(r.id);
+    }
+    return doomed;
+  }
+
   /** Duplique les artefacts d'une conversation vers un fork (re-ancrage des messages). */
   copyArtifactsToFork(
     fromConversationId: string,
@@ -695,10 +841,11 @@ export class Store {
     for (const r of rows) {
       const newMessageId = messageIdMap.get(r.message_id) ?? r.message_id;
       // Conserve le numéro de version d'origine (identité stable dans le fork)
+      // F-26 : l'étiquette, l'épinglage et le marqueur de restauration suivent.
       this.db
         .query(
-          `INSERT OR IGNORE INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT OR IGNORE INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           crypto.randomUUID(),
@@ -715,6 +862,9 @@ export class Store {
           r.status,
           r.status_label,
           r.error,
+          r.label,
+          r.pinned,
+          r.restored_from,
           r.created_at
         );
     }

@@ -256,6 +256,10 @@ export function toWireArtifact(row: ArtifactRow, anchorMessageId?: string): Arti
     (base as any).pdfUrl = `/artifacts/${row.id}/pdf`;
     (base as any).pdfSize = statSync(pdf).size;
   }
+  // F-26 : couche humaine du journal de versions
+  if (row.label) (base as any).label = row.label;
+  if (row.pinned) (base as any).pinned = true;
+  if (row.restored_from != null) (base as any).restoredFrom = row.restored_from;
   return base as Artifact;
 }
 

@@ -48,8 +48,15 @@ Quand l'agent émet un bloc de code annoté avec un nom de fichier
 - **Carte compacte** dans le message : états *génération* (squelette + code qui
   streame dans la carte) → *rendu* → *prêt* (vignette + actions), ou *erreur*
   (bouton Réessayer). Le bloc disparaît du flux de conversation.
-- **Versioning** : réémettre le même nom de fichier crée **v2 sur la même carte**
-  (sélecteur de version dans le panneau, diff ligne à ligne pour le code).
+- **Versioning (F-26)** : réémettre le même nom de fichier crée **v2 sur la même carte**
+  (sélecteur de version dans le panneau, diff ligne à ligne pour le code) ; chaque
+  ré-émission au contenu identique de la version courante ne crée PAS de version ;
+  le **badge v{n} de la carte** ouvre le **journal des versions** (popover) : épingler
+  (étoile, jamais purgée), étiqueter (double-clic inline), restaurer (bouton unique,
+  crée v(n+1) — jamais d'écrasement, marqueur ↩ + libellé auto « Restauration de vN »),
+  télécharger n'importe quelle version ; quota 50 versions/fichier (purge FIFO des
+  plus anciennes non épinglées, 10 épingles max) ; une seule version par tour et par
+  fichier. Composant unique : `src/components/chat/version-popover.tsx`.
 - **Panneau dédié** (split view ≈ 45 %, ouverture automatique à la naissance) :
   HTML → aperçu = **PNG plein page rendu par chrome-headless-shell** + export
   **PDF vectoriel** (texte sélectionnable) ; code (coloration, numéros, wrap),
@@ -71,6 +78,9 @@ Client → serveur :
 | `artifacts:list` | `{conversationId}` | `{artifacts: Artifact[]}` (toutes versions, métadonnées sans contenu) |
 | `artifact:versions` | `{conversationId, key}` | `{versions: Artifact[]}` |
 | `artifact:retry` | `{conversationId, artifactId}` | `{ok}` — relance le rendu Chrome d'un HTML en erreur |
+| `artifact:restore` | `{conversationId, key, version}` | `{artifact}` — crée v(n+1) d'après vN (libellé auto « Restauration de vN », marqueur ↩ ; le HTML repart par le rendu) ; purge du quota appliquée |
+| `artifact:label` | `{artifactId, label}` | `{artifact}` — étiquette ≤ 80 car. (vide = efface) |
+| `artifact:pin` | `{artifactId, pinned}` | `{artifact}` ou `{error}` — épinglage (10 max/fichier, jamais purgées) |
 
 Serveur → client :
 
@@ -101,9 +111,12 @@ l'aperçu est une image rendue côté serveur.
 
 Table `artifacts` : une ligne par version — `(conversation_id, key, version)`
 unique ; `content` (source), `status` (`generating`/`rendering`/`ready`/`error`),
-fichiers dérivés sur disque dans `db/artifacts/<id>.{png,pdf}`. La suppression
-d'une conversation purge lignes et fichiers ; le fork duplique les artefacts
-en ré-ancrant les messages.
+fichiers dérivés sur disque dans `db/artifacts/<id>.{png,pdf}`. Le journal des
+versions (F-26) y ajoute trois colonnes additives : `label` (étiquette
+humaine), `pinned` (épinglage), `restored_from` (↩ version d'origine d'une
+restauration). La suppression d'une conversation purge lignes et fichiers ;
+le fork duplique les artefacts (avec étiquettes et épingles) en ré-ancrant
+les messages.
 
 ## Projets — ranger les conversations
 

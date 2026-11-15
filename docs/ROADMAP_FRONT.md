@@ -72,6 +72,7 @@
 | ID | Feature | Statut | Preuve |
 |----|---------|--------|--------|
 | F-25 | **Page Paramètres** | **Terminé (phase 3 — v2.4 : les 10 sections du rail sont réelles)** | Volet 860 px à rail (maquette v4, `settings-panel.tsx`). Phases : 1 = sheet 460 px (`004b388`) ; 2 = volet + Fournisseurs & clés + Extensions (test réseau réel) + Hermes (presets, instructions, mémoire) + Modèles (tarifs) ; **3 = v2.4 : Outils (statuts réels, « gateway » jamais simulé), Skills (état vide honnête + liens croisés), Profils (création/application/duplication, liste côté service), Système (révision git, chrome-headless, cache des rendus, purge), Hermes « Conversations longues » (résumé automatique + seuil)**. Navigation interne du volet par liens croisés. |
+| F-26 | **Versionnage fichiers** | Journal de versions par fichier, restaurable | **Terminé** | Livré le 2026-11-15 (FORK.md §7.12) : le badge `v{n}` de la carte ouvre le **journal des versions** (`version-popover.tsx`, composant unique) — étoile (épinglée, jamais purgée), ↩ (née d'une restauration), étiquette inline (double-clic), restauration = v(n+1) copiée (jamais d'écrasement, toast sans dialogue), téléchargement par version ; automatique (naissance/changement, ré-émission identique ignorée, une version par tour), quota 50/fichier FIFO non épinglées + 10 épingles max (colonnes additives `artifacts.label/pinned/restored_from`, événements `artifact:restore/label/pin`). QA `test-versions-flow.ts` 21/21 + navigateur (captures `download/qa-f26/`). |
 
 ## Chantier du 2026-11-13 — F-01/F-04 « arrêt propre + erreurs persistantes »
 
@@ -434,6 +435,26 @@ en statuts RÉELS — la partie moteur dépendante de la gateway reste verrouill
   (les échecs initiaux share/expert/intégration étaient le rate-limit 429 z.ai transitoire,
   §9 (20) — repassés avec espacement).
 
+## Chantier du 2026-11-15 — F-26 « Versionnage fichiers depuis le chat »
+
+Conception validée par l'utilisatrice en trois passes (modèle, zones d'ombre, UI), puis
+« go ». Le besoin : **remonter à une version antérieure d'un fichier de travail** — pas
+de git par projet, un journal de versions automatique suffit et reste 100 % portable.
+
+Décision structurante : **fusion avec le journal artefacts** plutôt qu'un store parallèle
+(`db/versions/` écarté). La table `artifacts` était déjà immuable une-ligne-par-version :
+F-26 y ajoute la couche humaine (`label`, `pinned`, `restored_from` — migration additive)
+et le composant unique `version-popover.tsx` (badge de la carte = seule porte).
+
+Règles : ré-émission identique de la version courante → pas de version ; une seule
+version par tour ; restauration = v(n+1) copiée avec libellé auto et marqueur ↩ ; quota
+50/fichier, purge FIFO des non épinglées, 10 épingles max ; fork et suppression suivent
+le journal. Le panneau artefact (sélecteur, diff) reste inchangé.
+
+QA : `scripts/test-versions-flow.ts` 21/21 ; navigateur de bout en bout sur :81
+(badge → journal → étiquette inline → étoile → restauration → toast « v4 créée d'après
+v1 » → badge v4 + ↩ « Restauration de v1 »), captures `download/qa-f26/`.
+
 ## Ordre de démarrage recommandé (suite)
 
 1. ~~Valider le volet v4 implémenté~~ **premiers retours intégrés le 2026-11-14**
@@ -453,6 +474,7 @@ en statuts RÉELS — la partie moteur dépendante de la gateway reste verrouill
    restent « gateway » par conception — fichiers .md moteur, comportement (initiatives,
    tâches planifiées), génération d'images/vidéo, navigateur, exécution de code.
    ~~la lecture continue pendant le stream (F-16)~~ **livrée le 2026-11-14 (v2.4)**.
+9. ~~**F-26** (versionnage fichiers)~~ **livré le 2026-11-15** (ci-dessus).
 
 ## Notes de passation
 

@@ -28,6 +28,7 @@ import {
   type ArtifactKind,
 } from "@/lib/chat-types";
 import { artifactUrl, downloadArtifact } from "@/lib/artifact-utils";
+import { VersionPopover } from "@/components/chat/version-popover";
 
 function KindIcon({ kind, className }: { kind: ArtifactKind; className?: string }) {
   const Icon =
@@ -118,12 +119,17 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
           <div className="flex items-center gap-1.5">
             <p className="truncate font-mono text-[13px] font-medium">{artifact.name}</p>
             {artifact.version > 1 ? (
-              <Badge
-                variant="outline"
-                className="h-4 shrink-0 rounded px-1 font-mono text-[10px] text-hermes"
-              >
-                v{artifact.version}
-              </Badge>
+              // F-26 : le badge EST la porte du journal des versions (design
+              // validé : un seul point d'entrée, pas de bouton de plus).
+              <VersionPopover artifact={artifact}>
+                <Badge
+                  variant="outline"
+                  className="h-4 shrink-0 cursor-pointer rounded px-1 font-mono text-[10px] text-hermes transition-colors hover:border-hermes/60 hover:bg-hermes/10"
+                  title="Historique des versions"
+                >
+                  v{artifact.version}
+                </Badge>
+              </VersionPopover>
             ) : null}
           </div>
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">

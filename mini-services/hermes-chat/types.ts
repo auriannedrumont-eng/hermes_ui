@@ -143,6 +143,13 @@ export interface Artifact {
   pdfSize?: number;
   /** Moteur de rendu, pour le badge de confiance (« chrome-headless-shell »). */
   renderedBy?: string;
+  // Versionnage fichiers (F-26) — couche humaine du journal
+  /** Étiquette humaine (double-clic dans le journal des versions). */
+  label?: string;
+  /** Version épinglée : jamais purgée par le quota FIFO. */
+  pinned?: boolean;
+  /** Numéro de la version restaurée (marqueur ↩ dans le journal). */
+  restoredFrom?: number;
   createdAt: string;
 }
 

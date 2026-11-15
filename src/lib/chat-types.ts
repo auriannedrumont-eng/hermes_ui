@@ -220,6 +220,12 @@ export interface Artifact {
   pdfUrl?: string;
   pdfSize?: number;
   renderedBy?: string;
+  /** F-26 — étiquette humaine (double-clic dans le journal des versions). */
+  label?: string;
+  /** F-26 — version épinglée : jamais purgée par le quota FIFO. */
+  pinned?: boolean;
+  /** F-26 — numéro de la version restaurée (marqueur ↩ dans le journal). */
+  restoredFrom?: number;
   createdAt: string;
 }
 
