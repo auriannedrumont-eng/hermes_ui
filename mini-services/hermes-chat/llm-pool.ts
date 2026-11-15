@@ -20,7 +20,15 @@ import {
   type TurnCallbacks,
   type TurnRequest,
 } from "./demo-engine";
-import { pickActiveKey, providerCapabilities, looksLikeZaiJwt, explainQuotaError } from "./providers";
+import {
+  pickActiveKey,
+  providerCapabilities,
+  looksLikeZaiJwt,
+  explainQuotaError,
+  applyExplicitBase,
+  ZAI_CODING_BASE,
+  ZAI_STANDARD_BASE,
+} from "./providers";
 import { readAttachmentDataUrl } from "./uploads";
 
 // ── Types publics du pool ─────────────────────────────────────────────
@@ -68,7 +76,10 @@ interface LlmEndpoint {
 }
 
 const KNOWN_LLM_BASES: Record<string, string> = {
-  "z.ai": "https://api.z.ai/api/paas/v4",
+  "z.ai": ZAI_STANDARD_BASE,
+  // v2.5 : preset dédié du sélecteur — la surface coding est la base
+  // CANONIQUE de ce fournisseur (clés d'abonnement GLM Coding Plan).
+  "z.ai Coding Plan": ZAI_CODING_BASE,
   opencode: "https://opencode.ai/inference/openai/v1",
   OpenRouter: "https://openrouter.ai/api/v1",
   Anthropic: "https://api.anthropic.com/v1",
@@ -78,11 +89,11 @@ const KNOWN_LLM_BASES: Record<string, string> = {
   Groq: "https://api.groq.com/openai/v1",
 };
 
-// Surface « coding » de z.ai : la SEULE que les clés GLM Coding Plan
-// (jetons JWT « eyJ… ») acceptent — surface OpenAI-compatible (chat
-// completions + liste des modèles), cf. docs.z.ai/devpack (Tool
-// Integration). Une clé Coding Plan testée sur paas/v4 est refusée.
-const ZAI_CODING_BASE = "https://api.z.ai/api/coding/paas/v4";
+// Surface « coding » de z.ai : celle que les clés GLM Coding Plan
+// acceptent (docs.z.ai/devpack — Tool Integration). Une clé Coding Plan
+// testée sur paas/v4 est refusée. v2.5 : la bascule peut aussi venir du
+// test de clé (migrateBaseUrl → base_url explicite) pour les clés Coding
+// Plan au format standard — cf. providers.ts.
 
 // Repli documenté si la surface coding n'expose pas /models : modèles GLM
 // cités par la documentation du Coding Plan (glm-5.3, glm-5.3-flash, glm-5.2
@@ -139,14 +150,18 @@ function resolveLlmEndpoint(row: ProviderRow): LlmEndpoint | null {
       base = `${caps.defaultBaseUrl ?? "http://localhost:11434"}/v1`;
     }
   }
-  // L'adresse saisie par l'utilisatrice gagne sur l'adresse canonique —
-  // même convention que le test de clé (providers.ts) : pour un fournisseur
-  // CONNU, seule l'ORIGINE est remplacée (proxy, auto-hébergé, faux serveur
-  // QA), le chemin canonique fait partie du contrat (/api/paas/v4 chez z.ai,
-  // /inference/openai/v1 chez opencode, /v1 chez Anthropic…). Fournisseur
-  // personnalisé : l'adresse est la base complète (convention OpenAI,
-  // base + /chat/completions). Ollama (sans clé) : l'adresse désigne le
-  // serveur, la surface /v1 du moteur est conservée.
+  // L'adresse saisie par l'utilisatrice gagne sur l'adresse canonique
+  // (v2.5, même règle que le test de clé — providers.ts, applyExplicitBase) :
+  //  • champ non modifié (identique au canon) → canon ;
+  //  • adresse avec CHEMIN → base COMPLÈTE, utilisée telle quelle (détail
+  //    éditable demandé : bascule z.ai vers la surface coding, proxy
+  //    précis…) ;
+  //  • origine seule → seul l'hôte du canon est remplacé (proxy, auto-
+  //    hébergé) — le chemin canonique fait partie du contrat (/api/paas/v4
+  //    chez z.ai, /inference/openai/v1 chez opencode, /v1 chez Anthropic…).
+  // Fournisseur personnalisé : l'adresse est la base complète (convention
+  // OpenAI, base + /chat/completions). Ollama (sans clé) : l'adresse
+  // désigne le serveur, la surface /v1 du moteur est conservée.
   // Sans cette règle, le bouton « Tester » validait {origine}/api/paas/v4/models
   // pendant que le moteur appelait {origine}/models — deux adresses différentes
   // pour la même clé (constaté avec la clé z.ai réelle, 2026-11-15).
@@ -156,13 +171,7 @@ function resolveLlmEndpoint(row: ProviderRow): LlmEndpoint | null {
     if (keyless) {
       base = /\/v1$/.test(explicit) ? explicit : `${explicit}/v1`;
     } else if (canonical) {
-      try {
-        const e = new URL(explicit);
-        const c = new URL(canonical);
-        base = `${e.origin}${c.pathname}`;
-      } catch {
-        base = explicit;
-      }
+      base = applyExplicitBase(canonical, canonical, explicit);
     } else {
       base = explicit;
     }
@@ -174,15 +183,17 @@ function resolveLlmEndpoint(row: ProviderRow): LlmEndpoint | null {
 
 /** z.ai : une clé Coding Plan (JWT) ne parle qu'à la surface « coding » —
  *  l'endpoint est réécrit pour la clé effectivement choisie. Les clés API
- *  (format xxxxxxxx.yyyyyyyy) restent sur la surface standard paas/v4.
- *  Une adresse EXPLICITEMENT saisie (proxy, serveur local) garde son
- *  origine — seul le chemin passe à la surface coding. */
+ *  (format xxxxxxxx.yyyyyyyy) restent sur la surface standard paas/v4…
+ *  SAUF base explicite (preset « z.ai Coding Plan », bascule automatique
+ *  du test de clé) : la base enregistrée fait foi. Une adresse
+ *  EXPLICITEMENT saisie (proxy, serveur local) garde son origine — seul
+ *  le chemin passe à la surface coding. */
 function routeZaiCoding(endpoint: LlmEndpoint, secret: string | null): LlmEndpoint {
   if (endpoint.providerLabel !== "z.ai" || !secret || !looksLikeZaiJwt(secret)) {
     return endpoint;
   }
   if (endpoint.base === ZAI_CODING_BASE) return endpoint;
-  if (endpoint.base === "https://api.z.ai/api/paas/v4") {
+  if (endpoint.base === ZAI_STANDARD_BASE) {
     return {
       ...endpoint,
       base: ZAI_CODING_BASE,
@@ -327,9 +338,6 @@ export function createLlmPool(store: Store): LlmPoolApi {
     try {
       const key = endpoint.keyless ? null : pickKey(row);
       const routed = routeZaiCoding(endpoint, key?.secret ?? null);
-      const zaiJwt =
-        routed.providerLabel === "z.ai" &&
-        routed.base === ZAI_CODING_BASE;
       const res = await fetch(`${routed.base}/models`, {
         headers: {
           ...(routed.auth === "bearer" && key
@@ -359,13 +367,15 @@ export function createLlmPool(store: Store): LlmPoolApi {
     // Repli z.ai Coding Plan : la liste vivante a échoué (surface sans
     // /models ou indisponible) — les modèles documentés du plan prennent
     // le relais pour ne jamais bloquer la sélection de l'utilisatrice.
+    // v2.5 : la surface coding se reconnaît à la base routée (preset
+    // « z.ai Coding Plan », bascule du test de clé, ou jeton JWT).
     if (!result || result.length === 0) {
       const keyForFallback = endpoint.keyless ? null : pickKey(row);
-      if (
-        endpoint.providerLabel === "z.ai" &&
-        keyForFallback &&
-        looksLikeZaiJwt(keyForFallback.secret)
-      ) {
+      const routedForFallback = routeZaiCoding(endpoint, keyForFallback?.secret ?? null);
+      const codingSurface =
+        routedForFallback.providerLabel === "z.ai Coding Plan" ||
+        /\/api\/coding\/paas\/v4$/.test(routedForFallback.base);
+      if (keyForFallback && codingSurface) {
         if (!warned.has(`${row.id}:fallback`)) {
           warned.add(`${row.id}:fallback`);
           console.warn(
@@ -432,10 +442,12 @@ export function createLlmPool(store: Store): LlmPoolApi {
       model: modelId,
       messages,
       stream: true,
-      // z.ai : l'effort « off » coupe explicitement le raisonnement GLM ;
-      // toute autre valeur laisse le défaut du modèle (aucun risque d'erreur
-      // sur les modèles non-raisonnement).
-      ...(endpoint.providerLabel === "z.ai" && req.settings?.reasoningEffort === "off"
+      // z.ai (les deux portefeuilles) : l'effort « off » coupe explicitement
+      // le raisonnement GLM ; toute autre valeur laisse le défaut du modèle
+      // (aucun risque d'erreur sur les modèles non-raisonnement).
+      ...((endpoint.providerLabel === "z.ai" ||
+        endpoint.providerLabel === "z.ai Coding Plan") &&
+      req.settings?.reasoningEffort === "off"
         ? { thinking: { type: "disabled" } }
         : {}),
       ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),

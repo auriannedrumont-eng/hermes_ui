@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import type {
   ExtensionCommit,
   KeyStatus,
+  ProviderCatalogEntry,
   ProviderKind,
   ProviderStrategy,
   ProviderKeyView,
@@ -24,10 +25,15 @@ type AuthStyle = "bearer" | "x-api-key" | "key-prefix" | "none";
 interface KnownProvider {
   match: RegExp;
   name: string;
+  /** Libellé court du sélecteur d'ajout (v2.5) — défaut : name. */
+  label?: string;
   tagline: string;
   kind: ProviderKind;
   keyless?: boolean;
   defaultBaseUrl?: string;
+  /** Base du TEST quand elle diffère de la base d'appel (opencode : la
+   *  liste des modèles vit sur /inference/v1, les tours sur /inference/openai/v1). */
+  testBase?: string;
   test: {
     url: string;
     method: "GET" | "POST";
@@ -38,11 +44,34 @@ interface KnownProvider {
 }
 
 const KNOWN_PROVIDERS: KnownProvider[] = [
+  // ── z.ai : DEUX portefeuilles étanches (v2.5) ────────────────────────
+  // z.ai sépare l'argent en deux : l'API standard se paie au jeton (solde
+  // rechargeable), le GLM Coding Plan est un abonnement avec SES PROPRES
+  // clés. Une clé ne fonctionne que sur la surface où elle a été créée —
+  // même format hexadécimal, portefeuilles différents (matrice croisée
+  // 429/200 observée avec les clés réelles, 2026-11-15). Cette entrée
+  // DOIT rester AVANT l'entrée « z.ai » générique : les deux regex
+  // reconnaissent « z.ai », l'ordre du catalogue tranche.
+  {
+    match: /coding\s*plan|z\.ai\s*[-–—]?\s*coding/i,
+    name: "z.ai Coding Plan",
+    label: "z.ai — GLM Coding Plan (abonnement)",
+    tagline: "clés créées dans la section « Coding Plan » du tableau de bord z.ai",
+    kind: "llm",
+    defaultBaseUrl: "https://api.z.ai/api/coding/paas/v4",
+    test: {
+      url: "https://api.z.ai/api/coding/paas/v4/models",
+      method: "GET",
+      auth: "bearer",
+    },
+  },
   {
     match: /z\.ai|zhipu|bigmodel|glm/i,
     name: "z.ai",
-    tagline: "modèles GLM",
+    label: "z.ai — API standard (paiement au jeton)",
+    tagline: "modèles GLM — clés de la section « API Keys », solde rechargeable",
     kind: "llm",
+    defaultBaseUrl: "https://api.z.ai/api/paas/v4",
     test: {
       url: "https://api.z.ai/api/paas/v4/models",
       method: "GET",
@@ -57,9 +86,11 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /opencode/i,
     name: "opencode",
+    label: "opencode — dizaines de modèles sous une seule clé",
     tagline: "des dizaines de modèles sous un seul compte (Console opencode)",
     kind: "llm",
     defaultBaseUrl: "https://opencode.ai/inference/openai/v1",
+    testBase: "https://opencode.ai/inference/v1",
     test: {
       url: "https://opencode.ai/inference/v1/models",
       method: "GET",
@@ -69,8 +100,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /openrouter/i,
     name: "OpenRouter",
+    label: "OpenRouter — des centaines de modèles",
     tagline: "des centaines de modèles sous un même compte",
     kind: "llm",
+    defaultBaseUrl: "https://openrouter.ai/api/v1",
     // /models est public : on interroge /key, qui exige la clé.
     test: {
       url: "https://openrouter.ai/api/v1/key",
@@ -81,8 +114,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /anthropic|claude/i,
     name: "Anthropic",
+    label: "Anthropic — modèles Claude",
     tagline: "modèles Claude",
     kind: "llm",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
     test: {
       url: "https://api.anthropic.com/v1/models",
       method: "GET",
@@ -93,8 +128,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /mistral/i,
     name: "Mistral",
+    label: "Mistral — modèles Mistral",
     tagline: "modèles Mistral",
     kind: "llm",
+    defaultBaseUrl: "https://api.mistral.ai/v1",
     test: {
       url: "https://api.mistral.ai/v1/models",
       method: "GET",
@@ -104,8 +141,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /openai/i,
     name: "OpenAI",
+    label: "OpenAI — modèles GPT",
     tagline: "modèles GPT",
     kind: "llm",
+    defaultBaseUrl: "https://api.openai.com/v1",
     test: {
       url: "https://api.openai.com/v1/models",
       method: "GET",
@@ -115,8 +154,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /deepseek/i,
     name: "DeepSeek",
+    label: "DeepSeek — modèles DeepSeek",
     tagline: "modèles DeepSeek",
     kind: "llm",
+    defaultBaseUrl: "https://api.deepseek.com",
     test: {
       url: "https://api.deepseek.com/models",
       method: "GET",
@@ -126,8 +167,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /groq/i,
     name: "Groq",
+    label: "Groq — réponses très rapides",
     tagline: "inférence très rapide",
     kind: "llm",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
     test: {
       url: "https://api.groq.com/openai/v1/models",
       method: "GET",
@@ -137,6 +180,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /ollama/i,
     name: "Ollama",
+    label: "Ollama — sur votre machine, sans clé",
     tagline: "sur votre machine — aucune clé nécessaire",
     kind: "llm",
     keyless: true,
@@ -151,6 +195,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /tavily/i,
     name: "Tavily",
+    label: "Tavily — recherche web",
     tagline: "recherche web",
     kind: "service",
     test: {
@@ -163,6 +208,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /\bexa\b/i,
     name: "Exa",
+    label: "Exa — recherche web",
     tagline: "recherche web",
     kind: "service",
     test: {
@@ -175,6 +221,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /\bfal\b|fal\.ai|fal_ai/i,
     name: "FAL.ai",
+    label: "FAL.ai — images et vidéo",
     tagline: "images et vidéo",
     kind: "service",
     test: {
@@ -186,6 +233,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     match: /xai|grok/i,
     name: "xAI",
+    label: "xAI — vidéo et recherche sur X",
     tagline: "vidéo et recherche sur X",
     kind: "service",
     test: { url: "https://api.x.ai/v1/models", method: "GET", auth: "bearer" },
@@ -202,9 +250,46 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
 //    (https://api.z.ai/api/coding/paas/v4). Testée sur la mauvaise surface,
 //    une clé valide est refusée (401 « token expired or incorrect ») —
 //    d'où le routage ci-dessous.
+// v2.5 — le format ne dit PAS tout : des clés Coding Plan existent aussi
+// au format xxxxxxxx.yyyyyyyy (constaté 2026-11-15 : une telle clé reçoit
+// 429 « solde insuffisant » sur la surface standard et 200 OK sur la
+// surface coding — les deux portefeuilles sont étanches, seule la section
+// de création de la clé décide). Le JWT reste un indice (routage direct,
+// sans aller-retour), mais la vérité se décide au TEST : testProviderKey
+// essaie l'autre surface et propose la bascule (migrateBaseUrl).
+export const ZAI_STANDARD_BASE = "https://api.z.ai/api/paas/v4";
+export const ZAI_CODING_BASE = "https://api.z.ai/api/coding/paas/v4";
+
 export function looksLikeZaiJwt(secret: string): boolean {
   const s = secret.trim();
   return /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*$/.test(s);
+}
+
+/** Applique une adresse explicite (champ « endpoint » éditable, v2.5) :
+ *  • identique à l'adresse par défaut du fournisseur → aucun effet (le
+ *    champ n'a pas été modifié — pré-rempli par le sélecteur) ;
+ *  • avec CHEMIN (https://host/chemin) → base COMPLÈTE, utilisée telle
+ *    quelle : c'est le détail éditable demandé — basculer un fournisseur
+ *    z.ai vers la surface coding, pointer un proxy précis… ;
+ *  • origine seule (https://host) → seul l'hôte du canon est remplacé
+ *    (proxy, auto-hébergé) — le chemin canonique fait partie du contrat.
+ *  `canonicalUrl` est l'adresse de référence du contexte (test ou appel). */
+export function applyExplicitBase(
+  defaultBaseUrl: string,
+  canonicalUrl: string,
+  explicit: string,
+): string {
+  const canon = canonicalUrl.replace(/\/+$/, "");
+  const ex = (explicit ?? "").trim().replace(/\/+$/, "");
+  if (!ex || ex === defaultBaseUrl.replace(/\/+$/, "")) return canon;
+  try {
+    const e = new URL(ex);
+    const path = e.pathname.replace(/\/+$/, "");
+    if (path && path !== "/") return ex;
+    return `${e.origin}${new URL(canon).pathname}`;
+  } catch {
+    return canon;
+  }
 }
 
 /** Résout un nom ou une adresse saisie contre le catalogue. */
@@ -242,6 +327,19 @@ export function providerCapabilities(
   return KNOWN_PROVIDERS.find((p) => p.match.test(target)) ?? null;
 }
 
+/** Catalogue des fournisseurs connus, pour le sélecteur d'ajout (v2.5).
+ *  `name` est la valeur canonique à renvoyer telle quelle à providers:add. */
+export function knownProviderCatalog(): ProviderCatalogEntry[] {
+  return KNOWN_PROVIDERS.map((p) => ({
+    name: p.name,
+    label: p.label ?? p.name,
+    tagline: p.tagline,
+    kind: p.kind,
+    defaultBaseUrl: p.defaultBaseUrl ?? null,
+    keyless: Boolean(p.keyless),
+  }));
+}
+
 // ── Masquage (le secret ne quitte jamais le service) ─────────────────
 
 export function maskSecret(secret: string): string {
@@ -256,6 +354,9 @@ export interface KeyTestResult {
   status: KeyStatus;
   statusLabel: string;
   detail?: string;
+  /** z.ai (v2.5) : surface qui accepte réellement la clé — le fournisseur
+   *  est basculé dessus par l'appelant (index.ts, providers:test-key). */
+  migrateBaseUrl?: string;
 }
 
 function authHeaders(auth: AuthStyle, secret: string): Record<string, string> {
@@ -428,7 +529,114 @@ async function probeGeneration(
   }
 }
 
-/** Teste une clé : appel réseau réel, timeout court, résultat honnête. */
+/** Teste UNE surface z.ai (standard ou coding, v2.5) : liste des modèles
+ *  puis mini-génération — la vérité sur le portefeuille (solde rechargeable
+ *  ou abonnement). `networkFailure` distingue « la surface a répondu non »
+ *  (on peut tenter l'autre portefeuille) de « le réseau n'a pas répondu »
+ *  (inutile d'insister). */
+async function testZaiSurface(
+  base: string,
+  secret: string | null,
+): Promise<{ result: KeyTestResult; networkFailure: boolean }> {
+  const planLabel = /\/api\/coding\//.test(base) ? " (Coding Plan)" : "";
+  try {
+    const res = await fetch(`${base}/models`, {
+      method: "GET",
+      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+      signal: AbortSignal.timeout(7000),
+    });
+    if (res.status === 200) {
+      let json: unknown = null;
+      try {
+        json = await res.json();
+      } catch {
+        /* corps non JSON — pas grave */
+      }
+      // Piège z.ai : un 200 peut porter l'erreur d'authentification dans
+      // le corps ({"code":401,"success":false} observé) — pas de garantie.
+      if (
+        json &&
+        typeof json === "object" &&
+        !Array.isArray(json) &&
+        !Array.isArray((json as any).data) &&
+        !Array.isArray((json as any).models) &&
+        ((json as any).success === false ||
+          (typeof (json as any).code === "number" && (json as any).code !== 0))
+      ) {
+        const code = (json as any).code;
+        return {
+          result: {
+            status: "error",
+            statusLabel:
+              code === 1001 || code === 401 ? "clé refusée" : `réponse inattendue (code ${code})`,
+          },
+          networkFailure: false,
+        };
+      }
+      const ids = modelIds(json);
+      const n = countModels(json);
+      // La liste réussit même sur un compte incapable de générer (solde
+      // nul, quota épuisé) : la mini-génération dit la vérité.
+      if (secret && ids.length > 0) {
+        // Modèle le moins cher de préférence (flash) — coût dérisoire.
+        const model = ids.find((m) => /flash/i.test(m)) ?? ids[0];
+        const probed = await probeGeneration(`${base}/chat/completions`, secret, model, "");
+        if (probed) {
+          if (probed.status === "ok")
+            return {
+              result: {
+                status: "ok",
+                statusLabel: `${frModels(n ?? ids.length)}${planLabel} — compte actif`,
+              },
+              networkFailure: false,
+            };
+          return { result: probed, networkFailure: false };
+        }
+      }
+      return {
+        result: { status: "ok", statusLabel: `${frModels(n ?? ids.length)}${planLabel}` },
+        networkFailure: false,
+      };
+    }
+    if (res.status === 429) {
+      // La raison du 429 se lit dans le corps (solde nul, quota épuisé,
+      // débit…) : « limite atteinte » seul est trompeur.
+      const detail = await readBodySnippet(res);
+      const why = explainQuotaError(detail);
+      return {
+        result: {
+          status: "exhausted",
+          statusLabel: why.kind ? why.short : "limite atteinte",
+          detail: why.kind ? detail : undefined,
+        },
+        networkFailure: false,
+      };
+    }
+    if (res.status === 401 || res.status === 403)
+      return { result: { status: "error", statusLabel: "clé refusée" }, networkFailure: false };
+    return {
+      result: { status: "error", statusLabel: `réponse inattendue (HTTP ${res.status})` },
+      networkFailure: false,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      result: {
+        status: "error",
+        statusLabel: /timeout|abort/i.test(msg)
+          ? "service injoignable (délai dépassé)"
+          : "service injoignable",
+      },
+      networkFailure: true,
+    };
+  }
+}
+
+/** Teste une clé : appel réseau réel, timeout court, résultat honnête.
+ *  v2.5 — z.ai : les deux portefeuilles (API standard / GLM Coding Plan)
+ *  sont étanches ; le test essaie la surface attendue puis, si la clé y
+ *  est refusée (401/403/429), l'AUTRE surface — quand elle répond, le
+ *  fournisseur est basculé dessus (migrateBaseUrl) et le libellé le dit. */
 export async function testProviderKey(
   name: string,
   baseUrl: string | null | undefined,
@@ -453,55 +661,92 @@ export async function testProviderKey(
       return { status: "error", statusLabel: "adresse de base invalide" };
     }
   }
-  // z.ai : une clé Coding Plan (JWT) est testée sur la surface « coding »
-  // qui seule l'accepte (cf. looksLikeZaiJwt) — une clé API reste sur
-  // la surface standard paas/v4.
   const zaiJwt = Boolean(caps?.name === "z.ai" && secret && looksLikeZaiJwt(secret));
-  let test = caps ? caps.test : null;
-  if (caps && zaiJwt) {
-    test = {
-      url: "https://api.z.ai/api/coding/paas/v4/models",
-      method: "GET",
-      auth: "bearer",
-    };
+  // Test canonique du fournisseur, ou convention /models (fournisseur
+  // personnalisé — adresse collée).
+  let testUrl: string | null = caps ? caps.test.url : null;
+  if (!testUrl && baseUrl) {
+    testUrl = `${baseUrl.replace(/\/+$/, "")}/models`;
   }
-  // Fournisseur personnalisé : convention /models avec Bearer
-  if (!test && baseUrl) {
-    test = {
-      url: `${baseUrl.replace(/\/+$/, "")}/models`,
-      method: "GET",
-      auth: "bearer",
-    };
-  }
-  if (!test) {
+  if (!testUrl) {
     return {
       status: "error",
       statusLabel: "aucun test connu pour ce fournisseur",
     };
   }
-  // Adresse explicite fournie : son ORIGINE remplace celle du test connu
-  // (le test doit interroger ce que le moteur utilisera réellement —
-  // opencode auto-hébergé, proxy, etc.), le chemin connu est conservé.
-  if (baseUrl) {
+  // Adresse explicite (champ « endpoint » éditable, v2.5) :
+  //  • fournisseur LLM connu avec base d'appel — règle complète : adresse
+  //    inchangée = canon ; avec chemin = base COMPLÈTE ; origine seule =
+  //    hôte du canon (applyExplicitBase). Le test interroge ce que le
+  //    moteur utilisera réellement ;
+  //  • services et cas sans base d'appel — règle d'origine : seule
+  //    l'origine du test canonique est remplacée, le chemin est conservé.
+  if (baseUrl && caps && caps.kind === "llm" && caps.defaultBaseUrl) {
+    const canonicalTestBase = caps.testBase ?? caps.defaultBaseUrl;
+    const suffix = caps.test.url.startsWith(canonicalTestBase)
+      ? caps.test.url.slice(canonicalTestBase.length)
+      : "/models";
+    testUrl = `${applyExplicitBase(caps.defaultBaseUrl, canonicalTestBase, baseUrl)}${suffix}`;
+  } else if (baseUrl && caps) {
     try {
-      const tb = new URL(test.url);
+      const tb = new URL(testUrl);
       const ob = new URL(baseUrl);
       if (tb.origin !== ob.origin) {
-        test = { ...test, url: ob.origin + tb.pathname };
+        testUrl = `${ob.origin}${tb.pathname}`;
       }
     } catch {
       /* baseUrl invalide : déjà signalé ci-dessus */
     }
   }
+  // z.ai : deux portefeuilles étanches — le test décide de la surface.
+  // Les surfaces sont dérivées de la MÊME origine que le test (adresse
+  // explicite / proxy respecté — la clé ne fuit jamais vers api.z.ai).
+  if (caps && (caps.name === "z.ai" || caps.name === "z.ai Coding Plan")) {
+    let zaiOrigin = "https://api.z.ai";
+    try {
+      zaiOrigin = new URL(testUrl).origin;
+    } catch {
+      /* testUrl déjà construit valide */
+    }
+    // Les clés Coding Plan « eyJ… » ne parlent qu'à la surface coding :
+    // la tester en premier évite l'aller-retour (routage d'origine v2.4).
+    const codingFirst = zaiJwt || testUrl.includes("/coding/");
+    const primaryBase = codingFirst
+      ? `${zaiOrigin}/api/coding/paas/v4`
+      : `${zaiOrigin}/api/paas/v4`;
+    const secondaryBase = codingFirst
+      ? `${zaiOrigin}/api/paas/v4`
+      : `${zaiOrigin}/api/coding/paas/v4`;
+    const primary = await testZaiSurface(primaryBase, secret);
+    if (primary.result.status === "ok") return primary.result;
+    // Clé refusée ou à sec sur la surface attendue (le serveur a répondu) :
+    // l'AUTRE portefeuille répond peut-être — cas réel des clés Coding
+    // Plan au format standard (429 « solde insuffisant » d'un côté, 200 de
+    // l'autre, 2026-11-15). Les jetons JWT, eux, ne fonctionnent que sur
+    // la surface coding : inutile de tenter la standard.
+    if (!zaiJwt && !primary.networkFailure) {
+      const secondary = await testZaiSurface(secondaryBase, secret);
+      if (secondary.result.status === "ok") {
+        // Le libellé (« N modèles (Coding Plan) — compte actif ») reste
+        // court pour la pastille ; la bascule elle-même est annoncée par
+        // l'interface (toast) et visible sur la carte (nouvelle adresse).
+        return {
+          ...secondary.result,
+          migrateBaseUrl: secondaryBase,
+        };
+      }
+    }
+    return primary.result;
+  }
   try {
-    const res = await fetch(test.url, {
-      method: test.method,
+    const res = await fetch(testUrl, {
+      method: caps?.test.method ?? "GET",
       headers: {
-        ...(test.body ? { "Content-Type": "application/json" } : {}),
-        ...(secret ? authHeaders(test.auth, secret) : {}),
-        ...(test.extraHeaders ?? {}),
+        ...(caps?.test.body ? { "Content-Type": "application/json" } : {}),
+        ...(secret ? authHeaders(caps?.test.auth ?? "bearer", secret) : {}),
+        ...(caps?.test.extraHeaders ?? {}),
       },
-      body: test.body ? JSON.stringify(test.body) : undefined,
+      body: caps?.test.body ? JSON.stringify(caps.test.body) : undefined,
       signal: AbortSignal.timeout(7000),
     });
     if (res.status === 200) {
@@ -531,46 +776,29 @@ export async function testProviderKey(
         };
       }
       const models = countModels(json);
-      // Test approfondi z.ai / opencode : la liste des modèles réussit
-      // même sur un compte incapable de générer (solde nul, quota gratuit
-      // épuisé — cas réels) ; la mini-génération dit la vérité, cf.
-      // probeGeneration. L'ORIGINE du test (déjà celle du moteur potentiel)
-      // est respectée.
+      // Test approfondi opencode : la liste des modèles réussit même sur
+      // un compte incapable de générer (quota gratuit épuisé — cas réel) ;
+      // la mini-génération dit la vérité, cf. probeGeneration. La base du
+      // probe suit l'endpoint effectif (canonique ou édité).
+      // (z.ai est traité plus haut, surface par portefeuille.)
       const ids = modelIds(json);
-      if (caps && secret && ids.length > 0) {
-        let probeUrl: string | null = null;
-        let model: string | null = null;
-        let okLabel = "";
-        try {
-          const origin = new URL(test.url).origin;
-          if (caps.name === "z.ai") {
-            probeUrl =
-              origin + (zaiJwt ? "/api/coding/paas/v4/chat/completions" : "/api/paas/v4/chat/completions");
-            // Modèle le moins cher de préférence (flash) — coût dérisoire.
-            model = ids.find((m) => /flash/i.test(m)) ?? ids[0];
-            okLabel = `${frModels(models ?? ids.length)}${zaiJwt ? " (Coding Plan)" : ""} — compte actif`;
-          } else if (caps.name === "opencode") {
-            probeUrl = origin + "/inference/openai/v1/chat/completions";
-            // Modèle gratuit de préférence (free / pickle : prix 0 chez eux).
-            model = ids.find((m) => /free|pickle/i.test(m)) ?? ids[0];
-            okLabel = `${frModels(models ?? ids.length)} — compte actif`;
-          }
-        } catch {
-          /* test.url déjà validé par le fetch ci-dessus */
-        }
-        if (probeUrl && model) {
-          const probed = await probeGeneration(probeUrl, secret, model, okLabel);
-          if (probed) return probed;
-        }
+      if (caps && secret && ids.length > 0 && caps.name === "opencode" && caps.defaultBaseUrl) {
+        const probeBase = baseUrl
+          ? applyExplicitBase(caps.defaultBaseUrl, caps.defaultBaseUrl, baseUrl)
+          : caps.defaultBaseUrl;
+        // Modèle gratuit de préférence (free / pickle : prix 0 chez eux).
+        const model = ids.find((m) => /free|pickle/i.test(m)) ?? ids[0];
+        const probed = await probeGeneration(
+          `${probeBase}/chat/completions`,
+          secret,
+          model,
+          `${frModels(models ?? ids.length)} — compte actif`,
+        );
+        if (probed) return probed;
       }
       return {
         status: "ok",
-        statusLabel:
-          models !== null
-            ? `${frModels(models)}${zaiJwt ? " (Coding Plan)" : ""}`
-            : zaiJwt
-              ? "clé Coding Plan connectée"
-              : "connecté",
+        statusLabel: models !== null ? frModels(models) : "connecté",
       };
     }
     if (res.status === 429) {

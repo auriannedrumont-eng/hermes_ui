@@ -10,6 +10,7 @@ import type {
   ExtensionCommit,
   ExtensionView,
   KeyStatus,
+  ProviderCatalogEntry,
   ProviderKeyView,
   ProviderKind,
   ProviderStrategy,
@@ -28,6 +29,7 @@ interface EmitResult<T> {
 
 export function useProviders() {
   const [providers, setProviders] = useState<ProviderView[]>([]);
+  const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
   const [extensions, setExtensions] = useState<ExtensionView[]>([]);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
 
@@ -38,6 +40,9 @@ export function useProviders() {
     const refresh = () => {
       socket.emit("providers:list", (res: { providers?: ProviderView[] } = {}) => {
         if (Array.isArray(res.providers)) setProviders(res.providers);
+      });
+      socket.emit("providers:catalog", (res: { catalog?: ProviderCatalogEntry[] } = {}) => {
+        if (Array.isArray(res.catalog)) setCatalog(res.catalog);
       });
       socket.emit("extensions:list", (res: { extensions?: ExtensionView[] } = {}) => {
         if (Array.isArray(res.extensions)) setExtensions(res.extensions);
@@ -76,6 +81,9 @@ export function useProviders() {
     socket.emit("providers:list", (res: { providers?: ProviderView[] } = {}) => {
       if (Array.isArray(res.providers)) setProviders(res.providers);
     });
+    socket.emit("providers:catalog", (res: { catalog?: ProviderCatalogEntry[] } = {}) => {
+      if (Array.isArray(res.catalog)) setCatalog(res.catalog);
+    });
     socket.emit("extensions:list", (res: { extensions?: ExtensionView[] } = {}) => {
       if (Array.isArray(res.extensions)) setExtensions(res.extensions);
     });
@@ -83,9 +91,16 @@ export function useProviders() {
 
   // ── Fournisseurs & clés ───────────────────────────────────────────
 
+  /** Ajoute un fournisseur — `name` vient du sélecteur (valeur canonique
+   *  du catalogue) ou une adresse https ; `baseUrl` n'est envoyé que si
+   *  le champ « endpoint » a été rempli/modifié. */
   const addProvider = useCallback(
-    (name: string, kind: ProviderKind) =>
-      emit<{ provider?: ProviderView; error?: string }>("providers:add", { name, kind }),
+    (name: string, kind: ProviderKind, baseUrl?: string) =>
+      emit<{ provider?: ProviderView; error?: string }>("providers:add", {
+        name,
+        kind,
+        ...(baseUrl ? { baseUrl } : {}),
+      }),
     [emit]
   );
 
@@ -99,6 +114,16 @@ export function useProviders() {
       emit<{ provider?: ProviderView; error?: string }>("providers:set-strategy", {
         id,
         strategy,
+      }),
+    [emit]
+  );
+
+  /** Adresse (endpoint) éditable, v2.5 — chaîne vide = retour au canon. */
+  const setProviderBase = useCallback(
+    (id: string, baseUrl: string) =>
+      emit<{ provider?: ProviderView; error?: string }>("providers:set-base", {
+        id,
+        baseUrl,
       }),
     [emit]
   );
@@ -120,10 +145,12 @@ export function useProviders() {
 
   const testKey = useCallback(
     (keyId: string) =>
-      emit<{ ok?: boolean; key?: ProviderKeyView | null; error?: string }>(
-        "providers:test-key",
-        { keyId }
-      ),
+      emit<{
+        ok?: boolean;
+        key?: ProviderKeyView | null;
+        provider?: ProviderView | null;
+        error?: string;
+      }>("providers:test-key", { keyId }),
     [emit]
   );
 
@@ -170,12 +197,14 @@ export function useProviders() {
 
   return {
     providers,
+    catalog,
     extensions,
     pendingEngineCount,
     refresh,
     addProvider,
     removeProvider,
     setStrategy,
+    setProviderBase,
     addKey,
     removeKey,
     testKey,

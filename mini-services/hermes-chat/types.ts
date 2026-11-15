@@ -284,6 +284,21 @@ export interface ProviderView {
   keys: ProviderKeyView[];
 }
 
+/** Entrée du catalogue des fournisseurs connus (sélecteur d'ajout, v2.5).
+ *  `name` est la valeur canonique à renvoyer telle quelle à providers:add. */
+export interface ProviderCatalogEntry {
+  name: string;
+  /** Libellé court du sélecteur (p. ex. « z.ai — GLM Coding Plan (abonnement) »). */
+  label: string;
+  /** Description sous le sélecteur. */
+  tagline: string;
+  kind: ProviderKind;
+  /** Adresse d'appel par défaut (null pour les services testés par requête). */
+  defaultBaseUrl: string | null;
+  /** Fournisseur local sans clé (Ollama). */
+  keyless: boolean;
+}
+
 // ── Extensions : dépôts importés + serveurs MCP ───────────────────────
 
 export type ExtensionKind = "repo" | "mcp";

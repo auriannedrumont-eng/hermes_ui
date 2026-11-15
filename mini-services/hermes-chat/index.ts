@@ -6,7 +6,7 @@
 //   models:list, attachments:upload, audio:transcribe,
 //   artifacts:list, artifact:versions, artifact:retry,
 //   settings:get/set,
-//   providers:list/add/remove/set-strategy/add-key/remove-key/test-key,
+//   providers:list/catalog/add/remove/set-strategy/set-base/add-key/remove-key/test-key,
 //   extensions:list/add/toggle/remove/pin/check/update,
 //   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
 //   custom-instructions:get/set,
@@ -71,6 +71,7 @@ import {
 import { DEMO_BASE_PROMPT } from "./demo-engine";
 import {
   fetchRepoSnapshot,
+  knownProviderCatalog,
   maskSecret,
   parseRepoInput,
   providerCapabilities,
@@ -1543,6 +1544,13 @@ io.on("connection", (socket) => {
     if (typeof cb === "function") cb({ providers: providersWire() });
   });
 
+  // Catalogue des fournisseurs connus (sélecteur d'ajout, v2.5) — z.ai y
+  // figure DEUX fois : API standard (paiement au jeton) et GLM Coding
+  // Plan (abonnement), deux portefeuilles étanches.
+  socket.on("providers:catalog", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function") cb({ catalog: knownProviderCatalog() });
+  });
+
   socket.on(
     "providers:add",
     (
@@ -1575,7 +1583,9 @@ io.on("connection", (socket) => {
           ? (resolved.known.defaultBaseUrl ?? null)
           : resolved.custom.baseUrl;
       // Adresse explicite fournie : elle gagne sur l'adresse canonique
-      // (surcharger un fournisseur connu — passerelle d'entreprise, tests).
+      // (surcharger un fournisseur connu — passerelle d'entreprise, tests,
+      // bascule z.ai vers la surface coding). v2.5 : une adresse avec chemin
+      // est la base COMPLÈTE ; une origine seule remplace l'hôte du canon.
       // https requis, ou http strictement local (même règle que le test de clé).
       const explicit = (payload?.baseUrl ?? "").trim();
       if (explicit && /^https?:\/\//i.test(explicit)) {
@@ -1589,6 +1599,19 @@ io.on("connection", (socket) => {
         } catch {
           /* adresse invalide : adresse canonique conservée */
         }
+      }
+      // Champ d'adresse non modifié (pré-rempli par le sélecteur à l'identique
+      // du canon) : stocker null — l'adresse canonique reste la référence et
+      // les surfaces de TEST propres à certains fournisseurs (opencode) sont
+      // préservées.
+      const canonicalDefault =
+        "known" in resolved ? (resolved.known.defaultBaseUrl ?? null) : null;
+      if (
+        canonicalDefault &&
+        baseUrl &&
+        baseUrl.replace(/\/+$/, "") === canonicalDefault.replace(/\/+$/, "")
+      ) {
+        baseUrl = null;
       }
       const row = store.createProvider({ name: canonicalName, kind, baseUrl });
       if (typeof cb === "function") cb({ provider: providerWire(row, []) });
@@ -1626,6 +1649,55 @@ io.on("connection", (socket) => {
         return;
       }
       if (typeof cb === "function") cb({ provider: providerWire(row, store.listKeyRows(id)) });
+      broadcastProviders();
+    }
+  );
+
+  // Adresse (endpoint) éditable, v2.5 — champ visible à l'ajout d'une clé
+  // et dans les réglages avancés de la carte. Chaîne vide = retour à
+  // l'adresse canonique du fournisseur. Mêmes règles de sécurité que le
+  // test de clé : https requis, http strictement local admis.
+  socket.on(
+    "providers:set-base",
+    (
+      payload: { id?: string; baseUrl?: string },
+      cb?: (data: unknown) => void
+    ) => {
+      const id = payload?.id;
+      const row = id ? store.getProviderRow(id) : null;
+      if (!id || !row) {
+        if (typeof cb === "function") cb({ error: "Fournisseur introuvable" });
+        return;
+      }
+      const raw = (payload?.baseUrl ?? "").trim();
+      if (!raw) {
+        const updated = store.setProviderBaseUrl(id, null);
+        if (typeof cb === "function")
+          cb({ provider: updated ? providerWire(updated, store.listKeyRows(id)) : null });
+        broadcastProviders();
+        return;
+      }
+      if (!/^https?:\/\//i.test(raw)) {
+        if (typeof cb === "function")
+          cb({ error: "Adresse invalide — elle commence par https://" });
+        return;
+      }
+      try {
+        const u = new URL(raw);
+        const local =
+          u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
+        if (u.protocol !== "https:" && !(u.protocol === "http:" && local)) {
+          if (typeof cb === "function")
+            cb({ error: "https requis (http admis sur localhost uniquement)" });
+          return;
+        }
+      } catch {
+        if (typeof cb === "function") cb({ error: "Adresse invalide" });
+        return;
+      }
+      const updated = store.setProviderBaseUrl(id, raw.replace(/\/+$/, ""));
+      if (typeof cb === "function")
+        cb({ provider: updated ? providerWire(updated, store.listKeyRows(id)) : null });
       broadcastProviders();
     }
   );
@@ -1685,12 +1757,30 @@ io.on("connection", (socket) => {
       }
       try {
         const result = await testProviderKey(provider.name, provider.base_url, key.secret);
+        // v2.5 — z.ai : la clé a répondu sur l'AUTRE portefeuille (clé
+        // Coding Plan au format standard, p. ex.) : le fournisseur est
+        // basculé sur la surface qui l'accepte — le prochain tour et le
+        // prochain test parleront à la bonne adresse sans intervention.
+        const migrated =
+          result.migrateBaseUrl && result.migrateBaseUrl !== (provider.base_url ?? "")
+            ? store.setProviderBaseUrl(provider.id, result.migrateBaseUrl)
+            : null;
+        if (migrated) {
+          console.log(
+            `[hermes-chat] ${provider.name} : endpoint basculé vers ${migrated.base_url} (clé « ${key.label} »)`
+          );
+        }
         const updated = store.setKeyStatus(key.id, result.status, result.statusLabel);
         console.log(
           `[hermes-chat] test ${provider.name}/${key.label} → ${result.status} (${result.statusLabel})`
         );
         if (typeof cb === "function")
-          cb({ ok: true, key: updated ? toKeyView(updated) : null, detail: result.detail ?? null });
+          cb({
+            ok: true,
+            key: updated ? toKeyView(updated) : null,
+            detail: result.detail ?? null,
+            provider: providerWire(migrated ?? provider, store.listKeyRows(provider.id)),
+          });
         broadcastProviders();
       } catch (err) {
         if (typeof cb === "function")

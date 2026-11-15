@@ -170,12 +170,14 @@ Client → serveur :
 | Événement | Charge utile | Réponse (ack) |
 | --- | --- | --- |
 | `providers:list` | — | `{providers: ProviderView[]}` (avec clés masquées) |
-| `providers:add` | `{name, kind, baseUrl?}` | `{provider}` — nom connu (z.ai, Tavily…) ou adresse https |
+| `providers:catalog` | — | `{catalog: ProviderCatalogEntry[]}` — sélecteur d'ajout (v2.5) ; z.ai y figure DEUX fois (API standard / GLM Coding Plan, portefeuilles étanches) |
+| `providers:add` | `{name, kind, baseUrl?}` | `{provider}` — nom connu (z.ai, z.ai Coding Plan, opencode, Tavily…) ou adresse https ; `baseUrl` avec chemin = base complète, origine seule = hôte du canon, identique au défaut = ignoré |
 | `providers:remove` | `{id}` | `{ok}` (supprime ses clés) |
 | `providers:set-strategy` | `{id, strategy}` | `{provider}` |
+| `providers:set-base` | `{id, baseUrl}` | `{provider}` — endpoint éditable (v2.5) ; chaîne vide = retour à l'adresse canonique ; https requis (http localhost admis) |
 | `providers:add-key` | `{providerId, label, secret}` | `{key: ProviderKeyView}` (masquée) |
 | `providers:remove-key` | `{keyId}` | `{ok}` |
-| `providers:test-key` | `{keyId}` | `{ok, key}` — test réseau réel, peut prendre quelques secondes |
+| `providers:test-key` | `{keyId}` | `{ok, key, provider?}` — test réseau réel ; z.ai : essaie l'AUTRE portefeuille si la clé est refusée et **bascule le fournisseur** (`provider.baseUrl` mis à jour, v2.5) |
 | `extensions:list` | — | `{extensions: ExtensionView[]}` |
 | `extensions:add` | `{kind: repo\|mcp, source, channel?}` | `{extension, commits?}` — résolution GitHub réelle |
 | `extensions:toggle` | `{id, enabled}` | `{extension}` (effet au redémarrage) |

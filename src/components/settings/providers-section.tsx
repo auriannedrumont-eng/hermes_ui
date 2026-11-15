@@ -3,17 +3,23 @@
 // stratégie d'ordre d'utilisation. Maquette de référence :
 // design/maquette-parametres-v4.html (panes p-fournisseurs / p-cles).
 //
+// v2.5 — ajout par SÉLECTEUR (catalogue servi par le service : z.ai y
+// compte deux portefeuilles étanches, API standard et GLM Coding Plan)
+// et champ « endpoint » éditable, visible dès l'ajout d'une clé et dans
+// les réglages avancés de chaque carte.
+//
 // Sécurité : le secret est saisi une fois, envoyé au service, puis oublié
 // côté client — l'UI ne rend que la vue masquée (sk-••••7f3a).
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   Globe,
   Layers,
   Loader2,
   Lock,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import {
@@ -38,8 +44,6 @@ const TEXTS: Record<
     title: string;
     sub: string;
     addLabel: string;
-    addHint: string;
-    addPlaceholder: string;
     note?: string;
   }
 > = {
@@ -47,19 +51,27 @@ const TEXTS: Record<
     title: "Fournisseurs",
     sub: "Vos comptes d'accès aux modèles de langage. Plusieurs clés par fournisseur : quand l'une atteint sa limite, la suivante prend le relais.",
     addLabel: "Ajouter un fournisseur",
-    addHint:
-      "Fournisseurs connus : z.ai (clé API ou abonnement GLM Coding Plan), opencode, OpenRouter (avec des modèles gratuits « :free »), Anthropic, Mistral, Ollama… Pour les autres, collez leur adresse.",
-    addPlaceholder: "Nom ou adresse du fournisseur",
   },
   service: {
     title: "Clés de services",
     sub: "Recherche web, images, vidéo — chaque service demande sa propre clé. Plusieurs clés possibles par service.",
     addLabel: "Ajouter un service",
-    addHint: "Tavily, Exa, FAL.ai… ou n'importe quelle adresse d'API.",
-    addPlaceholder: "Nom du service ou adresse",
     note: "Les clés restent sur votre machine, dans Hermes — jamais dans le navigateur.",
   },
 };
+
+/** Valeur du sélecteur pour « Adresse personnalisée ». */
+const CUSTOM_VALUE = "__custom__";
+
+/** Endpoint effectif d'un fournisseur : adresse enregistrée, sinon adresse
+ *  par défaut du catalogue — c'est ce que le moteur appellera vraiment. */
+function effectiveBaseUrl(provider: ProviderView, api: ProvidersApi): string {
+  return (
+    provider.baseUrl ??
+    api.catalog.find((c) => c.name === provider.name)?.defaultBaseUrl ??
+    ""
+  );
+}
 
 // ── Une carte fournisseur (porte-clés) ───────────────────────────────
 
@@ -68,28 +80,53 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   const [showAddKey, setShowAddKey] = useState(false);
   const [keyLabel, setKeyLabel] = useState("");
   const [keySecret, setKeySecret] = useState("");
+  const [keyEndpoint, setKeyEndpoint] = useState("");
   const [addingKey, setAddingKey] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
+  const [advEndpoint, setAdvEndpoint] = useState("");
+  const [savingBase, setSavingBase] = useState(false);
   const [testing, setTesting] = useState<Set<string>>(new Set());
   const status = providerCardStatus(provider);
   const isLlm = provider.kind === "llm";
+  const endpoint = effectiveBaseUrl(provider, api);
+  const hasDefault = api.catalog.some((c) => c.name === provider.name);
+
+  // Les champs endpoint suivent le fournisseur (bascule automatique z.ai
+  // au test, édition depuis un autre champ) : resynchronisation continue.
+  useEffect(() => {
+    setKeyEndpoint(endpoint);
+    setAdvEndpoint(endpoint);
+  }, [endpoint]);
 
   const handleAddKey = async () => {
     if (!keySecret.trim() || addingKey) return;
     setAddingKey(true);
-    const res = await api.addKey(provider.id, keyLabel.trim(), keySecret.trim());
-    setAddingKey(false);
-    if (res.error) {
-      toast({ title: "Clé refusée", description: res.error, variant: "destructive" });
-      return;
+    try {
+      // Endpoint modifié dans le formulaire de clé : enregistré AVANT la
+      // clé — le test et les tours partiront sur la bonne adresse.
+      const nextBase = keyEndpoint.trim();
+      if (nextBase && nextBase !== endpoint) {
+        const base = await api.setProviderBase(provider.id, nextBase);
+        if (base.error) {
+          toast({ title: "Endpoint refusé", description: base.error, variant: "destructive" });
+          return;
+        }
+      }
+      const res = await api.addKey(provider.id, keyLabel.trim(), keySecret.trim());
+      if (res.error) {
+        toast({ title: "Clé refusée", description: res.error, variant: "destructive" });
+        return;
+      }
+      setKeyLabel("");
+      setKeySecret("");
+      setShowAddKey(false);
+      toast({
+        title: "Clé ajoutée",
+        description: `« ${res.key?.label ?? keyLabel} » — pensez à la tester.`,
+      });
+    } finally {
+      setAddingKey(false);
     }
-    setKeyLabel("");
-    setKeySecret("");
-    setShowAddKey(false);
-    toast({
-      title: "Clé ajoutée",
-      description: `« ${res.key?.label ?? keyLabel} » — pensez à la tester.`,
-    });
   };
 
   const handleTest = async (keyId: string) => {
@@ -103,6 +140,15 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
     });
     if (res.error) {
       toast({ title: "Test impossible", description: res.error, variant: "destructive" });
+      return;
+    }
+    // z.ai : le test a basculé le fournisseur sur le portefeuille qui
+    // accepte la clé (clé Coding Plan ajoutée côté API standard, p. ex.).
+    if (res.provider?.baseUrl && res.provider.baseUrl !== (provider.baseUrl ?? "")) {
+      toast({
+        title: "Endpoint basculé automatiquement",
+        description: `Votre clé répond sur l'autre portefeuille z.ai — ${provider.name} utilise maintenant ${res.provider.baseUrl}.`,
+      });
     }
   };
 
@@ -131,9 +177,43 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
     }
   };
 
+  const handleSaveAdvEndpoint = async () => {
+    if (savingBase) return;
+    const next = advEndpoint.trim();
+    if (!next || next === endpoint) return;
+    setSavingBase(true);
+    const res = await api.setProviderBase(provider.id, next);
+    setSavingBase(false);
+    if (res.error) {
+      toast({ title: "Endpoint refusé", description: res.error, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "Endpoint enregistré",
+      description: res.provider?.baseUrl ?? `${provider.name} revient à son adresse par défaut.`,
+    });
+  };
+
+  const handleResetEndpoint = async () => {
+    if (savingBase) return;
+    setSavingBase(true);
+    const res = await api.setProviderBase(provider.id, "");
+    setSavingBase(false);
+    if (res.error) {
+      toast({ title: "Réinitialisation impossible", description: res.error, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "Adresse par défaut rétablie",
+      description: `${provider.name} revient à son adresse d'origine.`,
+    });
+  };
+
+  const keyCount = provider.keys.length;
+
   return (
     <div className="mb-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
-      {/* En-tête : icône + nom + pastille + tagline */}
+      {/* En-tête : icône + nom + pastille + endpoint */}
       <div className="flex items-center gap-2.5">
         <span className="flex size-[30px] flex-none items-center justify-center rounded-[10px] bg-muted">
           {isLlm ? (
@@ -147,12 +227,12 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
             <b className="text-[14px] font-semibold tracking-tight">{provider.name}</b>
             <Pastille tone={status.tone} label={status.label} />
           </div>
-          <span className="block truncate text-[12px] text-muted-foreground">
+          <span className="block truncate text-[12px] text-muted-foreground" title={endpoint || undefined}>
             {provider.keyless
               ? "sur votre machine — aucune clé nécessaire"
-              : provider.baseUrl
-                ? `${provider.baseUrl} · ${provider.keys.length} clé${provider.keys.length > 1 ? "s" : ""}`
-                : `${provider.keys.length} clé${provider.keys.length > 1 ? "s" : ""}`}
+              : endpoint
+                ? `${endpoint} · ${keyCount} clé${keyCount > 1 ? "s" : ""}`
+                : `${keyCount} clé${keyCount > 1 ? "s" : ""}`}
           </span>
         </div>
         <button
@@ -214,96 +294,313 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
         </div>
       ) : null}
 
-      {/* + Ajouter une clé */}
+      {/* + Ajouter une clé — avec le détail éditable de l'endpoint */}
       {!provider.keyless ? (
         <>
           <div className="mt-2">
             <AddLine onClick={() => setShowAddKey((v) => !v)}>Ajouter une clé</AddLine>
           </div>
           {showAddKey ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                value={keyLabel}
-                onChange={(e) => setKeyLabel(e.target.value)}
-                placeholder="Étiquette (ex. Perso)"
-                aria-label="Étiquette de la clé"
-                className="h-[32px] w-[150px] rounded-[9px] border border-border bg-background px-2.5 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
-              />
-              <input
-                type="password"
-                value={keySecret}
-                onChange={(e) => setKeySecret(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleAddKey();
-                }}
-                placeholder="Clé (sk-…)"
-                aria-label="Valeur de la clé"
-                className="h-[32px] min-w-[160px] flex-1 rounded-[9px] border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
-              />
-              <button
-                type="button"
-                onClick={handleAddKey}
-                disabled={!keySecret.trim() || addingKey}
-                className="h-[32px] cursor-pointer rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {addingKey ? "Ajout…" : "Ajouter"}
-              </button>
+            <div className="mt-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={keyLabel}
+                  onChange={(e) => setKeyLabel(e.target.value)}
+                  placeholder="Étiquette (ex. Perso)"
+                  aria-label="Étiquette de la clé"
+                  className="h-[32px] w-[150px] rounded-[9px] border border-border bg-background px-2.5 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                />
+                <input
+                  type="password"
+                  value={keySecret}
+                  onChange={(e) => setKeySecret(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleAddKey();
+                  }}
+                  placeholder="Clé (sk-…)"
+                  aria-label="Valeur de la clé"
+                  className="h-[32px] min-w-[160px] flex-1 rounded-[9px] border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddKey}
+                  disabled={!keySecret.trim() || addingKey}
+                  className="h-[32px] cursor-pointer rounded-[9px] bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {addingKey ? "Ajout…" : "Ajouter"}
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="flex-none text-[11px] font-semibold text-muted-foreground">
+                  Endpoint
+                </span>
+                <input
+                  value={keyEndpoint}
+                  onChange={(e) => setKeyEndpoint(e.target.value)}
+                  placeholder="https://…"
+                  aria-label="Endpoint utilisé pour ce fournisseur"
+                  spellCheck={false}
+                  className="h-[30px] min-w-[200px] flex-1 rounded-[9px] border border-border bg-background px-2.5 font-mono text-[11.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                Adresse où Hermes appelle {provider.name} — modifiable, enregistrée avec la clé.
+              </p>
             </div>
           ) : null}
         </>
       ) : null}
 
-      {/* Réglages avancés : ordre d'utilisation des clés (LLM) */}
-      {isLlm && !provider.keyless ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowAdv((v) => !v)}
-            className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
-          >
-            <ChevronDown
-              className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
-              strokeWidth={2.2}
-            />
-            Réglages avancés
-          </button>
-          {showAdv ? (
-            <div className="mt-2 rounded-[10px] bg-muted/60 px-3 py-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[12px] font-medium">
-                  Ordre d&apos;utilisation des clés
-                  <span className="block text-[11px] font-normal text-muted-foreground">
-                    comment choisir la prochaine clé quand il faut changer
-                  </span>
-                </span>
-                <div
-                  role="radiogroup"
-                  aria-label="Ordre d'utilisation des clés"
-                  className="flex flex-none gap-0.5 rounded-[9px] bg-background p-[2.5px]"
+      {/* Réglages avancés : endpoint + ordre d'utilisation des clés */}
+      <button
+        type="button"
+        onClick={() => setShowAdv((v) => !v)}
+        className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+      >
+        <ChevronDown
+          className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
+          strokeWidth={2.2}
+        />
+        Réglages avancés
+      </button>
+      {showAdv ? (
+        <div className="mt-2 rounded-[10px] bg-muted/60 px-3 py-2.5">
+          {/* Endpoint éditable */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[12px] font-medium">
+              Adresse (endpoint)
+              <span className="block text-[11px] font-normal text-muted-foreground">
+                où Hermes appelle ce fournisseur
+              </span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <input
+                value={advEndpoint}
+                onChange={(e) => setAdvEndpoint(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSaveAdvEndpoint();
+                }}
+                placeholder="https://…"
+                aria-label="Adresse (endpoint) du fournisseur"
+                spellCheck={false}
+                className="h-[30px] w-[min(300px,100%)] rounded-[9px] border border-border bg-background px-2.5 font-mono text-[11.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+              />
+              <button
+                type="button"
+                onClick={handleSaveAdvEndpoint}
+                disabled={savingBase || !advEndpoint.trim() || advEndpoint.trim() === endpoint}
+                className="h-[30px] cursor-pointer rounded-[9px] bg-hermes px-2.5 text-[11.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingBase ? "…" : "Enregistrer"}
+              </button>
+              {hasDefault && provider.baseUrl ? (
+                <button
+                  type="button"
+                  onClick={handleResetEndpoint}
+                  disabled={savingBase}
+                  title="Revenir à l'adresse par défaut"
+                  aria-label="Revenir à l'adresse par défaut"
+                  className="flex size-[30px] cursor-pointer items-center justify-center rounded-[9px] border border-border text-muted-foreground transition-colors hover:border-hermes hover:text-hermes focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-60"
                 >
-                  {(Object.keys(STRATEGY_LABELS) as ProviderStrategy[]).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      role="radio"
-                      aria-checked={provider.strategy === s}
-                      title={STRATEGY_LABELS[s].sub}
-                      onClick={() => handleStrategy(s)}
-                      className={cn(
-                        "cursor-pointer rounded-[7px] px-[9px] py-[5px] text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
-                        "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
-                        provider.strategy === s && "bg-card font-semibold text-hermes shadow-sm"
-                      )}
-                    >
-                      {STRATEGY_LABELS[s].label}
-                    </button>
-                  ))}
-                </div>
+                  <RotateCcw className="size-[13px]" strokeWidth={2.2} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Ordre d'utilisation des clés (LLM) */}
+          {isLlm && !provider.keyless ? (
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
+              <span className="text-[12px] font-medium">
+                Ordre d&apos;utilisation des clés
+                <span className="block text-[11px] font-normal text-muted-foreground">
+                  comment choisir la prochaine clé quand il faut changer
+                </span>
+              </span>
+              <div
+                role="radiogroup"
+                aria-label="Ordre d'utilisation des clés"
+                className="flex flex-none gap-0.5 rounded-[9px] bg-background p-[2.5px]"
+              >
+                {(Object.keys(STRATEGY_LABELS) as ProviderStrategy[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    role="radio"
+                    aria-checked={provider.strategy === s}
+                    title={STRATEGY_LABELS[s].sub}
+                    onClick={() => handleStrategy(s)}
+                    className={cn(
+                      "cursor-pointer rounded-[7px] px-[9px] py-[5px] text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
+                      "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
+                      provider.strategy === s && "bg-card font-semibold text-hermes shadow-sm"
+                    )}
+                  >
+                    {STRATEGY_LABELS[s].label}
+                  </button>
+                ))}
               </div>
             </div>
           ) : null}
-        </>
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+// ── Panneau d'ajout : liste à sélectionner (v2.5) ────────────────────
+
+function AddProviderPanel({
+  kind,
+  api,
+  onClose,
+}: {
+  kind: ProviderKind;
+  api: ProvidersApi;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const entries = api.catalog.filter((c) => c.kind === kind);
+  // « __pending__ » le temps que le catalogue arrive du service (socket).
+  const [preset, setPreset] = useState<string>("__pending__");
+  const [endpoint, setEndpoint] = useState<string>("");
+
+  useEffect(() => {
+    if (preset === "__pending__" && entries.length > 0) {
+      setPreset(entries[0].name);
+      setEndpoint(entries[0].defaultBaseUrl ?? "");
+    }
+  }, [preset, entries]);
+
+  const presetValue =
+    preset === "__pending__" ? (entries.length > 0 ? entries[0].name : CUSTOM_VALUE) : preset;
+  const selected = entries.find((e) => e.name === presetValue) ?? null;
+  const isCustom = presetValue === CUSTOM_VALUE;
+  const [adding, setAdding] = useState(false);
+
+  const pick = (value: string) => {
+    setPreset(value);
+    const e = entries.find((x) => x.name === value) ?? null;
+    setEndpoint(e?.defaultBaseUrl ?? "");
+  };
+
+  const handleAdd = async () => {
+    if (adding) return;
+    const address = endpoint.trim();
+    if (isCustom && !/^https?:\/\//i.test(address)) {
+      toast({
+        title: "Adresse requise",
+        description: "Collez l'adresse complète du fournisseur (https://…).",
+        variant: "destructive",
+      });
+      return;
+    }
+    setAdding(true);
+    // Nom : valeur canonique du sélecteur, ou l'adresse collée (custom).
+    // L'endpoint n'est envoyé que s'il diffère du défaut du fournisseur —
+    // non modifié, le canon reste la référence.
+    const name = isCustom ? address : presetValue;
+    const sendBase =
+      isCustom || (selected !== null && address !== (selected.defaultBaseUrl ?? ""))
+        ? address
+        : undefined;
+    const res = await api.addProvider(name, kind, sendBase);
+    setAdding(false);
+    if (res.error) {
+      toast({ title: "Ajout impossible", description: res.error, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: `${res.provider?.name ?? name} ajouté`,
+      description: kind === "llm" ? "Ajoutez maintenant votre clé." : "Ajoutez sa clé.",
+    });
+    onClose();
+  };
+
+  const zaiSelected = selected?.name === "z.ai" || selected?.name === "z.ai Coding Plan";
+
+  return (
+    <div className="mt-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
+      <label
+        htmlFor="add-provider-select"
+        className="block text-[11.5px] font-semibold text-muted-foreground"
+      >
+        {kind === "llm" ? "Fournisseur" : "Service"}
+      </label>
+      <select
+        id="add-provider-select"
+        value={presetValue}
+        onChange={(e) => pick(e.target.value)}
+        className="mt-1 h-[34px] w-full cursor-pointer rounded-[9px] border border-border bg-background px-2.5 text-[13px] outline-none focus-visible:border-hermes"
+      >
+        {preset === "__pending__" ? <option value="">Chargement…</option> : null}
+        <optgroup label={kind === "llm" ? "Fournisseurs connus" : "Services connus"}>
+          {entries.map((e) => (
+            <option key={e.name} value={e.name}>
+              {e.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Autre">
+          <option value={CUSTOM_VALUE}>Adresse personnalisée (https://…)</option>
+        </optgroup>
+      </select>
+
+      {selected ? (
+        <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
+          {selected.tagline}
+        </p>
+      ) : null}
+      {zaiSelected ? (
+        <p className="mt-1.5 rounded-[9px] bg-muted/70 px-2.5 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+          z.ai sépare l&apos;argent en deux portefeuilles étanches : l&apos;API standard se
+          paie au jeton (solde rechargeable), le GLM Coding Plan est un abonnement avec ses
+          propres clés. Une clé ne fonctionne que sur la surface où elle a été créée — en cas
+          de doute, testez la clé : Hermes basculera automatiquement sur le bon portefeuille.
+        </p>
+      ) : null}
+
+      <label
+        htmlFor="add-provider-endpoint"
+        className="mt-2.5 block text-[11.5px] font-semibold text-muted-foreground"
+      >
+        {isCustom ? "Adresse du fournisseur" : "Adresse (endpoint)"}
+      </label>
+      <input
+        id="add-provider-endpoint"
+        value={endpoint}
+        onChange={(e) => setEndpoint(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void handleAdd();
+        }}
+        placeholder="https://…"
+        aria-label="Adresse (endpoint) du fournisseur"
+        spellCheck={false}
+        className="mt-1 h-[32px] w-full rounded-[9px] border border-border bg-background px-2.5 font-mono text-[12px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
+      />
+      {!isCustom ? (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+          Pré-remplie — modifiable (autre surface, proxy, serveur local).
+        </p>
+      ) : null}
+
+      <div className="mt-2.5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-[31px] cursor-pointer rounded-[9px] border border-border px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={adding || (isCustom && !/^https?:\/\//i.test(endpoint.trim()))}
+          className="h-[31px] cursor-pointer rounded-[9px] bg-hermes px-3.5 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {adding ? "Ajout…" : "Ajouter"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -317,29 +614,9 @@ export function ProvidersSection({
   kind: ProviderKind;
   api: ProvidersApi;
 }) {
-  const { toast } = useToast();
-  const [showAdd, setShowAdd] = useState(false);
-  const [name, setName] = useState("");
-  const [adding, setAdding] = useState(false);
   const texts = TEXTS[kind];
+  const [showAdd, setShowAdd] = useState(false);
   const list = api.providers.filter((p) => p.kind === kind);
-
-  const handleAdd = async () => {
-    if (!name.trim() || adding) return;
-    setAdding(true);
-    const res = await api.addProvider(name.trim(), kind);
-    setAdding(false);
-    if (res.error) {
-      toast({ title: "Ajout impossible", description: res.error, variant: "destructive" });
-      return;
-    }
-    setName("");
-    setShowAdd(false);
-    toast({
-      title: `${res.provider?.name ?? name} ajouté`,
-      description: kind === "llm" ? "Ajoutez une première clé." : "Ajoutez sa clé.",
-    });
-  };
 
   return (
     <section>
@@ -361,31 +638,7 @@ export function ProvidersSection({
         <AddLine onClick={() => setShowAdd((v) => !v)}>{texts.addLabel}</AddLine>
       </div>
       {showAdd ? (
-        <div className="mt-2.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleAdd();
-            }}
-            placeholder={texts.addPlaceholder}
-            aria-label={texts.addPlaceholder}
-            className="h-[34px] w-full rounded-[9px] border border-border bg-background px-3 text-[13px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
-          />
-          <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
-            {texts.addHint}
-          </p>
-          <div className="mt-2.5 flex justify-end">
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={!name.trim() || adding}
-              className="h-[31px] cursor-pointer rounded-[9px] bg-hermes px-3.5 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {adding ? "Ajout…" : "Ajouter"}
-            </button>
-          </div>
-        </div>
+        <AddProviderPanel kind={kind} api={api} onClose={() => setShowAdd(false)} />
       ) : null}
 
       {texts.note ? (

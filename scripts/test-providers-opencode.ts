@@ -10,7 +10,12 @@
 //   [M] models:list → liste vivante du faux opencode, libellés lisibles
 //   [T] chat:send → tour réel streamé chez le faux opencode (SSE), clé
 //       Bearer transmise, message persisté avec le modèle du fournisseur
+//   [V] v2.5 — endpoint éditable : providers:set-base avec une adresse
+//       COMPLÈTE (chemin) est honorée telle quelle par le moteur
 // Aucun réseau externe : le faux serveur tourne sur localhost.
+// v2.5 : l'adresse collée en [P] est une ORIGINE seule (proxy) — les
+// chemins canoniques d'opencode sont conservés ; l'adresse AVEC chemin
+// de [V] est, elle, utilisée verbatim (règle du champ « endpoint »).
 import { io } from "socket.io-client";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
@@ -64,12 +69,12 @@ function startMock(): Promise<{ server: Server; sawAuth: string[]; sawBody: any[
   const server = createServer((req, res) => {
     const url = req.url ?? "";
     sawAuth.push(String(req.headers.authorization ?? ""));
-    if (req.method === "GET" && (url === "/inference/v1/models" || url === "/inference/openai/v1/models")) {
+    if (req.method === "GET" && (url === "/inference/v1/models" || url === "/inference/openai/v1/models" || url === "/v1/models")) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(MODELS_BODY));
       return;
     }
-    if (req.method === "POST" && url === "/inference/openai/v1/chat/completions") {
+    if (req.method === "POST" && (url === "/inference/openai/v1/chat/completions" || url === "/v1/chat/completions")) {
       let raw = "";
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
@@ -200,7 +205,7 @@ async function main() {
       const add = await emitAck(socket, "providers:add", {
         name: "https://opencode.ai/inference/openai/v1", // adresse collée
         kind: "llm",
-        baseUrl: `http://localhost:${MOCK_PORT}/v1`, // remplace par le faux serveur
+        baseUrl: `http://localhost:${MOCK_PORT}`, // origine seule (proxy) : chemins canoniques conservés
       });
       providerId = add?.provider?.id ?? null;
       check("ajout par adresse → fournisseur créé", Boolean(providerId), JSON.stringify(add).slice(0, 100));
@@ -210,8 +215,8 @@ async function main() {
         add?.provider?.name
       );
       check(
-        "baseUrl explicite conservée (faux serveur local)",
-        add?.provider?.baseUrl === `http://localhost:${MOCK_PORT}/v1`,
+        "origine explicite conservée (faux serveur local)",
+        add?.provider?.baseUrl === `http://localhost:${MOCK_PORT}`,
         add?.provider?.baseUrl
       );
 
@@ -311,6 +316,27 @@ async function main() {
         "hello après tour : le modèle réel est exposé (opencode)",
         typeof hello2?.model === "string" && hello2.model.includes("opencode"),
         hello2?.model
+      );
+    }
+
+    // ── [V] v2.5 : endpoint éditable, adresse complète honorée ──────
+    console.log("\n[V] Endpoint éditable : adresse avec chemin utilisée telle quelle");
+    {
+      const set = await emitAck(socket, "providers:set-base", {
+        id: providerId,
+        baseUrl: `http://localhost:${MOCK_PORT}/v1`,
+      });
+      check(
+        "set-base avec chemin complet → enregistré tel quel",
+        set?.provider?.baseUrl === `http://localhost:${MOCK_PORT}/v1`,
+        set?.provider?.baseUrl
+      );
+      const models = await emitAck(socket, "models:list");
+      const ids = (models?.models ?? []).map((m: any) => m.id);
+      check(
+        "le moteur appelle /v1/models du faux serveur (verbatim)",
+        models?.source === "providers" && ids.includes("big-pickle"),
+        `${models?.source} · ${ids.join(",")}`
       );
     }
   } catch (err) {

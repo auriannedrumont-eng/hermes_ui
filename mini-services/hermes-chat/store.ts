@@ -1361,6 +1361,17 @@ export class Store {
     return this.getProviderRow(id);
   }
 
+  /** Adresse (endpoint) explicite du fournisseur, v2.5 — null = adresse
+   *  canonique du catalogue. Utilisée par le champ éditable et par la
+   *  bascule automatique de surface z.ai (providers:test-key). */
+  setProviderBaseUrl(id: string, baseUrl: string | null): ProviderRow | null {
+    if (!this.getProviderRow(id)) return null;
+    this.db
+      .query("UPDATE providers SET base_url = ?, updated_at = ? WHERE id = ?")
+      .run(baseUrl, new Date().toISOString(), id);
+    return this.getProviderRow(id);
+  }
+
   listKeyRows(providerId: string): KeyRow[] {
     return this.db
       .query("SELECT * FROM provider_keys WHERE provider_id = ? ORDER BY position ASC, created_at ASC")

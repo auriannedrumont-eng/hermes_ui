@@ -171,7 +171,10 @@ console.log("QA test de clé honnête — solde & quota révélés au test\n");
   check("[5] opencode compte actif : libellé", r.statusLabel === "2 modèles — compte actif", r.statusLabel);
 }
 
-// [6] 429 dès la liste des modèles : la raison du corps est traduite
+// [6] 429 dès la liste des modèles : la raison du corps est traduite.
+//     v2.5 : après le 429 de la surface standard, le test essaie l'AUTRE
+//     portefeuille z.ai (surface coding) — deux appels, et le verdict
+//     reste celui de la première surface quand les deux sont à sec.
 {
   const r = await withRoutes(
     [{ method: "GET", suffix: "/models", status: 429, body: ZAI_1113 }],
@@ -179,7 +182,13 @@ console.log("QA test de clé honnête — solde & quota révélés au test\n");
   );
   check("[6] 429 sur /models : statut exhausted", r.status === "exhausted", JSON.stringify(r));
   check("[6] 429 sur /models : raison traduite", r.statusLabel === "solde insuffisant (recharge requise)", r.statusLabel);
-  check("[6] 429 sur /models : un seul appel", calls.length === 1, `${calls.length} appel(s)`);
+  check(
+    "[6] les DEUX portefeuilles essayés (standard puis coding)",
+    calls.length === 2 &&
+      calls[0].url.endsWith("/api/paas/v4/models") &&
+      calls[1].url.endsWith("/api/coding/paas/v4/models"),
+    calls.map((c) => c.url.replace("https://api.z.ai", "")).join(" → "),
+  );
 }
 
 // [7] Autre fournisseur (OpenRouter) : AUCUNE sonde — zéro risque de dépense
