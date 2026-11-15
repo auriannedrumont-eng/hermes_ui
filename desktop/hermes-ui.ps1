@@ -11,14 +11,26 @@
 # Installation portable automatique :
 #   Au premier demarrage, tout ce qui manque est installe DANS le dossier
 #   hermes (sous-dossier tools\) : Node.js v22 LTS, Bun, Caddy, puis
-#   dependances npm/bun, client Prisma et build de production. Sans admin,
-#   sans registre, sans ecrire hors du dossier : il reste mobile (cle USB
-#   comprise). Les fois suivantes, le double-clic est immediat : nettoyage
+#   dependances npm/bun et build de production. Sans admin, sans registre,
+#   sans ecrire hors du dossier — les caches npm/bun sont AUSSI rediriges
+#   dans tools\ : il reste mobile (cle USB comprise), meme deplace sur une
+#   machine vierge sans Node ni Bun. Les copies de tools\ sont ensuite
+#   preferees a celles du systeme : une fois le dossier rempli, il se
+#   suffit a lui-meme. Les fois suivantes, le double-clic est immediat :
+#   nettoyage
 #   des restes d'une session plantee AVANT toute chose (un ancien serveur
 #   vivant verrouillerait .next et ferait echouer le build), verification
 #   silencieuse des mises a jour GitHub (fusion rapide ; en cas d'ecart
 #   local, sauvegarde des fichiers modifies puis alignement sur GitHub),
 #   dependances/build refaits seulement si necessaire, puis demarrage.
+#
+# Sobriete processeur :
+#   • l interface tourne en build de production ; le mode developpement
+#     (next dev, tres gourmand en CPU) n est qu un repli signale par un
+#     avertissement visible, et son build echoue est retente apres 24 h ;
+#   • surveillance des composants toutes les 15 s, verifications legeres ;
+#   • pile entiere en priorite BASSE (Job Object) : Hermes cede le
+#     processeur a vos autres logiciels des qu ils en ont besoin.
 #
 # Securite de fermeture :
 #   • Tous les processus sont places dans un Job Object noyau avec
@@ -47,12 +59,23 @@ New-Item -ItemType Directory -Force -Path $RuntimeDir, $LogDir | Out-Null
 
 $LauncherLog = Join-Path $LogDir 'launcher.log'
 
+# Rotation du journal : au-dela de ~512 Ko, ne garder que les 2000
+# dernieres lignes (le dossier reste propre apres des mois d utilisation).
+if (Test-Path $LauncherLog) {
+    try {
+        if ((Get-Item $LauncherLog).Length -gt 524288) {
+            (Get-Content $LauncherLog -Tail 2000) | Set-Content -Path $LauncherLog -Encoding UTF8
+        }
+    } catch { }
+}
+
 # Ports fixes imposes par le client (constantes SERVICE_PORT/FILES_PORT)
 $ChatPort = 3003; $FilesPort = 3004
 # Ordre de preference pour les ports mobiles
 $GwPorts = @(81, 8081, 8181, 18081)
 $UiPorts = @(3000, 3001, 3002, 3005)
 $MaxRestarts = 3
+$Script:SupCycle = 0   # cycle de surveillance courant (voir Supervise-One)
 
 # Marqueurs d'arbre de processus (separateurs Windows/Unix toleres)
 $MChat = 'index\.ts|hermes-chat'
@@ -226,10 +249,17 @@ public class JobKill {
 "@
         }
         $info = New-Object 'JobKill+JOBOBJECT_BASIC_LIMIT_INFORMATION'
-        $info.LimitFlags = 0x2000   # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        # 0x2000 = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (arbre tue si le
+        # lanceur meurt) ; 0x40 = JOB_OBJECT_LIMIT_PRIORITY_CLASS (la
+        # priorite fixee ci-dessous s applique a toute la pile).
+        # 0x4000 = BELOW_NORMAL_PRIORITY_CLASS : Hermes cede le processeur
+        # a vos autres logiciels des qu ils en ont besoin (machine moins
+        # chaude, ventilateurs plus discrets).
+        $info.LimitFlags = 0x2000 -bor 0x40
+        $info.PriorityClass = 0x4000
         $Script:JobHandle = [JobKill]::CreateJobObject([IntPtr]::Zero, $null)
         [void][JobKill]::SetInformationJobObject($Script:JobHandle, 1, [ref]$info, [Runtime.InteropServices.Marshal]::SizeOf($info))
-        Log "• Job Object noyau actif (arbre entier arrete si cette fenetre se ferme)"
+        Log "• Job Object noyau actif (arbre entier arrete si cette fenetre se ferme ; priorite basse : Hermes cede le processeur a vos autres logiciels)"
     } catch {
         Log "• ATTENTION : Job Object indisponible ($($_.Exception.Message)) — fermeture via Ctrl-C recommandee"
     }
@@ -436,16 +466,25 @@ function Update-FromGit {
 }
 
 # ── Installation portable automatique (tout dans <projet>\tools\) ───────
-# Ordre de resolution pour chaque outil : 1) deja sur le PATH systeme,
-# 2) deja installe dans tools\ (installation portable precedente),
-# 3) telecharge puis installe dans tools\ — sans admin, sans registre,
-# sans toucher au systeme : le dossier hermes reste autonome et mobile
-# (disque externe ou cle USB compris).
+# Ordre de resolution pour chaque outil : 1) deja installe dans tools\
+# (installation portable precedente : le dossier se suffit a lui-meme),
+# 2) telecharge puis installe dans tools\ — MEME si le systeme possede
+# deja l outil, pour que le dossier reste complet une fois deplace sur
+# une machine vierge ; 3) a defaut de reseau, copie du PATH systeme.
+# Sans admin, sans registre, sans toucher au systeme : le dossier hermes
+# reste autonome et mobile (disque externe ou cle USB compris).
 $ToolsDir   = Join-Path $Root 'tools'
 $NodeVer    = 'v22.20.0'    # LTS ; Next 16 exige Node >= 20.9
 $NodeZipUrl = "https://nodejs.org/dist/$NodeVer/node-$NodeVer-win-x64.zip"
 $BunZipUrl  = 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip'
 $CaddyExeUrl= 'https://caddyserver.com/api/download?os=windows&arch=amd64'   # renvoie l'exe directement
+
+# Tout ce que les outils ecrivent reste DANS le dossier : les caches npm
+# et bun (qui vivent par defaut dans le profil Windows) sont rediriges
+# vers tools\, et la telemetrie de Next.js est desactivee.
+$env:npm_config_cache      = Join-Path $ToolsDir 'npm-cache'
+$env:BUN_INSTALL_CACHE_DIR = Join-Path $ToolsDir 'bun-cache'
+$env:NEXT_TELEMETRY_DISABLED = '1'
 
 # Repertoire de tools\<outil>\ contenant l'exe (1 niveau de sous-dossier
 # tolere : les zips s'extraient dans un sous-dossier nomme par l'editeur)
@@ -480,15 +519,36 @@ function Install-ZipTool([string]$toolName, [string]$url, [string]$exe) {
     Expand-Archive -Path $zip -DestinationPath $dest -Force
     Remove-Item $zip -Force -ErrorAction SilentlyContinue
     $d = Find-ExeDir $toolName $exe
-    if (-not $d) { Die "$toolName telecharge mais $exe est introuvable dans l'archive — effacez $dest et reessayez" }
+    if (-not $d) { throw "$toolName telecharge mais $exe est introuvable dans l'archive — effacez $dest et reessayez" }
     return $d
 }
 function Install-ExeTool([string]$toolName, [string]$url, [string]$exe) {
     $dest = Join-Path $ToolsDir $toolName
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    $final = Join-Path $dest $exe
+    $part  = "$final.part"
     Log "  telechargement de $toolName (une seule fois)..."
-    Invoke-Download $url (Join-Path $dest $exe)
+    # telecharge en .part puis renomme : un telechargement interrompu ne
+    # laissera jamais un exe incomplet qui serait pris pour le bon au
+    # demarrage suivant.
+    Invoke-Download $url $part
+    Move-Item -Path $part -Destination $final -Force
     return $dest
+}
+
+# Resout un outil : copie portable de tools\ si presente, sinon
+# telechargement dans tools\ ; renvoie '' si le telechargement echoue
+# (l appelant se rabattra sur la copie systeme eventuelle).
+function Resolve-Tool([string]$toolName, [string]$exe, [string]$url, [bool]$isZip) {
+    $d = Get-ToolDir $toolName $exe
+    if ($d) { return $d }
+    try {
+        if ($isZip) { return (Install-ZipTool $toolName $url $exe) }
+        return (Install-ExeTool $toolName $url $exe)
+    } catch {
+        Log "  telechargement de $toolName impossible ($($_.Exception.Message)) — essai avec l outil du systeme s il existe"
+        return ''
+    }
 }
 # Execute une commande en affichant sa sortie EN DIRECT dans la fenetre
 # (installations, build) puis renvoie son code de sortie.
@@ -502,9 +562,9 @@ function Invoke-Live([string]$file, [string[]]$argList, [string]$workDir) {
 function Ensure-PortableSetup {
     $needInstall = -not (Test-Path (Join-Path $Root 'node_modules')) -or
                    -not (Test-Path (Join-Path $Root 'mini-services\hermes-chat\node_modules')) -or
-                   -not ((Get-ToolDir 'node' 'node.exe') -or (Test-Command 'node')) -or
-                   -not ((Get-ToolDir 'bun' 'bun.exe') -or (Test-Command 'bun')) -or
-                   -not ((Get-ToolDir 'caddy' 'caddy.exe') -or (Test-Command 'caddy'))
+                   -not (Get-ToolDir 'node' 'node.exe') -or
+                   -not (Get-ToolDir 'bun' 'bun.exe') -or
+                   -not (Get-ToolDir 'caddy' 'caddy.exe')
     if ($needInstall) {
         Write-Host ''
         Write-Host '  ═══ PREMIER DEMARRAGE : installation automatique ═══'
@@ -517,33 +577,27 @@ function Ensure-PortableSetup {
     New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
 
     # ── 1. Node.js (node + npm vivent dans le meme dossier) ──
-    $nodeDir = ''
-    if (Test-Command 'node') {
+    # tools\ d abord (dossier autonome), telechargement sinon, copie
+    # systeme en tout dernier recours (reseau absent).
+    $nodeDir = Resolve-Tool 'node' 'node.exe' $NodeZipUrl $true
+    if (-not $nodeDir -and (Test-Command 'node')) {
         $npmHit = Get-Command 'npm.cmd' -ErrorAction SilentlyContinue
         if ($npmHit) { $nodeDir = Split-Path -Parent $npmHit.Source }
     }
-    if (-not $nodeDir) {
-        $nodeDir = Get-ToolDir 'node' 'node.exe'
-        if (-not $nodeDir) { $nodeDir = Install-ZipTool 'node' $NodeZipUrl 'node.exe' }
-    }
+    if (-not $nodeDir) { Die "Node.js (avec npm) introuvable : telechargement impossible et node complet absent du systeme" }
     $npmCmd = Join-Path $nodeDir 'npm.cmd'
     if (-not (Test-Path $npmCmd)) { Die "npm.cmd introuvable dans $nodeDir" }
     if (-not (Test-Path (Join-Path $nodeDir 'node.exe'))) { Die "node.exe introuvable dans $nodeDir" }
 
     # ── 2. Bun ──
-    $bunDir = ''
-    if (Test-Command 'bun') { $bunDir = Split-Path -Parent (Get-Command 'bun').Source }
-    if (-not $bunDir) {
-        $bunDir = Get-ToolDir 'bun' 'bun.exe'
-        if (-not $bunDir) { $bunDir = Install-ZipTool 'bun' $BunZipUrl 'bun.exe' }
-    }
+    $bunDir = Resolve-Tool 'bun' 'bun.exe' $BunZipUrl $true
+    if (-not $bunDir -and (Test-Command 'bun')) { $bunDir = Split-Path -Parent (Get-Command 'bun').Source }
+    if (-not $bunDir) { Die "Bun introuvable : telechargement impossible et bun absent du systeme" }
+
     # ── 3. Caddy ──
-    $caddyDir = ''
-    if (Test-Command 'caddy') { $caddyDir = Split-Path -Parent (Get-Command 'caddy').Source }
-    if (-not $caddyDir) {
-        $caddyDir = Get-ToolDir 'caddy' 'caddy.exe'
-        if (-not $caddyDir) { $caddyDir = Install-ExeTool 'caddy' $CaddyExeUrl 'caddy.exe' }
-    }
+    $caddyDir = Resolve-Tool 'caddy' 'caddy.exe' $CaddyExeUrl $false
+    if (-not $caddyDir -and (Test-Command 'caddy')) { $caddyDir = Split-Path -Parent (Get-Command 'caddy').Source }
+    if (-not $caddyDir) { Die "Caddy introuvable : telechargement impossible et caddy absent du systeme" }
 
     # PATH de session : les outils portables (sous tools\) passes devant,
     # pour ce lanceur et tous ses processus enfants
@@ -589,20 +643,28 @@ function Ensure-Build([string]$nodeDir) {
     if (Test-Path (Join-Path $Root '.next\standalone\server.js')) { return }
     $flag = Join-Path $ToolsDir 'build-echoue.flag'
     if (Test-Path $flag) {
-        # Le marqueur memorise la revision git qui avait echoue : pas de
-        # reprise en boucle pour une meme version, mais une version nouvelle
-        # (apres mise a jour, ou marqueur ancien sans revision) a droit a
-        # une nouvelle tentative — au redemarrage suivant, le marqueur se
-        # reecrit avec la revision : le retentatif reste donc borne.
-        $flagRev = ''
-        try { $flagRev = [string](Get-Content $flag -ErrorAction SilentlyContinue | Select-Object -First 1) } catch { }
+        # Le marqueur memorise la revision git ET l heure de la tentative
+        # qui avait echoue : une meme version ne sera pas retestee en
+        # boucle pendant 24 h, mais une version nouvelle — ou une tentative
+        # vieille de plus de 24 h — a droit a une nouvelle chance. Le mode
+        # developpement qui resulte d un build echoue chauffe fortement le
+        # processeur : il ne doit jamais devenir permanent.
+        $flagLines = @()
+        try { $flagLines = @(Get-Content $flag -ErrorAction SilentlyContinue) } catch { }
+        $flagRev = [string]$flagLines[0]
+        $flagTs = [long]0
+        if ($flagLines.Count -ge 2) { [long]::TryParse([string]$flagLines[1], [ref]$flagTs) | Out-Null }
         $curRev = Get-RepoRevision
-        if ((-not $curRev) -or ($flagRev -and ($flagRev -eq $curRev))) {
-            Log "• build production saute (tentative precedente echouee — effacez $flag pour reessayer)"
+        $sameRev = ($flagRev -and $curRev -and ($flagRev -eq $curRev))
+        $ageH = 99
+        if ($flagTs -gt 0) { $ageH = [math]::Round(([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $flagTs) / 3600.0) }
+        if ($sameRev -and ($ageH -lt 24)) {
+            Log "• build production saute (tentative precedente echouee il y a $ageH h — effacez $flag pour reessayer tout de suite)"
             return
         }
         Remove-Item $flag -Force -ErrorAction SilentlyContinue
-        Log "• build retente : la version a change depuis l echec precedent"
+        if ($sameRev) { Log "• build retente : la tentative precedente date de plus de 24 h" }
+        else { Log "• build retente : la version a change depuis l echec precedent" }
     }
     Log "• build de production de l interface (1 a 3 minutes, une seule fois)..."
     $nextBin = Join-Path $Root 'node_modules\next\dist\bin\next'
@@ -616,8 +678,8 @@ function Ensure-Build([string]$nodeDir) {
         Log "  OK build production pret"
     } else {
         $revForFlag = Get-RepoRevision
-        if ($revForFlag) { Set-Content -Path $flag -Value $revForFlag -Encoding ASCII }
-        else { New-Item -ItemType File -Path $flag -Force | Out-Null }
+        $tsForFlag  = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        Set-Content -Path $flag -Value @($revForFlag, $tsForFlag) -Encoding ASCII
         Log "  ATTENTION build echoue (code $code) — l interface demarrera en mode developpement ; detail dans les messages ci-dessus"
     }
 }
@@ -655,6 +717,16 @@ function Start-Ui {
     } else {
         Log "• demarrage de l'interface (mode developpement) sur :$port..."
         Log "  (le build production automatique a ete saute ou a echoue — voir tools\build-echoue.flag)"
+        Write-Host ''
+        Write-Host '  ╔══════════════════════════════════════════════════════════════════╗' -ForegroundColor Yellow
+        Write-Host '  ║  ATTENTION : interface en mode DEVELOPPEMENT                     ║' -ForegroundColor Yellow
+        Write-Host '  ║  Ce mode sollicite fortement le processeur (ventilateur) et     ║' -ForegroundColor Yellow
+        Write-Host '  ║  ralentit l interface. Le build de production sera retente      ║' -ForegroundColor Yellow
+        Write-Host '  ║  automatiquement (au plus une fois par 24 h). Pour forcer       ║' -ForegroundColor Yellow
+        Write-Host '  ║  maintenant : fermez, effacez tools\build-echoue.flag,          ║' -ForegroundColor Yellow
+        Write-Host '  ║  relancez.                                                        ║' -ForegroundColor Yellow
+        Write-Host '  ╚══════════════════════════════════════════════════════════════════╝' -ForegroundColor Yellow
+        Write-Host ''
         $nextBin = Join-Path $Root 'node_modules\next\dist\bin\next'
         $p = Start-Component 'node' @($nextBin, 'dev', '-p', "$port") $Root 'interface'
         State-Set 'UI_MODE' 'developpement'
@@ -716,10 +788,15 @@ function Stop-All {
 function Supervise-One([string]$name, $healthyFn, $startFn, [string]$pidVar, [string]$ownedVar, [string]$marker, [ref]$strikes) {
     if ((State-Get $ownedVar) -ne '1') { return }
     if (& $healthyFn) {
-        $cpid = 0; [int]::TryParse((State-Get $pidVar), [ref]$cpid) | Out-Null
-        if ($cpid -gt 1 -and -not (Test-OurProcess $cpid)) {
-            Log "• $name repond mais son PID a change -> re-adopte (pas de greve)"
-            State-Set $ownedVar 0
+        # Verification d adoption allegee : une fois par minute environ
+        # (1 cycle sur 4), pas a chaque cycle — les requetes WMI ont un
+        # cout, et la surveillance tourne en continu, machine chaude.
+        if (($Script:SupCycle % 4) -eq 0) {
+            $cpid = 0; [int]::TryParse((State-Get $pidVar), [ref]$cpid) | Out-Null
+            if ($cpid -gt 1 -and -not (Test-OurProcess $cpid)) {
+                Log "• $name repond mais son PID a change -> re-adopte (pas de greve)"
+                State-Set $ownedVar 0
+            }
         }
         return
     }
@@ -736,10 +813,11 @@ function Supervise-One([string]$name, $healthyFn, $startFn, [string]$pidVar, [st
 }
 function Supervise {
     $nGw = 0; $nUi = 0; $nChat = 0
-    Log "Surveillance active (Ctrl-C ou fermeture de cette fenetre = arret propre)."
+    Log "Surveillance active, verifications toutes les 15 s (Ctrl-C ou fermeture de cette fenetre = arret propre)."
     try {
         while ($true) {
-            Start-Sleep -Seconds 5
+            Start-Sleep -Seconds 15
+            $Script:SupCycle++
             Supervise-One 'passerelle'   ${function:Test-GwHealthy}   ${function:Start-Gateway} 'GW_PID'   'GW_OWNED'   $MGw   ([ref]$nGw)
             Supervise-One 'interface'    ${function:Test-UiHealthy}   ${function:Start-Ui}      'UI_PID'   'UI_OWNED'   $MUii  ([ref]$nUi)
             Supervise-One 'mini-service' ${function:Test-ChatHealthy} ${function:Start-Chat}    'CHAT_PID' 'CHAT_OWNED' $MChat ([ref]$nChat)

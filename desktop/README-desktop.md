@@ -19,8 +19,12 @@
   pile.
 
 Le dossier `hermes` est **autonome et mobile** : copiez-le où vous voulez,
-y compris sur un disque externe ou une clé USB — tout vit dedans. Vous
-pouvez le renommer, le déplacer, il fonctionnera.
+y compris sur un disque externe ou une clé USB — tout vit dedans :
+outils (Node, Bun, Caddy), dépendances, build, base de données,
+pièces jointes… et même les **caches npm/bun** (redirigés vers `tools\`,
+rien ne s'écrit dans votre profil Windows). Vous pouvez le renommer, le
+déplacer, le mettre sur une autre machine sans Node préinstallé : il
+fonctionnera. La télémétrie de Next.js est désactivée.
 
 > Note : le fichier `.bat` porte l'icône générique de Windows (limite du
 > format). Si vous préférez le logo Hermes, faites un clic droit sur
@@ -38,10 +42,12 @@ pouvez le renommer, le déplacer, il fonctionnera.
    celui-ci est actualisé (il charge la toute dernière version) et le
    nouvel onglet se referme de lui-même — plus d’onglets qui s’empilent
    (détail ci-dessous, « Un seul onglet »).
-2. Outils manquants → téléchargés et installés dans `tools\` (ordre de
-   préférence : déjà sur le PATH système, sinon déjà dans `tools\`, sinon
-   téléchargement). Node v22.20.0 (LTS) et Bun en zip officiels, Caddy en
-   exe officiel.
+2. Outils → d'abord la **copie portable de `tools\`** si elle existe (le
+   dossier se suffit à lui-même) ; sinon **téléchargement dans `tools\`**
+   — même si l'outil est déjà installé sur le système, pour que le dossier
+   déplacé reste complet ; en cas d'échec du téléchargement, la copie du
+   système est utilisée à défaut. Node v22.20.0 (LTS) et Bun en zip
+   officiels, Caddy en exe officiel.
 3. **Mise à jour automatique** (si le dossier est un clone git) : les
    derniers commits poussés sur GitHub sont récupérés et appliqués par
    fusion rapide. Si le dossier contient des différences locales (anciens
@@ -60,14 +66,19 @@ pouvez le renommer, le déplacer, il fonctionnera.
 5. **Build de production** de l'interface
    (`next build` + copies `static`/`public`, une seule fois — refait
    automatiquement après une mise à jour qui touche le code). Si le build
-   échoue : bascule en mode développement et pose un marqueur
-   `tools\build-echoue.flag` **qui mémorise la version en cause** — une
-   nouvelle version (mise à jour) retente automatiquement le build, la
-   même version ne retente pas en boucle (effacez le fichier pour forcer).
+   échoue : bascule en mode développement avec un **avertissement jaune
+   visible dans la fenêtre** et pose un marqueur `tools\build-echoue.flag`
+   **qui mémorise la version et l'heure de la tentative** — une nouvelle
+   version (mise à jour) retente le build, et une même version est
+   **retentée au bout de 24 h** (jamais en boucle) ; effacez le fichier
+   pour forcer immédiatement.
 6. Démarrage de la pile : mini-service → interface → passerelle, navigateur
    ouvert sur `http://127.0.0.1:81/` (ou 8081/8181… si le port est pris).
 7. Surveillance : un composant qui plante est relancé (3 essais), puis
-   arrêt général propre si ça persiste.
+   arrêt général propre si ça persiste. Vérifications **toutes les 15 s**,
+   volontairement légères (voir « Chaleur du processeur » ci-dessous).
+8. Toute la pile tourne en **priorité basse** (Job Object) : dès qu'un
+   autre logiciel demande du processeur, Hermes lui cède la place.
 
 ### Fermeture — tous les cas couverts
 
@@ -114,6 +125,46 @@ onglets.
 - Aucun processus hors du projet n'est jamais tué : chaque cible est validée
   par le chemin du projet dans sa ligne de commande.
 
+### Déplacer le dossier (mode portable)
+
+Le dossier n'a besoin de **rien d'extérieur** pour fonctionner : ni Node,
+ni Bun, ni Caddy installés sur la machine, ni clé de registre, ni fichier
+dans votre profil. Pour le déplacer :
+
+1. Fermez la fenêtre du lanceur (arrêt propre de la pile).
+2. Déplacez/renommez/copiez le dossier où vous voulez — disque externe,
+   clé USB, autre machine.
+3. Double-cliquez sur `Hermes-Web.bat` : tout redémarre, y compris votre
+   base (conversations, clés, pièces jointes) qui a suivi le dossier.
+
+Seule la mise à jour automatique demande git (jamais bloquant : sans git,
+Hermes démarre avec la version présente). Le premier démarrage sur une
+machine **sans réseau** ne peut pas télécharger les outils manquants :
+ils voyagent dans `tools\` — si le dossier vient d'une machine où ils ont
+déjà été installés, tout fonctionne hors ligne.
+
+### Chaleur du processeur
+
+Hermes est conçu pour rester discret :
+
+- L'interface tourne en **build de production** : au repos, la pile
+  entière consomme moins de 1 % de processeur.
+- La **surveillance** interne fait de simples vérifications toutes les
+  15 s (une requête HTTP par composant, vérification d'appartenance
+  allégée une fois par minute).
+- La pile est en **priorité basse** : vos autres logiciels passent
+  toujours en premier.
+- Le journal du lanceur est **roté** (2000 dernières lignes) : pas de
+  fichier qui grossit indéfiniment.
+
+**Si le processeur chauffe quand même** : la fenêtre du lanceur affiche
+un grand cadre jaune « interface en mode DEVELOPPEMENT » ? C'est la
+cause — le mode développement (utilisé seulement si le build de
+production a échoué) sollicite fortement la machine. Le build sera
+retenté automatiquement dans les 24 h ; pour forcer tout de suite :
+fermez la fenêtre, effacez `tools\build-echoue.flag`, relancez. Si le
+problème persiste, regardez `desktop\logs\launcher.log`.
+
 ---
 
 ## Variantes (facultatives)
@@ -143,11 +194,12 @@ et Caddy via votre gestionnaire de paquets.
 |---|---|
 | « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
 | Téléchargement qui échoue | relancez (idempotent) ; vérifiez la connexion / le proxy |
-| Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` (une nouvelle version retente d'elle-même) |
+| Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` (une nouvelle version retente d'elle-même, une même version est retentée après 24 h) |
 | Mise à jour non appliquée | `desktop\logs\launcher.log` (cause en clair) ; les différences locales sont sauvegardées dans `desktop\runtime\maj-sauvegarde-…\` puis la version GitHub est appliquée. Vos données (conversations, clés) ne sont jamais touchées |
 | Page blanche / erreur | `desktop\logs\interface-err.log` |
 | Chat ne répond pas | `desktop\logs\mini-service-err.log` |
 | Page inaccessible | `desktop\logs\passerelle-err.log` |
+| Processeur chaud / ventilateur | voir « Chaleur du processeur » ci-dessus ; un cadre jaune « mode DEVELOPPEMENT » dans la fenêtre = build de production à retenter (effacez `tools\build-echoue.flag`) |
 | Ports 3003/3004 occupés | `netstat -ano \| findstr "3003 3004"` (Windows) / `ss -tlnp` (Linux) puis libérez-les |
 | Repartir de zéro | effacez `tools\` (outils), `node_modules\`, `.next\` — tout se réinstalle |
 
