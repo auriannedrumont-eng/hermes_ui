@@ -8,6 +8,8 @@
 import { useMemo, useState } from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { Check, ChevronDown, Search, Sparkles, Star, Zap } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -127,17 +129,14 @@ function ExpertPanel({
                   : "défaut"}
               </span>
             </div>
-            <input
-              type="range"
+            <Slider
               min={0}
               max={1}
               step={0.05}
-              value={expert.temperature ?? 0.7}
-              onChange={(e) =>
-                onExpertChange({ temperature: Number(e.target.value) })
-              }
+              value={[expert.temperature ?? 0.7]}
+              onValueChange={([v]) => onExpertChange({ temperature: v })}
               aria-label="Température"
-              className="mt-1 h-1.5 w-full cursor-pointer accent-[var(--hermes)]"
+              className="mt-3 w-full"
             />
             <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
               0 = déterministe · 1 = créatif (le moteur démo refuse au-delà).
@@ -421,31 +420,17 @@ export function ModelPicker({
               <span>Effort de raisonnement</span>
               <span className="text-[11px] font-medium">{effortScaleLabel}</span>
             </div>
-            <div
-              className="flex gap-0.5 rounded-md bg-muted p-[3px]"
-              role="radiogroup"
-              aria-label="Effort de raisonnement"
-            >
-              {efforts.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  role="radio"
-                  aria-checked={e === activeEffort}
-                  onClick={() => {
-                    onEffortChange(e);
-                    writeClientSetting(EFFORT_KEY, e);
-                  }}
-                  className={`flex-1 cursor-pointer rounded-sm border-0 bg-transparent px-2 py-[5px] text-[11px] font-medium capitalize transition-colors ${
-                    e === activeEffort
-                      ? "bg-card font-semibold text-hermes-text shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              ariaLabel="Effort de raisonnement"
+              options={efforts.map((e) => ({ value: e, label: e }))}
+              value={activeEffort}
+              onChange={(e) => {
+                onEffortChange(e);
+                writeClientSetting(EFFORT_KEY, e);
+              }}
+              className="w-full"
+              classNameItem="flex-1 capitalize"
+            />
             <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
               Envoyé dans <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>{" "}
               — ignoré sans dommage si le fournisseur ne le supporte pas.

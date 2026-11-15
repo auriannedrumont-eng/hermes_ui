@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, MessagesSquare, Pencil, Sparkle, Trash2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
@@ -170,20 +171,19 @@ function ConversationsLonguesCard({
               {threshold} %
             </span>
           </div>
-          <input
-            type="range"
+          <Slider
             min={COMPACT_THRESHOLD_MIN}
             max={COMPACT_THRESHOLD_MAX}
             step={5}
-            value={threshold}
-            onChange={(e) =>
+            value={[threshold]}
+            onValueChange={([v]) =>
               writeClientSetting(
                 "hermes.compaction.threshold",
-                clampCompactThreshold(Number(e.target.value))
+                clampCompactThreshold(v)
               )
             }
             aria-label="Seuil du résumé automatique"
-            className="mt-2 w-full accent-[var(--hermes)]"
+            className="mt-3 w-full"
           />
           <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
             Déclenche le résumé à ce niveau de remplissage de la fenêtre. Plus

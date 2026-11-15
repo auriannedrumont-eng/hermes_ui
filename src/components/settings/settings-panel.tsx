@@ -13,7 +13,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTheme } from "next-themes";
 import {
   Cpu,
@@ -37,7 +36,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Segmented } from "@/components/shared/segmented";
 import { Switch } from "@/components/ui/switch";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { InfoTip } from "@/components/settings/info-tip";
 import {
   getSettingDef,
   onSettingsChanged,
@@ -141,44 +143,6 @@ interface SettingsPanelProps {
   webSearchAvailable?: boolean;
 }
 
-// ── Contrôle segmenté (fond muted, pilule active en relief) ──────────
-function Segment({
-  ariaLabel,
-  options,
-  value,
-  onChange,
-}: {
-  ariaLabel: string;
-  options: { value: string; label: string }[];
-  value: string | null;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label={ariaLabel}
-      className="flex flex-none gap-0.5 rounded-md bg-muted p-[2.5px]"
-    >
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={o.value === value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "cursor-pointer rounded-sm px-[9px] py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-all hover:text-foreground",
-            "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
-            o.value === value && "bg-card font-semibold text-hermes-text shadow-sm"
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ── Une ligne de réglage : libellé + description à gauche, contrôle ──
 function SettingRow({
   label,
@@ -251,7 +215,7 @@ function InterfacePane({ projects }: { projects: Project[] }) {
         label="Thème"
         description="L'apparence de l'interface, claire ou sombre."
       >
-        <Segment
+        <Segmented
           ariaLabel="Thème"
           options={[
             { value: "system", label: "Système" },
@@ -446,7 +410,7 @@ function ModelesPane({
         label="Effort de raisonnement"
         description="La profondeur de réflexion avant de répondre — les niveaux proposés dépendent du modèle choisi."
       >
-        <Segment
+        <Segmented
           ariaLabel="Effort de raisonnement"
           options={effortOptions}
           value={activeEffort}
@@ -649,14 +613,13 @@ export function SettingsPanel({
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          className="fixed inset-y-0 left-0 z-50 flex h-app-full w-full flex-col overflow-hidden bg-card shadow-2xl outline-none min-[1100px]:w-[860px] min-[1100px]:flex-row min-[1100px]:rounded-r-[22px] min-[1100px]:border-r min-[1100px]:border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-left data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=closed]:duration-300 data-[state=open]:duration-300"
-        >
-          <DialogPrimitive.Title className="sr-only">Paramètres</DialogPrimitive.Title>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="left"
+        aria-describedby={undefined}
+        className="w-full gap-0 overflow-hidden bg-card p-0 shadow-2xl sm:max-w-none min-[1100px]:w-[860px] min-[1100px]:max-w-none min-[1100px]:flex-row min-[1100px]:rounded-r-[22px] min-[1100px]:border-r min-[1100px]:border-border data-[state=open]:duration-300"
+      >
+        <SheetTitle className="sr-only">Paramètres</SheetTitle>
 
           {/* ── Rail de sections ─────────────────────────────────────── */}
           <nav
@@ -689,7 +652,6 @@ export function SettingsPanel({
                     {id === "extensions" && extUpdate ? (
                       <i
                         className="ml-auto size-[7px] flex-none rounded-full bg-warning max-[1100px]:ml-1"
-                        title="Mise à jour disponible"
                         aria-label="Mise à jour disponible"
                       />
                     ) : null}
@@ -700,18 +662,20 @@ export function SettingsPanel({
             <div className="mt-auto px-2 pt-2 text-[11px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
               {isDemo ? (
                 poolActive ? (
-                  <span className="inline-flex items-center gap-1.5" title="Réponses via l'API de vos fournisseurs">
+                  <span className="inline-flex items-center gap-1.5">
+                    <InfoTip>Les réponses viennent de l'API de vos fournisseurs — vos clés, votre quota.</InfoTip>
                     <i className="size-[6px] rounded-full bg-success" aria-hidden />
                     moteur intégré
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5" title="Réponses simulées par le LLM intégré">
+                  <span className="inline-flex items-center gap-1.5">
+                    <InfoTip>Réponses simulées par le LLM intégré du moteur — aucune clé n'est utilisée.</InfoTip>
                     <i className="size-[6px] rounded-full bg-warning" aria-hidden />
                     mode démo
                   </span>
                 )
               ) : (
-                <span className="inline-flex items-center gap-1.5" title="Gateway Hermes connectée">
+                <span className="inline-flex items-center gap-1.5">
                   <i className="size-[6px] rounded-full bg-success" aria-hidden />
                   gateway
                 </span>
@@ -723,19 +687,7 @@ export function SettingsPanel({
           </nav>
 
           {/* ── Contenu ──────────────────────────────────────────────── */}
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex flex-none justify-end px-5 pt-4 min-[1100px]:px-[34px]">
-              <DialogPrimitive.Close asChild>
-                <button
-                  type="button"
-                  title="Fermer (Échap)"
-                  aria-label="Fermer les paramètres"
-                  className="flex size-[30px] cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
-                >
-                  <X className="size-4" strokeWidth={2} />
-                </button>
-              </DialogPrimitive.Close>
-            </div>
+          <div className="flex min-w-0 flex-1 flex-col pt-4 min-[1100px]:pt-0">
 
             <div
               key={section}
@@ -773,16 +725,15 @@ export function SettingsPanel({
               )}
               {api.pendingEngineCount > 0 ? (
                 <span
-                  title="Modifications moteur pas encore appliquées — pris en compte au prochain redémarrage"
-                  className="ml-auto flex h-6 flex-none cursor-help items-center gap-1 rounded-full bg-hermes/10 px-2.5 text-[11px] font-semibold text-hermes-text"
+                  className="ml-auto flex h-6 flex-none items-center gap-1 rounded-full bg-hermes/10 px-2 text-[11px] font-semibold text-hermes-text"
                 >
                   {api.pendingEngineCount} en attente
+                  <InfoTip>Modifications moteur pas encore appliquées — pris en compte au prochain redémarrage du moteur.</InfoTip>
                 </span>
               ) : null}
             </div>
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -6,8 +6,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Check, FileText, Sparkle, Trash2, X } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { ConversationPrompt, SystemPromptPreset } from "@/lib/chat-types";
 
@@ -59,7 +59,6 @@ export function SystemPromptPanel({
       prompt={prompt}
       presets={presets}
       conversationTitle={conversationTitle}
-      onClose={() => onOpenChange(false)}
       onSave={onSave}
       onClear={onClear}
       onCreatePreset={onCreatePreset}
@@ -67,20 +66,18 @@ export function SystemPromptPanel({
   );
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-50 flex h-app-full w-full flex-col overflow-hidden bg-card shadow-2xl outline-none min-[640px]:w-[460px] min-[640px]:rounded-l-[22px] min-[640px]:border-l min-[640px]:border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-300 data-[state=open]:duration-300"
-        >
-          <DialogPrimitive.Title className="sr-only">
-            Prompt système de la conversation
-          </DialogPrimitive.Title>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        aria-describedby={undefined}
+        className="w-full gap-0 overflow-hidden bg-card p-0 shadow-2xl sm:max-w-none min-[640px]:w-[460px] min-[640px]:max-w-[460px] min-[640px]:rounded-l-[22px] min-[640px]:border-l min-[640px]:border-border data-[state=open]:duration-300"
+      >
+        <SheetTitle className="sr-only">
+          Prompt système de la conversation
+        </SheetTitle>
           {body}
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -89,7 +86,6 @@ function PromptPanelBody({
   prompt,
   presets,
   conversationTitle,
-  onClose,
   onSave,
   onClear,
   onCreatePreset,
@@ -97,7 +93,6 @@ function PromptPanelBody({
   prompt: ConversationPrompt | null;
   presets: SystemPromptPreset[];
   conversationTitle: string | null;
-  onClose: () => void;
   onSave: (content: string, presetTitle?: string | null) => void;
   onClear: () => void;
   onCreatePreset: (title: string, content: string) => Promise<SystemPromptPreset | null>;
@@ -160,15 +155,6 @@ function PromptPanelBody({
             {conversationTitle ?? "Nouvelle conversation"}
           </p>
         </div>
-        <button
-          type="button"
-          title="Fermer (Échap)"
-          aria-label="Fermer le prompt système"
-          onClick={onClose}
-          className="flex size-[30px] cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
-        >
-          <X className="size-4" strokeWidth={2} />
-        </button>
       </div>
 
           {/* ── Corps ──────────────────────────────────────────────── */}
