@@ -1,5 +1,6 @@
-// Sélecteur de modèle — popover cmdk épuré : déclencheur icône seule (✦/A/B +
-// chevron — le modèle choisi vit dans le title et dans l'aria-label), recherche
+// Sélecteur de modèle — popover cmdk épuré : déclencheur au NOM du modèle en
+// cours (+ chevron — à la demande : le nom remplace l'icône ✦ ; pastille A/B
+// en comparaison, suivie du nom du slot), recherche
 // (nom, id, fournisseur — insensible à la casse et aux accents), section Favoris
 // (hermes.models.favorites) alimentée par l'étoile de chaque ligne (bascule ici
 // même — fin du panneau mort « gérés depuis les paramètres »), groupes par
@@ -10,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Command as CommandPrimitive } from "cmdk";
-import { Check, ChevronDown, Search, Sparkles, Star, Zap } from "lucide-react";
+import { Check, ChevronDown, Search, Star, Zap } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
@@ -384,9 +385,9 @@ export function ModelPicker({
       }}
     >
       <PopoverTrigger asChild>
-        {/* Déclencheur icône seule (✦ — ou pastille A/B du mode comparaison) :
-            le modèle choisi vit dans le title et l'aria-label, jamais à côté
-            de l'icône (épuration — même idiome que les actions du fil). */}
+        {/* Déclencheur au nom du modèle en cours (à la demande : le nom
+            remplace l'icône ✦ ; en comparaison, pastille A/B suivie du nom du
+            slot) — le title et l'aria-label restent complets. */}
         <Button
           variant="ghost"
           disabled={busy}
@@ -403,11 +404,14 @@ export function ModelPicker({
           }
         >
           {slotLabel ? (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes-text">
-              {slotLabel}
-            </span>
+            <>
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes-text">
+                {slotLabel}
+              </span>
+              <span className="max-w-[120px] truncate">{label}</span>
+            </>
           ) : (
-            <Sparkles className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
+            <span className="max-w-[160px] truncate">{label}</span>
           )}
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
         </Button>

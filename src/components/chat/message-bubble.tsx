@@ -774,11 +774,6 @@ export function MessageBubble({
                 onConfirm={() => onDelete(message.id)}
               />
             ) : null}
-            {message.model ? (
-              <span className="ml-1 font-mono text-[11px] text-muted-foreground/70">
-                {message.model}
-              </span>
-            ) : null}
           </div>
         ) : null}
       </div>
