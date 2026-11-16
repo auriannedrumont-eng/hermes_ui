@@ -52,6 +52,9 @@ $ErrorActionPreference = 'Stop'
 # ── Chemins ─────────────────────────────────────────────────────────────
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root       = Split-Path -Parent $ScriptDir
+# Chemin du script lanceur lui-meme : sert a detecter un lanceur PERIME en
+# memoire (script sur disque plus recent que son processus — voir Do-Start).
+$LauncherScript = Join-Path $ScriptDir 'hermes-ui.ps1'
 $RuntimeDir = Join-Path $ScriptDir 'runtime'
 $LogDir     = Join-Path $ScriptDir 'logs'
 $StateFile  = Join-Path $RuntimeDir 'state.env'
@@ -1009,14 +1012,40 @@ function Do-Start {
     if (Test-Path $MajFlag) { Remove-Item $MajFlag -Force -ErrorAction SilentlyContinue }
 
     # Pile deja lancee par un lanceur precedent encore vivant ? (reponse
-    # immediate, sans meme verifier les installations)
+    # immediate, sans meme verifier les installations) — SAUF si le lanceur
+    # en memoire est PERIME : le script sur disque a ete modifie APRES son
+    # demarrage (mise a jour GitHub appliquee pendant qu'il tournait). Dans
+    # ce cas une relance du .bat doit REMPLACER le lanceur, pas seulement
+    # ouvrir le navigateur — sinon l'utilisateur relance, croit avoir fait
+    # le necessaire, et la mise a jour suivante reste muette (le vieux
+    # lanceur tourne toujours sans connaitre le journal live).
     $lpid = 0; [int]::TryParse((State-Get 'LAUNCHER_PID'), [ref]$lpid) | Out-Null
     $lproc = Get-ProcById $lpid
     if ($lproc -and ($lproc.CommandLine -match 'hermes-ui\.ps1')) {
-        Log "Pile deja demarree (lanceur pid $lpid) — ouverture du navigateur uniquement."
-        Open-Browser ("http://127.0.0.1:{0}/" -f (State-Get 'GW_PORT'))
-        Write-Host ("Hermes Web est deja lance : http://127.0.0.1:{0}/" -f (State-Get 'GW_PORT'))
-        return
+        $lanceurPerime = $false
+        try {
+            if ($lproc.CreationDate -and (Test-Path $LauncherScript)) {
+                $ageScript = ((Get-Item $LauncherScript).LastWriteTime) - $lproc.CreationDate
+                if ($ageScript.TotalSeconds -gt 5) { $lanceurPerime = $true }
+            }
+        } catch { }
+        if ($lanceurPerime) {
+            Log ("REPRISE EN MAIN : un lanceur perime tourne encore (pid {0}, son script est plus recent sur disque) — arret de l'ancien lanceur et de sa pile, puis redemarrage avec le code a jour." -f $lpid)
+            try { Stop-Process -Id $lpid -Force -ErrorAction SilentlyContinue } catch { }
+            # Le Job Object noyau du lanceur tue l'arbre entier avec lui ;
+            # on laisse Windows souffler avant le nettoyage ci-dessous.
+            Start-Sleep -Seconds 2
+        } else {
+            Log "Pile deja demarree (lanceur pid $lpid) — ouverture du navigateur uniquement."
+            Write-Host ''
+            Write-Host ("  Hermes Web tourne deja (lanceur pid {0}) : http://127.0.0.1:{1}/" -f $lpid, (State-Get 'GW_PORT'))
+            Write-Host '  Rien a relancer. (Pour REMPLACER le lanceur : fermez sa fenetre puis relancez ce fichier.)'
+            Open-Browser ("http://127.0.0.1:{0}/" -f (State-Get 'GW_PORT'))
+            # Fenetre double-clic : sans pause elle se ferme avant d'avoir
+            # ete lue — l'utilisateur croyait avoir relance le lanceur.
+            Start-Sleep -Seconds 8
+            return
+        }
     }
 
     # Verrou perime (plantage precedent) : nettoie les restes eventuels
@@ -1051,6 +1080,13 @@ function Do-Start {
     [void](Start-Ui)
     [void](Start-Gateway)
     if ($MajDepuisInterface) {
+        # Le lanceur lui-meme fait-il partie de ce qui vient d'etre recu ?
+        # Dans ce cas il CONTINUE de tourner en memoire avec l'ancien code :
+        # la prochaine mise a jour serait muette tant qu'on ne le relance pas.
+        if (Test-FilesChanged @('desktop/hermes-ui.ps1', 'desktop/hermes-ui.sh', 'Hermes-Web.bat', 'desktop/Hermes-Web.bat')) {
+            Write-MajLog "remarque - le lanceur lui-meme a ete mis a jour : fermez sa fenetre puis relancez Hermes-Web.bat (une seule fois) pour que les PROCHAINES mises a jour s'affichent en direct."
+            Log "• le lanceur lui-meme a ete mis a jour — fermez sa fenetre puis relancez Hermes-Web.bat (une seule fois) pour que les prochaines mises a jour s'affichent en direct."
+        }
         Write-MajLog "MAJ OK - pile relancee, rafraichissez l'onglet Hermes (F5) pour charger la nouvelle version."
         Log "• pile relancee apres mise a jour — rafraichissez votre onglet Hermes (F5) pour charger la nouvelle version."
     } else {

@@ -385,14 +385,32 @@ do_start() {
     maj_log "GitHub injoignable — version locale conservée"
   fi
 
-  # Pile déjà lancée par un lanceur précédent encore vivant ?
-  local pid
+  # Pile déjà lancée par un lanceur précédent encore vivant ? — SAUF si le
+  # lanceur en mémoire est périmé : le script sur disque a été modifié APRÈS
+  # son démarrage (mise à jour GitHub appliquée pendant qu'il tournait). Une
+  # relance doit alors le REMPLACER, pas seulement ouvrir le navigateur —
+  # sinon la mise à jour suivante reste muette (le vieux lanceur ne connaît
+  # pas le journal live).
+  local pid debut scriptmt
   pid="$(state_get LAUNCHER_PID)"
   if pid_alive "$pid" && our_process "$pid" && grep -aq "hermes-ui" "/proc/$pid/cmdline" 2>/dev/null; then
-    log "Pile déjà démarrée (lanceur pid $pid) — ouverture du navigateur uniquement."
-    open_browser "http://127.0.0.1:$(state_get GW_PORT)/"
-    echo "Hermes Web est déjà lancé : http://127.0.0.1:$(state_get GW_PORT)/"
-    return 0
+    # Début du processus (epoch) : /proc/PID (ctime = démarrage) — Linux
+    # uniquement ; sans cette donnée, comportement simple conservé.
+    debut="$(stat -c %Y "/proc/$pid" 2>/dev/null || true)"
+    scriptmt="$(stat -c %Y "$0" 2>/dev/null || true)"
+    if [ -n "$debut" ] && [ -n "$scriptmt" ] && [ $((scriptmt - debut)) -gt 5 ]; then
+      log "REPRISE EN MAIN : un lanceur périmé tourne encore (pid $pid, son script est plus récent sur disque) — arrêt de l'ancien lanceur et de sa pile, puis redémarrage avec le code à jour."
+      kill "$pid" 2>/dev/null || true
+      sleep 2
+      if pid_alive "$pid"; then kill -9 "$pid" 2>/dev/null || true; sleep 1; fi
+    else
+      log "Pile déjà démarrée (lanceur pid $pid) — ouverture du navigateur uniquement."
+      open_browser "http://127.0.0.1:$(state_get GW_PORT)/"
+      echo "Hermes Web est déjà lancé : http://127.0.0.1:$(state_get GW_PORT)/"
+      echo "  Rien à relancer. (Pour REMPLACER le lanceur : fermez sa fenêtre puis relancez ce fichier.)"
+      sleep 8
+      return 0
+    fi
   fi
   # Verrou périmé (plantage sauvage précédent) : nettoie les restes éventuels
   if [ -f "$STATE_FILE" ]; then
@@ -417,6 +435,13 @@ do_start() {
   start_ui
   start_gateway
   if [ "${SANS_NAVIGATEUR:-0}" = "1" ]; then
+    # Le lanceur lui-même fait-il partie de ce qui vient d'être reçu ? Dans
+    # ce cas il continue de tourner en mémoire avec l'ancien code : la
+    # prochaine mise à jour serait muette tant qu'on ne le relance pas.
+    if [ -n "$avant" ] && [ -n "$apres" ] && git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -q '^desktop/hermes-ui\.sh'; then
+      maj_log "remarque - le lanceur lui-même a été mis à jour : fermez sa fenêtre puis relancez Hermes-Web.sh (une seule fois) pour que les PROCHAINES mises à jour s'affichent en direct."
+      log "• le lanceur lui-même a été mis à jour — fermez sa fenêtre puis relancez Hermes-Web.sh (une seule fois)."
+    fi
     maj_log "MAJ OK - pile relancée, rafraîchissez l'onglet Hermes (F5) pour charger la nouvelle version."
     log "• pile relancée après mise à jour — rafraîchissez votre onglet Hermes (F5) pour charger la nouvelle version."
   else

@@ -56,6 +56,15 @@ function majVerdict(text: string): null | "ok" | "erreur" {
   return null;
 }
 
+/** Dernière ligne non vide du journal — contexte du chien de garde : une
+ *  attente après « consultation de GitHub » est normale (fenêtre de connexion
+ *  Git Credential Manager la première fois), elle ne prouve pas un lanceur
+ *  mort. */
+function majDerniereLigne(text: string): string {
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  return lines[lines.length - 1] ?? "";
+}
+
 export function SystemSection({
   mode,
   engineProviders = null,
@@ -93,6 +102,14 @@ export function SystemSection({
   const consoleRef = useRef<HTMLPreElement | null>(null);
   const majLastChangeRef = useRef(0);
   const majActif = majLog !== null && majDone === null;
+  // Chien de garde contextualisé : la dernière étape connue du journal.
+  const majAttendGitHub =
+    majLog !== null && majDerniereLigne(majLog).includes("GitHub");
+  // La mise à jour a remplacé le script du lanceur LUI-MÊME (Windows l'écrit
+  // sans accents « lanceur lui-meme », Linux l'écrit accentué) : il tourne
+  // encore avec l'ancien code jusqu'à sa relance — sans elle, la prochaine
+  // demande de mise à jour serait muette.
+  const majLanceurPerime = majLog !== null && majLog.includes("lanceur lui-m");
 
   const majFetch = useCallback(() => {
     getSocket().emit(
@@ -344,13 +361,23 @@ export function SystemSection({
               {majLog}
             </pre>
             {majDone === "ok" ? (
-              <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-success" role="status">
-                <Check className="mt-0.5 size-[13px] flex-none" strokeWidth={2.5} />
-                <span>
-                  Mise à jour terminée — rechargez la page pour charger la nouvelle
-                  interface.
-                </span>
-              </p>
+              <>
+                <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-success" role="status">
+                  <Check className="mt-0.5 size-[13px] flex-none" strokeWidth={2.5} />
+                  <span>
+                    Mise à jour terminée — rechargez la page pour charger la nouvelle
+                    interface.
+                  </span>
+                </p>
+                {majLanceurPerime ? (
+                  <p className="mt-1.5 text-[11px] font-medium text-warning" role="status">
+                    Le lanceur lui-même a été mis à jour mais tourne encore avec
+                    l&apos;ancien code : fermez sa fenêtre puis relancez Hermes-Web.bat
+                    une fois — sans cela, la PROCHAINE mise à jour s&apos;exécutera en
+                    silence (console vide).
+                  </p>
+                ) : null}
+              </>
             ) : majDone === "erreur" ? (
               <p className="mt-2 text-[11px] font-medium text-destructive" role="alert">
                 Échec de la mise à jour — le détail complet est dans la fenêtre du lanceur.
@@ -361,12 +388,24 @@ export function SystemSection({
                 Services relancés par la mise à jour — reconnexion en cours…
               </p>
             ) : majStale ? (
-              <p className="mt-2 text-[11px] font-medium text-warning" role="alert">
-                Le lanceur ne réagit pas (aucune étape nouvelle depuis 45&nbsp;s) — il date
-                probablement d&apos;avant cette fonction. Fermez sa fenêtre, relancez
-                Hermes-Web.bat une fois (il se met à jour lui-même au démarrage), puis
-                redemandez la mise à jour ici.
-              </p>
+              majAttendGitHub ? (
+                <p className="mt-2 text-[11px] font-medium text-warning" role="alert">
+                  Le lanceur consulte GitHub depuis 45&nbsp;s — une fenêtre de connexion
+                  GitHub est peut-être ouverte (la première fois seulement) : répondez-y
+                  pour laisser la mise à jour continuer. Pas de fenêtre&nbsp;? Fermez la
+                  fenêtre du lanceur, relancez Hermes-Web.bat, puis redemandez la mise à
+                  jour ici.
+                </p>
+              ) : (
+                <p className="mt-2 text-[11px] font-medium text-warning" role="alert">
+                  Le lanceur ne réagit pas (aucune étape nouvelle depuis 45&nbsp;s) — il
+                  date probablement d&apos;avant cette fonction. La mise à jour a peut-être
+                  quand même abouti : attendez une minute puis rechargez la page (F5).
+                  Sinon, fermez la fenêtre du lanceur puis relancez Hermes-Web.bat —
+                  désormais la relance remplace un lanceur périmé même s&apos;il tourne
+                  encore — et redemandez la mise à jour ici.
+                </p>
+              )
             ) : (
               <p className="mt-2 text-[11px] text-muted-foreground" role="status">
                 Mise à jour en cours — les étapes apparaissent ici en direct (1 à 2 min,
