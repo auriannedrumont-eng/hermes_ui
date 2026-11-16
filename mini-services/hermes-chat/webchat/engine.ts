@@ -61,12 +61,9 @@ export function readWebchatConfig(store: WebchatSettingsReader): WebchatConfig {
 }
 
 // ── Options de modèles (fournisseur « Chats IA web ») ───────────────────
-
-/** Ce que ces modèles ne savent PAS faire (spec §6) — dit dans l'interface. */
-const LIMITATIONS =
-  "Pilote un vrai navigateur : réponse en un bloc (20 s à 4 min), aucun appel " +
-  "d'outil, aucune mémoire entre deux tours (chaque tour repart d'une page " +
-  "neuve), aucun accès au dépôt.";
+// Épuré : ni description ni pavé de limites ici — l'interface les dit une
+// seule fois (bloc « Pilotage navigateur » du sélecteur, spec pilotage §6),
+// pas répétés sur chaque ligne.
 
 export function webchatModelOptions(): ModelOption[] {
   const out: ModelOption[] = [];
@@ -76,7 +73,6 @@ export function webchatModelOptions(): ModelOption[] {
         id: webchatModelId(fiche.id, mode),
         label: `${fiche.label} — ${modeLabel(mode)}`,
         provider: WEBCHAT_PROVIDER_LABEL,
-        description: LIMITATIONS,
         // Un site non vérifié : INDISPONIBLE, affiché comme tel.
         ...(fiche.verifie ? {} : { available: false } as Partial<ModelOption>),
         webchat: true,

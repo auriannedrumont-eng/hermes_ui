@@ -1,17 +1,19 @@
 // Sélecteur de modèle — popover cmdk épuré : déclencheur au NOM du modèle en
-// cours (+ chevron — à la demande : le nom remplace l'icône ✦ ; pastille A/B
-// en comparaison, suivie du nom du slot), recherche
-// (nom, id, fournisseur — insensible à la casse et aux accents), section Favoris
-// (hermes.models.favorites) alimentée par l'étoile de chaque ligne (bascule ici
-// même — fin du panneau mort « gérés depuis les paramètres »), groupes par
-// fournisseur, échelle d'effort portée par le modèle (repli générique
-// off·low·medium·high·max) et mode expert (F-22). Les notes explicatives vivent
-// dans l'InfoTip — idiome unique du repo.
+// cours (+ chevron ; pastille A/B en comparaison, suivie du nom du slot),
+// recherche (nom, id, fournisseur — insensible à la casse et aux accents),
+// section Favoris (hermes.models.favorites) alimentée par l'étoile de chaque
+// ligne (bascule ici même), groupes par fournisseur, échelle d'effort portée
+// par le modèle (repli générique off·low·medium·high·max) et mode expert
+// (F-22). Épuration : ni id mono ni pavé de limites répété sur chaque ligne.
+// Les modèles « chats IA web » forment une section à part, en fin de liste
+// (globe + séparateur) — et quand l'un d'eux est sélectionné, ses limites
+// sont dites UNE seule fois, dans le bloc du bas qui remplace l'effort.
+// Les notes restantes vivent dans l'InfoTip — idiome unique du repo.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { Command as CommandPrimitive } from "cmdk";
-import { Check, ChevronDown, Search, Star, Zap } from "lucide-react";
+import { Check, ChevronDown, Globe, Search, Star, Zap } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
@@ -260,17 +262,19 @@ export function ModelPicker({
   );
   const favoriteIdSet = useMemo(() => new Set(favorites.map((m) => m.id)), [favorites]);
 
-  // ── Groupes : par fournisseur en gateway ou en pool vivant (v2.3) ──
-  // Le fournisseur « Chats IA web » force aussi le regroupement : il est à
-  // part (pas un modèle du moteur) et doit se voir (spec pilotage §6).
-  // En grouped, le fournisseur porte le titre de section : la ligne mono ne
-  // le répète pas. En flat (catalogue/moteur local), une seule section : il complète l'id.
+  // ── Groupes : par fournisseur dès que la source les expose (gateway,
+  // pool vivant) ou qu'au moins deux fournisseurs coexistent — l'info doit
+  // rester lisible dans les titres de section, la ligne id mono est tombée.
   const byProvider =
     (source === "gateway" && mode === "gateway") ||
     source === "providers" ||
-    list.some((m) => m.webchat);
+    new Set(
+      filtered.filter((m) => !m.webchat).map((m) => m.provider || "Gateway")
+    ).size > 1;
   const grouped = useMemo(() => {
-    const rest = filtered.filter((m) => !favoriteIdSet.has(m.id));
+    const rest = filtered.filter(
+      (m) => !favoriteIdSet.has(m.id) && !m.webchat
+    );
     if (byProvider) {
       const groups = new Map<string, ModelOption[]>();
       for (const m of rest) {
@@ -283,21 +287,20 @@ export function ModelPicker({
     return rest.length ? [["", rest] as [string, ModelOption[]]] : [];
   }, [filtered, favoriteIdSet, byProvider]);
 
-  const providers = useMemo(
-    () => new Set(filtered.map((m) => m.provider || "Gateway")),
-    [filtered]
+  // ── Chats IA web : section à part, toujours en fin de liste (spec
+  // pilotage §6 — pas des modèles du moteur, ils doivent se repérer d'un
+  // coup d'œil). Les favoris restent exclus de la section d'origine. ──
+  const webchatRest = useMemo(
+    () => filtered.filter((m) => m.webchat && !favoriteIdSet.has(m.id)),
+    [filtered, favoriteIdSet]
   );
+  const webchatProvider = webchatRest[0]?.provider || "Chats IA web";
 
   // ── Échelle d'effort : portée par le modèle, repli générique ───────────
   // Les modèles « chats IA web » ne portent ni effort ni mode expert : le
   // tour part sur le navigateur du site, pas sur une API réglable.
   const isWebchatCurrent = current?.webchat === true;
   const efforts = current?.efforts?.length ? current.efforts : GENERIC_EFFORTS;
-  const effortScaleLabel = current?.effortLabel
-    ? `Échelle : ${current.effortLabel}`
-    : source === "gateway" && mode === "gateway" && current?.provider
-      ? `Échelle : ${current.provider}`
-      : "Échelle : générique";
   const activeEffort = effort && efforts.includes(effort) ? effort : null;
 
   const pick = (id: string) => {
@@ -357,9 +360,6 @@ export function ModelPicker({
               {m.description}
             </span>
           ) : null}
-          <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground/70">
-            {byProvider ? m.id : `${m.id} · ${m.provider}`}
-          </span>
         </span>
         {/* Étoile favori : révélée au survol / sélection / focus, pleine si
             favorite. Clic et Entrée/Espace isolés de cmdk (sinon la ligne
@@ -488,22 +488,33 @@ export function ModelPicker({
                 <CommandGroup key="__flat">{groupModels.map(renderModel)}</CommandGroup>
               )
             )}
+
+            {/* Chats IA web : section séparée (globe + filet) — jamais mêlée
+                aux modèles du moteur, toujours après eux. */}
+            {webchatRest.length > 0 ? (
+              <CommandGroup
+                key={`webchat-${webchatProvider}`}
+                heading={
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="h-3 w-3" />
+                    {webchatProvider}
+                  </span>
+                }
+                className="mt-1 border-t border-border/60"
+              >
+                {webchatRest.map(renderModel)}
+              </CommandGroup>
+            ) : null}
           </CommandList>
 
-          <p className="flex items-center gap-1.5 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground">
-            <span>
-              {filtered.length}
-              {filtered.length > 1 ? " modèles" : " modèle"} · {providers.size}
-              {providers.size > 1 ? " fournisseurs" : " fournisseur"}
-            </span>
-            <InfoTip>
-              {source === "gateway" && mode === "gateway"
-                ? "Modèles exposés par la gateway Hermes."
-                : source === "providers"
-                  ? "Modèles vivants de vos clés — Paramètres → Fournisseurs & clés."
-                  : "Catalogue Hermes — ajoutez une clé dans Paramètres pour des modèles vivants."}
-            </InfoTip>
-          </p>
+          {/* Source dégradée seulement : le catalogue statique mérite un mot
+              — ni compteur ni redite dans les cas normaux (épuration). */}
+          {source === "catalogue" ? (
+            <p className="border-t border-border/60 px-3.5 py-2 text-[11px] leading-snug text-muted-foreground">
+              Catalogue statique — ajoutez une clé (Paramètres → Fournisseurs
+              &amp; clés) pour des modèles vivants.
+            </p>
+          ) : null}
 
           {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné.
               Un modèle « chat IA web » n'en porte pas : à sa place, ce que ce
@@ -511,37 +522,31 @@ export function ModelPicker({
           <div className={bare ? "hidden" : "border-t border-border/60 px-3.5 py-2.5"}>
             {isWebchatCurrent ? (
               <div>
-                <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    Pilotage navigateur
-                    <InfoTip>
-                      Le tour part sur une page réelle du site, conduite par le
-                      service — pas sur une API. Les réglages d'effort et du mode
-                      expert ne s'appliquent pas ici.
-                    </InfoTip>
-                  </span>
-                  <span className="text-[11px] font-medium">Chats IA web</span>
+                <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                  Pilotage navigateur
+                  <InfoTip>
+                    Le tour part sur une page réelle du site, conduite par le
+                    service — pas sur une API. Effort et mode expert ne
+                    s'appliquent pas ici.
+                  </InfoTip>
                 </div>
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  Réponse en un bloc (20 s à 4 min) · aucun appel d'outil ·
-                  aucune mémoire entre deux tours — chaque tour repart d'une
-                  page neuve · aucun accès au dépôt. Connexion du site à faire
-                  une fois, à la main (Paramètres → Chats web).
+                  Réponse en un bloc (20 s à 4 min), sans outils ni mémoire
+                  entre deux tours — chaque tour repart d'une page neuve, sans
+                  accès au dépôt. Connexion du site : une fois, à la main
+                  (Paramètres → Chats web).
                 </p>
               </div>
             ) : (
               <>
-            <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                Effort de raisonnement
-                <InfoTip>
-                  Échelle portée par le modèle sélectionné — repli générique
-                  off·low·medium·high·max. La valeur part dans{" "}
-                  <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>
-                  , ignorée sans dommage si le fournisseur ne la supporte pas.
-                </InfoTip>
-              </span>
-              <span className="text-[11px] font-medium">{effortScaleLabel}</span>
+            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+              Effort de raisonnement
+              <InfoTip>
+                Échelle portée par le modèle sélectionné — repli générique
+                off·low·medium·high·max. La valeur part dans{" "}
+                <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>
+                , ignorée sans dommage si le fournisseur ne la supporte pas.
+              </InfoTip>
             </div>
             <Segmented
               ariaLabel="Effort de raisonnement"
