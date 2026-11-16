@@ -158,6 +158,32 @@ export function testFailed(content: string): boolean {
   return head.startsWith("ÉCHEC") || head.startsWith("ECHEC") || head.startsWith("FAIL");
 }
 
+/** Tour de voix avec déroulé honnête : sur échec, la ligne du tour passe en
+ *  « error » avec le motif — rien ne reste « en cours » sans fin ni erreur
+ *  (un débat restait bloqué sur sa première voix quand un tour mourait).
+ *  L'erreur remonte contextualisée ; un arrêt utilisateur remonte tel quel —
+ *  le service clôt alors le tour en « stopped ». */
+async function runVoiceWithRow(
+  deps: OrchestratorDeps,
+  ctx: OrchestratorContext,
+  flow: FlowRecorder,
+  rowId: string,
+  voiceLabel: string,
+  req: VoiceTurnRequest,
+  cb?: { onDelta?: (delta: string) => void; onStatus?: (status: string) => void },
+): Promise<VoiceTurnOutcome> {
+  try {
+    return await deps.runVoiceTurn(req, { signal: ctx.signal, ...cb });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    flow.update(rowId, {
+      detail: ctx.signal.aborted ? "interrompu" : `échec : ${msg}`,
+      status: "error",
+    });
+    throw ctx.signal.aborted ? err : new Error(`${voiceLabel} : ${msg}`);
+  }
+}
+
 function voicePromptContent(
   userContent: string,
   transcript: string[],
@@ -198,7 +224,12 @@ async function runDebate(
         status: "running",
       });
       const note = `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. Chaque tour voit ce qui a été dit avant : contredisez sur des faits, jamais sur des généralités.`;
-      const outcome = await deps.runVoiceTurn(
+      const outcome = await runVoiceWithRow(
+        deps,
+        ctx,
+        flow,
+        rowId,
+        `Voix « ${v.name} » (tour ${r})`,
         {
           modelId: v.model,
           systemPrompt: (ctx.prompts.conseiller || "").replaceAll(
@@ -210,11 +241,13 @@ async function runDebate(
           attachments: ctx.attachments,
           settings: ctx.settings,
         },
-        { signal: ctx.signal },
       );
       transcript.push(`Tour ${r} · ${v.name} : ${outcome.content.trim()}`);
       flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
     }
+    // Un arrêt utilisateur ne lance pas le tour suivant : la boucle externe
+    // s'arrête avec l'interne (sinon le tour suivant partait pour échouer).
+    if (ctx.signal.aborted) break;
   }
   // Verdict : le juge streame la réponse conservée (une seule en base).
   flow.push({
@@ -224,7 +257,12 @@ async function runDebate(
     model: shortModel(juge.model),
     status: "running",
   });
-  const outcome = await deps.runVoiceTurn(
+  const outcome = await runVoiceWithRow(
+    deps,
+    ctx,
+    flow,
+    "verdict",
+    "Verdict du débat",
     {
       modelId: juge.model,
       systemPrompt:
@@ -238,11 +276,7 @@ async function runDebate(
       attachments: ctx.attachments,
       settings: ctx.settings,
     },
-    {
-      signal: ctx.signal,
-      onDelta: ctx.onFinalDelta,
-      onStatus: ctx.onFinalStatus,
-    },
+    { onDelta: ctx.onFinalDelta, onStatus: ctx.onFinalStatus },
   );
   flow.update("verdict", { detail: "verdict rendu", status: "done" });
   return {
@@ -330,7 +364,12 @@ async function runCouncil(
     .filter((a) => a.content)
     .map((a) => `Avis ${a.letter} :\n${a.content}`)
     .join("\n\n");
-  const outcome = await deps.runVoiceTurn(
+  const outcome = await runVoiceWithRow(
+    deps,
+    ctx,
+    flow,
+    "president",
+    "Président du conseil",
     {
       modelId: president.model,
       systemPrompt: ctx.prompts.president
@@ -345,11 +384,7 @@ async function runCouncil(
       attachments: ctx.attachments,
       settings: ctx.settings,
     },
-    {
-      signal: ctx.signal,
-      onDelta: ctx.onFinalDelta,
-      onStatus: ctx.onFinalStatus,
-    },
+    { onDelta: ctx.onFinalDelta, onStatus: ctx.onFinalStatus },
   );
   flow.update("president", { detail: "fusion rendue", status: "done" });
   return {
@@ -382,17 +417,14 @@ async function runAuto(
     content: string,
   ) => {
     flow.push({ id: rowId, label, detail, model: shortModel(modelId), status: "running" });
-    const outcome = await deps.runVoiceTurn(
-      {
-        modelId,
-        systemPrompt: prompt || null,
-        content,
-        history: ctx.history,
-        attachments: ctx.attachments,
-        settings: ctx.settings,
-      },
-      { signal: ctx.signal },
-    );
+    const outcome = await runVoiceWithRow(deps, ctx, flow, rowId, label, {
+      modelId,
+      systemPrompt: prompt || null,
+      content,
+      history: ctx.history,
+      attachments: ctx.attachments,
+      settings: ctx.settings,
+    });
     transcript.push(`${label} : ${outcome.content.trim()}`);
     flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
     return outcome;
@@ -441,17 +473,14 @@ async function runAuto(
     status: "running",
   });
   const runTest = (content: string) =>
-    deps.runVoiceTurn(
-      {
-        modelId: modelOf("test"),
-        systemPrompt: ctx.prompts.test || null,
-        content,
-        history: ctx.history,
-        attachments: ctx.attachments,
-        settings: ctx.settings,
-      },
-      { signal: ctx.signal },
-    );
+    runVoiceWithRow(deps, ctx, flow, "test", testLabel, {
+      modelId: modelOf("test"),
+      systemPrompt: ctx.prompts.test || null,
+      content,
+      history: ctx.history,
+      attachments: ctx.attachments,
+      settings: ctx.settings,
+    });
   let testOutcome = await runTest(voicePromptContent(ctx.userContent, transcript));
   let reprisesUsed = 0;
   while (testFailed(testOutcome.content) && reprisesUsed < retries && !ctx.signal.aborted) {
@@ -463,7 +492,12 @@ async function runAuto(
       detail: "corrige la vraie cause, jamais une rustine",
       status: "running",
     });
-    const repriseOutcome = await deps.runVoiceTurn(
+    const repriseOutcome = await runVoiceWithRow(
+      deps,
+      ctx,
+      flow,
+      `reprise-${reprisesUsed}`,
+      `Reprise ${reprisesUsed}/${retries}`,
       {
         modelId: modelOf("code"),
         systemPrompt:
@@ -480,7 +514,6 @@ async function runAuto(
         attachments: ctx.attachments,
         settings: ctx.settings,
       },
-      { signal: ctx.signal },
     );
     transcript.push(`Reprise ${reprisesUsed} : ${repriseOutcome.content.trim()}`);
     flow.update(`reprise-${reprisesUsed}`, {

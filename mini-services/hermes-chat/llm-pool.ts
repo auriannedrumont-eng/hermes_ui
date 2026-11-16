@@ -422,6 +422,45 @@ export function createLlmPool(store: Store): LlmPoolApi {
     return added > 0 ? { text: textContent, parts } : { text: textContent, parts: null };
   }
 
+  // Garde d'inactivité des tours fournisseur : la gateway a son timeout de
+  // tour (180 s) et le webchat son délai global de pilote — sans garde, une
+  // connexion fournisseur qui s'enraye (aucune réponse, ou des octets qui
+  // cessent) bloque le tour indéfiniment. C'est une garde d'INACTIVITÉ : le
+  // minuteur repart à chaque octet reçu — une réponse longue mais vivante
+  // reste licite, un fournisseur muet est coupé avec un motif parlant.
+  const TURN_STALL_TIMEOUT_MS = 120_000;
+
+  /** Signal combiné pour un tour streaming : annulation utilisateur (cb.signal)
+   *  + minuteur d'inactivité. reset() repart le minuteur (octet reçu) ;
+   *  done() nettoie à la fin du tour. Le déclenchement annule le fetch avec un
+   *  motif parlant — l'erreur remonte telle quelle jusqu'à l'interface. */
+  function stallGuard(signal: AbortSignal, stallMs: number, label: string) {
+    const controller = new AbortController();
+    const onUserAbort = () => controller.abort(signal.reason);
+    if (signal.aborted) onUserAbort();
+    else signal.addEventListener("abort", onUserAbort, { once: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        controller.abort(
+          new Error(
+            `${label} : plus aucun octet reçu depuis ${Math.round(stallMs / 1000)} s — tour abandonné (garde d'inactivité)`
+          ),
+        );
+      }, stallMs);
+    };
+    arm();
+    return {
+      signal: controller.signal,
+      reset: arm,
+      done() {
+        if (timer) clearTimeout(timer);
+        signal.removeEventListener("abort", onUserAbort);
+      },
+    };
+  }
+
   /** POST {base}/chat/completions en streaming (style openai). */
   async function streamOpenAiTurn(
     endpoint: LlmEndpoint,
@@ -455,17 +494,27 @@ export function createLlmPool(store: Store): LlmPoolApi {
       ...(expert.seed !== undefined ? { seed: expert.seed } : {}),
     };
 
-    const res = await fetch(`${endpoint.base}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(endpoint.auth === "bearer" && secret ? { Authorization: `Bearer ${secret}` } : {}),
-        ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
-        ...(endpoint.extraHeaders ?? {}),
-      },
-      body: JSON.stringify(body),
-      signal: cb.signal,
-    });
+    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel);
+    let res: Response;
+    try {
+      res = await fetch(`${endpoint.base}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(endpoint.auth === "bearer" && secret ? { Authorization: `Bearer ${secret}` } : {}),
+          ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
+          ...(endpoint.extraHeaders ?? {}),
+        },
+        body: JSON.stringify(body),
+        signal: guard.signal,
+      });
+    } catch (err) {
+      guard.done();
+      throw err;
+    }
+    // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
+    // pour la lecture du flux.
+    guard.reset();
     if (!res.ok) {
       const detail = await readErrorBody(res);
       if (res.status === 401 || res.status === 403)
@@ -520,14 +569,19 @@ export function createLlmPool(store: Store): LlmPoolApi {
         if (cb.signal.aborted) break;
         const { done, value } = await reader.read();
         if (done) break;
+        guard.reset();
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
         for (const line of lines) consume(line);
       }
     } catch (err) {
-      // Stop utilisateur pendant le vol : on rend le partiel reçu.
+      // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
+      // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
+      // parlant remonte tel quel.
       if (!cb.signal.aborted) throw err;
+    } finally {
+      guard.done();
     }
     return { content, reasoning, model, provider: endpoint.providerLabel, usage };
   }
@@ -556,16 +610,25 @@ export function createLlmPool(store: Store): LlmPoolApi {
       ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
     };
 
-    const res = await fetch(`${endpoint.base}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
-        ...(endpoint.extraHeaders ?? {}),
-      },
-      body: JSON.stringify(body),
-      signal: cb.signal,
-    });
+    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel);
+    let res: Response;
+    try {
+      res = await fetch(`${endpoint.base}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
+          ...(endpoint.extraHeaders ?? {}),
+        },
+        body: JSON.stringify(body),
+        signal: guard.signal,
+      });
+    } catch (err) {
+      guard.done();
+      throw err;
+    }
+    // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
+    // pour la lecture du flux.
     if (!res.ok) {
       const detail = await readErrorBody(res);
       if (res.status === 401 || res.status === 403)
@@ -632,13 +695,19 @@ export function createLlmPool(store: Store): LlmPoolApi {
         if (cb.signal.aborted) break;
         const { done, value } = await reader.read();
         if (done) break;
+        guard.reset();
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
         for (const line of lines) consume(line);
       }
     } catch (err) {
+      // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
+      // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
+      // parlant remonte tel quel.
       if (!cb.signal.aborted) throw err;
+    } finally {
+      guard.done();
     }
     return { content, reasoning, model, provider: endpoint.providerLabel, usage };
   }
