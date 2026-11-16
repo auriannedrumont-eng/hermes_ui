@@ -78,6 +78,10 @@ export interface ModeConfig {
   autoDebate?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;
+  /** Modèle par mode (chat/plan/code — modes sans voix) : remplace le modèle
+   *  de la conversation quand le mode est actif. Peut être un modèle du moteur
+   *  OU un chat IA web (webchat:<site>:<mode>). null/absent = modèle du fil. */
+  model?: Record<string, string | null>;
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -109,6 +113,13 @@ export function normalizeModeConfig(raw: unknown): ModeConfig {
       voices[modeKey] = slot;
     }
     out.voices = voices;
+  }
+  if (src.model && typeof src.model === "object") {
+    const model: Record<string, string | null> = {};
+    for (const [modeKey, id] of Object.entries(src.model as Record<string, unknown>)) {
+      model[modeKey] = typeof id === "string" && id.trim() ? id.trim() : null;
+    }
+    out.model = model;
   }
   return out;
 }
@@ -180,6 +191,14 @@ export function voiceModel(
   voiceId: string,
 ): string | null {
   const slot = config?.voices?.[mode]?.[voiceId];
+  return typeof slot === "string" && slot.trim() ? slot.trim() : null;
+}
+
+/** Modèle d'un mode sans voix (chat/plan/code) : choix de la conversation
+ *  (mode_config.model) sinon null = modèle du fil. Un id webchat passe tel
+ *  quel : le tour est routé vers le pilote navigateur du site. */
+export function modeModel(config: ModeConfig | null, mode: ConversationMode): string | null {
+  const slot = config?.model?.[mode];
   return typeof slot === "string" && slot.trim() ? slot.trim() : null;
 }
 

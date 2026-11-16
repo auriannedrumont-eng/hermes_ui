@@ -66,6 +66,7 @@ import {
 } from "./models";
 import {
   MODE_LABELS,
+  modeModel,
   normalizeModeConfig,
   resolveMode,
   resolveModePrompt,
@@ -949,11 +950,51 @@ function comparePairFromMode(modeState: {
   return [a ?? DEFAULT_MODEL_ID, b ?? (a ? "hermes-4-405b" : "hermes-4-70b")];
 }
 
+/** Blocs ``` file réinjectés pour les fichiers écrits par un tour webchat en
+ *  mode Fichiers — le suivi d'artefacts existant les transforme en cartes
+ *  versionnées (une carte par fichier, aperçu et journal inclus). */
+function webchatFileBlocks(
+  files: { name: string; bytes: number; path: string }[] | undefined,
+): string {
+  if (!files?.length) return "";
+  const wcConfig = readWebchatConfig(store);
+  let extra = "";
+  for (const f of files) {
+    const fileContent = readWebchatFile(f.path, f.name, wcConfig.outDir);
+    if (fileContent !== null) {
+      const ext = f.name.includes(".") ? f.name.split(".").pop()! : "txt";
+      extra += `\n\n\`\`\`${ext} file="${f.name}"\n${fileContent}\n\`\`\``;
+    }
+  }
+  return extra;
+}
+
 /** Dépendances de l'orchestrateur : un tour de voix passe par le connecteur
- *  (gateway ou pool de clés) SANS streamer vers le chat — capture silencieuse. */
+ *  (gateway ou pool de clés) SANS streamer vers le chat — capture silencieuse.
+ *  F-30b : une voix peut aussi tourner sur un chat IA web (webchat:<site>:<mode>)
+ *  — le pilote navigateur du site prend le relais ; pas de streaming, la
+ *  réponse arrive en un bloc, les statuts du pilote sont affichés honnêtement.
+ *  La file du pilote sérialise les voix webchat (un seul navigateur). */
 const orchestratorDeps: OrchestratorDeps = {
-  runVoiceTurn: (req, cb) =>
-    connector.runTurn(
+  runVoiceTurn: async (req, cb) => {
+    if (req.modelId && isWebchatModel(req.modelId)) {
+      const wc = await runWebchatTurn({
+        modelId: req.modelId,
+        // Pas de systemPrompt chez un site web : la consigne de la voix est
+        // prépendée au message (l'ordre de lecture reste le bon).
+        prompt: req.systemPrompt
+          ? `${req.systemPrompt}\n\n${req.content}`
+          : req.content,
+        store,
+        cb: { signal: cb.signal, onStatus: (status) => cb.onStatus?.(status) },
+      });
+      return {
+        content: wc.content + webchatFileBlocks(wc.files),
+        reasoning: "",
+        model: wc.model,
+      };
+    }
+    return connector.runTurn(
       {
         content: req.content,
         history: req.history,
@@ -970,7 +1011,8 @@ const orchestratorDeps: OrchestratorDeps = {
         onStatus: (status) => cb.onStatus?.(status),
         onToolEvent: () => {},
       },
-    ),
+    );
+  },
 };
 
 /** Taille réelle des instructions système (jauge honnête) : base + mémoire +
@@ -2581,6 +2623,13 @@ io.on("connection", (socket) => {
     const orchestrated =
       !variant &&
       (modeState.mode === "debate" || modeState.mode === "council" || modeState.mode === "auto");
+    // F-30b : modèle du mode (chat/plan/code) — l'assignment du mode remplace
+    // le modèle de la conversation, moteur OU chat IA web. Les modes multi-acteurs
+    // ne l'utilisent pas : chaque voix garde son propre choix (variantes A/B,
+    // conseillers, membres, étapes) et l'orchestrateur route déjà le webchat.
+    const turnModelId = !variant && !orchestrated
+      ? modeModel(modeState.config, modeState.mode) ?? opts.modelId ?? null
+      : opts.modelId ?? null;
     const versionIndex = opts.versionGroup
       ? store.countVersions(opts.versionGroup) + 1
       : null;
@@ -2599,8 +2648,8 @@ io.on("connection", (socket) => {
     running.set(turnKey, controller);
 
     // 0. Résout le modèle sélectionné (libellé d'affichage)
-    const model = opts.modelId
-      ? modelLabel(opts.modelId) || webchatModelLabel(opts.modelId) || opts.modelId
+    const model = turnModelId
+      ? modelLabel(turnModelId) || webchatModelLabel(turnModelId) || turnModelId
       : null;
     const attachments = opts.attachments?.length ? opts.attachments : undefined;
 
@@ -2734,10 +2783,11 @@ io.on("connection", (socket) => {
       }
     }
 
-    // ── F-30 : consigne du mode (chat/plan/code) — ajoutée au systemPrompt
-    // du tour, recomposé à chaque envoi (aucune consigne fantôme possible).
-    // Comparer et les modes orchestrés portent leurs consignes par voix.
-    const modeSection = orchestrated || variant
+    // ── F-30 : consigne du mode — ajoutée au systemPrompt du tour, recomposée
+    // à chaque envoi (aucune consigne fantôme possible). Comparer : la consigne
+    // commune part sur CHAQUE colonne (variantes a/b — même texte des deux côtés).
+    // Débat/conseil/auto : consignes par voix, portées par l'orchestrateur.
+    const modeSection = orchestrated
       ? ""
       : modeSystemPromptSection(conversationId, modeState);
 
@@ -2808,14 +2858,18 @@ io.on("connection", (socket) => {
           model: outcome.model,
           usage: outcome.usage,
         };
-      } else if (opts.modelId && isWebchatModel(opts.modelId)) {
+      } else if (turnModelId && isWebchatModel(turnModelId)) {
         // ── Fournisseur « chats IA web » — le tour ne part pas sur un moteur
         // LLM mais sur le pilote navigateur du site (spec « Piloter des chats
         // IA web », §4/§6). Réponse en un bloc : le statut explique où on en
         // est (navigateur, envoi, génération), jamais de streaming factice.
+        // F-30 : la consigne du mode est prépendée au message — un site web n'a
+        // pas de systemPrompt, l'ordre de lecture reste le bon.
         const wc = await runWebchatTurn({
-          modelId: opts.modelId,
-          prompt: opts.content,
+          modelId: turnModelId,
+          prompt: modeSection
+            ? `${modeSection}\n\n${opts.content}`
+            : opts.content,
           store,
           cb: {
             signal: controller.signal,
@@ -2832,17 +2886,8 @@ io.on("connection", (socket) => {
         // Mode build : les fichiers écrits sont réinjectés en blocs nommés —
         // le suivi d'artefacts existant les transforme en cartes versionnées
         // (une carte par fichier, aperçu et journal de versions inclus).
-        let extra = "";
-        const wcConfig = readWebchatConfig(store);
-        for (const f of wc.files ?? []) {
-          const fileContent = readWebchatFile(f.path, f.name, wcConfig.outDir);
-          if (fileContent !== null) {
-            const ext = f.name.includes(".") ? f.name.split(".").pop()! : "txt";
-            extra += `\n\n\`\`\`${ext} file="${f.name}"\n${fileContent}\n\`\`\``;
-          }
-        }
         result = {
-          content: wc.content + extra,
+          content: wc.content + webchatFileBlocks(wc.files),
           reasoning: "",
           model: wc.model,
           provider: wc.provider,
@@ -2853,7 +2898,7 @@ io.on("connection", (socket) => {
           content: opts.content,
           history,
           model,
-          modelId: opts.modelId,
+          modelId: turnModelId,
           attachments,
           // Réglages du tour : effort/permissions du composer + mémoire
           // utilisateur (F-18) — les notes ne partent que si la mémoire est

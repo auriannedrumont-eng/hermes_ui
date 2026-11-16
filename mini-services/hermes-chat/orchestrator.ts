@@ -14,6 +14,7 @@
 // Testabilité : runVoiceTurn est injecté (les QA passent un faux moteur —
 // aucun LLM requis pour prouver l'ordre des tours, les reprises et les rows).
 import { modelLabel } from "./models";
+import { FICHES, parseWebchatModelId } from "./webchat/fiches";
 import {
   COUNCIL_READ_ONLY_RULE,
   DEBATE_ROUNDS_MAX,
@@ -122,9 +123,13 @@ function excerptOf(content: string): string {
   return src.length > 110 ? `${src.slice(0, 110)}…` : src;
 }
 
-/** Étiquette courte « H4 405B » façon maquette (chip du déroulé). */
+/** Étiquette courte « H4 405B » façon maquette (chip du déroulé). Un chat IA
+ *  web est affiché par son site (« z.ai ») — le mode du site vit dans le
+ *  détail de la ligne, pas dans le chip. */
 export function shortModel(modelId: string | null | undefined): string | undefined {
   if (!modelId) return undefined;
+  const wc = parseWebchatModelId(modelId);
+  if (wc) return FICHES[wc.site].label;
   const label = modelLabel(modelId);
   const m = /^(Hermes|GLM|GPT|Claude)\s+(.+)$/.exec(label);
   if (!m) return label.length <= 14 ? label : undefined;

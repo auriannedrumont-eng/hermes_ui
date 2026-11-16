@@ -56,6 +56,17 @@ async function unitTests() {
   check("voix vide → null (suit la conversation)", cfg.voices?.debate?.juge === null);
   check("voix compare conservée", cfg.voices?.compare?.a === "m1" && cfg.voices?.compare?.b === "m2");
 
+  // A2.b Modèle du mode (F-30b) — chat/plan/code, moteur OU chat IA web
+  const cfgModel = modes.normalizeModeConfig({
+    model: { chat: "webchat:zai:answer", plan: "  hermes-4-70b  ", code: 42 },
+  });
+  check("modèle du mode conservé (chat web)", cfgModel.model?.chat === "webchat:zai:answer", String(cfgModel.model?.chat));
+  check("modèle du mode trimmé (plan)", cfgModel.model?.plan === "hermes-4-70b", String(cfgModel.model?.plan));
+  check("modèle du mode invalide → null (code)", cfgModel.model?.code === null, String(cfgModel.model?.code));
+  check("modeModel lit le chat web", modes.modeModel(cfgModel, "chat") === "webchat:zai:answer");
+  check("modeModel sans config → null (suit le fil)", modes.modeModel(null, "plan") === null);
+  check("model absent → undefined", modes.normalizeModeConfig({}).model === undefined);
+
   // A3. Interpolation des mots-clés au tour — jamais enregistrés remplacés
   const txt = modes.interpolatePrompt(
     "Débat de {tours} tours avec {membres} avis, {reprises} restantes, posture {angle}.",
@@ -260,6 +271,32 @@ async function unitTests() {
     JSON.stringify(autoRows.map((r) => r.label))
   );
 
+  // A6.d Chats IA web dans les voix (F-30b) — id transmis tel quel au moteur,
+  // chip du déroulé = site (pas d'id brut ni de libellé long)
+  check("shortModel webchat → site (« z.ai »)", orch.shortModel("webchat:zai:answer") === "z.ai", orch.shortModel("webchat:zai:answer"));
+  check("shortModel webchat → site (« Google AI Studio »)", orch.shortModel("webchat:aistudio:answer") === "Google AI Studio", orch.shortModel("webchat:aistudio:answer"));
+  seen.length = 0;
+  let wcRows: any[] = [];
+  await orch.runOrchestratedTurn(
+    {
+      conversationId: "c4",
+      messageId: "m9",
+      mode: "debate",
+      config: { voices: { debate: { sceptique: "webchat:aistudio:answer", pragmatique: null, innovateur: null, juge: null } } },
+      rounds: 3,
+      userContent: "Question.",
+      history: [],
+      prompts: { conseiller: "c", juge: "j" },
+      signal,
+      onFlow: (rows) => (wcRows = rows),
+      onFinalDelta: () => {},
+      onFinalStatus: () => {},
+    },
+    fakeDeps
+  );
+  check("voix webchat transmise telle quelle au moteur", seen.some((s) => s.model === "webchat:aistudio:answer"), JSON.stringify(seen.map((s) => s.model)));
+  check("chip du déroulé = site du chat web", wcRows.some((r) => r.model === "Google AI Studio"), JSON.stringify(wcRows.map((r) => r.model)));
+
   // A7. testFailed — le contrat du prompt auto.test
   check("testFailed détecte ÉCHEC", orch.testFailed("ÉCHEC : rien ne marche"));
   check("testFailed détecte FAIL", orch.testFailed("FAIL — sortie vide"));
@@ -385,6 +422,24 @@ async function serviceTests() {
   // avec une paire explicite — l'orchestration complète est couverte en A.)
   const cmp = await emitAck("conversations:create", { mode: "compare", modeConfig: { voices: { compare: { a: "hermes-4-405b", b: "hermes-4-70b" } } } });
   check("conversation Comparer créée avec ses voix", cmp?.conversation?.mode === "compare" && cmp?.conversation?.modeConfig?.voices?.compare?.a === "hermes-4-405b", JSON.stringify(cmp?.conversation?.modeConfig));
+
+  // B5. Modèle du mode (F-30b) — la config.model roundtrippe via setMode :
+  // chat web conservé tel quel, id invalide → null (jamais de plantage).
+  const setModel = await emitAck("conversations:setMode", {
+    conversationId: convId,
+    mode: "plan",
+    config: { model: { plan: "webchat:zai:answer", chat: 42 } },
+  });
+  check(
+    "setMode persiste le modèle du mode (chat web)",
+    setModel?.conversation?.modeConfig?.model?.plan === "webchat:zai:answer",
+    JSON.stringify(setModel?.conversation?.modeConfig?.model)
+  );
+  check(
+    "modèle du mode invalide → null (code)",
+    setModel?.conversation?.modeConfig?.model?.chat === null,
+    JSON.stringify(setModel?.conversation?.modeConfig?.model)
+  );
 
   socket.close();
 }

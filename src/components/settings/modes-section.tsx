@@ -42,6 +42,10 @@ import {
   readClientSetting,
   writeClientSetting,
 } from "@/lib/settings";
+import {
+  ModelChoiceList,
+  modelLabelOf,
+} from "@/components/shared/model-choice-list";
 import type { ModelOption } from "@/lib/chat-types";
 import {
   AUTO_RETRIES_MAX,
@@ -213,7 +217,8 @@ function Stepper({
   );
 }
 
-/** Une voix avec son modèle — « qui travaille » version Paramètres. */
+/** Une voix avec son modèle — « qui travaille » version Paramètres.
+ *  F-30b : la liste porte les modèles du moteur ET les chats IA web. */
 function VoiceRow({
   name,
   role,
@@ -228,9 +233,7 @@ function VoiceRow({
   onChange: (modelId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const label = model
-    ? (models.find((m) => m.id === model)?.label ?? model)
-    : "Modèle de la conversation";
+  const label = modelLabelOf(model ?? "", models);
   return (
     <div className="border-t border-border/70 first:border-t-0">
       <div className="flex items-center gap-2 py-2">
@@ -247,49 +250,66 @@ function VoiceRow({
               : "border-border bg-card text-foreground hover:bg-muted"
           )}
         >
-          <span className="truncate">{label}</span>
+          <span className="truncate">{model ? label : "Modèle de la conversation"}</span>
           <ChevronDown className="h-2.5 w-2.5 flex-none" />
         </button>
       </div>
       {open ? (
-        <div className="mb-1.5 rounded-xl border border-dashed border-border bg-background p-1">
-          <button
-            type="button"
-            onClick={() => {
-              onChange(null);
+        <div className="mb-1.5 max-h-52 overflow-y-auto rounded-xl border border-dashed border-border bg-background p-1">
+          <ModelChoiceList
+            models={models}
+            value={model}
+            onPick={(id) => {
+              onChange(id);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11.5px] hover:bg-muted/60"
-          >
-            <span
-              className={cn(
-                "size-[7px] flex-none rounded-full border",
-                !model ? "border-hermes-strong bg-hermes-strong" : "border-border"
-              )}
-            />
-            <span className="font-semibold">Modèle de la conversation</span>
-          </button>
-          {models
-            .filter((m) => !m.webchat && m.available !== false)
-            .map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  onChange(m.id);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11.5px] hover:bg-muted/60"
-              >
-                <span
-                  className={cn(
-                    "size-[7px] flex-none rounded-full border",
-                    model === m.id ? "border-hermes-strong bg-hermes-strong" : "border-border"
-                  )}
-                />
-                <span className="font-semibold">{m.label}</span>
-              </button>
-            ))}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Modèle du mode (chat/plan/code) — le défaut des nouvelles conversations,
+ *  modèle du moteur OU chat IA web ; sans choix, celui de la conversation. */
+function ModeModelRow({
+  model,
+  models,
+  onChange,
+}: {
+  model: string | null;
+  models: ModelOption[];
+  onChange: (modelId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "inline-flex max-w-[260px] items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+          model
+            ? "border-hermes/35 bg-hermes/10 text-hermes-text"
+            : "border-border bg-card text-foreground hover:bg-muted"
+        )}
+      >
+        <span className="truncate">
+          {model ? modelLabelOf(model, models) : "Modèle de la conversation"}
+        </span>
+        <ChevronDown className="h-2.5 w-2.5 flex-none" />
+      </button>
+      {open ? (
+        <div className="mt-1.5 max-h-52 overflow-y-auto rounded-xl border border-dashed border-border bg-background p-1">
+          <ModelChoiceList
+            models={models}
+            value={model}
+            onPick={(id) => {
+              onChange(id);
+              setOpen(false);
+            }}
+          />
         </div>
       ) : null}
     </div>
@@ -458,12 +478,19 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
   useEffect(() => onSettingsChanged(() => setRev((r) => r + 1)), []);
   const defaults = useMemo(() => {
     let voices: Record<string, Record<string, string | null>> = {};
+    let modeModels: Record<string, string | null> = {};
     try {
       const raw = readClientSetting<string>("hermes.modes.voices");
       if (raw) {
         const parsed = JSON.parse(raw) as unknown;
         if (parsed && typeof parsed === "object")
           voices = parsed as typeof voices;
+      }
+      const rawModels = readClientSetting<string>("hermes.modes.models");
+      if (rawModels) {
+        const parsed = JSON.parse(rawModels) as unknown;
+        if (parsed && typeof parsed === "object")
+          modeModels = parsed as typeof modeModels;
       }
     } catch {
       /* charge invalide */
@@ -492,6 +519,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
       showFlow: readClientSetting<boolean>("hermes.modes.showFlow") !== false,
       showModels: readClientSetting<boolean>("hermes.modes.showModels") !== false,
       voices,
+      modeModels,
     };
   }, [rev]);
 
@@ -512,6 +540,14 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
       },
     };
     writeClientSetting("hermes.modes.voices", JSON.stringify(next));
+  };
+
+  /** Modèle par défaut d'un mode sans voix (chat/plan/code) — registre
+   *  hermes.modes.models : le défaut rejoint chaque nouvelle conversation
+   *  qui passe sur ce mode. */
+  const setModeModelDefault = (mode: ConversationMode, modelId: string | null) => {
+    const next = { ...defaults.modeModels, [mode]: modelId };
+    writeClientSetting("hermes.modes.models", JSON.stringify(next));
   };
 
   /** Édite une consigne : clamp 4 000, ajout/retrait de la surcharge,
@@ -625,6 +661,16 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
 
       {/* ── Chat ─────────────────────────────────────────────────────── */}
       <ModeCard {...MODE_META.chat}>
+        <Row
+          label="Modèle du mode"
+          desc="Ce que Chat utilise par défaut — modèle du moteur ou chat IA web ; sans choix, celui de la conversation."
+        >
+          <ModeModelRow
+            model={defaults.modeModels.chat ?? null}
+            models={models}
+            onChange={(mid) => setModeModelDefault("chat", mid)}
+          />
+        </Row>
         <PromptCard
           promptKey="chat.main"
           value={promptValue("chat.main")}
@@ -636,6 +682,16 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
 
       {/* ── Plan ─────────────────────────────────────────────────────── */}
       <ModeCard {...MODE_META.plan}>
+        <Row
+          label="Modèle du mode"
+          desc="Ce que Plan utilise par défaut — modèle du moteur ou chat IA web ; sans choix, celui de la conversation."
+        >
+          <ModeModelRow
+            model={defaults.modeModels.plan ?? null}
+            models={models}
+            onChange={(mid) => setModeModelDefault("plan", mid)}
+          />
+        </Row>
         <PromptCard
           promptKey="plan.main"
           value={promptValue("plan.main")}
@@ -648,6 +704,16 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
 
       {/* ── Code ─────────────────────────────────────────────────────── */}
       <ModeCard {...MODE_META.code}>
+        <Row
+          label="Modèle du mode"
+          desc="Ce que Code utilise par défaut — modèle du moteur ou chat IA web ; sans choix, celui de la conversation."
+        >
+          <ModeModelRow
+            model={defaults.modeModels.code ?? null}
+            models={models}
+            onChange={(mid) => setModeModelDefault("code", mid)}
+          />
+        </Row>
         <PromptCard
           promptKey="code.main"
           value={promptValue("code.main")}

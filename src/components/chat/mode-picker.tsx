@@ -11,10 +11,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, Info, Minus, Plus, Users } from "lucide-react";
+import { Check, ChevronDown, Cpu, Info, Minus, Plus, Users } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { readClientSetting } from "@/lib/settings";
+import { ModelChoiceList, modelLabelOf } from "@/components/shared/model-choice-list";
 import type { ModelOption } from "@/lib/chat-types";
 import {
   AUTO_RETRIES_MAX,
@@ -26,6 +27,7 @@ import {
   DEFAULT_VOICES,
   MODES,
   clampInt,
+  mergedModeModel,
   mergedVoices,
   modeDef,
   modePillLabel,
@@ -143,9 +145,21 @@ function voicesDefaults(): Record<string, Record<string, string | null>> {
   };
 }
 
-/** Libellé court d'un modèle du catalogue (label officiel si connu). */
-function modelLabelOf(id: string, models: ModelOption[]): string {
-  return models.find((m) => m.id === id)?.label ?? id;
+/** Défauts du modèle par mode (chat/plan/code) — registre client
+ *  hermes.modes.models (page Paramètres). Charge invalide = défauts
+ *  (tous suivent le modèle de la conversation). */
+function modeModelDefaults(): Record<string, string | null> {
+  let stored: Record<string, string | null> = {};
+  try {
+    const raw = readClientSetting<string>("hermes.modes.models");
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object") stored = parsed as typeof stored;
+    }
+  } catch {
+    /* charge invalide */
+  }
+  return { chat: stored.chat ?? null, plan: stored.plan ?? null, code: stored.code ?? null };
 }
 
 export function ModePicker({
@@ -159,6 +173,8 @@ export function ModePicker({
   const [voicesOpen, setVoicesOpen] = useState(false);
   /** Voix dont la liste de modèles est dépliée (une seule à la fois). */
   const [openVoice, setOpenVoice] = useState<string | null>(null);
+  /** Liste du modèle du mode (chat/plan/code) dépliée. */
+  const [modelOpen, setModelOpen] = useState(false);
 
   const def = modeDef(mode);
   const current = useMemo<ModeConfig>(() => {
@@ -206,6 +222,8 @@ export function ModePicker({
 
   const voices = voicesFor(mode, current);
   const modelByVoice = mergedVoices(mode, config, voicesDefaults());
+  const modelDefaults = modeModelDefaults();
+  const modeModelId = mergedModeModel(mode, config, modelDefaults);
   const on = mode !== "chat";
 
   const patch = (updater: (c: ModeConfig) => ModeConfig) => {
@@ -223,8 +241,18 @@ export function ModePicker({
     onSetMode(mode, { ...current, voices: voicesMap });
   };
 
+  /** Modèle du mode (chat/plan/code) — null = suit la conversation. */
+  const setModeModel = (modelId: string | null) => {
+    const model: ModeConfig["model"] = {
+      ...(config?.model ?? {}),
+      [mode]: modelId,
+    };
+    onSetMode(mode, { ...current, model });
+  };
+
   /** Change de mode : les défauts de la page Paramètres rejoignent la
-   *  conversation (les colonnes A/B, conseillers, membres partent avec eux). */
+   *  conversation (les colonnes A/B, conseillers, membres, le modèle du mode
+   *  partent avec eux). */
   const switchTo = (next: ConversationMode) => {
     const withVoices: ModeConfig = {
       ...current,
@@ -232,10 +260,17 @@ export function ModePicker({
         ...(config?.voices ?? {}),
         [next]: mergedVoices(next, config, voicesDefaults()),
       },
+      model: {
+        ...(config?.model ?? {}),
+        ...(config?.model?.[next] === undefined
+          ? { [next]: modelDefaults[next] ?? null }
+          : {}),
+      },
     };
     onSetMode(next, withVoices);
     setVoicesOpen(modeDef(next).hasVoices);
     setOpenVoice(null);
+    setModelOpen(false);
   };
 
   return (
@@ -246,6 +281,7 @@ export function ModePicker({
         if (!o) {
           setOpenVoice(null);
           setVoicesOpen(false);
+          setModelOpen(false);
         }
       }}
     >
@@ -370,6 +406,49 @@ export function ModePicker({
             </>
           ) : null}
 
+          {/* Modèle du mode (chat/plan/code) — ce que le mode utilise par
+              défaut dans cette conversation ; les modes à voix règlent leurs
+              modèles voix par voix plus bas. */}
+          {!def.hasVoices ? (
+            <div className="mt-1.5">
+              <div className="flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11.5px] text-muted-foreground">
+                <Cpu className="h-3.5 w-3.5 flex-none text-hermes-text" />
+                <span className="min-w-0 flex-1 truncate">
+                  {modeModelId ? (
+                    <>
+                      Modèle du mode —{" "}
+                      <span className="font-semibold text-foreground">
+                        {modelLabelOf(modeModelId, models)}
+                      </span>
+                    </>
+                  ) : (
+                    "Modèle du mode — celui de la conversation"
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setModelOpen((v) => !v)}
+                  aria-expanded={modelOpen}
+                  className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[10.5px] font-semibold text-foreground transition-colors hover:bg-muted"
+                >
+                  {modelOpen ? "Fermer" : "Choisir"}
+                </button>
+              </div>
+              {modelOpen ? (
+                <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border bg-card p-1">
+                  <ModelChoiceList
+                    models={models}
+                    value={modeModelId}
+                    onPick={(id) => {
+                      setModeModel(id);
+                      setModelOpen(false);
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* « Qui travaille » — une voix par acteur du mode, son modèle à part */}
           {def.hasVoices ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11.5px] text-muted-foreground">
@@ -419,58 +498,15 @@ export function ModePicker({
                       </button>
                     </div>
                     {expanded ? (
-                      <div
-                        className="max-h-44 overflow-y-auto border-t border-dashed border-border bg-card p-1"
-                        role="listbox"
-                      >
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={!mid}
-                          onClick={() => {
-                            setVoiceModel(v.id, null);
+                      <div className="max-h-44 overflow-y-auto border-t border-dashed border-border bg-card p-1">
+                        <ModelChoiceList
+                          models={models}
+                          value={mid}
+                          onPick={(id) => {
+                            setVoiceModel(v.id, id);
                             setOpenVoice(null);
                           }}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11.5px] hover:bg-muted/60"
-                        >
-                          <span
-                            className={cn(
-                              "h-[7px] w-[7px] flex-none rounded-full border",
-                              !mid
-                                ? "border-hermes-strong bg-hermes-strong"
-                                : "border-border"
-                            )}
-                          />
-                          <span className="font-semibold">Modèle de la conversation</span>
-                        </button>
-                        {models
-                          .filter((m) => !m.webchat && m.available !== false)
-                          .map((m) => {
-                            const sel = mid === m.id;
-                            return (
-                              <button
-                                key={m.id}
-                                type="button"
-                                role="option"
-                                aria-selected={sel}
-                                onClick={() => {
-                                  setVoiceModel(v.id, m.id);
-                                  setOpenVoice(null);
-                                }}
-                                className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11.5px] hover:bg-muted/60"
-                              >
-                                <span
-                                  className={cn(
-                                    "h-[7px] w-[7px] flex-none rounded-full border",
-                                    sel
-                                      ? "border-hermes-strong bg-hermes-strong"
-                                      : "border-border"
-                                  )}
-                                />
-                                <span className="font-semibold">{m.label}</span>
-                              </button>
-                            );
-                          })}
+                        />
                       </div>
                     ) : null}
                   </div>

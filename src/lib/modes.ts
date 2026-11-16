@@ -68,6 +68,10 @@ export interface ModeConfig {
   autoDebate?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;
+  /** Modèle par mode (chat/plan/code — modes sans voix) : remplace le modèle
+   *  de la conversation quand le mode est actif. Peut être un modèle du moteur
+   *  OU un chat IA web (webchat:<site>:<mode>). null/absent = modèle du fil. */
+  model?: Record<string, string | null>;
 }
 
 /** Valeurs par défaut des voix (réglage hermes.modes.voices — page Paramètres). */
@@ -103,6 +107,18 @@ export function mergedVoices(
   const base = defaults[mode] ?? {};
   const perConv = config?.voices?.[mode] ?? {};
   return { ...base, ...perConv };
+}
+
+/** Modèle du mode effectif (chat/plan/code) : le choix de la conversation
+ *  gagne (même null), sinon le défaut du registre client, sinon null =
+ *  modèle de la conversation. Mêmes règles que mergedVoices. */
+export function mergedModeModel(
+  mode: ConversationMode,
+  config: ModeConfig | null | undefined,
+  defaults: Record<string, string | null>,
+): string | null {
+  const perConv = config?.model?.[mode];
+  return perConv !== undefined ? perConv : defaults[mode] ?? null;
 }
 
 // ── Le référentiel affiché (libellés simples, sans jargon) ──────────────
