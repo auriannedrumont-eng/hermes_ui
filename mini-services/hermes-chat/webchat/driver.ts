@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { CdpPage, closeTarget, findTab, listTargets, newTab, sleep } from "./cdp";
 import { ensureBrowser, launchWatchdog, touchActivity } from "./browser";
-import { DriverLock } from "./lock";
+import { DriverLock, type LockInfo } from "./lock";
 import { writeGuarded } from "./paths";
 import { FICHES, type WebchatMode, type WebchatSiteId } from "./fiches";
 import { runAiStudio, runGeminiApp, runZai, type FlowCtx, type FlowResult } from "./flows";
@@ -105,9 +105,24 @@ async function main(): Promise<number> {
   }
 
   // 1. Verrou mono-pilote — sortie propre en nommant le titulaire (§7.4).
+  //    Une erreur disque (dossier/profil inaccessible…) jette : échec JSON
+  //    franc, jamais un crash sans ligne de contrat sur stdout.
   const lockPath = join(args.profile, "hermes-pilot.lock");
   const lock = new DriverLock(lockPath);
-  const holder = lock.acquire(args.site, args.mode);
+  let holder: LockInfo | null = null;
+  try {
+    holder = lock.acquire(args.site, args.mode);
+  } catch (err) {
+    return finish(
+      {
+        ok: false,
+        site: args.site,
+        mode: args.mode,
+        error: err instanceof Error ? err.message : String(err),
+      },
+      1
+    );
+  }
   if (holder) {
     return finish(
       {

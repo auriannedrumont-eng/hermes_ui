@@ -234,7 +234,10 @@ export async function runWebchatTurn(opts: {
 
 /** Consigne passée par fichier (évite les limites de ligne de commande). */
 async function writePromptTemp(prompt: string): Promise<string> {
-  const { writeFileSync } = await import("node:fs");
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  // Premier tour après un clone : db/ n'existe pas encore — le créer
+  // (même classe de bug que le verrou sur un profil frais).
+  mkdirSync(WEBCHAT_DATA_DIR, { recursive: true });
   const path = join(WEBCHAT_DATA_DIR, "webchat-prompt.tmp");
   writeFileSync(path, prompt, "utf-8");
   return path;

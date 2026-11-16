@@ -52,6 +52,18 @@ async function unitTests() {
   check("verrou : reprise d'un processus mort", third.acquire("zai", "build") === null);
   check("pidAlive : 0 et négatif refusés", !pidAlive(0) && !pidAlive(-3) && !pidAlive(Number.NaN));
 
+  // Verrou sur un profil FRAIS — dossier parent inexistant (bug réel du
+  // 16/11 : l'écriture du verrou précède la création du dossier par le
+  // navigateur → ENOENT déguisé en « verrou tenu par pid -1 »).
+  const freshPath = join(lockDir, "profil-frais", "pilot.lock");
+  const fresh = new DriverLock(freshPath);
+  check(
+    "verrou : profil frais (dossier absent) → créé et acquis",
+    fresh.acquire("zai", "answer") === null && existsSync(freshPath)
+  );
+  fresh.release();
+  check("verrou : release sur profil frais", !existsSync(freshPath));
+
   // Touche/release : le verrou d'AUTRUI n'est jamais retiré.
   const shared = join(lockDir, "shared.lock");
   const a = new DriverLock(shared);
