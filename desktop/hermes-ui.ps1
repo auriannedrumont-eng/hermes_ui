@@ -55,6 +55,11 @@ $Root       = Split-Path -Parent $ScriptDir
 $RuntimeDir = Join-Path $ScriptDir 'runtime'
 $LogDir     = Join-Path $ScriptDir 'logs'
 $StateFile  = Join-Path $RuntimeDir 'state.env'
+# Drapeau « mise a jour demandee depuis l'interface » : pose par le
+# mini-service (system:update-request), ramasse par la boucle de surveillance
+# (cycle suivant) — arret propre, mise a jour GitHub, relance. L'onglet
+# Hermes reste ouvert : l'utilisateur le rafraichit (F5) quand c est termine.
+$MajFlag    = Join-Path $RuntimeDir 'maj-demandee.flag'
 New-Item -ItemType Directory -Force -Path $RuntimeDir, $LogDir | Out-Null
 
 $LauncherLog = Join-Path $LogDir 'launcher.log'
@@ -907,10 +912,19 @@ function Supervise-One([string]$name, $healthyFn, $startFn, [string]$pidVar, [st
 }
 function Supervise {
     $nGw = 0; $nUi = 0; $nChat = 0
+    $majDemandee = $false
     Log "Surveillance active, verifications toutes les 15 s (Ctrl-C ou fermeture de cette fenetre = arret propre)."
     try {
         while ($true) {
             Start-Sleep -Seconds 15
+            # Mise a jour demandee depuis l'interface (Parametres → Systeme) :
+            # arret propre, mise a jour GitHub + reconstruction selective, relance.
+            if (Test-Path $MajFlag) {
+                try { Remove-Item $MajFlag -Force } catch { }
+                $majDemandee = $true
+                Log "• mise a jour demandee depuis l'interface — arret, mise a jour GitHub, relance (1 a 2 minutes)."
+                break
+            }
             $Script:SupCycle++
             Supervise-One 'passerelle'   ${function:Test-GwHealthy}   ${function:Start-Gateway} 'GW_PID'   'GW_OWNED'   $MGw   ([ref]$nGw)
             Supervise-One 'interface'    ${function:Test-UiHealthy}   ${function:Start-Ui}      'UI_PID'   'UI_OWNED'   $MUii  ([ref]$nUi)
@@ -918,11 +932,16 @@ function Supervise {
         }
     }
     finally {
-        # Ctrl-C : PowerShell declenche le finally -> arret propre.
+        # Ctrl-C, fermeture de fenetre ou relance pour mise a jour : arret propre.
         if ((State-Get 'GW_OWNED') -eq '1' -or (State-Get 'UI_OWNED') -eq '1' -or (State-Get 'CHAT_OWNED') -eq '1') {
-            Log "Signal recu — arret propre."
+            if ($majDemandee) { Log "Arret pour mise a jour (demandee depuis l'interface) — donnees sauvegardees." }
+            else { Log "Signal recu — arret propre." }
             Stop-All
         }
+    }
+    if ($majDemandee) {
+        Start-Sleep -Seconds 1
+        Do-Start -MajDepuisInterface
     }
 }
 
@@ -954,6 +973,13 @@ function Show-Status {
 }
 
 function Do-Start {
+    param([switch]$MajDepuisInterface)
+
+    # Drapeau reste pose (demande faite sans lanceur vivant) : le demarrage
+    # fait de toute facon la mise a jour GitHub — le retirer evite une
+    # relance supplementaire inutile des le premier cycle de surveillance.
+    if (Test-Path $MajFlag) { Remove-Item $MajFlag -Force -ErrorAction SilentlyContinue }
+
     # Pile deja lancee par un lanceur precedent encore vivant ? (reponse
     # immediate, sans meme verifier les installations)
     $lpid = 0; [int]::TryParse((State-Get 'LAUNCHER_PID'), [ref]$lpid) | Out-Null
@@ -995,7 +1021,11 @@ function Do-Start {
     [void](Start-Chat)
     [void](Start-Ui)
     [void](Start-Gateway)
-    Open-Browser "http://127.0.0.1:$gw/"
+    if ($MajDepuisInterface) {
+        Log "• pile relancee apres mise a jour — rafraichissez votre onglet Hermes (F5) pour charger la nouvelle version."
+    } else {
+        Open-Browser "http://127.0.0.1:$gw/"
+    }
 
     Write-Host ''
     Write-Host '  ┌────────────────────────────────────────────────┐'

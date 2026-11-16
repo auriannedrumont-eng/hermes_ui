@@ -40,6 +40,11 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 RUNTIME_DIR="$SCRIPT_DIR/runtime"
 LOG_DIR="$SCRIPT_DIR/logs"
 STATE_FILE="$RUNTIME_DIR/state.env"
+# Drapeau « mise à jour demandée depuis l'interface » : posé par le
+# mini-service (system:update-request), ramassé par la boucle de surveillance
+# (cycle suivant) — arrêt propre, mise à jour GitHub, relance. L'onglet
+# Hermes reste ouvert : l'utilisateur le rafraîchit (F5) quand c'est terminé.
+MAJ_FLAG="$RUNTIME_DIR/maj-demandee.flag"
 mkdir -p "$RUNTIME_DIR" "$LOG_DIR" 2>/dev/null || true
 
 LAUNCHER_LOG="$LOG_DIR/launcher.log"
@@ -280,15 +285,30 @@ supervise_one() { # nom fn_healthy fn_start var_owned ref_compteur
 }
 
 supervise() {
-  local n_gw=0 n_ui=0 n_chat=0
+  local n_gw=0 n_ui=0 n_chat=0 maj_demandee=0
   log "Surveillance active (Ctrl-C ou fermeture de cette fenêtre = arrêt propre)."
   trap 'log "Signal reçu — arrêt propre."; do_stop; exit 0' INT TERM HUP
   while :; do
     sleep 5
+    # Mise à jour demandée depuis l'interface (Paramètres → Système) :
+    # arrêt propre, mise à jour GitHub + reconstruction si nécessaire, relance.
+    if [ -f "$MAJ_FLAG" ]; then
+      rm -f "$MAJ_FLAG" 2>/dev/null
+      maj_demandee=1
+      log "• mise à jour demandée depuis l'interface — arrêt, mise à jour GitHub, relance (1 à 2 minutes)."
+      break
+    fi
     supervise_one "passerelle"   gw_healthy   start_gateway GW_OWNED   n_gw
     supervise_one "interface"    ui_healthy   start_ui      UI_OWNED   n_ui
     supervise_one "mini-service" chat_healthy start_chat    CHAT_OWNED n_chat
   done
+  if [ "$maj_demandee" = "1" ]; then
+    log "Arrêt pour mise à jour (demandée depuis l'interface) — données sauvegardées."
+    do_stop
+    sleep 1
+    SANS_NAVIGATEUR=1
+    do_start
+  fi
 }
 
 # ── COMMANDES ────────────────────────────────────────────────────────────
@@ -314,6 +334,36 @@ do_status() {
 
 do_start() {
   check_deps
+
+  # Drapeau resté posé (demande faite sans lanceur vivant) : le démarrage fait
+  # de toute façon la mise à jour GitHub — le retirer évite une relance
+  # supplémentaire dès le premier cycle de surveillance.
+  rm -f "$MAJ_FLAG" 2>/dev/null
+
+  # Mise à jour GitHub (même idiome que le lanceur Windows : fusion rapide
+  # ff-only ; en cas d'écart local, version locale conservée sans toucher).
+  local avant apres
+  avant="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
+  if [ -n "$avant" ] && git -C "$ROOT" fetch --quiet origin 2>/dev/null; then
+    apres="$(git -C "$ROOT" rev-parse '@{u}' 2>/dev/null)"
+    if [ -n "$apres" ] && [ "$apres" != "$avant" ]; then
+      if git -C "$ROOT" merge --ff-only "$apres" >/dev/null 2>&1; then
+        log "• mise à jour appliquée : $(git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -c . || echo '?') fichier(s) récupéré(s)"
+        # Code de l'interface modifié → reconstruction du build production.
+        if git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -qE '^(src|public)/|^(package|next\.config|postcss\.config|tailwind\.config|tsconfig)'; then
+          if [ -f "$ROOT/.next/standalone/server.js" ]; then
+            log "  code de l'interface modifié : reconstruction du build production…"
+            rm -rf "$ROOT/.next"
+            ( cd "$ROOT" && npm run build >>"$LOG_DIR/build.log" 2>&1 ) \
+              && log "  reconstruction terminée." \
+              || log "  ATTENTION : reconstruction échouée — mode développement au démarrage (voir logs/build.log)."
+          fi
+        fi
+      else
+        log "• ATTENTION : nouvelle version disponible mais non appliquée (fichiers locaux modifiés) — version locale conservée."
+      fi
+    fi
+  fi
 
   # Pile déjà lancée par un lanceur précédent encore vivant ?
   local pid
@@ -345,7 +395,11 @@ do_start() {
   start_chat
   start_ui
   start_gateway
-  open_browser "http://127.0.0.1:$gw/"
+  if [ "${SANS_NAVIGATEUR:-0}" = "1" ]; then
+    log "• pile relancée après mise à jour — rafraîchissez votre onglet Hermes (F5) pour charger la nouvelle version."
+  else
+    open_browser "http://127.0.0.1:$gw/"
+  fi
 
   echo ""
   echo "  ┌────────────────────────────────────────────────┐"

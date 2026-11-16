@@ -1393,6 +1393,31 @@ io.on("connection", (socket) => {
     }
   );
 
+  // ── Mise à jour depuis l'interface (Paramètres → Système) ───────────
+  // Dépose un drapeau que le lanceur (desktop/hermes-ui.ps1 | .sh — boucle
+  // de surveillance, cycle 15 s) ramasse : arrêt propre, mise à jour GitHub,
+  // reconstruction si besoin, relance SANS réouvrir le navigateur. L'onglet
+  // reste ouvert : l'utilisateur le rafraîchit (F5) quand la pile revient.
+  // Sans lanceur vivant, le drapeau reste posé : le prochain démarrage
+  // l'efface (il fait de toute façon la mise à jour GitHub).
+  socket.on("system:update-request", (cb?: (data: unknown) => void) => {
+    const done = (res: Record<string, unknown>) => {
+      if (typeof cb === "function") cb(res);
+    };
+    try {
+      const flag = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj-demandee.flag");
+      mkdirSync(join(flag, ".."), { recursive: true });
+      writeFileSync(flag, String(Date.now()), "utf-8");
+      console.log("[hermes-chat] mise à jour demandée depuis l'interface (drapeau posé)");
+      done({ ok: true });
+    } catch (err) {
+      done({
+        ok: false,
+        error: err instanceof Error ? err.message : "drapeau de mise à jour non posé",
+      });
+    }
+  });
+
   // ── Système (v2.4) : profils de rendu Chrome — sonde réelle ─────────
   // Le cache des rendus, ce sont les profils « hermes-chrome-* » du tmp :
   // régénérés à chaque rendu, purgés au démarrage du service. Jamais de

@@ -64,6 +64,24 @@ export function SystemSection({
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [connectedFlash, setConnectedFlash] = useState(false);
+  // ── Mise à jour depuis l'interface (demande déposée au lanceur) ────
+  const [updating, setUpdating] = useState(false);
+  const [updateRequested, setUpdateRequested] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const updateNow = () => {
+    if (updating) return;
+    setUpdating(true);
+    setUpdateError(null);
+    getSocket().emit(
+      "system:update-request",
+      (res: { ok?: boolean; error?: string } = {}) => {
+        setUpdating(false);
+        if (res?.ok) setUpdateRequested(true);
+        else setUpdateError(res?.error ?? "Échec du dépôt de la demande de mise à jour");
+      }
+    );
+  };
 
   // Resynchronise le champ si l'URL change côté service (hello rediffusé).
   useEffect(() => {
@@ -182,6 +200,49 @@ export function SystemSection({
             className="flex-none"
           />
         </div>
+      </div>
+
+      {/* ── Mise à jour de l'interface — demande déposée au lanceur ──── */}
+      <div className="mt-4 rounded-xl border border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[12.5px] font-semibold">
+              Mise à jour de l&apos;interface
+            </div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
+              Récupère la dernière version depuis GitHub, reconstruit si besoin et relance
+              la pile — sans fermer fenêtres ni onglet.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={updateNow}
+            disabled={updating || updateRequested}
+            className="inline-flex h-8 flex-none cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {updating ? "Dépôt…" : updateRequested ? "Demande déposée" : "Mettre à jour"}
+          </button>
+        </div>
+        {updateError ? (
+          <p className="mt-2 text-[11px] font-medium text-destructive" role="alert">
+            {updateError}
+          </p>
+        ) : updateRequested ? (
+          <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-success" role="status">
+            <Check className="mt-0.5 size-[13px] flex-none" strokeWidth={2.5} />
+            <span>
+              Demande déposée — le lanceur va couper la pile, mettre à jour puis relancer
+              (1 à 2 min). Laissez cette page ouverte : quand l&apos;interface redevient
+              joignable, rafraîchissez-la (F5) pour charger la nouvelle version. Sans
+              lanceur actif, la mise à jour s&apos;appliquera au prochain lancement.
+            </span>
+          </p>
+        ) : (
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            Fonctionne quand la pile est lancée par le lanceur bureau (Hermes-Web.bat ou
+            hermes-ui.sh) : la demande est ramassée au cycle de surveillance suivant (15 s).
+          </p>
+        )}
       </div>
 
       {/* ── Connexion à l'agent Hermes (gateway) — sonde WebSocket réelle ── */}

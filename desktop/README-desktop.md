@@ -83,6 +83,17 @@ fonctionnera. La télémétrie de Next.js est désactivée.
 8. Toute la pile tourne en **priorité basse** (Job Object) : dès qu'un
    autre logiciel demande du processeur, Hermes lui cède la place.
 
+### Mettre à jour sans rien fermer (bouton dans l'interface)
+
+Paramètres → Système → **« Mettre à jour »** : la demande est déposée au
+lanceur (drapeau `desktop\runtime\maj-demandee.flag`), ramassée au cycle de
+surveillance suivant (15 s) — arrêt propre, mise à jour GitHub,
+reconstruction **seulement si le code a changé**, relance. L'onglet Hermes
+reste ouvert : quand l'interface redevient joignable (30 s à 2 min),
+**rafraîchissez-le (F5)** pour charger la nouvelle version — aucun nouvel
+onglet de navigateur n'est ouvert. Sans lanceur actif (pile lancée à la main),
+la mise à jour s'appliquera au prochain lancement de l'icône.
+
 ### Fermeture — tous les cas couverts
 
 | Comment tu fermes | Ce qui se passe |
