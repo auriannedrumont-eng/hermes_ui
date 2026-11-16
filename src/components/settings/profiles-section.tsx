@@ -238,11 +238,6 @@ export function ProfilesSection() {
           );
         })}
       </div>
-
-      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        L&apos;application est immédiate (bus de réglages, aucun redémarrage) et prend
-        effet au prochain tour. La liste est conservée d&apos;une session à l&apos;autre.
-      </p>
     </section>
   );
 }

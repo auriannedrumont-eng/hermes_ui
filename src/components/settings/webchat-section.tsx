@@ -10,10 +10,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, ExternalLink, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
-import { InfoTip } from "@/components/shared/info-tip";
 import { getSocket } from "@/lib/socket";
 
 interface SiteStatus {
@@ -74,6 +73,7 @@ export function WebchatSection() {
   const [opening, setOpening] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAdv, setShowAdv] = useState(false);
 
   const load = useCallback(() => {
     getSocket().emit("webchat:status", (res: WebchatStatusPayload) => setStatus(res));
@@ -170,9 +170,9 @@ export function WebchatSection() {
     <section>
       <h1 className="text-[19px] font-bold tracking-tight">Chats web</h1>
       <p className="mt-1 mb-2 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-        Pilotage des chats IA publics (z.ai, AI Studio…) dans un vrai navigateur,
-        par l&apos;interface. Aucun identifiant n&apos;est saisi ni stocké par le
-        code : vous vous connectez une fois, à la main.
+        Faire travailler des chats IA publics (z.ai, AI Studio…) dans leur vrai
+        navigateur. Vous vous connectez une fois, à la main — rien n&apos;est
+        saisi ni stocké par l&apos;interface.
       </p>
 
       {/* ── Sites — statut réel de chaque fiche ───────────────────────── */}
@@ -186,11 +186,10 @@ export function WebchatSection() {
               <div className="text-[12.5px] font-semibold">{s.label}</div>
               <div className="mt-px text-[11px] leading-snug text-muted-foreground">
                 {s.verifie
-                  ? `Sélecteurs vérifiés — modes : ${s.modes.join(", ")}.`
-                  : "Sélecteurs à relever sur la page vivante — indisponible dans le sélecteur, pas cassé."}
+                  ? "Prêt — ouvert via le navigateur de pilotage ci-dessous."
+                  : "Pas encore prêt."}
               </div>
             </div>
-            <span className="flex-none font-mono text-[11px] text-muted-foreground/70">{s.id}</span>
             {s.verifie ? (
               <Pastille tone="ok" label="vérifié" className="flex-none" />
             ) : (
@@ -254,37 +253,49 @@ export function WebchatSection() {
             ))}
           </div>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          Binaire {cfg?.browserFound ? (
-            <code className="rounded bg-muted px-1 font-mono text-[11px]">{cfg.browserFound}</code>
-          ) : (
-            <span className="font-medium text-warning">introuvable — installez Chromium/Brave ou renseignez le chemin ci-dessous</span>
-          )}
-          {" · "}dossier de sortie{" "}
-          <code className="rounded bg-muted px-1 font-mono text-[11px]">{cfg?.outDir ?? "…"}</code>
-          {cfg && !cfg.outDirExists ? " (créé au premier tour build)" : ""}
-        </p>
       </div>
 
-      {/* ── Réglages des pilotes ──────────────────────────────────────── */}
-      <div className="mt-4 rounded-xl border border-border px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-[12.5px] font-semibold">Réglages des pilotes</div>
-          <span className="flex items-center gap-1.5">
-            {draftDirty ? (
-              <button
-                type="button"
-                onClick={() => void saveAll()}
-                className="inline-flex h-8 cursor-pointer items-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
-              >
-                Enregistrer
-              </button>
-            ) : (
-              <Pastille tone="off" label="à jour" className="flex-none" />
-            )}
-          </span>
-        </div>
-        <div className="mt-2.5 grid gap-3 sm:grid-cols-3">
+      {/* ── Réglages avancés — repliés par défaut (v2.6) ──────────────── */}
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => setShowAdv((v) => !v)}
+          className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+        >
+          <ChevronDown
+            className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
+            strokeWidth={2}
+          />
+          Réglages avancés
+        </button>
+        {showAdv ? (
+          <div className="mt-2 rounded-xl border border-border px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[12.5px] font-semibold">Pilotes du navigateur</div>
+              {draftDirty ? (
+                <button
+                  type="button"
+                  onClick={() => void saveAll()}
+                  className="inline-flex h-8 cursor-pointer items-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
+                >
+                  Enregistrer
+                </button>
+              ) : (
+                <Pastille tone="off" label="à jour" className="flex-none" />
+              )}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Navigateur{" "}
+              {cfg?.browserFound ? (
+                <code className="rounded bg-muted px-1 font-mono text-[11px]">{cfg.browserFound}</code>
+              ) : (
+                <span className="font-medium text-warning">introuvable — installez Chromium/Brave ou renseignez le chemin ci-dessous</span>
+              )}
+              {" · "}dossier de sortie{" "}
+              <code className="rounded bg-muted px-1 font-mono text-[11px]">{cfg?.outDir ?? "…"}</code>
+              {cfg && !cfg.outDirExists ? " (créé au premier tour build)" : ""}
+            </p>
+            <div className="mt-2.5 grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Port de débogage</span>
             <input
@@ -359,14 +370,12 @@ export function WebchatSection() {
           </label>
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          <InfoTip>
-            Le port de débogage ouvre le pilotage CDP sur le PROFIL DÉDIÉ
-            uniquement — votre navigateur personnel, lancé sans ce profil,
-            n&apos;est jamais touché (fil sur la chaîne --user-data-dir).
-          </InfoTip>{" "}
-          Un plafond dépassé est un échec explicite — jamais une réponse
-          tronquée présentée comme complète.
+          Le navigateur de pilotage est un profil dédié à l&apos;application —
+          votre navigateur personnel n&apos;est jamais touché. Un plafond dépassé
+          est un échec explicite, jamais une réponse tronquée.
         </p>
+          </div>
+        ) : null}
       </div>
 
       {flash ? (

@@ -4,11 +4,17 @@
 // navigation par rail, pastilles comme seule langue d'état, descriptions
 // simples sous les libellés.
 //
+// v2.6 — rail à 9 sections : Outils + Extensions + Skills fusionnées
+// (« Outils & extensions », ajout unifié par nom ou adresse), listes
+// limitées à ce qui est réellement installé (les fournisseurs de modèles
+// gardent leur catalogue), statut du moteur affiché en pied de volet une
+// seule fois.
+//
 // Sections livrées : Interface (registres client, effet immédiat),
 // Modèles (catalogue vivant du service + tarifs), Fournisseurs / Clés de
-// services (porte-clés, test réel), Extensions (dépôts GitHub + serveurs),
-// Hermes (presets + instructions + mémoire + conversations longues) et
-// — v2.4 — Outils, Skills, Profils, Système (statuts et sondes réels,
+// services (porte-clés, test réel), Chats web, Outils & extensions
+// (ajout unifié), Hermes (presets + instructions + mémoire +
+// conversations longues), Profils et Système (statuts et sondes réels,
 // jamais simulés ; le moteur reste verrouillé « gateway »).
 "use client";
 
@@ -16,15 +22,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   Cpu,
-  Database,
   Globe,
   KeyRound,
   Layers,
   Monitor,
-  Package,
   Settings2,
   Sparkle,
-  Sparkles,
   UserRound,
   Wrench,
   X,
@@ -65,10 +68,8 @@ import { useModelPricing } from "@/hooks/use-pricing";
 import { getSocket } from "@/lib/socket";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { ProvidersSection } from "@/components/settings/providers-section";
-import { ExtensionsSection } from "@/components/settings/extensions-section";
 import { HermesSection } from "@/components/settings/hermes-section";
-import { ToolsSection } from "@/components/settings/tools-section";
-import { SkillsSection } from "@/components/settings/skills-section";
+import { ToolsExtensionsSection } from "@/components/settings/outils-extensions-section";
 import { ProfilesSection } from "@/components/settings/profiles-section";
 import { SystemSection } from "@/components/settings/system-section";
 import { cn } from "@/lib/utils";
@@ -89,16 +90,14 @@ const SORT_LABELS: Record<string, string> = {
   title: "Nom",
 };
 
-// ── Les 10 sections du rail v4 ──────────────────────────────────────
+// ── Rail v2.6 : 9 sections (Outils + Extensions + Skills fusionnées) ──
 const SECTIONS = [
   { id: "interface", icon: Monitor, label: "Interface" },
   { id: "modeles", icon: Cpu, label: "Modèles" },
   { id: "fournisseurs", icon: Layers, label: "Fournisseurs" },
   { id: "cles", icon: KeyRound, label: "Clés de services" },
   { id: "chatsweb", icon: Globe, label: "Chats web" },
-  { id: "extensions", icon: Package, label: "Extensions" },
-  { id: "outils", icon: Wrench, label: "Outils" },
-  { id: "skills", icon: Sparkles, label: "Skills" },
+  { id: "outils", icon: Wrench, label: "Outils & extensions" },
   { id: "hermes", icon: Sparkle, label: "Hermes" },
   { id: "profils", icon: UserRound, label: "Profils" },
   { id: "systeme", icon: Settings2, label: "Système" },
@@ -389,7 +388,7 @@ function ModelesPane({
 
       <SettingRow
         label="Modèle de conversation"
-        description="Le modèle qui rédige les réponses — celui de la barre de saisie vaut pour la conversation en cours, ceci règle celui des nouvelles conversations."
+        description="Le modèle des nouvelles conversations — celui de la barre de saisie reste celui de la conversation en cours."
       >
         <Select
           value={selectedModel ?? undefined}
@@ -433,9 +432,8 @@ function ModelesPane({
       <div className="border-b border-border py-3">
         <div className="text-[14px] font-medium">Tarifs des modèles</div>
         <p className="mt-px max-w-[520px] text-[12.5px] leading-snug text-muted-foreground">
-          $ par million de jetons, entrée et sortie — le coût de chaque réponse
-          sera affiché sous la bulle. Rien n&apos;est pré-rempli : le fournisseur fait
-          foi ; aucune donnée ne quitte votre machine.
+          Prix en $ par million de jetons (entrée, sortie) — le coût de chaque
+          réponse s&apos;affiche sous la bulle.
         </p>
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <Select value={tarifModel || undefined} onValueChange={setTarifModel}>
@@ -508,18 +506,11 @@ function ModelesPane({
           </ul>
         ) : (
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Aucun tarif déclaré — les réponses afficheront leur coût dès qu&apos;un
-            tarif sera renseigné (ou tel que facturé par le fournisseur).
+            Aucun tarif déclaré — le coût d&apos;une réponse s&apos;affiche dès que
+            son modèle en a un.
           </p>
         )}
       </div>
-
-      <p className="mt-6 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted-foreground">
-        <Database className="mt-[1px] size-[13px] flex-none" strokeWidth={2} />
-        Le modèle d&apos;arrière-plan (travaux invisibles) et le modèle de secours
-        arriveront avec la découverte du moteur (v2.3). La place dont Hermes dispose
-        pour une conversation est détectée automatiquement — voir la section Hermes.
-      </p>
     </section>
   );
 }
@@ -581,8 +572,14 @@ export function SettingsPanel({
         return <ProvidersSection kind="service" api={api} />;
       case "chatsweb":
         return <WebchatSection />;
-      case "extensions":
-        return <ExtensionsSection api={api} />;
+      case "outils":
+        return (
+          <ToolsExtensionsSection
+            webSearchAvailable={webSearchAvailable}
+            onNavigate={goto}
+            api={api}
+          />
+        );
       case "hermes":
         return (
           <HermesSection
@@ -601,15 +598,6 @@ export function SettingsPanel({
             selectedModel={selectedModel}
           />
         );
-      case "outils":
-        return (
-          <ToolsSection
-            webSearchAvailable={webSearchAvailable}
-            onNavigate={goto}
-          />
-        );
-      case "skills":
-        return <SkillsSection onNavigate={goto} />;
       case "profils":
         return <ProfilesSection />;
       case "systeme":
@@ -665,7 +653,7 @@ export function SettingsPanel({
                   >
                     <Icon className="size-[14px] flex-none" strokeWidth={2} />
                     <span className="whitespace-nowrap">{label}</span>
-                    {id === "extensions" && extUpdate ? (
+                    {id === "outils" && extUpdate ? (
                       <i
                         className="ml-auto size-[7px] flex-none rounded-full bg-warning max-[1100px]:ml-1"
                         aria-label="Mise à jour disponible"
@@ -675,30 +663,10 @@ export function SettingsPanel({
                 );
               })}
             </div>
+            {/* Version du service — l'état du moteur est en pied de volet,
+                une seule fois (v2.6 : doublon retiré). */}
             <div className="mt-auto px-2 pt-2 text-[11px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
-              {isLocal ? (
-                poolActive ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <InfoTip>Les réponses viennent de l'API de vos fournisseurs — vos clés, votre quota.</InfoTip>
-                    <i className="size-[6px] rounded-full bg-success" aria-hidden />
-                    clés actives
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <InfoTip>Agent Hermes non détecté — lancez l'agent (connexion automatique) ou ajoutez une clé.</InfoTip>
-                    <i className="size-[6px] rounded-full bg-muted-foreground/50" aria-hidden />
-                    agent non détecté
-                  </span>
-                )
-              ) : (
-                <span className="inline-flex items-center gap-1.5">
-                  <i className="size-[6px] rounded-full bg-success" aria-hidden />
-                  gateway
-                </span>
-              )}
-              {serverVersion ? (
-                <span className="block pt-0.5">service v{serverVersion}</span>
-              ) : null}
+              {serverVersion ? <span>service v{serverVersion}</span> : null}
             </div>
           </nav>
 

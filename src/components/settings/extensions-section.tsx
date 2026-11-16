@@ -1,8 +1,6 @@
-// Section « Extensions » du volet Paramètres v4 — dépôts GitHub importés
-// (vérifier, mettre à jour, épingler) et serveurs ajoutés (MCP).
-// Maquette de référence : design/maquette-parametres-v4.html (pane
-// p-extensions). « Vérifier » et « Mettre à jour » interrogent réellement
-// l'API GitHub via le mini-service.
+// Carte d'une extension (dépôt importé ou serveur MCP) — partagée par la
+// section « Outils & extensions ». « Vérifier » et « Mettre à jour »
+// interrogent réellement l'API GitHub via le mini-service.
 "use client";
 
 import { useState } from "react";
@@ -17,7 +15,7 @@ import {
 } from "lucide-react";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import type { ExtensionCommit, ExtensionView } from "@/lib/chat-types";
-import { AddLine, Pastille } from "@/components/settings/bits";
+import { Pastille } from "@/components/settings/bits";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -32,7 +30,7 @@ function timeAgo(iso: string): string {
 
 // ── Une extension (dépôt importé ou serveur) ─────────────────────────
 
-function ExtensionRow({
+export function ExtensionRow({
   ext,
   api,
   commits,
@@ -139,9 +137,8 @@ function ExtensionRow({
         !ext.enabled && "opacity-40"
       )}
     >
-      {/* En-tête restructuré façon ConversationItem (C2.1) : une zone
-          d'ouverture dédiée, le Switch HORS du bouton — plus de double
-          annonce, plus de double handler, une seule tabulation par fonction. */}
+      {/* En-tête : une zone d'ouverture dédiée, le Switch HORS du bouton —
+          plus de double annonce, une seule tabulation par fonction. */}
       <div className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60">
         <button
           type="button"
@@ -261,146 +258,5 @@ function ExtensionRow({
         </div>
       ) : null}
     </div>
-  );
-}
-
-// ── Le panneau Extensions ────────────────────────────────────────────
-
-export function ExtensionsSection({ api }: { api: ProvidersApi }) {
-  const { toast } = useToast();
-  const [showRepo, setShowRepo] = useState(false);
-  const [showMcp, setShowMcp] = useState(false);
-  const [repoUrl, setRepoUrl] = useState("");
-  const [mcpUrl, setMcpUrl] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [commitsByExt, setCommitsByExt] = useState<Record<string, ExtensionCommit[]>>({});
-
-  const setCommits = (id: string, commits: ExtensionCommit[] | null) => {
-    setCommitsByExt((m) => {
-      const next = { ...m };
-      if (commits) next[id] = commits;
-      else delete next[id];
-      return next;
-    });
-  };
-
-  const handleImport = async () => {
-    if (!repoUrl.trim() || importing) return;
-    setImporting(true);
-    const res = await api.addExtension("repo", repoUrl.trim());
-    setImporting(false);
-    if (res.error) {
-      toast({ title: "Import impossible", description: res.error, variant: "destructive" });
-      return;
-    }
-    if (res.commits && res.extension) setCommits(res.extension.id, res.commits);
-    setRepoUrl("");
-    setShowRepo(false);
-    toast({
-      title: "Import terminé",
-      description: `${res.extension?.name ?? "Dépôt"} importé — ${res.extension?.version ?? ""} sur ${res.extension?.channel ?? "main"}.`,
-    });
-  };
-
-  const handleAddMcp = async () => {
-    if (!mcpUrl.trim()) return;
-    const res = await api.addExtension("mcp", mcpUrl.trim());
-    if (res.error) {
-      toast({ title: "Ajout impossible", description: res.error, variant: "destructive" });
-      return;
-    }
-    setMcpUrl("");
-    setShowMcp(false);
-    toast({
-      title: "Serveur ajouté",
-      description: "Activé au prochain redémarrage — les sessions en cours seront prévenues.",
-    });
-  };
-
-  return (
-    <section>
-      <h1 className="text-[19px] font-bold tracking-tight">Extensions</h1>
-      <p className="mt-1 mb-5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-        Dépôts et serveurs ajoutés, qui apportent de nouveaux pouvoirs à Hermes. Désactiver
-        garde la configuration ; tout décharger.
-      </p>
-
-      {api.extensions.map((e) => (
-        <ExtensionRow
-          key={e.id}
-          ext={e}
-          api={api}
-          commits={commitsByExt[e.id] ?? null}
-          onCommits={setCommits}
-        />
-      ))}
-      {api.extensions.length === 0 ? (
-        <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
-          Aucune extension pour l&apos;instant — importez un dépôt GitHub ou ajoutez un serveur.
-        </p>
-      ) : null}
-
-      <div className="mt-1 flex flex-wrap gap-5">
-        <AddLine onClick={() => setShowRepo((v) => !v)}>Importer un dépôt GitHub</AddLine>
-        <AddLine onClick={() => setShowMcp((v) => !v)}>Ajouter un serveur</AddLine>
-      </div>
-
-      {showRepo ? (
-        <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
-          <input
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleImport();
-            }}
-            placeholder="Adresse du dépôt (https://github.com/…)"
-            aria-label="Adresse du dépôt GitHub"
-            className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
-          />
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Hermes analysera le dépôt et détectera ce qu&apos;il apporte : outils, skills,
-            serveur.
-          </p>
-          <div className="mt-2.5 flex justify-end">
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={!repoUrl.trim() || importing}
-              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {importing ? (
-                <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
-              ) : null}
-              {importing ? "Analyse…" : "Importer"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {showMcp ? (
-        <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
-          <input
-            value={mcpUrl}
-            onChange={(e) => setMcpUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleAddMcp();
-            }}
-            placeholder="Adresse du serveur, ou commande de lancement"
-            aria-label="Adresse du serveur MCP"
-            className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
-          />
-          <div className="mt-2.5 flex justify-end">
-            <button
-              type="button"
-              onClick={handleAddMcp}
-              disabled={!mcpUrl.trim()}
-              className="h-8 cursor-pointer rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Ajouter
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </section>
   );
 }

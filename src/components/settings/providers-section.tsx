@@ -7,6 +7,10 @@
 // compte deux portefeuilles étanches, API standard et GLM Coding Plan)
 // et champ « endpoint » éditable, visible dès l'ajout d'une clé et dans
 // les réglages avancés de chaque carte.
+// v2.6 — « Clés de services » : plus de catalogue à parcourir, ajout par
+// le champ unifié « nom ou adresse » (AddAnything) ; libellés « adresse »
+// (le jargon « endpoint » ne sort plus dans l'interface). Le catalogue du
+// sélecteur reste pour les fournisseurs de modèles (Fournisseurs).
 //
 // Sécurité : le secret est saisi une fois, envoyé au service, puis oublié
 // côté client — l'UI ne rend que la vue masquée (sk-••••7f3a).
@@ -29,6 +33,7 @@ import {
 } from "@/hooks/use-providers";
 import type { ProviderKind, ProviderStrategy, ProviderView } from "@/lib/chat-types";
 import { AddLine, Pastille } from "@/components/settings/bits";
+import { AddAnything } from "@/components/settings/add-anything";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +113,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       if (nextBase && nextBase !== endpoint) {
         const base = await api.setProviderBase(provider.id, nextBase);
         if (base.error) {
-          toast({ title: "Endpoint refusé", description: base.error, variant: "destructive" });
+          toast({ title: "Adresse refusée", description: base.error, variant: "destructive" });
           return;
         }
       }
@@ -146,7 +151,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
     // accepte la clé (clé Coding Plan ajoutée côté API standard, p. ex.).
     if (res.provider?.baseUrl && res.provider.baseUrl !== (provider.baseUrl ?? "")) {
       toast({
-        title: "Endpoint basculé automatiquement",
+        title: "Adresse basculée automatiquement",
         description: `Votre clé répond sur l'autre portefeuille z.ai — ${provider.name} utilise maintenant ${res.provider.baseUrl}.`,
       });
     }
@@ -185,11 +190,11 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
     const res = await api.setProviderBase(provider.id, next);
     setSavingBase(false);
     if (res.error) {
-      toast({ title: "Endpoint refusé", description: res.error, variant: "destructive" });
+      toast({ title: "Adresse refusée", description: res.error, variant: "destructive" });
       return;
     }
     toast({
-      title: "Endpoint enregistré",
+      title: "Adresse enregistrée",
       description: res.provider?.baseUrl ?? `${provider.name} revient à son adresse par défaut.`,
     });
   };
@@ -338,7 +343,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   value={keyEndpoint}
                   onChange={(e) => setKeyEndpoint(e.target.value)}
                   placeholder="https://…"
-                  aria-label="Endpoint utilisé pour ce fournisseur"
+                  aria-label="Adresse utilisée pour ce fournisseur"
                   spellCheck={false}
                   className="h-8 min-w-[200px] flex-1 rounded-md border border-border bg-background px-2.5 font-mono text-[11px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
@@ -368,7 +373,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
           {/* Endpoint éditable */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[12.5px] font-medium">
-              Adresse (endpoint)
+              Adresse
               <span className="block text-[11px] font-normal text-muted-foreground">
                 où Hermes appelle ce fournisseur
               </span>
@@ -381,7 +386,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   if (e.key === "Enter") void handleSaveAdvEndpoint();
                 }}
                 placeholder="https://…"
-                aria-label="Adresse (endpoint) du fournisseur"
+                aria-label="Adresse du fournisseur"
                 spellCheck={false}
                 className="h-8 w-[min(300px,100%)] rounded-md border border-border bg-background px-2.5 font-mono text-[11px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
               />
@@ -564,7 +569,7 @@ function AddProviderPanel({
         htmlFor="add-provider-endpoint"
         className="mt-2.5 block text-[11px] font-semibold text-muted-foreground"
       >
-        {isCustom ? "Adresse du fournisseur" : "Adresse (endpoint)"}
+        {isCustom ? "Adresse du fournisseur" : "Adresse"}
       </label>
       <input
         id="add-provider-endpoint"
@@ -574,7 +579,7 @@ function AddProviderPanel({
           if (e.key === "Enter") void handleAdd();
         }}
         placeholder="https://…"
-        aria-label="Adresse (endpoint) du fournisseur"
+        aria-label="Adresse du fournisseur"
         spellCheck={false}
         className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
       />
@@ -638,7 +643,20 @@ export function ProvidersSection({
         <AddLine onClick={() => setShowAdd((v) => !v)}>{texts.addLabel}</AddLine>
       </div>
       {showAdd ? (
-        <AddProviderPanel kind={kind} api={api} onClose={() => setShowAdd(false)} />
+        kind === "service" ? (
+          // v2.6 — plus de catalogue à parcourir : le même champ unifié
+          // « nom ou adresse » (un nom connu crée la fiche ici ; la clé
+          // s'ajoute ensuite dessus).
+          <div className="mt-2.5">
+            <AddAnything
+              api={api}
+              autoFocus
+              hint="Tapez un nom connu (ex. tavily) — la fiche apparaît ici, sa clé s'ajoute dessus."
+            />
+          </div>
+        ) : (
+          <AddProviderPanel kind={kind} api={api} onClose={() => setShowAdd(false)} />
+        )
       ) : null}
 
       {texts.note ? (

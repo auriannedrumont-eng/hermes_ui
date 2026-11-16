@@ -27,6 +27,16 @@ interface EmitResult<T> {
   commits?: ExtensionCommit[];
 }
 
+/** Résultat de l'ajout unifié (registry:install) — le service décide ce
+ *  que l'entrée devient : dépôt, serveur MCP ou fournisseur. */
+export interface InstallResult {
+  what?: "repo" | "mcp" | "provider";
+  extension?: ExtensionView;
+  provider?: ProviderView;
+  commits?: ExtensionCommit[];
+  error?: string;
+}
+
 export function useProviders() {
   const [providers, setProviders] = useState<ProviderView[]>([]);
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
@@ -162,6 +172,14 @@ export function useProviders() {
     [emit]
   );
 
+  /** Ajout unifié (v2.6) : un nom (« tavily ») ou une adresse (dépôt
+   *  GitHub, serveur https, commande de lancement) — le service résout et
+   *  installe seul ; la clé API s'ajoute ensuite sur la fiche. */
+  const installAnything = useCallback(
+    (source: string) => emit<InstallResult>("registry:install", { source }),
+    [emit]
+  );
+
   const toggleExtension = useCallback(
     (id: string, enabled: boolean) =>
       emit<{ extension?: ExtensionView; error?: string }>("extensions:toggle", { id, enabled }),
@@ -209,6 +227,7 @@ export function useProviders() {
     removeKey,
     testKey,
     addExtension,
+    installAnything,
     toggleExtension,
     removeExtension,
     pinExtension,

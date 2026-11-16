@@ -9,6 +9,7 @@
 //   settings:get/set,
 //   providers:list/catalog/add/remove/set-strategy/set-base/add-key/remove-key/test-key,
 //   extensions:list/add/toggle/remove/pin/check/update,
+//   registry:install (v2.6 — ajout unifié « nom ou adresse » : dépôt, MCP, fournisseur),
 //   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
 //   custom-instructions:get/set,
 //   memory:get/set-enabled/set-auto/set-notes,
@@ -2113,6 +2114,104 @@ io.on("connection", (socket) => {
         if (typeof cb === "function")
           cb({ error: err instanceof Error ? err.message : "Import impossible" });
       }
+    }
+  );
+
+  // Ajout UNIFIÉ (v2.6) — un seul champ « nom ou adresse » : le service
+  // décide tout seul ce que l'entrée devient.
+  //   dépôt GitHub (URL, owner/repo, git@…) → extension « repo », résolue
+  //     réellement (infos, branche, tête) ;
+  //   adresse https → serveur MCP ;
+  //   commande de lancement (npx/uvx/node/…) → serveur MCP ;
+  //   nom connu (tavily, exa…) → fournisseur, créé avec la clé du catalogue
+  //     (service → fiche « Clés de services », llm → « Fournisseurs ») ; la
+  //     clé API s'ajoute ensuite sur la fiche, jamais à l'installation.
+  socket.on(
+    "registry:install",
+    async (payload: { source?: string }, cb?: (data: unknown) => void) => {
+      const raw = (payload?.source ?? "").trim();
+      if (!raw) {
+        if (typeof cb === "function") cb({ error: "Tapez un nom ou collez une adresse." });
+        return;
+      }
+
+      // 1. Dépôt GitHub ?
+      const repoRef = parseRepoInput(raw);
+      if (repoRef) {
+        try {
+          const snap = await fetchRepoSnapshot(repoRef, null);
+          const row = store.createExtension({
+            name: snap.name,
+            kind: "repo",
+            description: snap.description,
+            source: `${repoRef.owner}/${repoRef.repo}`,
+            channel: snap.defaultBranch,
+            commit: snap.headSha,
+            version: snap.versionLabel,
+          });
+          console.log(
+            `[hermes-chat] registry: dépôt installé : ${row.source} @ ${row.channel} (${row.version})`
+          );
+          if (typeof cb === "function")
+            cb({ what: "repo", extension: extensionWire(row), commits: snap.commits });
+          broadcastExtensions();
+        } catch (err) {
+          if (typeof cb === "function")
+            cb({ error: err instanceof Error ? err.message : "Import impossible" });
+        }
+        return;
+      }
+
+      // 2. Adresse https → serveur MCP. 3. Commande de lancement → MCP aussi.
+      if (/^https?:\/\//i.test(raw) || /^(npx|uvx|bunx|node|python3?|docker)\b/i.test(raw)) {
+        const row = store.createExtension({
+          name: raw.slice(0, 80),
+          kind: "mcp",
+          description: "serveur ajouté",
+          source: raw,
+        });
+        if (typeof cb === "function") cb({ what: "mcp", extension: extensionWire(row) });
+        broadcastExtensions();
+        return;
+      }
+
+      // 4. Nom connu → fournisseur (kind porté par le catalogue).
+      const resolved = resolveKnownProvider(raw);
+      if (resolved && "known" in resolved) {
+        const known = resolved.known;
+        const existing = store
+          .listProviderRows()
+          .find(
+            (p) =>
+              p.name.toLowerCase() === known.name.toLowerCase() && p.kind === known.kind
+          );
+        if (existing) {
+          if (typeof cb === "function")
+            cb({
+              error:
+                known.kind === "service"
+                  ? `${known.name} est déjà configuré — sa clé s'ajoute sur sa fiche dans « Clés de services ».`
+                  : `${known.name} figure déjà dans « Fournisseurs ».`,
+            });
+          return;
+        }
+        const row = store.createProvider({
+          name: known.name,
+          kind: known.kind,
+          baseUrl: known.defaultBaseUrl ?? null,
+        });
+        console.log(`[hermes-chat] registry: fournisseur installé : ${row.name} (${row.kind})`);
+        if (typeof cb === "function")
+          cb({ what: "provider", provider: providerWire(row, []) });
+        broadcastProviders();
+        return;
+      }
+
+      if (typeof cb === "function")
+        cb({
+          error:
+            "Introuvable — tapez un nom connu (tavily, exa…) ou collez une adresse GitHub / https.",
+        });
     }
   );
 

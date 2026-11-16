@@ -2,12 +2,12 @@
 // bibliothèque de presets de prompt système (éditeur intégré), instructions
 // personnalisées globales, mémoire utilisateur (consultable, éditable,
 // effaçable) et — v2.4 — conversations longues (résumé automatique avec
-// seuil, fenêtre suivie). Les fichiers .md moteur et le comportement
-// (initiatives) restent « à venir » — ils dépendent de la découverte moteur.
+// seuil, fenêtre suivie). v2.6 : les blocs « à venir » décoratifs sont
+// retirés — la section ne montre que ce qui est livré.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, MessagesSquare, Pencil, Sparkle, Trash2 } from "lucide-react";
+import { Check, MessagesSquare, Pencil, Trash2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -431,44 +431,7 @@ export function HermesSection({
         </div>
       </div>
 
-      {/* ── À venir : le reste de la section Hermes ─────────────────── */}
-      <div className="mt-6 rounded-xl border border-dashed border-border px-4 py-1">
-        {[
-          {
-            name: "Fichiers .md moteur",
-            desc: "SOUL.md, AGENTS.md… — éditables ici, effet au rechargement du moteur",
-          },
-          {
-            name: "Comportement du moteur",
-            desc: "initiatives de fond, tâches planifiées, délégation, historique des sessions",
-          },
-        ].map((it, i) => (
-          <div
-            key={it.name}
-            className={cn(
-              "flex items-center gap-3 py-[11px]",
-              i > 0 && "border-t border-border/60"
-            )}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] font-semibold">{it.name}</div>
-              <div className="mt-px text-[11px] leading-snug text-muted-foreground">
-                {it.desc}
-              </div>
-            </div>
-            <span className="flex-none rounded-full bg-warning/12 px-2 py-0.5 text-[11px] font-semibold text-warning">
-              à venir
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
-        <Sparkle className="mt-[2px] size-[13px] flex-none" strokeWidth={2} />
-        Le prompt de chaque conversation vit dans son propre panneau (bouton
-        «&nbsp;prompt&nbsp;» de l&apos;en-tête) ; les presets ci-dessus s&apos;y
-        appliquent en un clic. Une fois la gateway branchée, ces réglages
-        partiront dans <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>.
-      </p>
+
     </section>
   );
 }
