@@ -69,11 +69,6 @@ export interface ChatMessage {
   artifacts?: Artifact[];
   /** Réponse interrompue par l'utilisateur (bouton Stop) — partiel conservé. */
   stopped?: boolean;
-  // ── Feedback utilisateur (F-24) — local, jamais envoyé au modèle ──
-  /** 👍/👎 posé sur une réponse assistant (absent = pas de feedback). */
-  feedbackRating?: "up" | "down";
-  /** Commentaire libre associé au feedback (max 2 000 caractères). */
-  feedbackComment?: string;
   // ── Comparaison de modèles (F-17) — réponse de la variante a ou b ──
   /** Variante du tour de comparaison (absent = message hors comparaison). */
   variant?: "a" | "b";
@@ -86,12 +81,6 @@ export interface ChatMessage {
   // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
   /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
   versions?: { group: string; index: number; count: number };
-}
-
-/** Charge utile du bus `feedback:changed` (F-24, broadcast). */
-export interface FeedbackChangedPayload {
-  conversationId: string;
-  message: ChatMessage;
 }
 
 // ── Artefacts : fichiers générés par l'agent, objets de première classe ──

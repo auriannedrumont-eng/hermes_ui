@@ -177,17 +177,6 @@ export class Store {
     } catch {
       /* colonne déjà présente */
     }
-    // Migration douce : feedback utilisateur (F-24) — 👍/👎 + commentaire
-    try {
-      this.db.exec("ALTER TABLE messages ADD COLUMN feedback_rating TEXT");
-    } catch {
-      /* colonne déjà présente */
-    }
-    try {
-      this.db.exec("ALTER TABLE messages ADD COLUMN feedback_comment TEXT");
-    } catch {
-      /* colonne déjà présente */
-    }
     // Migration douce : variante de comparaison (F-17) — "a" | "b" | null
     try {
       this.db.exec("ALTER TABLE messages ADD COLUMN variant TEXT");
@@ -1115,8 +1104,6 @@ export class Store {
       model: r.model ?? undefined,
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
-      feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
-      feedbackComment: r.feedback_comment ?? undefined,
       variant: (r.variant as "a" | "b" | null) ?? undefined,
       usage:
         r.usage_input != null || r.usage_output != null || r.usage_cost != null
@@ -1128,22 +1115,6 @@ export class Store {
           : undefined,
       sources: r.sources ? (JSON.parse(r.sources) as WebSource[]) : undefined,
     }));
-  }
-
-  /** Définit le feedback d'un message assistant (F-24) — null = effacé. */
-  setMessageFeedback(
-    conversationId: string,
-    messageId: string,
-    rating: "up" | "down" | null,
-    comment?: string | null
-  ): ChatMessage | null {
-    const msg = this.getMessage(conversationId, messageId);
-    if (!msg || msg.role !== "assistant") return null;
-    const clean = typeof comment === "string" ? comment.trim().slice(0, 2000) : null;
-    this.db
-      .query("UPDATE messages SET feedback_rating = ?, feedback_comment = ? WHERE conversation_id = ? AND id = ?")
-      .run(rating, rating ? (clean ?? null) : null, conversationId, messageId);
-    return this.getMessage(conversationId, messageId);
   }
 
   appendMessage(
@@ -1286,8 +1257,6 @@ export class Store {
       model: r.model ?? undefined,
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
-      feedbackRating: (r.feedback_rating as "up" | "down" | null) ?? undefined,
-      feedbackComment: r.feedback_comment ?? undefined,
       variant: (r.variant as "a" | "b" | null) ?? undefined,
       usage:
         r.usage_input != null || r.usage_output != null || r.usage_cost != null

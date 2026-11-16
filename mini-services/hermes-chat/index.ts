@@ -12,7 +12,7 @@
 //   system-prompt:get/set/clear, system-prompts:list/create/update/delete,
 //   custom-instructions:get/set,
 //   memory:get/set-enabled/set-auto/set-notes,
-//   share:get/create/revoke, feedback:set,
+//   share:get/create/revoke,
 //   system:renderCache/clearRenderCache (v2.4 — profils de rendu Chrome)
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
@@ -21,7 +21,7 @@
 //   artifact:created, artifact:delta, artifact:updated,
 //   settings:changed, providers:changed, models:changed, extensions:changed,
 //   system-prompt:changed, system-prompts:changed, custom-instructions:changed,
-//   share:changed, feedback:changed,
+//   share:changed,
 //   memory:changed
 // HTTP (port 3004) :
 //   GET /uploads/<id>.<ext>            — pièces jointes multimédia
@@ -1567,44 +1567,6 @@ io.on("connection", (socket) => {
       const ok = store.revokeShareByConversation(id);
       if (typeof cb === "function") cb({ ok });
       if (ok) io.emit("share:changed", { conversationId: id, share: null });
-    }
-  );
-
-  // ── Feedback utilisateur (F-24) — local, jamais envoyé au modèle ────
-  // 👍/👎 + commentaire libre sur les réponses assistant. null = effacé.
-  socket.on(
-    "feedback:set",
-    (
-      payload: {
-        conversationId?: string;
-        messageId?: string;
-        rating?: "up" | "down" | null;
-        comment?: string | null;
-      },
-      cb?: (data: unknown) => void
-    ) => {
-      const conversationId = payload?.conversationId;
-      const messageId = payload?.messageId;
-      const rating =
-        payload?.rating === "up" || payload?.rating === "down" ? payload.rating : null;
-      if (!conversationId || !messageId) {
-        if (typeof cb === "function") cb({ error: "Paramètres manquants" });
-        return;
-      }
-      const comment =
-        typeof payload?.comment === "string" ? payload.comment.trim().slice(0, 2000) : null;
-      if (!rating && comment) {
-        if (typeof cb === "function")
-          cb({ error: "Un commentaire accompagne un 👍/👎 — effacez le retour complet" });
-        return;
-      }
-      const message = store.setMessageFeedback(conversationId, messageId, rating, comment);
-      if (!message) {
-        if (typeof cb === "function") cb({ error: "Réponse introuvable (assistant seule)" });
-        return;
-      }
-      if (typeof cb === "function") cb({ message });
-      io.emit("feedback:changed", { conversationId, message });
     }
   );
 

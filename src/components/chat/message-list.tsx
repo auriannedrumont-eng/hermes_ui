@@ -91,8 +91,6 @@ interface MessageListProps {
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onFork: (messageId: string) => void;
-  /** Feedback 👍/👎 + commentaire (F-24) — réponses assistant. */
-  onSetFeedback: (messageId: string, rating: "up" | "down" | null, comment?: string | null) => void;
   onOpenArtifact: (artifact: Artifact) => void;
   onRetryArtifact: (artifactId: string) => void;
 }
@@ -170,7 +168,6 @@ export function MessageList({
   onEdit,
   onDelete,
   onFork,
-  onSetFeedback,
   onOpenArtifact,
   onRetryArtifact,
 }: MessageListProps) {
@@ -276,7 +273,6 @@ export function MessageList({
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onFork={onFork}
-                    onSetFeedback={onSetFeedback}
                     artifactCards={cardsForMessage(row.message.id, artifacts, row.message.artifacts)}
                     artifactStreams={artifactStreams}
                     onOpenArtifact={onOpenArtifact}
@@ -295,7 +291,6 @@ export function MessageList({
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onFork={onFork}
-                  onSetFeedback={onSetFeedback}
                   onOpenArtifact={onOpenArtifact}
                   onRetryArtifact={onRetryArtifact}
                 />
@@ -394,7 +389,6 @@ function ComparePair({
   onEdit,
   onDelete,
   onFork,
-  onSetFeedback,
   onOpenArtifact,
   onRetryArtifact,
 }: {
@@ -407,7 +401,6 @@ function ComparePair({
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onFork: (messageId: string) => void;
-  onSetFeedback: (messageId: string, rating: "up" | "down" | null, comment?: string | null) => void;
   onOpenArtifact: (artifact: Artifact) => void;
   onRetryArtifact: (artifactId: string) => void;
 }) {
@@ -457,7 +450,6 @@ function ComparePair({
               onEdit={onEdit}
               onDelete={onDelete}
               onFork={onFork}
-              onSetFeedback={onSetFeedback}
               artifactCards={cardsForMessage(cell.message.id, artifacts, cell.message.artifacts)}
               artifactStreams={artifactStreams}
               onOpenArtifact={onOpenArtifact}

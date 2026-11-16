@@ -698,25 +698,6 @@ export function useHermesChat() {
       );
     };
 
-    // Feedback 👍/👎 + commentaire (F-24) — broadcast d'un autre client
-    const onFeedbackChanged = (p: {
-      conversationId: string;
-      message: ChatMessage;
-    }) => {
-      if (p.conversationId !== activeIdRef.current || !p.message) return;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === p.message.id
-            ? {
-                ...m,
-                feedbackRating: p.message.feedbackRating,
-                feedbackComment: p.message.feedbackComment,
-              }
-            : m
-        )
-      );
-    };
-
     // Conversation épinglée (broadcast)
     const onConversationsPinned = (p: { conversation: ConversationMeta }) => {
       if (!p.conversation) return;
@@ -807,7 +788,6 @@ export function useHermesChat() {
     socket.on("messages:superseded", onMessagesSuperseded);
     socket.on("messages:refreshed", onMessagesRefreshed);
     socket.on("message:updated", onMessageUpdated);
-    socket.on("feedback:changed", onFeedbackChanged);
     socket.on("conversations:pinned", onConversationsPinned);
     socket.on("conversations:created", onConversationsCreated);
     socket.on("projects:created", onProjectCreated);
@@ -841,7 +821,6 @@ export function useHermesChat() {
       socket.off("messages:superseded", onMessagesSuperseded);
       socket.off("messages:refreshed", onMessagesRefreshed);
       socket.off("message:updated", onMessageUpdated);
-      socket.off("feedback:changed", onFeedbackChanged);
       socket.off("conversations:pinned", onConversationsPinned);
       socket.off("conversations:created", onConversationsCreated);
       socket.off("projects:created", onProjectCreated);
@@ -1287,47 +1266,6 @@ export function useHermesChat() {
     [openConversation]
   );
 
-  /** Pose / retire le feedback 👍/👎 (+ commentaire) d'une réponse (F-24).
-   *  Local : jamais envoyé au modèle — persisté sur le message, broadcast. */
-  const setMessageFeedback = useCallback(
-    (
-      messageId: string,
-      rating: "up" | "down" | null,
-      comment?: string | null
-    ) => {
-      const conversationId = activeIdRef.current;
-      if (!conversationId || messageId.startsWith("local-")) return;
-      // Mise à jour optimiste : le clic est immédiat ; le broadcast confirme.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId
-            ? {
-                ...m,
-                feedbackRating: rating ?? undefined,
-                feedbackComment: rating ? (comment ?? undefined) : undefined,
-              }
-            : m
-        )
-      );
-      getSocket().emit(
-        "feedback:set",
-        { conversationId, messageId, rating, comment: comment ?? null },
-        (res: { message?: ChatMessage; error?: string } = {}) => {
-          if (res.message) {
-            const confirmed = res.message;
-            setMessages((prev) =>
-              prev.map((m) => (m.id === confirmed.id ? confirmed : m))
-            );
-          } else if (res.error) {
-            // Échec (message partiels, rôle) : retour à l'état antérieur
-            openConversation(conversationId);
-          }
-        }
-      );
-    },
-    [openConversation]
-  );
-
   /** Épingle / détache une conversation. */
   const togglePin = useCallback(
     (id: string) => {
@@ -1689,8 +1627,6 @@ export function useHermesChat() {
     deleteMessage,
     // F-14 — navigation entre versions d'une réponse
     setMessageVersion,
-    // Feedback 👍/👎 (F-24)
-    setMessageFeedback,
     togglePin,
     forkConversation,
     searchMessages,

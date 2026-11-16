@@ -413,7 +413,6 @@ export default function HermesWebPage() {
             onEdit={chat.editMessage}
             onDelete={chat.deleteMessage}
             onFork={handleFork}
-            onSetFeedback={chat.setMessageFeedback}
             onOpenArtifact={handleOpenArtifact}
             onRetryArtifact={chat.retryArtifact}
           />

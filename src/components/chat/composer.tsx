@@ -628,20 +628,19 @@ export function Composer({
               variant="ghost"
               onClick={onToggleCompare}
               title={compareEnabled ? "Couper la comparaison" : "Comparer deux modèles côte à côte"}
+              aria-label={compareEnabled ? "Couper la comparaison" : "Comparer deux modèles côte à côte"}
               aria-pressed={compareEnabled}
               className={
                 compareEnabled
-                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes-text hover:bg-hermes/25"
-                  : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  ? "h-8 w-8 justify-center rounded-full bg-hermes/15 p-0 text-hermes-text hover:bg-hermes/25"
+                  : "h-8 w-8 justify-center rounded-full p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               }
             >
               <Columns2 className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">Comparer</span>
             </Button>
             {compareEnabled ? (
               <>
                 <ModelPicker
-                  compact
                   bare
                   slotLabel="A"
                   models={models}
@@ -653,7 +652,6 @@ export function Composer({
                   onEffortChange={onEffortChange}
                 />
                 <ModelPicker
-                  compact
                   bare
                   slotLabel="B"
                   models={models}
@@ -667,7 +665,6 @@ export function Composer({
               </>
             ) : (
               <ModelPicker
-                compact
                 models={models}
                 selectedModel={selectedModel}
                 source={modelsSource}
@@ -700,12 +697,11 @@ export function Composer({
               aria-label="Recherche web"
               className={
                 webSearch
-                  ? "h-8 gap-1.5 rounded-full bg-hermes/15 px-2.5 text-[12.5px] font-semibold text-hermes-text hover:bg-hermes/25 disabled:opacity-40"
-                  : "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+                  ? "h-8 w-8 justify-center rounded-full bg-hermes/15 p-0 text-hermes-text hover:bg-hermes/25 disabled:opacity-40"
+                  : "h-8 w-8 justify-center rounded-full p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
               }
             >
               <Globe className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">Web</span>
             </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px]">

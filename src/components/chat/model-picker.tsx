@@ -1,9 +1,11 @@
-// Sélecteur de modèle — popover cmdk épuré : recherche (nom, id, fournisseur —
-// insensible à la casse et aux accents), section Favoris (hermes.models.favorites)
-// alimentée par l'étoile de chaque ligne (bascule ici même — fin du panneau mort
-// « géré depuis les paramètres »), groupes par fournisseur, échelle d'effort
-// portée par le modèle (repli générique off·low·medium·high·max) et mode expert
-// (F-22). Les notes explicatives vivent dans l'InfoTip — idiome unique du repo.
+// Sélecteur de modèle — popover cmdk épuré : déclencheur icône seule (✦/A/B +
+// chevron — le modèle choisi vit dans le title et dans l'aria-label), recherche
+// (nom, id, fournisseur — insensible à la casse et aux accents), section Favoris
+// (hermes.models.favorites) alimentée par l'étoile de chaque ligne (bascule ici
+// même — fin du panneau mort « gérés depuis les paramètres »), groupes par
+// fournisseur, échelle d'effort portée par le modèle (repli générique
+// off·low·medium·high·max) et mode expert (F-22). Les notes explicatives vivent
+// dans l'InfoTip — idiome unique du repo.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -67,8 +69,6 @@ interface ModelPickerProps {
   source: "gateway" | "catalogue" | "providers" | null;
   mode: "gateway" | "demo" | null;
   disabled?: boolean;
-  /** Variante compacte (dans le composer). */
-  compact?: boolean;
   onSelect: (id: string) => void;
   /** Effort de raisonnement courant (valeur brute du fournisseur). */
   effort: string | null;
@@ -202,7 +202,6 @@ export function ModelPicker({
   source,
   mode,
   disabled,
-  compact = false,
   onSelect,
   effort,
   onEffortChange,
@@ -385,14 +384,18 @@ export function ModelPicker({
       }}
     >
       <PopoverTrigger asChild>
+        {/* Déclencheur icône seule (✦ — ou pastille A/B du mode comparaison) :
+            le modèle choisi vit dans le title et l'aria-label, jamais à côté
+            de l'icône (épuration — même idiome que les actions du fil). */}
         <Button
           variant="ghost"
           disabled={busy}
-          className={
-            compact
-              ? "h-8 gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              : "h-9 gap-1.5 rounded-xl px-2.5 text-[14px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+          title={
+            slotLabel
+              ? `Modèle ${slotLabel} : ${label}. Changer le modèle ${slotLabel}`
+              : `Modèle sélectionné : ${label}. Changer de modèle`
           }
+          className="h-8 gap-1 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
           aria-label={
             slotLabel
               ? `Modèle ${slotLabel} : ${label}. Changer le modèle ${slotLabel}`
@@ -403,16 +406,15 @@ export function ModelPicker({
             <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-hermes/15 px-1 text-[11px] font-bold text-hermes-text">
               {slotLabel}
             </span>
-          ) : compact ? (
+          ) : (
             <Sparkles className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
-          ) : null}
-          <span className="max-w-40 truncate sm:max-w-none">{label}</span>
+          )}
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
         side="top"
-        align={compact ? "start" : "center"}
+        align="start"
         className="w-[352px] p-0"
         // Le picker vit dans le composer : ouverture vers le haut
         onOpenAutoFocus={(e) => e.preventDefault()}

@@ -317,25 +317,6 @@ charge partielle). Script de test E2E : `scripts/test-memory-flow.ts`
 (17 contrôles, dont la vérification comportementale — la démo cite la
 mémoire).
 
-## Feedback intégré (F-24)
-
-Chaque réponse assistant peut recevoir un retour **👍/👎 + commentaire libre**
-— **local : jamais envoyé au modèle** (le protocole gateway n'est pas
-modifié). Re-clic sur le même vote = efface le retour complet ; le
-commentaire est tronqué à 2 000 caractères ; seul le rôle assistant est
-éligible. Un fork de conversation repart sans retours (assumé).
-
-Schéma SQL : colonnes additives `messages.feedback_rating` ('up'/'down',
-NULL) et `messages.feedback_comment`.
-
-| Événement | Charge utile | Réponse (ack) |
-| --- | --- | --- |
-| `feedback:set` | `{conversationId, messageId, rating: up\|down\|null, comment?}` | `{message}` (feedback mis à jour) ou `{error}` |
-
-Serveur → client : `feedback:changed {conversationId, message}` (broadcast
-après chaque mise à jour). Script de test E2E :
-`scripts/test-feedback-flow.ts` (15 contrôles).
-
 ## Protocole socket.io
 
 Client → serveur :
