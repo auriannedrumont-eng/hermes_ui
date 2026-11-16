@@ -13,6 +13,7 @@
 //
 // Bornes affichées à l'écran et revalidées ici : débat 3–10 tours,
 // conseil 2–5 membres, auto 0–3 reprises, consigne 4 000 caractères.
+import { normalizeWebchatModelId } from "./webchat/fiches";
 
 // ── Identifiants et libellés ────────────────────────────────────────────
 
@@ -80,7 +81,8 @@ export interface ModeConfig {
   voices?: Record<string, Record<string, string | null>>;
   /** Modèle par mode (chat/plan/code — modes sans voix) : remplace le modèle
    *  de la conversation quand le mode est actif. Peut être un modèle du moteur
-   *  OU un chat IA web (webchat:<site>:<mode>). null/absent = modèle du fil. */
+   *  OU un chat IA web (webchat:<site> — une entrée par site, la forme de la
+   *  réponse est observée). null/absent = modèle du fil. */
   model?: Record<string, string | null>;
 }
 
@@ -91,7 +93,9 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
 }
 
 /** Normalise une charge client : bornes appliquées (jamais de refus muet —
- *  la valeur est ramenée dans les limites affichées à l'écran). */
+ *  la valeur est ramenée dans les limites affichées à l'écran) et ids webchat
+ *  ramenés au format fusionné (webchat:<site>) — l'ancien webchat:<site>:<mode>
+ *  reste accepté, il pointe vers le même site. */
 export function normalizeModeConfig(raw: unknown): ModeConfig {
   const src = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const out: ModeConfig = {};
@@ -108,7 +112,9 @@ export function normalizeModeConfig(raw: unknown): ModeConfig {
       if (!map || typeof map !== "object") continue;
       const slot: Record<string, string | null> = {};
       for (const [voiceId, model] of Object.entries(map as Record<string, unknown>)) {
-        slot[voiceId] = typeof model === "string" && model.trim() ? model.trim() : null;
+        slot[voiceId] = typeof model === "string" && model.trim()
+          ? normalizeWebchatModelId(model.trim())
+          : null;
       }
       voices[modeKey] = slot;
     }
@@ -117,7 +123,9 @@ export function normalizeModeConfig(raw: unknown): ModeConfig {
   if (src.model && typeof src.model === "object") {
     const model: Record<string, string | null> = {};
     for (const [modeKey, id] of Object.entries(src.model as Record<string, unknown>)) {
-      model[modeKey] = typeof id === "string" && id.trim() ? id.trim() : null;
+      model[modeKey] = typeof id === "string" && id.trim()
+        ? normalizeWebchatModelId(id.trim())
+        : null;
     }
     out.model = model;
   }

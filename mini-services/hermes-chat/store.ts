@@ -10,6 +10,7 @@ import type { WebSource } from "./web-search";
 import { MAX_PINNED, MAX_VERSIONS, isIdenticalReissue, restoreLabel, restoredStatus, selectPurgeable } from "./versions";
 import { resolveMode } from "./modes";
 import type { ConversationMode, ModeConfig } from "./modes";
+import { normalizeWebchatModelId } from "./webchat/fiches";
 import type { ModeFlowRow } from "./types";
 import type {
   Artifact,
@@ -27,11 +28,29 @@ const DB_PATH =
   process.env.HERMES_CHAT_DB ??
   join(import.meta.dir, "..", "..", "db", "hermes-chat.sqlite");
 
-/** mode_config stocké en JSON — charge invalide = null (jamais de plantage). */
+/** mode_config stocké en JSON — charge invalide = null (jamais de plantage).
+ *  Les ids webchat du format historique (webchat:<site>:<mode>) sont ramenés
+ *  au format fusionné (webchat:<site>) À LA LECTURE — les conversations déjà
+ *  en base continuent de pointer vers le bon site, sans migration. */
 function parseModeConfigWire(raw: string): ModeConfig | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as ModeConfig) : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    const cfg = parsed as ModeConfig;
+    if (cfg.voices) {
+      for (const map of Object.values(cfg.voices)) {
+        if (!map || typeof map !== "object") continue;
+        for (const [voiceId, id] of Object.entries(map)) {
+          if (id) map[voiceId] = normalizeWebchatModelId(id);
+        }
+      }
+    }
+    if (cfg.model) {
+      for (const [modeKey, id] of Object.entries(cfg.model)) {
+        if (id) cfg.model[modeKey] = normalizeWebchatModelId(id);
+      }
+    }
+    return cfg;
   } catch {
     return null;
   }

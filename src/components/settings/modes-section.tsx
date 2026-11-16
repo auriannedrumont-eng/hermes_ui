@@ -59,6 +59,7 @@ import {
   MAX_MODE_PROMPT_CHARS,
   MODES,
   clampInt,
+  normalizeWebchatModelId,
   type ConversationMode,
 } from "@/lib/modes";
 
@@ -489,8 +490,11 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
       const rawModels = readClientSetting<string>("hermes.modes.models");
       if (rawModels) {
         const parsed = JSON.parse(rawModels) as unknown;
-        if (parsed && typeof parsed === "object")
-          modeModels = parsed as typeof modeModels;
+        if (parsed && typeof parsed === "object") {
+          for (const [modeKey, id] of Object.entries(parsed as Record<string, unknown>)) {
+            modeModels[modeKey] = typeof id === "string" ? normalizeWebchatModelId(id) : (id as null);
+          }
+        }
       }
     } catch {
       /* charge invalide */

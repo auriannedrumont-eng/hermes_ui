@@ -29,10 +29,14 @@ async function unitTests() {
   check("fiches : trois sites", ids.length === 3 && ids.includes("zai") && ids.includes("aistudio") && ids.includes("gemini-app"));
   check("fiches : zai/aistudio vérifiés, gemini-app non", FICHES.zai.verifie && FICHES.aistudio.verifie && !FICHES["gemini-app"].verifie);
   check("fiches : zai expose answer+build", FICHES.zai.modes.includes("answer") && FICHES.zai.modes.includes("build"));
-  const parsed = parseWebchatModelId(webchatModelId("zai", "build"));
-  check("ids webchat : webchat:<site>:<mode>", parsed?.site === "zai" && parsed?.mode === "build");
-  check("ids webchat : mode non exposé refusé", parseWebchatModelId(webchatModelId("aistudio", "build" as any)) === null);
-  check("ids webchat : site inconnu refusé", parseWebchatModelId("webchat:inconnu:answer") === null);
+  // Fusion : une entrée par site, la forme de la réponse est OBSERVÉE.
+  const parsed = parseWebchatModelId(webchatModelId("zai"));
+  check("ids webchat : webchat:<site>", parsed?.site === "zai");
+  const legacy = parseWebchatModelId("webchat:zai:build");
+  check("ids webchat : format historique accepté (même site)", legacy?.site === "zai");
+  check("ids webchat : mode non exposé refusé (historique)", parseWebchatModelId("webchat:aistudio:build") === null);
+  check("ids webchat : mode inconnu refusé (historique)", parseWebchatModelId("webchat:zai:nope") === null);
+  check("ids webchat : site inconnu refusé", parseWebchatModelId("webchat:inconnu") === null && parseWebchatModelId("webchat:inconnu:answer") === null);
   check(
     "fiches : aistudio carte_candidates présentes",
     (FICHES.aistudio.selecteur_modele?.carte_candidates?.length ?? 0) >= 3,
@@ -115,7 +119,7 @@ async function unitTests() {
 
   // ── Contrat JSON du pilote (site non vérifié — sans navigateur) ───────
   const driverPath = join(import.meta.dir, "..", "mini-services", "hermes-chat", "webchat", "driver.ts");
-  const proc = Bun.spawnSync([process.execPath, driverPath, "--site", "gemini-app", "--mode", "answer", "--prompt", "bonjour"]);
+  const proc = Bun.spawnSync([process.execPath, driverPath, "--site", "gemini-app", "--prompt", "bonjour"]);
   const lastLine = proc.stdout.toString().trim().split("\n").filter(Boolean).pop() ?? "";
   let json: any = {};
   try { json = JSON.parse(lastLine); } catch { /* ligne manquante */ }
@@ -123,15 +127,15 @@ async function unitTests() {
   check("pilote gemini-app : code de sortie non nul", proc.exitCode !== 0, `code ${proc.exitCode}`);
   check("pilote : une seule ligne JSON (contrat stdout)", proc.stdout.toString().trim().split("\n").filter(Boolean).length === 1);
 
-  // Site/mode incohérent : refus franc AVANT toute ouverture de navigateur.
-  const bad = Bun.spawnSync([process.execPath, driverPath, "--site", "aistudio", "--mode", "build", "--prompt", "x"]);
+  // Site inconnu : refus franc AVANT toute ouverture de navigateur.
+  const bad = Bun.spawnSync([process.execPath, driverPath, "--site", "inconnu", "--prompt", "x"]);
   const badJson = JSON.parse(bad.stdout.toString().trim().split("\n").filter(Boolean).pop() ?? "{}");
-  check("pilote : mode non exposé refusé", badJson.ok === false && String(badJson.error).includes("mode"));
+  check("pilote : site inconnu refusé", badJson.ok === false && String(badJson.error).includes("site inconnu"));
 
-  // Build sans --out : refus franc.
-  const noOut = Bun.spawnSync([process.execPath, driverPath, "--site", "zai", "--mode", "build", "--prompt", "x"]);
-  const noOutJson = JSON.parse(noOut.stdout.toString().trim().split("\n").filter(Boolean).pop() ?? "{}");
-  check("pilote : build sans --out refusé", noOutJson.ok === false && String(noOutJson.error).includes("--out"));
+  // Consigne manquante : refus franc.
+  const noPrompt = Bun.spawnSync([process.execPath, driverPath, "--site", "gemini-app"]);
+  const noPromptJson = JSON.parse(noPrompt.stdout.toString().trim().split("\n").filter(Boolean).pop() ?? "{}");
+  check("pilote : consigne manquante refusée", noPromptJson.ok === false && String(noPromptJson.error).includes("consigne manquante"));
 }
 
 async function serviceTests() {
@@ -152,12 +156,15 @@ async function serviceTests() {
   }
 
   // models:list : le groupe « Chats IA web » est à part, toujours proposé.
+  // Fusion : UNE entrée par site (la forme de la réponse est observée).
   const ml = await emit("models:list");
   const webchat = (ml.models ?? []).filter((m: any) => m.webchat === true);
-  check("models:list : groupe webchat présent", webchat.length >= 4, `${webchat.length} entrée(s)`);
+  check("models:list : groupe webchat présent", webchat.length >= 3, `${webchat.length} entrée(s)`);
   check("models:list : provider « Chats IA web »", webchat.every((m: any) => m.provider === "Chats IA web"));
-  check("models:list : gemini-app indisponible", webchat.some((m: any) => m.id === "webchat:gemini-app:answer" && m.available === false));
-  check("models:list : z.ai expose answer et build", webchat.some((m: any) => m.id === "webchat:zai:answer") && webchat.some((m: any) => m.id === "webchat:zai:build"));
+  check("models:list : gemini-app indisponible", webchat.some((m: any) => m.id === "webchat:gemini-app" && m.available === false));
+  check("models:list : z.ai en entrée unique", webchat.some((m: any) => m.id === "webchat:zai" && m.available !== false));
+  check("models:list : aistudio en entrée unique", webchat.some((m: any) => m.id === "webchat:aistudio" && m.available !== false));
+  check("models:list : plus d'entrée par mode", !webchat.some((m: any) => /webchat:[a-z-]+:(answer|build)$/.test(m.id)));
 
   // Réglages serveur roundtrip (clés du volet « Chats web »).
   const setPort = await emit("settings:set", { key: "fork.webchat.port", value: 9223 });
@@ -177,7 +184,7 @@ async function serviceTests() {
   const errEvent: any = await new Promise((resolve) => {
     const t = setTimeout(() => resolve({ error: "timeout stream:error" }), 15000);
     socket.on("stream:error", (p: any) => { clearTimeout(t); resolve(p); });
-    socket.emit("chat:send", { conversationId, content: "bonjour", model: "webchat:gemini-app:answer" }, () => {});
+    socket.emit("chat:send", { conversationId, content: "bonjour", model: "webchat:gemini-app" }, () => {});
   });
   check("tour gemini-app : stream:error explicite", typeof errEvent.error === "string" && errEvent.error.includes("indisponible"), errEvent.error?.slice(0, 70));
   const noTool: any = await new Promise((resolve) => {

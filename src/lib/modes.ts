@@ -70,8 +70,18 @@ export interface ModeConfig {
   voices?: Record<string, Record<string, string | null>>;
   /** Modèle par mode (chat/plan/code — modes sans voix) : remplace le modèle
    *  de la conversation quand le mode est actif. Peut être un modèle du moteur
-   *  OU un chat IA web (webchat:<site>:<mode>). null/absent = modèle du fil. */
+   *  OU un chat IA web (webchat:<site> — une entrée par site). null/absent =
+   *  modèle du fil. */
   model?: Record<string, string | null>;
+}
+
+/** Ramène un id de chat IA web au format fusionné (webchat:<site>) — l'ancien
+ *  webchat:<site>:<mode> (Réponse / Fichiers) reste accepté : il pointe vers
+ *  le même site, la forme de la réponse étant observée par le pilote. Id non
+ *  webchat → inchangé. */
+export function normalizeWebchatModelId(id: string): string {
+  const m = /^webchat:([a-z-]+)(?::(answer|build))?$/.exec(id.trim());
+  return m ? `webchat:${m[1]}` : id.trim();
 }
 
 /** Valeurs par défaut des voix (réglage hermes.modes.voices — page Paramètres). */

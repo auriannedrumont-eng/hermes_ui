@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ModelOption } from "../types";
-import { FICHES, modeLabel, parseWebchatModelId, webchatModelId, type WebchatMode, type WebchatSiteId } from "./fiches";
+import { FICHES, parseWebchatModelId, webchatModelId, type WebchatSiteId } from "./fiches";
 import { isBrowserUp } from "./browser";
 import { resolveUnder } from "./paths";
 
@@ -66,20 +66,14 @@ export function readWebchatConfig(store: WebchatSettingsReader): WebchatConfig {
 // pas répétés sur chaque ligne.
 
 export function webchatModelOptions(): ModelOption[] {
-  const out: ModelOption[] = [];
-  for (const fiche of Object.values(FICHES)) {
-    for (const mode of fiche.modes) {
-      out.push({
-        id: webchatModelId(fiche.id, mode),
-        label: `${fiche.label} — ${modeLabel(mode)}`,
-        provider: WEBCHAT_PROVIDER_LABEL,
-        // Un site non vérifié : INDISPONIBLE, affiché comme tel.
-        ...(fiche.verifie ? {} : { available: false } as Partial<ModelOption>),
-        webchat: true,
-      });
-    }
-  }
-  return out;
+  return Object.values(FICHES).map((fiche) => ({
+    id: webchatModelId(fiche.id),
+    label: fiche.label,
+    provider: WEBCHAT_PROVIDER_LABEL,
+    // Un site non vérifié : INDISPONIBLE, affiché comme tel.
+    ...(fiche.verifie ? {} : { available: false } as Partial<ModelOption>),
+    webchat: true,
+  }));
 }
 
 export function isWebchatModel(id: string | null | undefined): boolean {
@@ -90,8 +84,7 @@ export function isWebchatModel(id: string | null | undefined): boolean {
 export function webchatModelLabel(id: string | null | undefined): string | null {
   const parsed = parseWebchatModelId(id);
   if (!parsed) return null;
-  const fiche = FICHES[parsed.site];
-  return `${fiche.label} — ${modeLabel(parsed.mode)}`;
+  return FICHES[parsed.site].label;
 }
 
 // ── Exécution d'un tour webchat ─────────────────────────────────────────
@@ -104,7 +97,7 @@ export interface WebchatTurnCallbacks {
 
 export interface WebchatTurnResult {
   content: string;
-  /** Fichiers écrits par le mode build (nom + taille + chemin sûr). */
+  /** Fichiers écrits par le pilote (nom + taille + chemin sûr). */
   files?: { name: string; bytes: number; path: string }[];
   model: string;
   provider: string;
@@ -136,7 +129,7 @@ export async function runWebchatTurn(opts: {
 }): Promise<WebchatTurnResult> {
   const parsed = parseWebchatModelId(opts.modelId);
   if (!parsed) throw new Error(`id de modèle webchat invalide : ${opts.modelId}`);
-  const { site, mode } = parsed;
+  const { site } = parsed;
   const fiche = FICHES[site];
   const config = readWebchatConfig(opts.store);
 
@@ -149,25 +142,26 @@ export async function runWebchatTurn(opts: {
   }
 
   const job = async (): Promise<WebchatTurnResult> => {
-    opts.cb.onStatus?.(`Pilotage de ${fiche.label} (${modeLabel(mode)})…`);
+    opts.cb.onStatus?.(`Pilotage de ${fiche.label}…`);
     opts.cb.onToolEvent?.({
       name: `Chat web · ${fiche.label}`,
       status: "running",
-      detail: `${modeLabel(mode)} — navigateur de pilotage sur le port ${config.port}`,
+      detail: `navigateur de pilotage sur le port ${config.port}`,
     });
 
     const driverPath = join(import.meta.dir, "driver.ts");
+    // Pas de --mode : le pilote OBSERVE ce que le site produit (texte ou
+    // fichiers) et rapporte l'un ou l'autre — fusion, une entrée par site.
     const args = [
       driverPath,
       "--site", site,
-      "--mode", mode,
       "--prompt-file", await writePromptTemp(opts.prompt),
       "--port", String(config.port),
       "--timeout", String(config.timeoutS),
       "--profile", config.profileDir,
       "--idle-min", String(config.idleMin),
+      "--out", config.outDir,
     ];
-    if (mode === "build") args.push("--out", config.outDir);
     if (config.browserPath) args.push("--browser", config.browserPath);
 
     const json = await spawnDriver(args, config.timeoutS * 1000 + 60_000, opts.cb.signal);
@@ -182,15 +176,15 @@ export async function runWebchatTurn(opts: {
     opts.cb.onToolEvent?.({
       name: `Chat web · ${fiche.label}`,
       status: "done",
-      detail: mode === "build"
-        ? `${json.files?.length ?? 0} fichier(s) écrit(s) dans ${config.outDir}`
+      detail: json.files?.length
+        ? `${json.files.length} fichier(s) écrit(s) dans ${config.outDir}`
         : `${Math.round(json.elapsed_s ?? 0)} s`,
     });
 
-    if (mode === "build") {
+    if (json.files?.length) {
       const files: { name: string; bytes: number; path: string }[] = [];
       const refused = json.refused ?? [];
-      for (const f of json.files ?? []) {
+      for (const f of json.files) {
         // Re-contrôle côté service : le nom (venu du réseau) est résolu sous
         // le dossier de sortie avant toute lecture — jamais de confiance.
         const safe = resolveUnder(config.outDir, f.name);
@@ -295,7 +289,7 @@ function spawnDriver(
   });
 }
 
-/** Lit un fichier produit (mode build) — chemin re-vérifié sous outDir. */
+/** Lit un fichier produit par un site web — chemin re-vérifié sous outDir. */
 export function readWebchatFile(path: string, name: string, outDir: string): string | null {
   const safe = resolveUnder(outDir, name);
   if (!safe || resolve(safe) !== resolve(path) || !existsSync(safe)) return null;

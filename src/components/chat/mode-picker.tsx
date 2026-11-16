@@ -31,6 +31,7 @@ import {
   mergedVoices,
   modeDef,
   modePillLabel,
+  normalizeWebchatModelId,
   voicesFor,
   whoTextFor,
   type ConversationMode,
@@ -125,7 +126,8 @@ function SwitchMini({
 }
 
 /** Défauts des voix : registre hermes.modes.voices fusionné sur les défauts
- *  de la librairie (charge invalide = défauts — jamais d'écran cassé). */
+ *  de la librairie (charge invalide = défauts — jamais d'écran cassé). Les
+ *  ids webchat du format historique sont ramenés au format fusionné. */
 function voicesDefaults(): Record<string, Record<string, string | null>> {
   let stored: Record<string, Record<string, string | null>> = {};
   try {
@@ -137,11 +139,18 @@ function voicesDefaults(): Record<string, Record<string, string | null>> {
   } catch {
     /* charge invalide */
   }
+  const normSlot = (slot?: Record<string, string | null>) =>
+    Object.fromEntries(
+      Object.entries(slot ?? {}).map(([voiceId, id]) => [
+        voiceId,
+        typeof id === "string" ? normalizeWebchatModelId(id) : id,
+      ])
+    );
   return {
-    debate: { ...DEFAULT_VOICES.debate, ...stored.debate },
-    council: { ...DEFAULT_VOICES.council, ...stored.council },
-    auto: { ...DEFAULT_VOICES.auto, ...stored.auto },
-    compare: { ...DEFAULT_VOICES.compare, ...stored.compare },
+    debate: { ...DEFAULT_VOICES.debate, ...normSlot(stored.debate) },
+    council: { ...DEFAULT_VOICES.council, ...normSlot(stored.council) },
+    auto: { ...DEFAULT_VOICES.auto, ...normSlot(stored.auto) },
+    compare: { ...DEFAULT_VOICES.compare, ...normSlot(stored.compare) },
   };
 }
 
@@ -159,7 +168,9 @@ function modeModelDefaults(): Record<string, string | null> {
   } catch {
     /* charge invalide */
   }
-  return { chat: stored.chat ?? null, plan: stored.plan ?? null, code: stored.code ?? null };
+  const norm = (id: string | null | undefined) =>
+    typeof id === "string" ? normalizeWebchatModelId(id) : (id ?? null);
+  return { chat: norm(stored.chat), plan: norm(stored.plan), code: norm(stored.code) };
 }
 
 export function ModePicker({

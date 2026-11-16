@@ -1,12 +1,15 @@
 // Pilote d'un chat IA web — un processus par tour, UNE ligne JSON sur stdout
 // (contrat de la spec §4) :
-//   { ok, site, mode, url, text?, files?: [{name, bytes}], elapsed_s, error }
+//   { ok, site, url, text?, files?: [{name, bytes}], refused?, elapsed_s, error }
 // Code de sortie 0 si ok, non nul sinon. Tout le journal va sur stderr.
 //
-// Paramètres : --site <zai|aistudio|gemini-app>, --mode <answer|build>,
-// --prompt "…" | --prompt-file <chemin>, --out <dossier> (build),
-// --port <9222>, --timeout <240 s>, --profile <user-data-dir>,
-// --browser <chemin>, --idle-min <minutes du veilleur>.
+// Paramètres : --site <zai|aistudio|gemini-app>,
+// --prompt "…" | --prompt-file <chemin>, --out <dossier de sortie> (requis
+// dès que le site produit des fichiers), --port <9222>, --timeout <240 s>,
+// --profile <user-data-dir>, --browser <chemin>, --idle-min <minutes du
+// veilleur>.
+// Pas de --mode : la FORME de la réponse est observée dans la page (texte
+// stable, ou carte des artefacts posés) — le site décide selon la demande.
 
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -14,12 +17,11 @@ import { CdpPage, closeTarget, findTab, listTargets, newTab, sleep } from "./cdp
 import { ensureBrowser, launchWatchdog, touchActivity } from "./browser";
 import { DriverLock, type LockInfo } from "./lock";
 import { writeGuarded } from "./paths";
-import { FICHES, type WebchatMode, type WebchatSiteId } from "./fiches";
+import { FICHES, type WebchatSiteId } from "./fiches";
 import { runAiStudio, runGeminiApp, runZai, type FlowCtx, type FlowResult } from "./flows";
 
 interface Args {
   site: WebchatSiteId;
-  mode: WebchatMode;
   prompt: string;
   out: string | null;
   port: number;
@@ -37,11 +39,6 @@ function argOf(flag: string): string | null {
 function parseArgs(): Args | { error: string } {
   const site = (argOf("--site") ?? "") as WebchatSiteId;
   if (!FICHES[site]) return { error: `site inconnu : « ${site} » (attendus : zai, aistudio, gemini-app)` };
-  const mode = (argOf("--mode") ?? "answer") as WebchatMode;
-  const fiche = FICHES[site];
-  if (!fiche.modes.includes(mode)) {
-    return { error: `mode « ${mode} » non exposé par ${site} (modes : ${fiche.modes.join(", ")})` };
-  }
   let prompt = argOf("--prompt");
   const promptFile = argOf("--prompt-file");
   if (promptFile) {
@@ -52,16 +49,11 @@ function parseArgs(): Args | { error: string } {
     }
   }
   if (!prompt || !prompt.trim()) return { error: "consigne manquante (--prompt ou --prompt-file)" };
-  const modeArg = mode;
   const outArg = argOf("--out");
-  if (modeArg === "build" && (!outArg || !outArg.trim())) {
-    return { error: "mode build : --out <dossier de sortie> est requis" };
-  }
   return {
     site,
-    mode,
     prompt: prompt.trim(),
-    out: outArg ? resolve(outArg) : null,
+    out: outArg && outArg.trim() ? resolve(outArg) : null,
     port: Number(argOf("--port") ?? 9222) || 9222,
     timeoutS: Number(argOf("--timeout") ?? 240) || 240,
     profile: argOf("--profile") ?? join(process.cwd(), "webchat-profile"),
@@ -95,7 +87,6 @@ async function main(): Promise<number> {
       {
         ok: false,
         site: args.site,
-        mode: args.mode,
         error:
           `${fiche.label} est indisponible : ses sélecteurs n'ont pas encore été ` +
           `relevés sur la page vivante (fiche verifie=false).`,
@@ -111,13 +102,12 @@ async function main(): Promise<number> {
   const lock = new DriverLock(lockPath);
   let holder: LockInfo | null = null;
   try {
-    holder = lock.acquire(args.site, args.mode);
+    holder = lock.acquire(args.site, "auto");
   } catch (err) {
     return finish(
       {
         ok: false,
         site: args.site,
-        mode: args.mode,
         error: err instanceof Error ? err.message : String(err),
       },
       1
@@ -128,7 +118,6 @@ async function main(): Promise<number> {
       {
         ok: false,
         site: args.site,
-        mode: args.mode,
         error:
           `verrou mono-pilote tenu par un autre pilote (pid ${holder.pid}, site ` +
           `${holder.site}/${holder.mode}, démarré ${holder.startedAt}) — réessayez une fois le tour terminé.`,
@@ -187,7 +176,6 @@ async function main(): Promise<number> {
     const ctx: FlowCtx = {
       page,
       fiche,
-      mode: args.mode,
       prompt: args.prompt,
       timeoutMs: args.timeoutS * 1000,
       onStep: step,
@@ -202,8 +190,12 @@ async function main(): Promise<number> {
 
     // 9/10. Récupération — la garde de chemin vérifie CHAQUE destination :
     // un nom venu du réseau qui sortirait du dossier est refusé et rapporté.
-    if (args.mode === "build") {
-      const { written, refused } = writeGuarded(args.out!, flow.files ?? []);
+    // La forme est celle OBSERVÉE dans la page : des fichiers, sinon le texte.
+    if (flow.files?.length) {
+      if (!args.out) {
+        throw new Error("fichiers produites mais aucun dossier de sortie (--out)");
+      }
+      const { written, refused } = writeGuarded(args.out, flow.files);
       if (written.length === 0) {
         const why = refused[0]?.reason ?? "aucun fichier écrit";
         throw new Error(`aucun fichier écrit — ${why}`);
@@ -213,7 +205,6 @@ async function main(): Promise<number> {
         {
           ok: true,
           site: args.site,
-          mode: args.mode,
           url: flow.url,
           files: written.map((w) => ({ name: w.name, bytes: w.bytes })),
           ...(refused.length ? { refused: refused.map((r) => ({ name: r.name, reason: r.reason })) } : {}),
@@ -223,7 +214,7 @@ async function main(): Promise<number> {
       );
     }
     return finish(
-      { ok: true, site: args.site, mode: args.mode, url: flow.url, text: flow.text, error: null },
+      { ok: true, site: args.site, url: flow.url, text: flow.text, error: null },
       0
     );
   } catch (err) {
@@ -233,7 +224,6 @@ async function main(): Promise<number> {
       {
         ok: false,
         site: args.site,
-        mode: args.mode,
         error: err instanceof Error ? err.message : String(err),
       },
       1
@@ -241,7 +231,7 @@ async function main(): Promise<number> {
   } finally {
     // 11. Libérer le verrou, nettoyer les onglets (about:blank sortants).
     page?.close();
-    if (targetId && args.mode === "answer") {
+    if (targetId) {
       // L'onglet du site reste ouvert (histoires de session) — seuls les
       // about:blank vides créés pour la navigation sont refermés.
       try {

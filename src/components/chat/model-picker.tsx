@@ -531,9 +531,11 @@ export function ModelPicker({
                   </InfoTip>
                 </div>
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  Réponse en un bloc (20 s à 4 min), sans outils ni mémoire
-                  entre deux tours — chaque tour repart d'une page neuve, sans
-                  accès au dépôt. Connexion du site : une fois, à la main
+                  Réponse en un bloc (20 s à 4 min) — texte ou fichiers, selon
+                  la demande ; les fichiers produits arrivent comme pièces
+                  jointes. Sans outils ni mémoire entre deux tours : chaque
+                  tour repart d&apos;une page neuve, sans accès au dépôt.
+                  Connexion du site : une fois, à la main
                   (Paramètres → Chats web).
                 </p>
               </div>

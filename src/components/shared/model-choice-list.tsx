@@ -94,7 +94,8 @@ export function ModelChoiceList({
           ))}
           <p className="px-2 pb-1 pt-1 text-[10px] leading-snug text-muted-foreground">
             Hermes ouvre le site dans son navigateur de pilotage et y pose le
-            message — la réponse arrive d&apos;un bloc, les tours s&apos;enchaînent
+            message — texte ou fichiers, le site répond selon la demande et
+            Hermes ramène le résultat d&apos;un bloc, les tours s&apos;enchaînent
             l&apos;un après l&apos;autre.
           </p>
         </>

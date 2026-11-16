@@ -124,8 +124,8 @@ function excerptOf(content: string): string {
 }
 
 /** Étiquette courte « H4 405B » façon maquette (chip du déroulé). Un chat IA
- *  web est affiché par son site (« z.ai ») — le mode du site vit dans le
- *  détail de la ligne, pas dans le chip. */
+ *  web est affiché par son site (« z.ai ») — une seule entrée par site :
+ *  la forme de la réponse (texte ou fichiers) est observée, pas réglée. */
 export function shortModel(modelId: string | null | undefined): string | undefined {
   if (!modelId) return undefined;
   const wc = parseWebchatModelId(modelId);

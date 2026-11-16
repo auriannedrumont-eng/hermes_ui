@@ -56,14 +56,17 @@ async function unitTests() {
   check("voix vide → null (suit la conversation)", cfg.voices?.debate?.juge === null);
   check("voix compare conservée", cfg.voices?.compare?.a === "m1" && cfg.voices?.compare?.b === "m2");
 
-  // A2.b Modèle du mode (F-30b) — chat/plan/code, moteur OU chat IA web
+  // A2.b Modèle du mode (F-30b) — chat/plan/code, moteur OU chat IA web.
+  // Fusion webchat : l'id historique webchat:<site>:<mode> est ramené à
+  // webchat:<site> à la normalisation (la forme de la réponse est observée).
   const cfgModel = modes.normalizeModeConfig({
     model: { chat: "webchat:zai:answer", plan: "  hermes-4-70b  ", code: 42 },
   });
-  check("modèle du mode conservé (chat web)", cfgModel.model?.chat === "webchat:zai:answer", String(cfgModel.model?.chat));
+  check("modèle du mode : chat web historique → fusionné", cfgModel.model?.chat === "webchat:zai", String(cfgModel.model?.chat));
+  check("modèle du mode : id déjà fusionné inchangé", modes.normalizeModeConfig({ model: { chat: "webchat:zai" } }).model?.chat === "webchat:zai");
   check("modèle du mode trimmé (plan)", cfgModel.model?.plan === "hermes-4-70b", String(cfgModel.model?.plan));
   check("modèle du mode invalide → null (code)", cfgModel.model?.code === null, String(cfgModel.model?.code));
-  check("modeModel lit le chat web", modes.modeModel(cfgModel, "chat") === "webchat:zai:answer");
+  check("modeModel lit le chat web", modes.modeModel(cfgModel, "chat") === "webchat:zai");
   check("modeModel sans config → null (suit le fil)", modes.modeModel(null, "plan") === null);
   check("model absent → undefined", modes.normalizeModeConfig({}).model === undefined);
 
@@ -272,9 +275,12 @@ async function unitTests() {
   );
 
   // A6.d Chats IA web dans les voix (F-30b) — id transmis tel quel au moteur,
-  // chip du déroulé = site (pas d'id brut ni de libellé long)
-  check("shortModel webchat → site (« z.ai »)", orch.shortModel("webchat:zai:answer") === "z.ai", orch.shortModel("webchat:zai:answer"));
-  check("shortModel webchat → site (« Google AI Studio »)", orch.shortModel("webchat:aistudio:answer") === "Google AI Studio", orch.shortModel("webchat:aistudio:answer"));
+  // chip du déroulé = site (pas d'id brut ni de libellé long). Fusion : les
+  // ids fusionnés (webchat:<site>) et historiques (<site>:<mode>) pointent
+  // vers le même site.
+  check("shortModel webchat fusionné (« z.ai »)", orch.shortModel("webchat:zai") === "z.ai", orch.shortModel("webchat:zai"));
+  check("shortModel webchat historique (« z.ai »)", orch.shortModel("webchat:zai:answer") === "z.ai", orch.shortModel("webchat:zai:answer"));
+  check("shortModel webchat (« Google AI Studio »)", orch.shortModel("webchat:aistudio") === "Google AI Studio", orch.shortModel("webchat:aistudio"));
   seen.length = 0;
   let wcRows: any[] = [];
   await orch.runOrchestratedTurn(
@@ -424,15 +430,16 @@ async function serviceTests() {
   check("conversation Comparer créée avec ses voix", cmp?.conversation?.mode === "compare" && cmp?.conversation?.modeConfig?.voices?.compare?.a === "hermes-4-405b", JSON.stringify(cmp?.conversation?.modeConfig));
 
   // B5. Modèle du mode (F-30b) — la config.model roundtrippe via setMode :
-  // chat web conservé tel quel, id invalide → null (jamais de plantage).
+  // chat web normalisé au format fusionné (historique accepté), id invalide
+  // → null (jamais de plantage).
   const setModel = await emitAck("conversations:setMode", {
     conversationId: convId,
     mode: "plan",
     config: { model: { plan: "webchat:zai:answer", chat: 42 } },
   });
   check(
-    "setMode persiste le modèle du mode (chat web)",
-    setModel?.conversation?.modeConfig?.model?.plan === "webchat:zai:answer",
+    "setMode persiste le modèle du mode (chat web fusionné)",
+    setModel?.conversation?.modeConfig?.model?.plan === "webchat:zai",
     JSON.stringify(setModel?.conversation?.modeConfig?.model)
   );
   check(

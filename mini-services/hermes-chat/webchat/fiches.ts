@@ -150,18 +150,32 @@ export const FICHES: Record<WebchatSiteId, SiteFiche> = {
   },
 };
 
-/** Identifiant de modèle webchat : webchat:<site>:<mode>. */
-export function webchatModelId(site: WebchatSiteId, mode: WebchatMode): string {
-  return `webchat:${site}:${mode}`;
+// ── Identifiants de modèles — UNE entrée par site (fusion) ──────────────
+// L'ancien format webchat:<site>:<mode> (z.ai — Réponse / z.ai — Fichiers)
+// forçait la forme de la réponse à l'avance. Fusion demandée : le pilote
+// OBSERVE ce que le site produit (texte stable ou carte des fichiers) et
+// rapporte l'un ou l'autre — la forme est décidée par le site selon la
+// demande, pas par un réglage.
+
+/** Identifiant de modèle webchat : webchat:<site>. */
+export function webchatModelId(site: WebchatSiteId): string {
+  return `webchat:${site}`;
 }
 
-/** Décode un id de modèle webchat (null si ce n'en est pas un, ou si le mode
- *  n'est pas EXPOSÉ par la fiche du site — aistudio n'a pas de build). */
+/** Décode un id de modèle webchat (null si ce n'en est pas un). Le format
+ *  historique webchat:<site>:<mode> reste accepté en lecture — le mode y est
+ *  ignoré (et doit rester un mode EXPOSÉ par la fiche : aistudio n'a pas eu
+ *  de build), pour que les réglages déjà enregistrés continuent de pointer
+ *  vers le bon site sans migration. */
 export function parseWebchatModelId(
   id: string | null | undefined
-): { site: WebchatSiteId; mode: WebchatMode } | null {
+): { site: WebchatSiteId } | null {
   if (!id || !id.startsWith("webchat:")) return null;
   const parts = id.split(":");
+  if (parts.length === 2) {
+    const site = parts[1] as WebchatSiteId;
+    return FICHES[site] ? { site } : null;
+  }
   if (parts.length !== 3) return null;
   const site = parts[1] as WebchatSiteId;
   const mode = parts[2] as WebchatMode;
@@ -169,10 +183,11 @@ export function parseWebchatModelId(
   if (!fiche) return null;
   if (mode !== "answer" && mode !== "build") return null;
   if (!fiche.modes.includes(mode)) return null;
-  return { site, mode };
+  return { site };
 }
 
-/** Libellé humain d'un mode (interface — la différence doit être visible). */
-export function modeLabel(mode: WebchatMode): string {
-  return mode === "build" ? "Fichiers" : "Réponse";
+/** Ramène un id webchat au format fusionné (id non webchat → inchangé). */
+export function normalizeWebchatModelId(id: string): string {
+  const parsed = parseWebchatModelId(id);
+  return parsed ? webchatModelId(parsed.site) : id;
 }

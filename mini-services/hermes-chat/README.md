@@ -168,19 +168,23 @@ dans le `FORK.md` du repo (registre source de vérité : `src/lib/settings.ts`).
 
 Les chats IA publics (z.ai, Google AI Studio, gemini.google.com) sont exposés
 comme un **fournisseur de modèles à part** (`models:list` ajoute le groupe
-« Chats IA web », ids `webchat:<site>:<mode>`), indépendant de la gateway et
-des clés. Le tour ne part pas sur une API : un sous-processus pilote un vrai
-navigateur (module `webchat/`), conformément à la spec
+« Chats IA web », ids `webchat:<site>` — UNE entrée par site), indépendant de
+la gateway et des clés. Le tour ne part pas sur une API : un sous-processus
+pilote un vrai navigateur (module `webchat/`), conformément à la spec
 `upload/pilotage-chats-ia-web.md`.
 
-- `models:list` → `webchat:zai:answer|build`, `webchat:aistudio:answer`,
-  `webchat:gemini-app:answer` (ce dernier **indisponible** : fiche
+- `models:list` → `webchat:zai`, `webchat:aistudio`,
+  `webchat:gemini-app` (ce dernier **indisponible** : fiche
   `verifie=false` — pastille dans le picker, clic no-op).
+- Pas de choix de mode : la FORME de la réponse est observée dans la page
+  (texte stable, ou carte « All files in task ») — le site décide selon la
+  demande. L'ancien format `webchat:<site>:<mode>` reste accepté en lecture
+  (réglages déjà enregistrés) et est normalisé à l'écriture/lecture.
 - Un tour webchat branche `runAssistantTurn` AVANT le connecteur : statuts
   réels (`stream:status` : navigateur, envoi, génération) + événement outil
   par site ; réponse en UN bloc (pas de streaming factice).
-- Mode `build` (z.ai) : les fichiers écrits dans le dossier de sortie
-  (`fork.webchat.outDir`, défaut `db/webchat-out`) sont réinjectés en blocs
+- Fichiers produits par le site : écrits dans le dossier de sortie
+  (`fork.webchat.outDir`, défaut `db/webchat-out`) puis réinjectés en blocs
   `file="…"` → pipeline d'artefacts existant (cartes versionnées).
 - Verrou mono-pilote (fichier + pid, reprise d'un mort), garde de chemin
   (`../` refusé et rapporté, jamais écrit), plafond de génération

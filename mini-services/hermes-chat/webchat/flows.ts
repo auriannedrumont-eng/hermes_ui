@@ -9,21 +9,20 @@
 //   connexion qui l'a posé).
 import type { CdpPage } from "./cdp";
 import { sleep } from "./cdp";
-import type { SiteFiche, WebchatMode } from "./fiches";
+import type { SiteFiche } from "./fiches";
 
 export interface FlowResult {
   /** URL du chat à l'issue du tour (rapport). */
   url: string;
-  /** Texte extrait (mode answer). */
+  /** Texte extrait (le site a répondu sans produire de fichiers). */
   text?: string;
-  /** Fichiers produits, en base64 (mode build — écrits côté pilote). */
+  /** Fichiers produits, en base64 (écrits côté pilote via la garde de chemin). */
   files?: { name: string; base64: string }[];
 }
 
 export interface FlowCtx {
   page: CdpPage;
   fiche: SiteFiche;
-  mode: WebchatMode;
   prompt: string;
   /** Plafond de génération (ms) — filet, pas méthode de fin. */
   timeoutMs: number;
@@ -70,7 +69,7 @@ const ZAI_STATE_EXPR = `(() => {
   };
 })()`;
 
-/** Extraction du texte réponse (mode answer) : conteneur cloné, bruit retiré. */
+/** Extraction du texte réponse : conteneur cloné, bruit retiré. */
 const ZAI_TEXT_EXPR = `(() => {
   const direct = document.querySelector(".chat-assistant");
   const marks = [...document.querySelectorAll('[class*="markdown"]')];
@@ -162,12 +161,17 @@ export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
     throw new Error("envoi refusé : le compositeur z.ai ne se vide pas après 12 essais");
   }
 
-  // C. Savoir où en est la génération — un état, pas une durée.
+  // C. Savoir où en est la génération — un état, pas une durée. La FORME de
+  //  la réponse est OBSERVÉE, jamais décidée à l'avance (fusion : une seule
+  //  entrée par site) : le site répond en texte (question) ou pose ses
+  //  fichiers (tâche qui en produit) — on attend l'un OU l'autre, le premier
+  //  qui survient l'emporte.
   ctx.onStep("Attente de la génération (états du DOM)");
   const deadline = Date.now() + ctx.timeoutMs;
   let stableCount = 0;
   let lastLen = -1;
   let emptyPolls = 0;
+  let producedFiles = false;
   for (;;) {
     if (Date.now() > deadline) {
       throw new Error(`plafond de ${Math.round(ctx.timeoutMs / 1000)} s dépassé (z.ai)`);
@@ -177,15 +181,22 @@ export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
     const st = (await page.evaluate(ZAI_STATE_EXPR)) as {
       filesCard: boolean; thinking: boolean; lastLen: number;
     };
+    if (st.filesCard && !st.thinking) {
+      producedFiles = true;
+      break;
+    }
     const stable = st.lastLen > 0 && st.lastLen === lastLen;
-    if (st.filesCard && !st.thinking) break;
-    if (st.lastLen > 0 && !st.thinking && stable) {
+    // Fin « texte » : réponse stable, génération terminée — MAIS tant que des
+    // artefacts sont annoncés (carte présente), on continue d'attendre leur
+    // pose : un résumé qui se fige pendant que les fichiers s'écrivent n'est
+    // pas une fin.
+    if (stable && !st.thinking && !st.filesCard) {
       stableCount++;
       if (stableCount >= 2) break; // 3 relevés consécutifs identiques
     } else {
       stableCount = 0;
     }
-    if (!st.thinking && st.lastLen === 0) {
+    if (!st.thinking && st.lastLen === 0 && !st.filesCard) {
       emptyPolls++;
       if (emptyPolls >= 8) {
         throw new Error("aucun texte produit par z.ai (session expirée ? refus du site ?)");
@@ -196,8 +207,8 @@ export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
     lastLen = st.lastLen;
   }
 
-  // D/E. Récupérer les fichiers (build) ou le texte (answer).
-  if (ctx.mode === "build") {
+  // D/E. Récupérer ce que le site a produit : ses fichiers, sinon son texte.
+  if (producedFiles) {
     ctx.onStep("Récupération des fichiers produits (crochet fetch dans la page)");
     await page.evaluate(ZAI_HOOK_EXPR);
     // Cliquer CHAQUE bouton de téléchargement (jusqu'à 3 passes, en

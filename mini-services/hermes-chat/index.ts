@@ -950,9 +950,10 @@ function comparePairFromMode(modeState: {
   return [a ?? DEFAULT_MODEL_ID, b ?? (a ? "hermes-4-405b" : "hermes-4-70b")];
 }
 
-/** Blocs ``` file réinjectés pour les fichiers écrits par un tour webchat en
- *  mode Fichiers — le suivi d'artefacts existant les transforme en cartes
- *  versionnées (une carte par fichier, aperçu et journal inclus). */
+/** Blocs ``` file réinjectés pour les fichiers produits par un tour webchat
+ *  (le site a posé ses artefacts) — le suivi d'artefacts existant les
+ *  transforme en cartes versionnées (une carte par fichier, aperçu et
+ *  journal inclus). */
 function webchatFileBlocks(
   files: { name: string; bytes: number; path: string }[] | undefined,
 ): string {
@@ -971,7 +972,7 @@ function webchatFileBlocks(
 
 /** Dépendances de l'orchestrateur : un tour de voix passe par le connecteur
  *  (gateway ou pool de clés) SANS streamer vers le chat — capture silencieuse.
- *  F-30b : une voix peut aussi tourner sur un chat IA web (webchat:<site>:<mode>)
+ *  F-30b : une voix peut aussi tourner sur un chat IA web (webchat:<site>)
  *  — le pilote navigateur du site prend le relais ; pas de streaming, la
  *  réponse arrive en un bloc, les statuts du pilote sont affichés honnêtement.
  *  La file du pilote sérialise les voix webchat (un seul navigateur). */
@@ -2883,8 +2884,8 @@ io.on("connection", (socket) => {
             onToolEvent: (event) => emitTool(event),
           },
         });
-        // Mode build : les fichiers écrits sont réinjectés en blocs nommés —
-        // le suivi d'artefacts existant les transforme en cartes versionnées
+        // Fichiers produits par le site : réinjectés en blocs nommés — le
+        // suivi d'artefacts existant les transforme en cartes versionnées
         // (une carte par fichier, aperçu et journal de versions inclus).
         result = {
           content: wc.content + webchatFileBlocks(wc.files),
