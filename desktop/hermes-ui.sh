@@ -45,6 +45,11 @@ STATE_FILE="$RUNTIME_DIR/state.env"
 # (cycle suivant) — arrêt propre, mise à jour GitHub, relance. L'onglet
 # Hermes reste ouvert : l'utilisateur le rafraîchit (F5) quand c'est terminé.
 MAJ_FLAG="$RUNTIME_DIR/maj-demandee.flag"
+# Journal live de la mise à jour : le lanceur y raconte chaque étape
+# (marqueurs terminaux « MAJ OK » / « MAJ ERREUR »), le mini-service le relit
+# et le diffuse à l'interface (Paramètres → Système — console en direct).
+MAJ_LOG="$RUNTIME_DIR/maj.log"
+MAJ_ENCOURS=0
 mkdir -p "$RUNTIME_DIR" "$LOG_DIR" 2>/dev/null || true
 
 LAUNCHER_LOG="$LOG_DIR/launcher.log"
@@ -63,7 +68,11 @@ MAX_RESTARTS=3
 URL_DISPLAY=""
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LAUNCHER_LOG"; }
-die() { log "ERREUR : $*"; echo "Hermes Web n'a pas démarré : $*" >&2; exit 1; }
+# Journal de mise à jour : actif seulement après une demande venue de
+# l'interface (MAJ_ENCOURS posé au ramassage du drapeau) — les démarrages
+# ordinaires ne polluent pas le journal.
+maj_log() { [ "$MAJ_ENCOURS" = "1" ] || return 0; printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" >> "$MAJ_LOG" 2>/dev/null || true; }
+die() { maj_log "MAJ ERREUR - $*"; log "ERREUR : $*"; echo "Hermes Web n'a pas démarré : $*" >&2; exit 1; }
 
 # ── Aides ────────────────────────────────────────────────────────────────
 port_open() { # port → 0 si occupé
@@ -295,6 +304,8 @@ supervise() {
     if [ -f "$MAJ_FLAG" ]; then
       rm -f "$MAJ_FLAG" 2>/dev/null
       maj_demandee=1
+      MAJ_ENCOURS=1
+      maj_log "MAJ DEBUT - demande ramassée par le lanceur"
       log "• mise à jour demandée depuis l'interface — arrêt, mise à jour GitHub, relance (1 à 2 minutes)."
       break
     fi
@@ -305,9 +316,10 @@ supervise() {
   if [ "$maj_demandee" = "1" ]; then
     log "Arrêt pour mise à jour (demandée depuis l'interface) — données sauvegardées."
     do_stop
+    maj_log "services arrêtés — mise à jour GitHub puis relance…"
     sleep 1
     SANS_NAVIGATEUR=1
-    do_start
+    do_start || maj_log "MAJ ERREUR - échec de la relance (détail : $LAUNCHER_LOG)"
   fi
 }
 
@@ -344,25 +356,33 @@ do_start() {
   # ff-only ; en cas d'écart local, version locale conservée sans toucher).
   local avant apres
   avant="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
+  maj_log "consultation de GitHub…"
   if [ -n "$avant" ] && git -C "$ROOT" fetch --quiet origin 2>/dev/null; then
     apres="$(git -C "$ROOT" rev-parse '@{u}' 2>/dev/null)"
     if [ -n "$apres" ] && [ "$apres" != "$avant" ]; then
       if git -C "$ROOT" merge --ff-only "$apres" >/dev/null 2>&1; then
         log "• mise à jour appliquée : $(git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -c . || echo '?') fichier(s) récupéré(s)"
+        maj_log "mise à jour appliquée : $(git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -c . || echo '?') fichier(s) récupéré(s)"
         # Code de l'interface modifié → reconstruction du build production.
         if git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -qE '^(src|public)/|^(package|next\.config|postcss\.config|tailwind\.config|tsconfig)'; then
           if [ -f "$ROOT/.next/standalone/server.js" ]; then
             log "  code de l'interface modifié : reconstruction du build production…"
+            maj_log "code de l'interface modifié — reconstruction (1 à 3 minutes)…"
             rm -rf "$ROOT/.next"
             ( cd "$ROOT" && npm run build >>"$LOG_DIR/build.log" 2>&1 ) \
-              && log "  reconstruction terminée." \
-              || log "  ATTENTION : reconstruction échouée — mode développement au démarrage (voir logs/build.log)."
+              && { log "  reconstruction terminée."; maj_log "reconstruction terminée"; } \
+              || { log "  ATTENTION : reconstruction échouée — mode développement au démarrage (voir logs/build.log)."; maj_log "ATTENTION - reconstruction échouée — mode développement au démarrage"; }
           fi
         fi
       else
         log "• ATTENTION : nouvelle version disponible mais non appliquée (fichiers locaux modifiés) — version locale conservée."
+        maj_log "ATTENTION - nouvelle version disponible mais non appliquée — version locale conservée"
       fi
+    else
+      maj_log "déjà à jour — aucune nouvelle version sur GitHub"
     fi
+  else
+    maj_log "GitHub injoignable — version locale conservée"
   fi
 
   # Pile déjà lancée par un lanceur précédent encore vivant ?
@@ -392,10 +412,12 @@ do_start() {
   state_set LAUNCHER_PID "$$"
   log "════ Démarrage Hermes Web (passerelle :$gw, interface :$ui) ════"
 
+  maj_log "relance des services…"
   start_chat
   start_ui
   start_gateway
   if [ "${SANS_NAVIGATEUR:-0}" = "1" ]; then
+    maj_log "MAJ OK - pile relancée, rafraîchissez l'onglet Hermes (F5) pour charger la nouvelle version."
     log "• pile relancée après mise à jour — rafraîchissez votre onglet Hermes (F5) pour charger la nouvelle version."
   else
     open_browser "http://127.0.0.1:$gw/"

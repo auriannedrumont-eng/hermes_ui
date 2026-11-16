@@ -88,10 +88,17 @@ fonctionnera. La télémétrie de Next.js est désactivée.
 Paramètres → Système → **« Mettre à jour »** : la demande est déposée au
 lanceur (drapeau `desktop\runtime\maj-demandee.flag`), ramassée au cycle de
 surveillance suivant (15 s) — arrêt propre, mise à jour GitHub,
-reconstruction **seulement si le code a changé**, relance. L'onglet Hermes
-reste ouvert : quand l'interface redevient joignable (30 s à 2 min),
-**rafraîchissez-le (F5)** pour charger la nouvelle version — aucun nouvel
-onglet de navigateur n'est ouvert. Sans lanceur actif (pile lancée à la main),
+reconstruction **seulement si le code a changé**, relance. **Chaque étape
+s'affiche en direct dans la carte** (journal `desktop\runtime\maj.log`
+relais par le mini-service) : consultation de GitHub, application,
+reconstruction, relance — jusqu'au verdict final **« Mise à jour terminée »**
+(bouton « Recharger la page ») ou **« Échec »** (détail dans la fenêtre du
+lanceur). L'onglet Hermes reste ouvert : quand la console affiche le verdict,
+**rechargez la page** pour charger la nouvelle version — aucun nouvel onglet
+de navigateur n'est ouvert. Si rien ne bouge pendant 45 s, la carte le dit :
+le lanceur qui tourne date d'avant la fonction — fermez sa fenêtre et
+relancez `Hermes-Web.bat` une fois (il se met à jour lui-même au démarrage),
+puis redemandez la mise à jour. Sans lanceur actif (pile lancée à la main),
 la mise à jour s'appliquera au prochain lancement de l'icône.
 
 ### Fermeture — tous les cas couverts

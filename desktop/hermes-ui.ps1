@@ -60,6 +60,10 @@ $StateFile  = Join-Path $RuntimeDir 'state.env'
 # (cycle suivant) — arret propre, mise a jour GitHub, relance. L'onglet
 # Hermes reste ouvert : l'utilisateur le rafraichit (F5) quand c est termine.
 $MajFlag    = Join-Path $RuntimeDir 'maj-demandee.flag'
+# Journal live de la mise a jour : le lanceur y raconte chaque etape
+# (marqueurs terminaux « MAJ OK » / « MAJ ERREUR »), le mini-service le relit
+# et le diffuse a l'interface (Parametres → Systeme — console en direct).
+$MajLog     = Join-Path $RuntimeDir 'maj.log'
 New-Item -ItemType Directory -Force -Path $RuntimeDir, $LogDir | Out-Null
 
 $LauncherLog = Join-Path $LogDir 'launcher.log'
@@ -92,7 +96,16 @@ function Log([string]$msg) {
     Write-Host $line
     Add-Content -Path $LauncherLog -Value $line
 }
+# Journal de mise a jour : actif seulement apres une demande venue de
+# l'interface ($Script:MajEnCours pose au ramassage du drapeau) — les
+# demarrages ordinaires ne polluent pas le journal.
+$Script:MajEnCours = $false
+function Write-MajLog([string]$msg) {
+    if (-not $Script:MajEnCours) { return }
+    try { Add-Content -Path $MajLog -Value ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $msg) -Encoding UTF8 } catch { }
+}
 function Die([string]$msg) {
+    Write-MajLog "MAJ ERREUR - $msg"
     Log "ERREUR : $msg"
     Write-Host ''
     Write-Host "  Hermes Web n'a pas demarre : $msg" -ForegroundColor Red
@@ -361,15 +374,17 @@ function Update-FromGit {
     if ($r.Code -ne 0) { Log "• mise a jour auto : etat du depot illisible — ignoree"; return }
     $before = $r.Text.Trim()
     Log "• verification des mises a jour sur GitHub..."
+    Write-MajLog "consultation de GitHub..."
     $r = Invoke-Git @('fetch', '--quiet', 'origin')
     if ($r.Code -ne 0) {
         Log "  pas de mise a jour recuperee (reseau ou connexion GitHub) — version locale conservee"
+        Write-MajLog "GitHub injoignable (reseau ou connexion) — version locale conservee"
         return
     }
     $r = Invoke-Git @('rev-parse', '@{u}')
-    if ($r.Code -ne 0) { Log "  pas de branche distante suivie — mise a jour ignoree"; return }
+    if ($r.Code -ne 0) { Log "  pas de branche distante suivie — mise a jour ignoree"; Write-MajLog "pas de branche distante suivie — version locale conservee"; return }
     $upstream = $r.Text.Trim()
-    if ($upstream -eq $before) { Log "  a jour : aucune nouvelle version"; return }
+    if ($upstream -eq $before) { Log "  a jour : aucune nouvelle version"; Write-MajLog "deja a jour — aucune nouvelle version sur GitHub"; return }
     $r = Invoke-Git @('merge', '--ff-only', $upstream)
     if ($r.Code -ne 0) {
         # Fusion directe impossible : fichiers locaux modifies, fichiers
@@ -379,6 +394,7 @@ function Update-FromGit {
         # dans desktop\runtime\), puis on aligne le dossier sur GitHub.
         # Echec de la sauvegarde -> on ne touche a rien.
         Log "  fusion directe impossible (fichiers locaux modifies ou historique local different)..."
+        Write-MajLog "fusion directe impossible — sauvegarde des fichiers locaux modifies, puis alignement sur GitHub..."
         $aligned = $false
         try {
             # Liste des fichiers a sauvegarder : modifications en cours et
@@ -443,13 +459,16 @@ function Update-FromGit {
         } catch { }
         if (-not $aligned) {
             Log "  ATTENTION : nouvelle version disponible mais non appliquee — version locale conservee"
+            Write-MajLog "ATTENTION - nouvelle version disponible mais non appliquee — version locale conservee"
             return
         }
         Log "  version GitHub appliquee (dossier aligne sur le depot distant)"
+        Write-MajLog "version GitHub appliquee (dossier aligne sur le depot distant)"
     }
     $r = Invoke-Git @('diff', '--name-only', $before, $upstream)
     $Script:UpdateChangedFiles = @($r.Text -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     Log ("  mise a jour appliquee : {0} fichier(s) recupere(s) de GitHub" -f $Script:UpdateChangedFiles.Count)
+    Write-MajLog ("mise a jour appliquee : {0} fichier(s) recupere(s) de GitHub" -f $Script:UpdateChangedFiles.Count)
     # Interface a reconstruire ? seulement si son code ou sa configuration
     # a change (src/, public/, configs racine) — sinon le build actuel reste
     # valable et le demarrage reste rapide.
@@ -460,6 +479,7 @@ function Update-FromGit {
     if ($cfgTouched -or $srcTouched) {
         if (Test-Path (Join-Path $Root '.next')) {
             Log "  code de l interface modifie : il sera reconstruit apres la mise a jour..."
+            Write-MajLog "code de l'interface modifie — reconstruction lancee (1 a 3 minutes)..."
             Remove-Item -Recurse -Force (Join-Path $Root '.next') -ErrorAction SilentlyContinue
         }
         $flag = Join-Path $ToolsDir 'build-echoue.flag'
@@ -766,6 +786,7 @@ function Ensure-Build([string]$nodeDir) {
         else { Log "• build retente : la version a change depuis l echec precedent" }
     }
     Log "• build de production de l interface (1 a 3 minutes, une seule fois)..."
+    Write-MajLog "construction de l'interface (1 a 3 minutes)..."
     $nextBin = Join-Path $Root 'node_modules\next\dist\bin\next'
     $code = Invoke-Live (Join-Path $nodeDir 'node.exe') @($nextBin, 'build') $Root
     if ($code -eq 0 -and (Test-Path (Join-Path $Root '.next\standalone\server.js'))) {
@@ -775,11 +796,13 @@ function Ensure-Build([string]$nodeDir) {
             Copy-Item -Path (Join-Path $Root 'public') -Destination (Join-Path $Root '.next\standalone\public') -Recurse -Force
         }
         Log "  OK build production pret"
+        Write-MajLog "construction de l'interface terminee"
     } else {
         $revForFlag = Get-RepoRevision
         $tsForFlag  = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         Set-Content -Path $flag -Value @($revForFlag, $tsForFlag) -Encoding ASCII
         Log "  ATTENTION build echoue (code $code) — l interface demarrera en mode developpement ; detail dans les messages ci-dessus"
+        Write-MajLog "ATTENTION - build de production echoue — l'interface demarrera en mode developpement"
     }
 }
 
@@ -922,6 +945,8 @@ function Supervise {
             if (Test-Path $MajFlag) {
                 try { Remove-Item $MajFlag -Force } catch { }
                 $majDemandee = $true
+                $Script:MajEnCours = $true
+                Write-MajLog "MAJ DEBUT - demande ramassee par le lanceur"
                 Log "• mise a jour demandee depuis l'interface — arret, mise a jour GitHub, relance (1 a 2 minutes)."
                 break
             }
@@ -934,14 +959,17 @@ function Supervise {
     finally {
         # Ctrl-C, fermeture de fenetre ou relance pour mise a jour : arret propre.
         if ((State-Get 'GW_OWNED') -eq '1' -or (State-Get 'UI_OWNED') -eq '1' -or (State-Get 'CHAT_OWNED') -eq '1') {
-            if ($majDemandee) { Log "Arret pour mise a jour (demandee depuis l'interface) — donnees sauvegardees." }
+            if ($majDemandee) {
+                Log "Arret pour mise a jour (demandee depuis l'interface) — donnees sauvegardees."
+                Write-MajLog "arret des services..."
+            }
             else { Log "Signal recu — arret propre." }
             Stop-All
         }
     }
     if ($majDemandee) {
         Start-Sleep -Seconds 1
-        Do-Start -MajDepuisInterface
+        try { Do-Start -MajDepuisInterface } catch { Write-MajLog ("MAJ ERREUR - {0}" -f $_.Exception.Message) }
     }
 }
 
@@ -1018,10 +1046,12 @@ function Do-Start {
     State-Set 'LAUNCHER_PID' $PID
     Log "════ Demarrage Hermes Web (passerelle :$gw, interface :$ui) ════"
 
+    Write-MajLog "relance des services (mini-service, interface, passerelle)..."
     [void](Start-Chat)
     [void](Start-Ui)
     [void](Start-Gateway)
     if ($MajDepuisInterface) {
+        Write-MajLog "MAJ OK - pile relancee, rafraichissez l'onglet Hermes (F5) pour charger la nouvelle version."
         Log "• pile relancee apres mise a jour — rafraichissez votre onglet Hermes (F5) pour charger la nouvelle version."
     } else {
         Open-Browser "http://127.0.0.1:$gw/"

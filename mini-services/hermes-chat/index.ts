@@ -14,6 +14,7 @@
 //   memory:get/set-enabled/set-auto/set-notes,
 //   share:get/create/revoke,
 //   system:renderCache/clearRenderCache (v2.4 — profils de rendu Chrome)
+//   system:update-request (drapeau au lanceur) / system:update-log (journal live)
 //   webchat:status/open/close (fournisseur « Chats IA web » — pilotage navigateur)
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
@@ -23,7 +24,8 @@
 //   settings:changed, providers:changed, models:changed, extensions:changed,
 //   system-prompt:changed, system-prompts:changed, custom-instructions:changed,
 //   share:changed,
-//   memory:changed
+//   memory:changed,
+//   system:update-log:changed (relais du journal du lanceur pendant la mise à jour)
 // HTTP (port 3004) :
 //   GET /uploads/<id>.<ext>            — pièces jointes multimédia
 //   GET /artifacts/<id>/raw|download|thumb|pdf
@@ -33,7 +35,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { Server } from "socket.io";
 import { timingSafeEqual } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1393,22 +1395,44 @@ io.on("connection", (socket) => {
     }
   );
 
-  // ── Mise à jour depuis l'interface (Paramètres → Système) ───────────
+  // ── Mise à jour depuis l'interface : demande + JOURNAL LIVE ────────────
   // Dépose un drapeau que le lanceur (desktop/hermes-ui.ps1 | .sh — boucle
-  // de surveillance, cycle 15 s) ramasse : arrêt propre, mise à jour GitHub,
-  // reconstruction si besoin, relance SANS réouvrir le navigateur. L'onglet
-  // reste ouvert : l'utilisateur le rafraîchit (F5) quand la pile revient.
-  // Sans lanceur vivant, le drapeau reste posé : le prochain démarrage
-  // l'efface (il fait de toute façon la mise à jour GitHub).
+  // de surveillance) ramasse : arrêt propre, mise à jour GitHub,
+  // reconstruction si besoin, relance SANS réouvrir le navigateur. Le
+  // lanceur raconte chaque étape dans desktop/runtime/maj.log (marqueurs
+  // terminaux « MAJ OK » / « MAJ ERREUR ») — le service RELAIT ce journal
+  // en direct (system:update-log:changed) : l'utilisateur voit le déroulé
+  // au lieu de croiser les doigts. Sans lanceur vivant (ou lanceur trop
+  // ancien pour connaître le drapeau), rien ne bouge : l'interface le
+  // détecte et l'affiche — le prochain démarrage efface le drapeau.
+  const majFlag = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj-demandee.flag");
+  const majLog = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj.log");
+  // Dernier contenu diffusé : on ne re-diffuse que sur changement réel.
+  let majLogSig = "";
+  const majLogRead = (): { exists: boolean; text: string; mtimeMs: number } => {
+    try {
+      const st = statSync(majLog);
+      // Plafond 64 Ko : un journal ne doit jamais gonfler un message socket.
+      const buf = readFileSync(majLog);
+      const text = buf.length > 65_536 ? buf.subarray(buf.length - 65_536).toString("utf-8") : buf.toString("utf-8");
+      return { exists: true, text, mtimeMs: st.mtimeMs };
+    } catch {
+      return { exists: false, text: "", mtimeMs: 0 };
+    }
+  };
   socket.on("system:update-request", (cb?: (data: unknown) => void) => {
     const done = (res: Record<string, unknown>) => {
       if (typeof cb === "function") cb(res);
     };
     try {
-      const flag = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj-demandee.flag");
-      mkdirSync(join(flag, ".."), { recursive: true });
-      writeFileSync(flag, String(Date.now()), "utf-8");
-      console.log("[hermes-chat] mise à jour demandée depuis l'interface (drapeau posé)");
+      mkdirSync(join(majFlag, ".."), { recursive: true });
+      writeFileSync(majFlag, String(Date.now()), "utf-8");
+      // Le journal démarre ICI : une demande neuve repart d'une page blanche,
+      // et l'interface a aussitôt quelque chose à afficher (ligne d'attente).
+      const stamp = new Date().toLocaleTimeString("fr-FR", { hour12: false });
+      writeFileSync(majLog, `[${stamp}] Demande déposée depuis l'interface — attente du lanceur (cycle de surveillance ≤ 15 s)…\n`, "utf-8");
+      majLogSig = "";
+      console.log("[hermes-chat] mise à jour demandée depuis l'interface (drapeau posé, journal démarré)");
       done({ ok: true });
     } catch (err) {
       done({
@@ -1417,6 +1441,21 @@ io.on("connection", (socket) => {
       });
     }
   });
+  // Lecture à la demande (montage du panneau, reconnexion socket après que
+  // le lanceur a relancé la pile).
+  socket.on("system:update-log", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function") cb(majLogRead());
+  });
+  // Relais en direct : le fichier est écrit par le lanceur, pas par nous —
+  // sondage léger (2 s), diffusion seulement si le contenu a vraiment changé.
+  setInterval(() => {
+    const snap = majLogRead();
+    if (!snap.exists) return;
+    const sig = `${snap.mtimeMs}:${snap.text.length}`;
+    if (sig === majLogSig) return;
+    majLogSig = sig;
+    io.emit("system:update-log:changed", snap);
+  }, 2000);
 
   // ── Système (v2.4) : profils de rendu Chrome — sonde réelle ─────────
   // Le cache des rendus, ce sont les profils « hermes-chrome-* » du tmp :

@@ -6,7 +6,7 @@
 // restent verrouillés « gateway » — jamais simulés.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
@@ -45,6 +45,17 @@ function fmtBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+/** Verdict de la mise à jour = marqueur terminal de la DERNIÈRE ligne non
+ *  vide du journal (les lanceurs écrivent « MAJ OK » / « MAJ ERREUR » —
+ *  une « ATTENTION » au milieu du déroulé ne termine rien). */
+function majVerdict(text: string): null | "ok" | "erreur" {
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  const last = lines[lines.length - 1] ?? "";
+  if (last.includes("MAJ ERREUR")) return "erreur";
+  if (last.includes("MAJ OK")) return "ok";
+  return null;
+}
+
 export function SystemSection({
   mode,
   engineProviders = null,
@@ -64,24 +75,113 @@ export function SystemSection({
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [connectedFlash, setConnectedFlash] = useState(false);
-  // ── Mise à jour depuis l'interface (demande déposée au lanceur) ────
+  // ── Mise à jour depuis l'interface — demande + JOURNAL LIVE ────────
+  // Le lanceur raconte chaque étape dans desktop/runtime/maj.log ; le
+  // service relit ce journal et le relaie (system:update-log /
+  // system:update-log:changed) : la carte affiche le déroulé en direct,
+  // avec un verdict franc à la fin — plus d'attente aveugle.
   const [updating, setUpdating] = useState(false);
-  const [updateRequested, setUpdateRequested] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  /** Journal connu (null = pas de mise à jour en cours). */
+  const [majLog, setMajLog] = useState<string | null>(null);
+  /** Verdict du journal : marqueur terminal de la dernière ligne. */
+  const [majDone, setMajDone] = useState<null | "ok" | "erreur">(null);
+  /** Aucune étape nouvelle depuis 45 s : le lanceur ne réagit probablement pas. */
+  const [majStale, setMajStale] = useState(false);
+  /** Socket coupé pendant la mise à jour (le lanceur relance la pile). */
+  const [majReconnect, setMajReconnect] = useState(false);
+  const consoleRef = useRef<HTMLPreElement | null>(null);
+  const majLastChangeRef = useRef(0);
+  const majActif = majLog !== null && majDone === null;
+
+  const majFetch = useCallback(() => {
+    getSocket().emit(
+      "system:update-log",
+      (res: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
+        if (!res?.exists || typeof res.text !== "string") return;
+        majLastChangeRef.current = Date.now();
+        setMajStale(false);
+        setMajReconnect(false);
+        setMajLog(res.text);
+        setMajDone(majVerdict(res.text));
+      }
+    );
+  }, []);
 
   const updateNow = () => {
-    if (updating) return;
+    if (updating || majActif) return;
     setUpdating(true);
     setUpdateError(null);
+    setMajDone(null);
     getSocket().emit(
       "system:update-request",
       (res: { ok?: boolean; error?: string } = {}) => {
         setUpdating(false);
-        if (res?.ok) setUpdateRequested(true);
-        else setUpdateError(res?.error ?? "Échec du dépôt de la demande de mise à jour");
+        if (res?.ok) {
+          // Le service a écrit la première ligne du journal avant l'ack :
+          // on la tire aussitôt — la suite arrive par le relais en direct.
+          majFetch();
+        } else {
+          setUpdateError(res?.error ?? "Échec du dépôt de la demande de mise à jour");
+        }
       }
     );
   };
+
+  // Suivi live pendant une mise à jour : relais du journal + reprise après
+  // la coupure (le lanceur arrête ce service pour le relancer — socket.io
+  // se reconnecte seul) + détection d'un lanceur muet (trop ancien pour
+  // connaître le drapeau : aucune étape n'apparaît).
+  useEffect(() => {
+    if (!majActif) return;
+    const socket = getSocket();
+    const onChange = (snap: { text?: string } = {}) => {
+      if (typeof snap?.text !== "string") return;
+      majLastChangeRef.current = Date.now();
+      setMajStale(false);
+      setMajLog(snap.text);
+      setMajDone(majVerdict(snap.text));
+    };
+    const onConnect = () => majFetch();
+    const onDisconnect = () => setMajReconnect(true);
+    socket.on("system:update-log:changed", onChange);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    const timer = setInterval(() => {
+      if (Date.now() - majLastChangeRef.current > 45_000) setMajStale(true);
+    }, 5_000);
+    return () => {
+      socket.off("system:update-log:changed", onChange);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      clearInterval(timer);
+    };
+  }, [majActif, majFetch]);
+
+  // Reprise au montage : un F5 pendant la mise à jour ne doit pas faire
+  // perdre la console — le journal persiste côté service ; on le relit s'il
+  // est récent et sans verdict (sinon il s'agit d'un vieil essai terminé).
+  useEffect(() => {
+    getSocket().emit(
+      "system:update-log",
+      (res: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
+        if (!res?.exists || typeof res.text !== "string" || !res.text.trim()) return;
+        const fresh =
+          typeof res.mtimeMs === "number" &&
+          Date.now() - res.mtimeMs < 10 * 60_000;
+        if (majVerdict(res.text) === null && fresh) {
+          majLastChangeRef.current = Date.now();
+          setMajLog(res.text);
+        }
+      }
+    );
+  }, []);
+
+  // Console : toujours coller en bas (le déroulé se lit de haut en bas).
+  useEffect(() => {
+    const el = consoleRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [majLog]);
 
   // Resynchronise le champ si l'URL change côté service (hello rediffusé).
   useEffect(() => {
@@ -202,7 +302,7 @@ export function SystemSection({
         </div>
       </div>
 
-      {/* ── Mise à jour de l'interface — demande déposée au lanceur ──── */}
+      {/* ── Mise à jour de l'interface — demande + console en direct ── */}
       <div className="mt-4 rounded-xl border border-border px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -214,33 +314,75 @@ export function SystemSection({
               la pile — sans fermer fenêtres ni onglet.
             </div>
           </div>
-          <button
-            type="button"
-            onClick={updateNow}
-            disabled={updating || updateRequested}
-            className="inline-flex h-8 flex-none cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {updating ? "Dépôt…" : updateRequested ? "Demande déposée" : "Mettre à jour"}
-          </button>
+          {majDone === "ok" ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex h-8 flex-none cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
+            >
+              Recharger la page
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={updateNow}
+              disabled={updating || majActif}
+              className="inline-flex h-8 flex-none cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {updating ? "Dépôt…" : majActif ? "Mise à jour en cours…" : "Mettre à jour"}
+            </button>
+          )}
         </div>
-        {updateError ? (
+
+        {majLog !== null ? (
+          <div className="mt-2">
+            <pre
+              ref={consoleRef}
+              aria-label="Journal de la mise à jour en direct"
+              className="max-h-36 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
+            >
+              {majLog}
+            </pre>
+            {majDone === "ok" ? (
+              <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-success" role="status">
+                <Check className="mt-0.5 size-[13px] flex-none" strokeWidth={2.5} />
+                <span>
+                  Mise à jour terminée — rechargez la page pour charger la nouvelle
+                  interface.
+                </span>
+              </p>
+            ) : majDone === "erreur" ? (
+              <p className="mt-2 text-[11px] font-medium text-destructive" role="alert">
+                Échec de la mise à jour — le détail complet est dans la fenêtre du lanceur.
+                Après correction, redemandez «&nbsp;Mettre à jour&nbsp;».
+              </p>
+            ) : majReconnect ? (
+              <p className="mt-2 text-[11px] text-muted-foreground" role="status">
+                Services relancés par la mise à jour — reconnexion en cours…
+              </p>
+            ) : majStale ? (
+              <p className="mt-2 text-[11px] font-medium text-warning" role="alert">
+                Le lanceur ne réagit pas (aucune étape nouvelle depuis 45&nbsp;s) — il date
+                probablement d&apos;avant cette fonction. Fermez sa fenêtre, relancez
+                Hermes-Web.bat une fois (il se met à jour lui-même au démarrage), puis
+                redemandez la mise à jour ici.
+              </p>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground" role="status">
+                Mise à jour en cours — les étapes apparaissent ici en direct (1 à 2 min,
+                davantage si reconstruction).
+              </p>
+            )}
+          </div>
+        ) : updateError ? (
           <p className="mt-2 text-[11px] font-medium text-destructive" role="alert">
             {updateError}
-          </p>
-        ) : updateRequested ? (
-          <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-success" role="status">
-            <Check className="mt-0.5 size-[13px] flex-none" strokeWidth={2.5} />
-            <span>
-              Demande déposée — le lanceur va couper la pile, mettre à jour puis relancer
-              (1 à 2 min). Laissez cette page ouverte : quand l&apos;interface redevient
-              joignable, rafraîchissez-la (F5) pour charger la nouvelle version. Sans
-              lanceur actif, la mise à jour s&apos;appliquera au prochain lancement.
-            </span>
           </p>
         ) : (
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
             Fonctionne quand la pile est lancée par le lanceur bureau (Hermes-Web.bat ou
-            hermes-ui.sh) : la demande est ramassée au cycle de surveillance suivant (15 s).
+            hermes-ui.sh) : la demande est ramassée au cycle de surveillance suivant (15&nbsp;s),
+            et chaque étape s&apos;affiche ici en direct jusqu&apos;au verdict final.
           </p>
         )}
       </div>
