@@ -4,7 +4,7 @@
 // régénération d'un seul côté, régénération des deux, arrêt global,
 // gardes anti-tour en vol, fork conservant les variantes, tour simple
 // après une comparaison (rétro-compatibilité), édition avec relance
-// comparative. Les tours passent par le moteur de démo (z-ai réel) —
+// comparative. Les tours passent par le moteur local (z-ai réel) —
 // reprises anti-429 espacées entre scénarios.
 import { io } from "socket.io-client";
 

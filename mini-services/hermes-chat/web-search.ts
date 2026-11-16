@@ -3,7 +3,7 @@
 // fait JAMAIS échouer le tour — l'événement outil l'affiche honnêtement dans
 // la bulle, le modèle répond alors sans contexte web.
 // Les résultats numérotés sont injectés dans les instructions du tour (mode
-// démo : pool ou LLM intégré) ; en gateway, la recherche est gérée par
+// local : pool ou LLM intégré) ; en gateway, la recherche est gérée par
 // l'agent Hermes lui-même (le service n'injecte rien).
 import type { KeyRow, ProviderRow, Store } from "./store";
 import { pickActiveKey, providerCapabilities } from "./providers";
@@ -150,7 +150,7 @@ export async function runWebSearch(store: Store, query: string): Promise<WebSear
   }
 }
 
-/** Section injectée dans les instructions du tour (mode démo). */
+/** Section injectée dans les instructions du tour (moteur local). */
 export function webSearchSection(sources: WebSource[]): string {
   const lines = sources.map(
     (s) => `[${s.n}] ${s.title} — ${s.url}\nExtrait : ${s.snippet}`,

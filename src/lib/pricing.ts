@@ -41,7 +41,7 @@ export function parsePricing(raw: string | null | undefined): PricingMap {
 }
 
 /** Décompose un libellé persisté : « glm-4.6 · z.ai » → { id: "glm-4.6",
- *  provider: "z.ai" } ; « Hermes 4 70B (démo) » → { id: "Hermes 4 70B" }. */
+ *  provider: "z.ai" } ; un libellé sans fournisseur → { id } seul. */
 export function parseModelLabel(label?: string | null): {
   id: string;
   provider?: string;
@@ -54,7 +54,6 @@ export function parseModelLabel(label?: string | null): {
     provider = rest.slice(dot + 1).trim() || undefined;
     rest = rest.slice(0, dot).trim();
   }
-  rest = rest.replace(/\s*\(démo\)$/, "").trim();
   if (!rest) return null;
   return { id: rest, provider };
 }

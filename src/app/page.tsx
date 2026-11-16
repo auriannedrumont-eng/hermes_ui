@@ -517,6 +517,8 @@ export default function HermesWebPage() {
         appRevision={chat.serverRevision}
         chromeHeadless={chat.chromeHeadless}
         gatewayUrl={chat.gatewayUrl}
+        gatewayTokenSet={chat.gatewayTokenSet}
+        onConnectGateway={chat.connectGateway}
         webSearchAvailable={webSearchAvailable}
       />
 

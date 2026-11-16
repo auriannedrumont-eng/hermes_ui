@@ -1,6 +1,6 @@
 // Section « Skills » du volet Paramètres v4 (v2.4) — état vide honnête.
 // Les skills sont fournis par le MOTEUR Hermes (procédures découvertes au
-// branchement) : rien n'est simulé en démo. En attendant, les liens croisés
+// branchement) : rien n'est simulé. En attendant, les liens croisés
 // pointent vers ce qui existe déjà (presets de prompt, dépôts importés).
 "use client";
 

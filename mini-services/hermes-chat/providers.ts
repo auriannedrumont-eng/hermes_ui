@@ -3,7 +3,7 @@
 // masque pour le client et exécute lui-même les appels de test (réels,
 // réseau inclus) — cf. FORK.md §7.4, décisions v2/v4.
 //
-// Rien ici ne touche au moteur de tours : en mode démo les clés servent à
+// Rien ici ne touche au moteur de tours : en moteur local les clés servent à
 // préparer la configuration (test, ordre, relai) ; le branchement effectif
 // des pools sur les tours suivra la gateway (v2.3+).
 import { spawnSync } from "node:child_process";
@@ -830,7 +830,7 @@ export async function testProviderKey(
 }
 
 // ── Stratégies de porte-clés (pools d'identifiants) ───────────────────
-// Prêtes pour le moteur ; en démo elles sont exposées et testables mais
+// Prêtes pour le moteur ; en local elles sont exposées et testables mais
 // les tours du LLM intégré ne les consomment pas (SDK du bac à sable).
 
 // Curseur de rotation (round_robin) par fournisseur, en mémoire.

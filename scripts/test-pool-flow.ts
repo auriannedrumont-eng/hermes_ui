@@ -340,8 +340,8 @@ async function main() {
     const done = await Promise.race([doneSdkP, errSdkP]);
     if (done.message?.content) {
       check(
-        "repli SDK intégré (bac à sable) : tour (démo)",
-        /\(démo\)$/.test(String(done.message?.model)),
+        "repli SDK intégré (bac à sable) : tour moteur local",
+        Boolean(String(done.message?.model)) && !/\(démo\)/.test(String(done.message?.model)),
         String(done.message?.model),
       );
     } else {

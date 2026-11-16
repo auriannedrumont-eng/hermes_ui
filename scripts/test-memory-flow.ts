@@ -2,7 +2,7 @@
 // pose/édition/effacement des notes, garde-fous (limite 12 000), toggles
 // (désactivation coupe l'injection ; réactivation la rétablit), broadcasts,
 // hello honnête (memoryChars), persistance (reconnexion), vérification
-// comportementale (la démo cite la mémoire) et isolation des instructions
+// comportementale (le moteur local cite la mémoire) et isolation des instructions
 // (les notes ne polluent pas le prompt d'une conversation sans mémoire).
 // Remise à l'état initial en fin de test (notes effacées, mémoire active).
 import { io } from "socket.io-client";
@@ -114,9 +114,9 @@ async function main() {
   await new Promise((r) => setTimeout(r, 150));
   check("broadcast memory:changed (autoLearn)", broadcast?.autoLearn === true, "reçu");
 
-  // ── 5. Comportement : la démo cite la mémoire ─────────────────────
+  // ── 5. Comportement : le moteur local cite la mémoire ─────────────
   // La note « Z » est remise seule pour la vérification comportementale
-  // (le LLM démo est réel : une question directe garantit une citation).
+  // (le LLM local est réel : une question directe garantit une citation).
   // NB : le bloc broadcast laisse la mémoire DÉSACTIVÉE — réactivation ici.
   await emit("memory:set-enabled", { enabled: true });
   await emit("memory:set-notes", { value: "Je m'appelle Z." });

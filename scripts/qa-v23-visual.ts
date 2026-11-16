@@ -21,7 +21,7 @@ async function main() {
   await page.screenshot({ path: `${OUT}/01-accueil-composer.jpeg`, type: "jpeg", quality: 60 });
   console.log("capturé: 01-accueil-composer.jpeg");
 
-  // 2. Un tour réel (SDK démo) : réponse + carte jetons & coût repliée
+  // 2. Un tour réel (SDK local) : réponse + carte jetons & coût repliée
   try {
     const box = page.locator("textarea").last();
     await box.click();

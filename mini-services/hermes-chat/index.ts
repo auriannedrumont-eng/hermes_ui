@@ -64,12 +64,12 @@ import {
   MEMORY_ENABLED_KEY,
   MEMORY_NOTES_KEY,
   SEED_PRESETS,
-  composeDemoSystemPrompt,
+  composeLocalSystemPrompt,
   rowToPreset,
   sanitizeExpertSettings,
   validatePromptText,
 } from "./prompts";
-import { DEMO_BASE_PROMPT } from "./demo-engine";
+import { LOCAL_BASE_PROMPT } from "./local-engine";
 import {
   fetchRepoSnapshot,
   knownProviderCatalog,
@@ -726,11 +726,25 @@ io.use((socket, next) => {
 
 const store = new Store();
 const connector = new HermesConnector();
-// v2.3 : le moteur consomme le porte-clés du volet Paramètres — en mode
-// démo, les tours partent sur l'API du fournisseur à clé active.
+// v2.3 : le moteur consomme le porte-clés du volet Paramètres — en moteur
+// local, les tours partent sur l'API du fournisseur à clé active.
 // v2.4 : référence conservée pour la carte de statut honnête (hello).
 const pool = createLlmPool(store);
 connector.attachPool(pool);
+
+// ── Gateway Hermes : URL/jeton persistés (Paramètres → Système) ──────────
+// L'URL saisie dans l'interface prime sur HERMES_GATEWAY_URL (repli de
+// déploiement). Un réglage PRÉSENT mais vide = débranchement explicite.
+const GATEWAY_URL_KEY = "hermes.gateway.url";
+const GATEWAY_TOKEN_KEY = "hermes.gateway.token";
+{
+  const savedUrl = store.getSetting(GATEWAY_URL_KEY);
+  if (savedUrl !== null) {
+    connector.gatewayUrl = savedUrl.trim() || null;
+    const savedToken = store.getSetting(GATEWAY_TOKEN_KEY);
+    if (savedToken !== null) connector.gatewayToken = savedToken.trim() || null;
+  }
+}
 
 // Presets de départ semés une seule fois si la bibliothèque est vide (F-11).
 store.seedPromptPresetsIfNeeded(SEED_PRESETS);
@@ -780,10 +794,10 @@ function titleFrom(text: string, attachments?: Attachment[]): string {
   return "Nouvelle conversation";
 }
 
-/** Instructions complètes du tour (mode démo) : base + F-18 (si active) + F-19 + F-11. */
-function demoSystemPrompt(conversationId: string): string {
-  return composeDemoSystemPrompt({
-    base: DEMO_BASE_PROMPT,
+/** Instructions complètes du tour (moteur local) : base + F-18 (si active) + F-19 + F-11. */
+function localSystemPrompt(conversationId: string): string {
+  return composeLocalSystemPrompt({
+    base: LOCAL_BASE_PROMPT,
     memoryNotes: store.getSettingBool(MEMORY_ENABLED_KEY, true)
       ? store.getSetting(MEMORY_NOTES_KEY)
       : null,
@@ -795,7 +809,7 @@ function demoSystemPrompt(conversationId: string): string {
 /** Taille réelle des instructions système (jauge honnête) : base + mémoire +
  * F-19 + prompt de la conversation donnée (le hello envoie la base + F-19). */
 function systemPromptSize(conversationId?: string): number {
-  const base = DEMO_BASE_PROMPT.length;
+  const base = LOCAL_BASE_PROMPT.length;
   const memory = (store.getSettingBool(MEMORY_ENABLED_KEY, true)
     ? store.getSetting(MEMORY_NOTES_KEY) ?? ""
     : ""
@@ -818,10 +832,11 @@ function helloPayload() {
     mode: connector.mode,
     model: connector.model,
     gatewayUrl: connector.gatewayUrl,
+    gatewayTokenSet: Boolean(connector.gatewayToken),
     engineProviders,
-    // Taille réelle des instructions système du moteur démo (base + F-18 + F-19) ;
+    // Taille réelle des instructions système du moteur local (base + F-18 + F-19) ;
     // la gateway garde les siennes (le client retombe sur son estimation).
-    systemPromptChars: connector.mode === "demo" ? systemPromptSize() : null,
+    systemPromptChars: connector.mode === "local" ? systemPromptSize() : null,
     // v2.4 (Paramètres → Système) : révision du dépôt et binaire de rendu,
     // sondes réelles — jamais simulées.
     appRevision: APP_REVISION,
@@ -1290,6 +1305,59 @@ io.on("connection", (socket) => {
       store.setSetting(key, value);
       if (typeof cb === "function") cb({ ok: true, key, value });
       io.emit("settings:changed", { key, value });
+    }
+  );
+
+  // ── Gateway Hermes (Paramètres → Système) : brancher l'agent réel ───
+  // URL ws:// ou http(s):// (le /api/ws est ajouté au besoin côté connecteur)
+  // + jeton facultatif. Chaîne vide = débranchement. Persisté dans settings :
+  // survit aux redémarrages ; l'URL saisie PRIME sur HERMES_GATEWAY_URL.
+  socket.on("gateway:get", (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function")
+      cb({
+        url: connector.gatewayUrl,
+        tokenSet: Boolean(connector.gatewayToken),
+        mode: connector.mode,
+      });
+  });
+
+  socket.on(
+    "gateway:set",
+    async (
+      payload: { url?: unknown; token?: unknown },
+      cb?: (data: unknown) => void
+    ) => {
+      const done = (res: Record<string, unknown>) => {
+        if (typeof cb === "function") cb(res);
+      };
+      const url = typeof payload?.url === "string" ? payload.url.trim() : "";
+      if (url && !/^(ws|wss|http|https):\/\//i.test(url)) {
+        done({ ok: false, error: "URL invalide — attendu ws://… ou http(s)://…" });
+        return;
+      }
+      const token = typeof payload?.token === "string" ? payload.token : undefined;
+      try {
+        const mode = await connector.setGateway(url || null, token);
+        store.setSetting(GATEWAY_URL_KEY, url);
+        if (token !== undefined) store.setSetting(GATEWAY_TOKEN_KEY, token);
+        console.log(
+          `[hermes-chat] gateway ${url ? `"${url}"` : "débranchée"} → mode : ${mode}`
+        );
+        // Statut + modèles suivent en direct (même idiome que le porte-clés)
+        io.emit("hello", helloPayload());
+        io.emit("models:changed", {});
+        done({
+          ok: true,
+          mode,
+          url: connector.gatewayUrl,
+          tokenSet: Boolean(connector.gatewayToken),
+        });
+      } catch (err) {
+        done({
+          ok: false,
+          error: err instanceof Error ? err.message : "Échec de la sonde gateway",
+        });
+      }
     }
   );
 
@@ -2034,7 +2102,7 @@ io.on("connection", (socket) => {
       attachments?: Attachment[];
       modelId?: string | null;
       settings?: TurnSettings;
-      /** F-09/F-12 : recherche web du tour (clés Tavily/Exa, mode démo). */
+      /** F-09/F-12 : recherche web du tour (clés Tavily/Exa, moteur local). */
       webSearch?: boolean;
       /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
       variant?: "a" | "b";
@@ -2201,7 +2269,7 @@ io.on("connection", (socket) => {
           attachments,
           // Réglages du tour : effort/permissions du composer + mémoire
           // utilisateur (F-18) — les notes ne partent que si la mémoire est
-          // active (mode gateway ; en démo elles vivent dans systemPrompt).
+          // active (mode gateway ; en local elles vivent dans systemPrompt).
           settings: {
             ...opts.settings,
             memoryNotes:
@@ -2211,13 +2279,13 @@ io.on("connection", (socket) => {
             memoryAutoLearn: store.getSettingBool(MEMORY_AUTO_KEY, false),
           },
           // Instructions système du tour (F-11/F-19) : composées par le
-          // service en mode démo ; en mode gateway, le prompt de conversation
+          // service en local ; en mode gateway, le prompt de conversation
           // part seul (la gateway garde ses instructions de base).
           // F-12 : les résultats de recherche web sont ajoutés en fin de
-          // prompt système du tour démo (pool ou LLM intégré).
+          // prompt système du tour local (pool ou LLM intégré).
           systemPrompt:
-            connector.mode === "demo"
-              ? demoSystemPrompt(conversationId) +
+            connector.mode === "local"
+              ? localSystemPrompt(conversationId) +
                 (webSources ? webSearchSection(webSources) : "")
               : store.getConversationPrompt(conversationId)?.content ?? null,
         },
@@ -2277,9 +2345,7 @@ io.on("connection", (socket) => {
         usedModel =
           result.engine === "pool" && result.provider
             ? `${result.model} · ${result.provider}`
-            : connector.mode === "demo"
-              ? `${result.model} (démo)`
-              : result.model;
+            : result.model;
       }
       if (lastSent < contentAcc.length) {
         socket.emit("stream:delta", {
@@ -2872,9 +2938,9 @@ connector
       filesServer.listen(FILES_PORT, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
       });
-      if (connector.mode === "demo") {
+      if (connector.mode === "local") {
         console.log(
-          `[hermes-chat] HERMES_GATEWAY_URL non configurée ou injoignable → moteur de démo intégré`
+          `[hermes-chat] gateway non branchée → moteur local (LLM intégré / clés fournisseurs)`
         );
       }
       // Audit passe 3, F-04 : sans jeton, socket.io (CORS *) et le 3004 sont

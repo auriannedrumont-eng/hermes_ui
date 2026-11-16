@@ -1,5 +1,5 @@
 // Pools de clés fournisseurs → tours LLM réels (v2.3, cf. FORK.md §7.4).
-// Le moteur démo consomme ENFIN le porte-clés du volet Paramètres : les tours
+// Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours
 // partent sur l'API du fournisseur (clé choisie par la stratégie, compteur
 // d'usage entretenu), la liste des modèles devient vivante (GET /models) et la
 // compaction suit le même chemin. Sans fournisseur actif, le connecteur
@@ -14,12 +14,12 @@
 import type { KeyRow, ProviderRow, Store } from "./store";
 import type { ModelOption, ModelsResult, ProviderStrategy } from "./types";
 import {
-  DEMO_BASE_PROMPT,
+  LOCAL_BASE_PROMPT,
   attachmentNote,
   parseSseLine,
   type TurnCallbacks,
   type TurnRequest,
-} from "./demo-engine";
+} from "./local-engine";
 import {
   pickActiveKey,
   providerCapabilities,
@@ -430,7 +430,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
     req: TurnRequest,
     cb: TurnCallbacks,
   ): Promise<PoolTurnResult> {
-    const system = req.systemPrompt ?? DEMO_BASE_PROMPT;
+    const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
     const { text, parts } = buildUserPayload(req, "openai");
     const messages: any[] = [
       { role: "system", content: system },
@@ -540,7 +540,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
     req: TurnRequest,
     cb: TurnCallbacks,
   ): Promise<PoolTurnResult> {
-    const system = req.systemPrompt ?? DEMO_BASE_PROMPT;
+    const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
     const { text, parts } = buildUserPayload(req, "anthropic");
     const expert = req.settings ?? {};
     const body: Record<string, unknown> = {

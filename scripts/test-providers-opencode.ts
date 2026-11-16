@@ -114,7 +114,7 @@ function startService(): Promise<ChildProcess> {
     HERMES_SERVICE_TOKEN: TOKEN,
     HERMES_CHAT_PORT: "3313",
     HERMES_CHAT_FILES_PORT: "3314",
-    HERMES_GATEWAY_URL: "", // mode démo/pool — la gateway n'existe pas ici
+    HERMES_GATEWAY_URL: "", // moteur local/pool — la gateway n'existe pas ici
     HERMES_CHAT_DB: join(DB_DIR, "hermes-chat.sqlite"),
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
@@ -197,8 +197,8 @@ async function main() {
     {
       const hello0 = await emitAck(socket, "hello");
       check(
-        "hello initial : mode démo, aucun fournisseur actif",
-        hello0?.mode === "demo" && (hello0?.engineProviders ?? []).length === 0,
+        "hello initial : mode local, aucun fournisseur actif",
+        hello0?.mode === "local" && (hello0?.engineProviders ?? []).length === 0,
         `mode=${hello0?.mode} engineProviders=${JSON.stringify(hello0?.engineProviders ?? [])}`
       );
 

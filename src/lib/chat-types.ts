@@ -118,7 +118,9 @@ export interface SearchHit {
   createdAt: string;
 }
 
-export type GatewayMode = "gateway" | "demo";
+/** Mode du moteur : « gateway » (agent Hermes réel) ou « local » (moteur
+ *  intégré — vraies réponses via les API fournisseurs / SDK, sans outils). */
+export type GatewayMode = "gateway" | "local";
 
 /** Mode d'autorisation de l'agent (reset sur « ask » à chaque session). */
 export type PermissionsMode = "ask" | "auto";
@@ -126,7 +128,7 @@ export type PermissionsMode = "ask" | "auto";
 // ── Mode expert (F-22) : température, plafond de sortie, graine ────────
 
 /** Réglages expert d'un tour — champs facultatifs, assainis côté service
- *  (température [0,1] : le moteur démo rejette au-delà ; plafond [1,8192] ;
+ *  (température [0,1] : le fournisseur rejette au-delà ; plafond [1,8192] ;
  *  graine entière 32 bits). Absents = valeurs par défaut du fournisseur. */
 export interface ExpertSettings {
   temperature?: number;
@@ -149,6 +151,8 @@ export interface ServerHello {
   appRevision?: string | null;
   /** Binaire chrome-headless-shell présent ou absent (sonde réelle). v2.4. */
   chromeHeadless?: "present" | "absent";
+  /** Jeton de gateway enregistré côté service (booléen, jamais la valeur). */
+  gatewayTokenSet?: boolean;
 }
 
 /** État de compaction d'une conversation (résumé conservé en tête de session). */

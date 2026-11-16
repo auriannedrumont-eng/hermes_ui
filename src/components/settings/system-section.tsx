@@ -1,8 +1,9 @@
-// Section « Système » du volet Paramètres v4 (v2.4) — versions, exécution,
-// journaux. Sondes RÉELLES uniquement : révision git du déploiement, état
-// du binaire chrome-headless, place des profils de rendu (mesurée sur le
-// système de fichiers). Les réglages du MOTEUR (mises à jour, exécution
-// des commandes, journaux) restent verrouillés « gateway » — jamais simulés.
+// Section « Système » du volet Paramètres v4 (v2.4) — versions, connexion à
+// l'agent Hermes (gateway), journaux. Sondes RÉELLES uniquement : révision git
+// du déploiement, état du binaire chrome-headless, place des profils de rendu
+// (mesurée sur le système de fichiers), sonde WebSocket de la gateway. Les
+// réglages du MOTEUR (mises à jour, exécution des commandes, journaux)
+// restent verrouillés « gateway » — jamais simulés.
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -14,13 +15,20 @@ import type { GatewayMode } from "@/lib/chat-types";
 
 interface SystemSectionProps {
   mode: GatewayMode | null;
-  /** Fournisseurs LLM actionnables (v2.4) — pastille « moteur intégré » honnête. */
+  /** Fournisseurs LLM actionnables (v2.4) — pastille « moteur local » honnête. */
   engineProviders?: string[] | null;
   serverVersion: string | null;
   /** Révision git du déploiement (null = installation sans git). */
   appRevision: string | null;
   chromeHeadless: "present" | "absent" | null;
   gatewayUrl: string | null;
+  /** Jeton de gateway enregistré côté service (jamais la valeur). */
+  gatewayTokenSet?: boolean;
+  /** Branche/débranche la gateway (URL vide = débranchement). */
+  onConnectGateway?: (
+    url: string,
+    token?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 interface RenderCacheStats {
@@ -44,10 +52,23 @@ export function SystemSection({
   appRevision,
   chromeHeadless,
   gatewayUrl,
+  gatewayTokenSet = false,
+  onConnectGateway,
 }: SystemSectionProps) {
   const [stats, setStats] = useState<RenderCacheStats | null>(null);
   const [clearing, setClearing] = useState(false);
   const [cleared, setCleared] = useState<string | null>(null);
+  // ── Formulaire de connexion de la gateway (URL + jeton facultatif) ──
+  const [urlDraft, setUrlDraft] = useState(gatewayUrl ?? "");
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectedFlash, setConnectedFlash] = useState(false);
+
+  // Resynchronise le champ si l'URL change côté service (hello rediffusé).
+  useEffect(() => {
+    setUrlDraft(gatewayUrl ?? "");
+  }, [gatewayUrl]);
 
   const load = useCallback(() => {
     getSocket().emit(
@@ -74,10 +95,25 @@ export function SystemSection({
     });
   };
 
-  const demo = mode !== "gateway";
-  // v2.4 : « démo » seulement si aucune clé fournisseur ne peut répondre —
-  // sinon le moteur intégré est RÉEL (tours sur les API des fournisseurs).
+  const local = mode !== "gateway";
+  // « local » : les réponses sont réelles (API fournisseurs / LLM intégré) ;
+  // seule l'exécution d'outils attend la gateway Hermes.
   const poolActive = (engineProviders?.length ?? 0) > 0;
+
+  const submitGateway = async (url: string) => {
+    if (!onConnectGateway || connecting) return;
+    setConnecting(true);
+    setConnectError(null);
+    const res = await onConnectGateway(url, tokenDraft.trim() || undefined);
+    setConnecting(false);
+    if (res.ok) {
+      setTokenDraft("");
+      setConnectedFlash(true);
+      setTimeout(() => setConnectedFlash(false), 4000);
+    } else {
+      setConnectError(res.error ?? "Échec de la connexion");
+    }
+  };
 
   return (
     <section>
@@ -116,20 +152,20 @@ export function SystemSection({
           <div className="min-w-0 flex-1">
             <div className="text-[12.5px] font-semibold">Moteur</div>
             <div className="mt-px text-[11px] leading-snug text-muted-foreground">
-              {demo
+              {local
                 ? poolActive
-                  ? `Moteur intégré — les réponses partent sur l'API de vos fournisseurs (clés actives : ${engineProviders!.join(", ")}).`
+                  ? `Moteur local — les réponses partent sur l'API de vos fournisseurs (clés actives : ${engineProviders!.join(", ")}).`
                   : gatewayUrl
                     ? `Gateway non branchée (${gatewayUrl}). Aucune clé fournisseur active : ajoutez-en une (Fournisseurs) pour de vraies réponses.`
-                    : "Aucune clé fournisseur active : les tours sont simulés par le LLM intégré. Ajoutez une clé (Fournisseurs) ou branchez la gateway Hermes."
-                : "Gateway Hermes connectée — les réponses viennent du moteur réel."}
+                    : "Aucune clé fournisseur active : le moteur local répond via son LLM intégré. Ajoutez une clé (Fournisseurs) ou branchez la gateway Hermes ci-dessous."
+                : "Gateway Hermes connectée — les réponses viennent de l'agent réel (outils inclus)."}
             </div>
           </div>
-          {demo ? (
+          {local ? (
             poolActive ? (
               <Pastille tone="ok" label="moteur" className="flex-none" />
             ) : (
-              <Pastille tone="warn" label="démo" className="flex-none" />
+              <Pastille tone="ok" label="local" className="flex-none" />
             )
           ) : (
             <Pastille tone="ok" label="gateway" className="flex-none" />
@@ -148,6 +184,98 @@ export function SystemSection({
             className="flex-none"
           />
         </div>
+      </div>
+
+      {/* ── Connexion à l'agent Hermes (gateway) — sonde WebSocket réelle ── */}
+      <div className="mt-4 rounded-xl border border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[12.5px] font-semibold">
+              Connexion à l&apos;agent Hermes
+            </div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
+              Branchez la gateway de l&apos;agent réel — ses outils (terminal,
+              fichiers, web) et ses modèles deviennent ceux de l&apos;interface.
+            </div>
+          </div>
+          {mode === "gateway" ? (
+            <Pastille tone="ok" label="connectée" className="flex-none" />
+          ) : (
+            <Pastille tone="off" label="non branchée" className="flex-none" />
+          )}
+        </div>
+        <div className="mt-2.5 grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <label className="grid gap-1">
+            <span className="text-[11px] text-muted-foreground">
+              URL de la gateway
+            </span>
+            <input
+              type="text"
+              value={urlDraft}
+              onChange={(e) => setUrlDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void submitGateway(urlDraft.trim());
+              }}
+              placeholder="ws://127.0.0.1:9120/api/ws"
+              aria-label="URL de la gateway Hermes"
+              className="h-9 rounded-sm border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none focus-visible:border-hermes/60"
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-[11px] text-muted-foreground">
+              Jeton {gatewayTokenSet ? "(enregistré — laisser vide pour conserver)" : "(facultatif)"}
+            </span>
+            <input
+              type="password"
+              value={tokenDraft}
+              onChange={(e) => setTokenDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void submitGateway(urlDraft.trim());
+              }}
+              placeholder={gatewayTokenSet ? "••••••••" : "ticket de session"}
+              aria-label="Jeton de la gateway Hermes"
+              className="h-9 rounded-sm border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none focus-visible:border-hermes/60"
+            />
+          </label>
+          <div className="flex gap-1.5 sm:pb-px">
+            <button
+              type="button"
+              onClick={() => void submitGateway(urlDraft.trim())}
+              disabled={connecting || !onConnectGateway}
+              className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {connecting ? "Connexion…" : "Connecter"}
+            </button>
+            {gatewayUrl ? (
+              <button
+                type="button"
+                onClick={() => void submitGateway("")}
+                disabled={connecting || !onConnectGateway}
+                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Débrancher
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {connectError ? (
+          <p className="mt-2 text-[11px] font-medium text-destructive" role="alert">
+            {connectError}
+          </p>
+        ) : connectedFlash ? (
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-success">
+            <Check className="size-[13px] flex-none" strokeWidth={2.5} />
+            {mode === "gateway"
+              ? "Gateway connectée — l'agent Hermes répond."
+              : "Enregistré — la gateway n'a pas répondu, le moteur local prend le relais."}
+          </p>
+        ) : (
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            La sonde teste l&apos;URL en direct : si la gateway ne répond pas,
+            l&apos;enregistrement est conservé et le moteur local continue de
+            répondre. Un échec retente à chaque tour.
+          </p>
+        )}
       </div>
 
       {/* ── Profils de rendu — sonde réelle + purge ───────────────────── */}

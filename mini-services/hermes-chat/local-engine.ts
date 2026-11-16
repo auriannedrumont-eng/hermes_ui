@@ -1,18 +1,19 @@
-// Moteur de démonstration : LLM intégré via z-ai-web-dev-sdk (streaming SSE)
-// Utilisé lorsqu'aucune gateway Hermes n'est joignable.
-// Supporte les pièces jointes : les images sont transmises en contenu
-// multimodal (vision), les autres fichiers en métadonnées textuelles.
+// Moteur local : LLM intégré via z-ai-web-dev-sdk (streaming SSE) — les tours
+// passent par les API des fournisseurs à clé active (llm-pool) ou par ce
+// moteur. Les réponses sont RÉELLES ; seule l'exécution d'outils attend la
+// gateway Hermes. Supporte les pièces jointes : les images sont transmises en
+// contenu multimodal (vision), les autres fichiers en métadonnées textuelles.
 import ZAI from "z-ai-web-dev-sdk";
 import { readAttachmentDataUrl } from "./uploads";
-import { composeDemoSystemPrompt } from "./prompts";
+import { composeLocalSystemPrompt } from "./prompts";
 import type { Attachment, TurnSettings } from "./types";
 
 // Le pool de clés fournisseurs (llm-pool.ts) partage ces analyseurs :
 // même contrat SSE que le SDK, mêmes notes de pièces jointes — cf. les
 // `export function` correspondants plus bas.
 
-// Compose les instructions du tour démo (base + custom + conversation).
-export { composeDemoSystemPrompt as composeSystemPrompt };
+// Compose les instructions du tour local (base + custom + conversation).
+export { composeLocalSystemPrompt as composeSystemPrompt };
 
 interface VisionMessageLike {
   role: "assistant" | "user";
@@ -47,7 +48,7 @@ Règles de réponse :
 - Sois utile, précis et concis. Structure tes réponses en Markdown quand c'est pertinent (listes, titres, **gras**, tableaux).
 - Utilise des blocs de code avec le bon langage pour tout extrait de code.
 - Si on t'envoie des pièces jointes (images, audio, vidéo, PDF), analyse-les et réponds à leur sujet ; le protocole Hermes les supporte nativement.
-- Si on te demande qui tu es : explique que tu es le moteur de démonstration intégré de l'interface, et que lorsqu'une gateway Hermes est connectée (variable HERMES_GATEWAY_URL), les réponses proviennent directement de l'agent Hermes avec ses outils (terminal, fichiers, web…).
+- Si on te demande qui tu es : explique que tu es Hermes, l'assistant de l'interface Hermes Web (LLM configuré côté service) ; lorsqu'une gateway Hermes est connectée (Paramètres → Système), les réponses et l'exécution d'outils (terminal, fichiers, web…) proviennent directement de l'agent Hermes réel.
 - N'invente jamais de faits : si tu ne sais pas, dis-le.
 
 Artefacts (fichiers générés) :
@@ -60,8 +61,8 @@ Artefacts (fichiers générés) :
 - N'annote PAS les simples extraits de code illustratifs (snippets courts dans une explication) : seuls les fichiers complets deviennent des artefacts.
 - Pour le HTML : produis des documents autonomes (styles et polices intégrés ou système, aucune dépendance externe obligatoire), avec un design soigné et une mise en page professionnelle.`;
 
-/** Instructions système de base du moteur démo (composables, F-11/F-19). */
-export const DEMO_BASE_PROMPT = SYSTEM_PROMPT;
+/** Instructions système de base du moteur local (composables, F-11/F-19). */
+export const LOCAL_BASE_PROMPT = SYSTEM_PROMPT;
 
 /** Taille des instructions système (estimation honnête de la jauge de contexte). */
 export const SYSTEM_PROMPT_CHARS = SYSTEM_PROMPT.length;
@@ -114,7 +115,7 @@ export function attachmentNote(attachments: Attachment[]): string {
   return `\n\n[Pièces jointes envoyées via le protocole Hermes]\n${lines.join("\n")}`;
 }
 
-export class DemoEngine {
+export class LocalEngine {
   private zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 
   async init(): Promise<void> {

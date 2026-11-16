@@ -343,14 +343,12 @@ export function useHermesChat() {
     return [a, b] as [string, string];
   }, [compareEnabled, compareModels]);
 
-  /** Retrouve l'id d'un modèle depuis le libellé d'une réponse (« … (démo) »,
-   *  « glm-4.6 · z.ai » — v2.3 : le suffixe fournisseur est retiré). */
+  /** Retrouve l'id d'un modèle depuis le libellé d'une réponse
+   *  (« glm-4.6 · z.ai » — v2.3 : le suffixe fournisseur est retiré). */
   const modelIdFromLabel = useCallback(
     (label?: string) => {
       if (!label) return null;
-      const clean = label
-        .replace(/\s*\(démo\)$/, "")
-        .replace(/\s*·\s*[^·]+$/, "");
+      const clean = label.replace(/\s*·\s*[^·]+$/, "");
       return models.find((m) => m.label === clean)?.id ?? null;
     },
     [models]
@@ -1447,7 +1445,7 @@ export function useHermesChat() {
     const model = models.find((m) => m.id === selectedModel) ?? null;
     const { windowTokens, estimated } = contextWindowOf(model);
 
-    // Instructions système : taille réelle du moteur démo, estimation sinon
+    // Instructions système : taille réelle du moteur local, estimation sinon
     const systemTokens = serverInfo?.systemPromptChars
       ? Math.ceil(serverInfo.systemPromptChars / 3.5)
       : SYSTEM_PROMPT_ESTIMATE;
@@ -1565,6 +1563,25 @@ export function useHermesChat() {
     []
   );
 
+  /** Branche (ou débranche, url vide) la gateway Hermes — Paramètres →
+   *  Système. Le hello rediffusé par le service met mode, statut et modèles
+   *  à jour en direct sur tous les clients. */
+  const connectGateway = useCallback(
+    (url: string, token?: string): Promise<{ ok: boolean; error?: string }> =>
+      new Promise((resolve) => {
+        getSocket().emit(
+          "gateway:set",
+          { url, ...(token !== undefined ? { token } : {}) },
+          (res: { ok?: boolean; error?: string } = {}) => {
+            if (!res?.ok && res?.error)
+              console.warn("[hermes] gateway :", res.error);
+            resolve({ ok: Boolean(res?.ok), error: res?.error });
+          }
+        );
+      }),
+    []
+  );
+
   return {
     connected,
     mode: (serverInfo?.mode ?? null) as GatewayMode | null,
@@ -1576,6 +1593,10 @@ export function useHermesChat() {
     serverRevision: serverInfo?.appRevision ?? null,
     chromeHeadless: serverInfo?.chromeHeadless ?? null,
     gatewayUrl: serverInfo?.gatewayUrl ?? null,
+    /** Jeton de gateway enregistré côté service (booléen honnête). */
+    gatewayTokenSet: serverInfo?.gatewayTokenSet ?? false,
+    /** Paramètres → Système : brancher l'agent Hermes réel. */
+    connectGateway,
     conversations,
     projects,
     activeId,

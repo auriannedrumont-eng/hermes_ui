@@ -433,9 +433,6 @@ export function Composer({
         {/* Suggestions de commandes slash */}
         {showSlash ? (
           <div className="absolute bottom-full left-3 z-20 mb-2 w-[min(92%,26rem)] overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-            <p className="border-b border-border/70 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Commandes · Entrée pour insérer, Échap pour ignorer
-            </p>
             <ul className="max-h-60 overflow-y-auto p-1">
               {slashMatches.map((tpl, i) => (
                 <li key={tpl.slash}>
@@ -689,9 +686,9 @@ export function Composer({
               type="button"
               variant="ghost"
               onClick={() => {
-                if (webSearchAvailable && mode === "demo") onToggleWebSearch();
+                if (webSearchAvailable && mode === "local") onToggleWebSearch();
               }}
-              aria-disabled={!webSearchAvailable || mode !== "demo"}
+              aria-disabled={!webSearchAvailable || mode !== "local"}
               aria-pressed={webSearch}
               aria-label="Recherche web"
               className={
@@ -704,7 +701,7 @@ export function Composer({
             </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px]">
-                  {mode !== "demo"
+                  {mode !== "local"
                     ? "Recherche web : gérée par l'agent Hermes quand la gateway est branchée"
                     : webSearchAvailable
                       ? webSearch
@@ -717,7 +714,7 @@ export function Composer({
 
           </div>
           <div className="flex items-center gap-1.5">
-            {/* Bouclier des autorisations — sans objet en mode démo (pas
+            {/* Bouclier des autorisations — sans objet en moteur local (pas
                 d'outils) : même idiome que la recherche web — le bouton reste
                 survolable et le tooltip explique pourquoi il est inactif,
                 au lieu d'un bouton désactivé sans explication visible. */}
@@ -746,7 +743,7 @@ export function Composer({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px]">
                   {mode !== "gateway"
-                    ? "Autorisations de l'agent : sans objet en mode démo — l'agent démo n'exécute aucun outil. Actives avec une gateway."
+                    ? "Autorisations de l'agent : le moteur local n'exécute aucune action — actives quand la gateway Hermes est branchée (Paramètres → Système)."
                     : permissionsMode === "auto"
                       ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
                       : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}

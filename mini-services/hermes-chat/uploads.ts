@@ -110,7 +110,7 @@ export function resolveUploadFile(urlPath: string): ServedFile | null {
   return { filePath, mime: EXT_MIME[ext] ?? "application/octet-stream" };
 }
 
-/** Lit un fichier joint en data URL (pour l'envoi multimodal au LLM de démo). */
+/** Lit un fichier joint en data URL (pour l'envoi multimodal au moteur local). */
 export function readAttachmentDataUrl(urlPath: string): string | null {
   const served = resolveUploadFile(urlPath);
   if (!served) return null;

@@ -88,7 +88,7 @@ export const HERMES_SETTINGS: SettingDef[] = [
     default: null,
     label: "Température",
     description:
-      "Réglage du tour entre 0 (déterministe) et 1 (créatif) — le moteur démo " +
+      "Réglage du tour entre 0 (déterministe) et 1 (créatif) — le fournisseur " +
       "rejette au-delà. Absente = valeur par défaut du fournisseur.",
     scope: "client",
     category: "Agent Hermes",

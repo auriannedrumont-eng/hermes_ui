@@ -14,12 +14,19 @@ bun run dev   # bun --hot index.ts → http://localhost:3003
 
 | Mode | Condition | Comportement |
 | --- | --- | --- |
-| **Gateway** | `HERMES_GATEWAY_URL` défini et joignable | Les tours sont envoyés à l'agent Hermes réel (protocole `api_turn_v1`), avec événements d'outils et raisonnement |
-| **Démo** (défaut) | Aucune URL configurée ou gateway injoignable | Réponses générées par le LLM intégré (`z-ai-web-dev-sdk`, serveur uniquement) avec un persona Hermes |
+| **Gateway** | URL configurée et joignable (Paramètres → Système, ou `HERMES_GATEWAY_URL`) | Les tours sont envoyés à l'agent Hermes réel (protocole `api_turn_v1`), avec événements d'outils et raisonnement |
+| **Local** (défaut) | Aucune URL configurée ou gateway injoignable | Réponses RÉELLES : pool de clés fournisseurs d'abord, LLM intégré (`z-ai-web-dev-sdk`, serveur uniquement) ensuite — sans exécution d'outils |
 
-L'interface affiche le mode actif dans la sidebar (« Mode démo · LLM intégré » ou « Gateway Hermes connectée »).
+L'interface affiche le mode actif dans la sidebar (« Moteur local · LLM intégré », « Moteur local · vos clés répondent » ou « Gateway Hermes connectée »).
 
 ## Brancher une gateway Hermes réelle
+
+**Depuis l'interface** (recommandé) : Paramètres → Système → « Connexion à
+l'agent Hermes » — URL + jeton facultatif, sonde en direct, persisté (les
+redémarrages conservent le branchement ; l'URL saisie PRIME sur
+`HERMES_GATEWAY_URL`).
+
+**Par variable d'environnement** (repli de déploiement) :
 
 ```bash
 # URL du listener WebSocket de la gateway Hermes (cf. gateway/run_api.py — endpoint /api/ws)
@@ -33,7 +40,7 @@ Le connecteur (`hermes-connector.ts`) implémente le protocole de tour document�
 
 1. **Admission** — envoi de l'enveloppe `{"text": ..., "api_turn_v1": {"history": [...], "settings": {...}}}`
 2. **Observation** — écoute des deltas de stream, du raisonnement, des événements d'outils et de la fin de tour
-3. **Repli** — si la gateway est injoignable ou expire, bascule automatique en mode démo avec un message de statut
+3. **Repli** — si la gateway est injoignable ou expire, le moteur local prend le relais avec un message de statut
 
 > Note : la poignée de main exacte (ticket de session) dépend de votre version de la gateway.
 > Ajustez `toWsUrl()` et les en-têtes d'authentification dans `hermes-connector.ts` si nécessaire.
@@ -147,6 +154,8 @@ Client → serveur :
 | `conversation:compact` | `{conversationId}` | **v2.4 : ack unique À LA FIN** `{ok: true, compact, done: true}` (échec `{ok: false, error}`) + broadcast `conversation:compacted`. NB socket.io : un emit-ack n'accepte qu'UN ack — le second appel (même id) est ignoré par le client. |
 | `system:renderCache` | — | `{count, bytes}` (place des profils de rendu Chrome, v2.4) |
 | `system:clearRenderCache` | — | `{count, bytes, removed, kept}` — purge (faite aussi à chaque démarrage) |
+| `gateway:get` | — | `{url, tokenSet, mode}` — état de la gateway (booléen pour le jeton, jamais la valeur) |
+| `gateway:set` | `{url, token?}` | `{ok, mode, url, tokenSet}` ou `{error}` — sonde la nouvelle URL en direct, persiste, rediffuse `hello` + `models:changed` ; `url: ""` = débranchement |
 
 Les réglages serveur suivent le découpage `hermes.*` / `fork.*` documenté
 dans le `FORK.md` du repo (registre source de vérité : `src/lib/settings.ts`).
@@ -174,7 +183,7 @@ service, le pied du volet compte les écarts).
   dans ce cas. Jeton optionnel : `GITHUB_TOKEN` dans le `.env` du service
   (quota ×80).
 - `pickActiveKey()` (stratégies de porte-clés) est prêt pour le moteur ;
-  en mode démo les tours du LLM intégré ne consomment pas les pools.
+  en moteur local les tours consomment le porte-clés avant le LLM intégré.
 
 ### Événements socket fournisseurs & extensions
 
@@ -211,7 +220,7 @@ de l'en-tête) et les instructions personnalisées globales (section Hermes du
 volet Paramètres). Presets réutilisables dans la bibliothèque (5 semés à la
 première ouverture).
 
-Composition du tour : en mode démo, les instructions envoyées au LLM empilent
+Composition du tour : en moteur local, les instructions envoyées au LLM empilent
 base + instructions globales + prompt de conversation ; en mode gateway, le
 prompt de conversation part dans `api_turn_v1.settings.system_prompt`
 (ignoré sans dommage si non supporté — la gateway garde ses instructions de
@@ -244,7 +253,7 @@ Serveur → client : `system-prompt:changed {conversationId, prompt}`,
 `system-prompts:changed {presets}` et `custom-instructions:changed {value}`
 (diffusés à tous les clients après chaque mutation). Script de test E2E :
 `scripts/test-system-prompt-flow.ts` (24 contrôles, dont la vérification
-comportementale — le LLM démo suit le prompt).
+comportementale — le moteur local suit le prompt).
 
 ## Partage public lecture seule (F-13)
 
@@ -287,7 +296,7 @@ Réglages par tour transmis par `chat:send` / `chat:regenerate` /
 `message:edit` (charge `temperature` / `maxTokens` / `seed`, assainis par
 `sanitizeExpertSettings` : température clampée **[0, 1]** — le fournisseur
 rejette au-delà, erreur 1210 ; plafond [1, 8192] ; graine entière 32 bits ;
-`null` / non-numériques ignorés). En mode démo ils sont injectés au LLM
+`null` / non-numériques ignorés). En moteur local ils sont injectés au LLM
 pour de réel (`temperature`, `max_tokens`, `seed`) ; en mode gateway ils
 partent dans `api_turn_v1.settings` (clés à valider — convention « ignoré
 sans dommage »). Script de test E2E : `scripts/test-expert-flow.ts`
@@ -299,7 +308,7 @@ Mémoire **consultable, éditable, effaçable** : notes persistantes injectées
 dans les instructions du tour tant que la mémoire est active. Clés du
 registre `settings` : `hermes.memory.enabled` ("1"/"0", absente = active),
 `hermes.memory.autoLearn` ("1"/"0"), `hermes.memory.notes` (≤ 12 000 car.).
-En mode démo, la section « Mémoire de l'utilisateur » est composée par le
+En moteur local, la section « Mémoire de l'utilisateur » est composée par le
 service (entre la base et les instructions personnalisées) ; en mode
 gateway, `memory_notes` + `memory_auto_learn` partent dans
 `api_turn_v1.settings` (clés à valider contre la gateway). Le `hello`
@@ -314,7 +323,7 @@ expose `memoryChars` (taille réelle, 0 si mémoire coupée).
 
 Serveur → client : `memory:changed {notes?|enabled?|autoLearn?}` (broadcast,
 charge partielle). Script de test E2E : `scripts/test-memory-flow.ts`
-(17 contrôles, dont la vérification comportementale — la démo cite la
+(17 contrôles, dont la vérification comportementale — le moteur local cite la
 mémoire).
 
 ## Protocole socket.io
@@ -392,8 +401,9 @@ pour repartir de zéro.
 - `store.ts` — persistance SQLite (bun:sqlite) : conversations, messages, **artefacts versionnés**, **projets**, réglages, épinglage, fork, recherche
 - `artifacts.ts` — extraction des blocs fichier du contenu de l'agent (annotés ou auto-détectés), suivi de streaming, payloads wire
 - `render.ts` — pipeline chrome-headless-shell (client CDP minimal) : PNG plein page + PDF vectoriel
-- `hermes-connector.ts` — résolution du mode (gateway / démo) + protocole Hermes
-- `demo-engine.ts` — LLM intégré avec streaming SSE (z-ai-web-dev-sdk, serveur uniquement)
+- `hermes-connector.ts` — résolution du mode (gateway / local, URL saisie dans
+  l'interface ou `HERMES_GATEWAY_URL`) + protocole Hermes
+- `local-engine.ts` — moteur local avec streaming SSE (z-ai-web-dev-sdk, serveur uniquement)
 - `asr.ts` — transcription audio (ASR + conversion ffmpeg)
 - `uploads.ts` — pièces jointes multimédia (disque, service HTTP, nettoyage)
 - `types.ts` — types partagés (miroir : `src/lib/chat-types.ts` côté frontend)

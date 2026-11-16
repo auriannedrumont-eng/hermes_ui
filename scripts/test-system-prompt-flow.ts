@@ -2,7 +2,7 @@
 // personnalisées » : presets semés, CRUD complet, prompt par conversation
 // (get/set/clear, broadcast), instructions globales, garde-fous (longueur,
 // validation), isolation entre conversations, hello honnête (taille des
-// instructions). Vérifie AUSSI le comportement réel du LLM démo : le prompt
+// instructions). Vérifie AUSSI le comportement réel du LLM local : le prompt
 // de conversation doit orienter la réponse. Données créées nettoyées en fin.
 import { io } from "socket.io-client";
 
@@ -32,7 +32,7 @@ function emit(event: string, payload?: unknown): Promise<any> {
 
 /** Attends la fin d'un tour de chat (done/error) pour une conversation.
  *  ABONNEMENT POSÉ AVANT l'émission de chat:send (sinon le done arrive
- *  avant l'écouteur — le LLM démo peut répondre en < 1 s). */
+ *  avant l'écouteur — le LLM local peut répondre en < 1 s). */
 function waitTurnEnd(conversationId: string, timeoutMs = 60_000): Promise<{ done?: boolean; error?: string }> {
   return new Promise((resolve) => {
     const onDone = (p: { conversationId: string }) => {
@@ -70,9 +70,9 @@ async function main() {
   );
   const seedTitles = (list0.presets ?? []).map((p: any) => p.title as string);
   check(
-    "preset « Démo Hermes » semé",
-    seedTitles.includes("Démo Hermes"),
-    seedTitles.filter((t: string) => ["Assistant sobre", "Professeur patient", "Relecteur exigeant", "Développeur senior", "Démo Hermes"].includes(t)).join(", ")
+    "preset « Vitrine d'artefacts » semé",
+    seedTitles.includes("Vitrine d'artefacts"),
+    seedTitles.filter((t: string) => ["Assistant sobre", "Professeur patient", "Relecteur exigeant", "Développeur senior", "Vitrine d'artefacts"].includes(t)).join(", ")
   );
 
   // ── 2. CRUD des presets ───────────────────────────────────────────

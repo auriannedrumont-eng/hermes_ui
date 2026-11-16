@@ -68,7 +68,7 @@ interface ModelPickerProps {
   models: ModelOption[];
   selectedModel: string | null;
   source: "gateway" | "catalogue" | "providers" | null;
-  mode: "gateway" | "demo" | null;
+  mode: "gateway" | "local" | null;
   disabled?: boolean;
   onSelect: (id: string) => void;
   /** Effort de raisonnement courant (valeur brute du fournisseur). */
@@ -159,7 +159,7 @@ function ExpertPanel({
               className="mt-3 w-full"
             />
             <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-              0 = déterministe · 1 = créatif (le moteur démo refuse au-delà).
+              0 = déterministe · 1 = créatif (le fournisseur refuse au-delà).
             </p>
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -262,7 +262,7 @@ export function ModelPicker({
 
   // ── Groupes : par fournisseur en gateway ou en pool vivant (v2.3) ──
   // En grouped, le fournisseur porte le titre de section : la ligne mono ne
-  // le répète pas. En flat (catalogue/démo), une seule section : il complète l'id.
+  // le répète pas. En flat (catalogue/moteur local), une seule section : il complète l'id.
   const byProvider =
     (source === "gateway" && mode === "gateway") || source === "providers";
   const grouped = useMemo(() => {

@@ -22,7 +22,7 @@ export interface ExpertSettingsInput {
 
 /**
  * Assainit les réglages expert d'un tour (F-22) : température clampée à
- * [0, 1] (le moteur démo rejette au-delà — erreur 1210 du fournisseur),
+ * [0, 1] (le fournisseur rejette au-delà — erreur 1210 du fournisseur),
  * plafond de jetons clampé à [1, 8192] (vérifié : 1 token = une unique
  * sortie, la troncation est réellement effective), graine entière 32 bits.
  * Toute valeur absente, non numérique ou non finie est ignorée — le tour
@@ -97,7 +97,7 @@ export const MAX_PROMPT_CHARS = 12_000;
 /** Limite des instructions personnalisées globales (plus courte). */
 export const MAX_CUSTOM_INSTRUCTIONS_CHARS = 4_000;
 
-/** Presets initiaux semés à la première ouverture (idempotent, « Démo » remplace tout). */
+/** Presets initiaux semés à la première ouverture (idempotent, « Vitrine » remplace tout). */
 export const SEED_PRESETS: { title: string; content: string }[] = [
   {
     title: "Assistant sobre",
@@ -120,17 +120,17 @@ export const SEED_PRESETS: { title: string; content: string }[] = [
       "Écris du code production : typé, testable, commenté aux endroits non évidents. Explique tes choix techniques en quelques lignes avant le code. Signale explicitement les compromis.",
   },
   {
-    title: "Démo Hermes",
+    title: "Vitrine d'artefacts",
     content:
-      "Tu es en mode démonstration : illustre chaque réponse par un artefact complet (page HTML, tableau CSV, graphique SVG…) quand c'est pertinent, sinon explique ce que l'agent Hermes ferait avec ses outils.",
+      "Illustre chaque réponse par un artefact complet (page HTML, tableau CSV, graphique SVG…) quand c'est pertinent, sinon explique ce que l'agent Hermes ferait avec ses outils.",
   },
 ];
 
-/** Construit les instructions complètes du tour (démo) : système de base +
+/** Construit les instructions complètes du tour (moteur local) : système de base +
  * mémoire utilisateur (F-18) + instructions personnalisées + prompt de
  * conversation. Chaque section absente est simplement omise — ordre
  * stable, lisible dans les logs. */
-export function composeDemoSystemPrompt(parts: {
+export function composeLocalSystemPrompt(parts: {
   base: string;
   memoryNotes?: string | null;
   customInstructions?: string | null;

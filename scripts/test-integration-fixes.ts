@@ -39,7 +39,7 @@ async function startService(): Promise<ChildProcess> {
     HERMES_CHAT_PORT: "3303",
     HERMES_CHAT_FILES_PORT: "3304",
     HERMES_WAL_CHECKPOINT_MS: "1000", // checkpoint visible pendant le test
-    HERMES_GATEWAY_URL: "", // force le mode démo (pas de réseau externe)
+    HERMES_GATEWAY_URL: "", // force le moteur local (pas de réseau externe)
     HERMES_CHAT_DB: `${DB_DIR}/hermes-chat.sqlite`, // base de test isolée
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
@@ -250,7 +250,7 @@ async function main() {
       check("conversation créée", Boolean(cid));
 
       // Envoie un tour et attend qu'il soit EN VOL (stream:start/delta) —
-      // une attente fixe court la course si le tour de démo finit vite.
+      // une attente fixe court la course si le tour local finit vite.
       // Retourne false si le tour s'est terminé avant tout événement, a été
       // REFUSÉ (tour précédent pas encore libéré) ou a dépassé 15 s.
       const sendUntilStreaming = (content: string): Promise<boolean> =>
@@ -274,7 +274,7 @@ async function main() {
           const onDone = (p: any) => {
             if (p?.conversationId === cid) finish(false);
           };
-          // Garde : un tour sans événement (rate-limit côté démo) ne doit
+          // Garde : un tour sans événement (rate-limit côté moteur local) ne doit
           // pas suspendre la suite — on débloque avec chat:stop.
           const guard = setTimeout(() => {
             socket.emit("chat:stop", { conversationId: cid });
@@ -375,7 +375,7 @@ async function main() {
       }
       const comp = await emitAck(socket, "conversation:compact", { conversationId: cid });
       check("compaction lancée (ok/started)", comp?.ok === true || comp?.started === true, JSON.stringify(comp).slice(0, 60));
-      // Le résumé passe par le moteur démo (ZAI rate-limité : retenter jusqu'à
+      // Le résumé passe par le moteur local (ZAI rate-limité : retenter jusqu'à
       // 20 s, l'échec 429 est transitoire et pas un défaut du correctif).
       const compactedAt = Date.now();
       let compactSet = false;

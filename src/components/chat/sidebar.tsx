@@ -528,7 +528,7 @@ export function Sidebar({
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
 
   // Carte de statut honnête (v2.4) : sans gateway, le moteur intégré répond
-  // dès qu au moins un fournisseur a une clé active — on ne dit plus « démo »
+  // dès qu au moins un fournisseur a une clé active — l'état honnête s'affiche
   // quand les tours partent réellement sur les API des fournisseurs.
   const poolActive = (engineProviders?.length ?? 0) > 0;
 
@@ -1039,7 +1039,7 @@ export function Sidebar({
               className={`h-2 w-2 shrink-0 rounded-full ${
                 !connected
                   ? "bg-muted-foreground/50"
-                  : mode === "gateway" || (mode === "demo" && poolActive)
+                  : mode === "gateway" || (mode === "local" && poolActive)
                     ? "bg-success"
                     : "bg-hermes"
               }`}
@@ -1051,8 +1051,8 @@ export function Sidebar({
                 : mode === "gateway"
                   ? "Gateway Hermes connectée"
                   : poolActive
-                    ? "Moteur intégré · vos clés répondent"
-                    : "Mode démo · LLM intégré"}
+                    ? "Moteur local · vos clés répondent"
+                    : "Moteur local · LLM intégré"}
             </p>
             {/* Entrée unique des paramètres (décision v1 confirmée v3) */}
             <button
@@ -1078,11 +1078,7 @@ export function Sidebar({
             ) : (
               <>
                 Ajoutez une clé dans Paramètres → Fournisseurs &amp; clés, ou
-                définissez{" "}
-                <code className="break-all rounded bg-background/60 px-1 py-px font-mono text-[11px]">
-                  HERMES_GATEWAY_URL
-                </code>{" "}
-                pour brancher l&apos;agent Hermes.
+                branchez l&apos;agent Hermes dans Paramètres → Système.
               </>
             )}
           </p>

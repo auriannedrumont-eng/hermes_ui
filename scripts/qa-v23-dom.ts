@@ -21,7 +21,7 @@ async function main() {
   // 1. Cluster de capacités du composer
   const web = page.locator('button[aria-label="Recherche web"]');
   check("toggle Web présent", (await web.count()) === 1);
-  check("toggle Web désactivé sans clé (mode démo)", await web.isDisabled());
+  check("toggle Web désactivé sans clé (moteur local)", await web.isDisabled());
   check(
     "infobulle oriente vers les clés de services",
     (await web.getAttribute("title"))?.includes("Clés de services") === true,
@@ -53,8 +53,8 @@ async function main() {
     await page.waitForTimeout(25000);
     const body = await page.locator("main, body").first().innerText();
     check("carte jetons visible (≈ N jetons)", /jetons/.test(body), (body.match(/≈ \d+ jetons[^\n]*/) ?? [""])[0]);
-    const modelLine = (body.match(/[^\n]*(\(démo\)|· [a-z0-9.]+)[^\n]*/) ?? [""])[0];
-    check("modèle affiché (démo ou fournisseur)", /\(démo\)|· /.test(modelLine), modelLine.slice(0, 80));
+    const modelLine = (body.match(/[^\n]*(· [a-z0-9.]+|glm-)[^\n]*/) ?? [""])[0];
+    check("modèle affiché (local ou fournisseur)", /· [a-z0-9.]+|glm-/.test(modelLine), modelLine.slice(0, 80));
   } catch (e) {
     check("tour + carte jetons", false, String(e).slice(0, 80));
   }

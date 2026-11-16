@@ -1,19 +1,22 @@
-// Connecteur gateway Hermes :
-// - Si HERMES_GATEWAY_URL est défini, tente de parler le protocole de tour
+// Connecteur moteur Hermes :
+// - Si une URL de gateway est configurée (Paramètres → Système, ou variable
+//   HERMES_GATEWAY_URL en repli) et joignable, les tours parlent le protocole
 //   de la gateway Hermes (WebSocket `/api/ws`, enveloppe `api_turn_v1`,
 //   observation des deltas de stream / événements d'outils / raisonnement).
-// - Sinon (ou en cas d'échec), bascule sur le moteur de démo intégré.
+// - Sinon (ou en cas d'échec), le moteur local prend le relais : pool de clés
+//   fournisseurs d'abord, LLM intégré (SDK) ensuite.
 // - `listModels()` interroge l'API REST de la gateway
 //   (GET /api/model/options) et retombe sur le catalogue Hermes.
 import WebSocket from "ws";
-import { DemoEngine } from "./demo-engine";
+import { LocalEngine } from "./local-engine";
 import { catalogModelsResult } from "./models";
 import type { LlmPoolApi, PoolTurnResult, TurnUsage } from "./llm-pool";
 import type { Attachment, GatewayMode, ModelOption, ModelsResult } from "./types";
-import type { TurnCallbacks, TurnRequest } from "./demo-engine";
+import type { TurnCallbacks, TurnRequest } from "./local-engine";
 
-const GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? null;
-const GATEWAY_TOKEN = process.env.HERMES_GATEWAY_TOKEN ?? null;
+// Repli : variables d'environnement (l'URL saisie dans l'interface prime).
+const ENV_GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? null;
+const ENV_GATEWAY_TOKEN = process.env.HERMES_GATEWAY_TOKEN ?? null;
 const HANDSHAKE_TIMEOUT_MS = 3000;
 const TURN_TIMEOUT_MS = 180_000;
 const MODELS_TIMEOUT_MS = 4000;
@@ -81,14 +84,15 @@ function parseModelOptions(data: any): ModelOption[] {
   return out;
 }
 
-/** Erreur du LLM intégré rendue pédagogique : sur un poste sans bac à sable
+/** Erreur du moteur local rendue pédagogique : sur un poste sans bac à sable
  *  Z.ai, le SDK échoue faute de .z-ai-config — on oriente vers les clés. */
-function friendlyDemoError(err: unknown): Error {
+function friendlyLocalError(err: unknown): Error {
   const msg = err instanceof Error ? err.message : String(err);
   if (/z-ai-config|Configuration file not found/i.test(msg)) {
     return new Error(
-      "Le moteur de démo intégré n'est pas disponible sur cette machine (fichier .z-ai-config absent). " +
-        "Ouvrez Paramètres → Fournisseurs & clés et ajoutez une clé : les réponses viendront alors de l'API du fournisseur."
+      "Le moteur local n'a pas de LLM configuré sur cette machine (fichier .z-ai-config absent). " +
+        "Ouvrez Paramètres → Fournisseurs & clés et ajoutez une clé, ou branchez la gateway Hermes " +
+        "(Paramètres → Système) : les réponses viendront alors de l'agent réel."
     );
   }
   return err instanceof Error ? err : new Error(msg);
@@ -108,10 +112,12 @@ export interface TurnOutcome {
 }
 
 export class HermesConnector {
-  mode: GatewayMode = "demo";
-  gatewayUrl: string | null = GATEWAY_URL;
-  model = "Hermes 4 70B (démo)";
-  private demo = new DemoEngine();
+  mode: GatewayMode = "local";
+  /** URL de gateway active (saisie dans l'interface, repli environnement). */
+  gatewayUrl: string | null = ENV_GATEWAY_URL;
+  gatewayToken: string | null = ENV_GATEWAY_TOKEN;
+  model = "Hermes (moteur local)";
+  private engine = new LocalEngine();
   private modelsCache: ModelsResult | null = null;
   private pool: LlmPoolApi | null = null;
 
@@ -126,22 +132,38 @@ export class HermesConnector {
   }
 
   async init(): Promise<void> {
-    if (!GATEWAY_URL) {
-      this.mode = "demo";
+    if (!this.gatewayUrl) {
+      this.mode = "local";
       return;
     }
     const reachable = await this.probe();
-    this.mode = reachable ? "gateway" : "demo";
+    this.mode = reachable ? "gateway" : "local";
     if (reachable) this.model = "hermes (gateway)";
+  }
+
+  /** Branche (ou débranche, url vide/null) la gateway depuis l'interface :
+   *  re-sonde la nouvelle URL et bascule le mode en conséquence. */
+  async setGateway(
+    url: string | null,
+    token?: string | null
+  ): Promise<GatewayMode> {
+    const clean = typeof url === "string" ? url.trim() : "";
+    this.gatewayUrl = clean || null;
+    if (token !== undefined) {
+      this.gatewayToken =
+        typeof token === "string" && token.trim() ? token.trim() : null;
+    }
+    await this.init();
+    return this.mode;
   }
 
   /** Liste des modèles : gateway si joignable, sinon pool vivant, sinon catalogue. */
   async listModels(): Promise<ModelsResult> {
-    if (this.mode === "gateway" && GATEWAY_URL) {
+    if (this.mode === "gateway" && this.gatewayUrl) {
       const fromGateway = await this.fetchGatewayModels();
       if (fromGateway && fromGateway.models.length > 0) return fromGateway;
     }
-    // Mode démo : les fournisseurs à clé active exposent leurs vrais modèles.
+    // Moteur local : les fournisseurs à clé active exposent leurs vrais modèles.
     if (this.pool) {
       const pooled = await this.pool.listModels();
       if (pooled && pooled.models.length > 0) return pooled;
@@ -157,11 +179,11 @@ export class HermesConnector {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), MODELS_TIMEOUT_MS);
       const res = await fetch(
-        `${toHttpBase(GATEWAY_URL!)}/api/model/options?include_unconfigured=1`,
+        `${toHttpBase(this.gatewayUrl!)}/api/model/options?include_unconfigured=1`,
         {
           signal: controller.signal,
-          headers: GATEWAY_TOKEN
-            ? { Authorization: `Bearer ${GATEWAY_TOKEN}` }
+          headers: this.gatewayToken
+            ? { Authorization: `Bearer ${this.gatewayToken}` }
             : undefined,
         }
       );
@@ -199,8 +221,8 @@ export class HermesConnector {
         }
         resolve(ok);
       };
-      const ws = new WebSocket(toWsUrl(GATEWAY_URL!), {
-        headers: GATEWAY_TOKEN ? { Authorization: `Bearer ${GATEWAY_TOKEN}` } : undefined,
+      const ws = new WebSocket(toWsUrl(this.gatewayUrl!), {
+        headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
         handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
       });
       const timer = setTimeout(() => done(false), HANDSHAKE_TIMEOUT_MS);
@@ -216,11 +238,11 @@ export class HermesConnector {
   }
 
   async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<TurnOutcome> {
-    if (this.mode === "gateway" && GATEWAY_URL) {
+    if (this.mode === "gateway" && this.gatewayUrl) {
       try {
         return await this.runGatewayTurn(req, cb);
       } catch {
-        cb.onStatus("Gateway Hermes injoignable — basculement en mode démo…");
+        cb.onStatus("Gateway Hermes injoignable — réponse par le moteur local…");
       }
     }
     // Pool de clés fournisseurs d'abord (v2.3). Une erreur du pool ne retombe
@@ -242,12 +264,12 @@ export class HermesConnector {
       }
     }
     try {
-      const result = await this.demo.runTurn(req, cb);
+      const result = await this.engine.runTurn(req, cb);
       const label = result.model || this.model;
-      this.model = `${label} (démo)`;
+      this.model = label;
       return { ...result, model: label, engine: "sdk" };
     } catch (err) {
-      throw friendlyDemoError(err);
+      throw friendlyLocalError(err);
     }
   }
 
@@ -260,9 +282,9 @@ export class HermesConnector {
       if (pooled) return pooled;
     }
     try {
-      return await this.demo.summarize(history);
+      return await this.engine.summarize(history);
     } catch (err) {
-      throw friendlyDemoError(err);
+      throw friendlyLocalError(err);
     }
   }
 
@@ -280,8 +302,8 @@ export class HermesConnector {
       let settled = false;
       let content = "";
       let reasoning = "";
-      const ws = new WebSocket(toWsUrl(GATEWAY_URL!), {
-        headers: GATEWAY_TOKEN ? { Authorization: `Bearer ${GATEWAY_TOKEN}` } : undefined,
+      const ws = new WebSocket(toWsUrl(this.gatewayUrl!), {
+        headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
         handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
       });
 

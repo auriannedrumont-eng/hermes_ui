@@ -183,7 +183,9 @@ export interface SearchHit {
   createdAt: string;
 }
 
-export type GatewayMode = "gateway" | "demo";
+/** Mode du moteur : « gateway » (agent Hermes réel) ou « local » (moteur
+ *  intégré — vraies réponses via les API fournisseurs / SDK, sans outils). */
+export type GatewayMode = "gateway" | "local";
 
 /** Réglages additifs envoyés dans api_turn_v1.settings (ignorés sans dommage). */
 export interface TurnSettings {
@@ -197,7 +199,7 @@ export interface TurnSettings {
   /** Apprentissage automatique demandé au moteur. */
   memoryAutoLearn?: boolean;
   // ── Mode expert (F-22) — température, plafond de sortie, graine ────
-  /** Température du tour (0–1 : le moteur démo refuse au-delà, erreur 1210). */
+  /** Température du tour (0–1 : le fournisseur refuse au-delà, erreur 1210). */
   temperature?: number;
   /** Plafond de jetons de la réponse (16–8192). */
   maxTokens?: number;

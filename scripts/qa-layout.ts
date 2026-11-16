@@ -36,10 +36,10 @@ async function main() {
     sidebar: '[aria-label="Historique des conversations"]',
     composer: "textarea",
   });
-  // carte de statut (contient « Mode démo ») cherchée par texte
+  // carte de statut (contient « Moteur local ») cherchée par texte
   home.statusCard = await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("*")).find(
-      (e) => e.children.length === 0 && e.textContent?.includes("Mode démo"),
+      (e) => e.children.length === 0 && e.textContent?.includes("Moteur local"),
     );
     return el ? el.closest("div.border, section, footer, div")?.getBoundingClientRect().toJSON() ?? null : null;
   });

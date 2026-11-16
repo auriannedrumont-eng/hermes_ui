@@ -3,7 +3,7 @@
 // conservée en base ; le fil n'affiche que la version active, avec la meta
 // ‹ index/count › ; message:setVersion bascule la version affichée (et
 // envoyée au modèle) ; les côtés d'une comparaison versionnent séparément ;
-// supprimer la version active promeut la précédente. Tours via moteur démo.
+// supprimer la version active promeut la précédente. Tours via moteur local.
 import { io } from "socket.io-client";
 
 const socket = io("http://localhost:3003", { transports: ["websocket"] });

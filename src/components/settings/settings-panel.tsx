@@ -139,6 +139,13 @@ interface SettingsPanelProps {
   appRevision?: string | null;
   chromeHeadless?: "present" | "absent" | null;
   gatewayUrl?: string | null;
+  /** Jeton de gateway enregistré côté service (jamais la valeur). */
+  gatewayTokenSet?: boolean;
+  /** Branche/débranche la gateway (section Système). */
+  onConnectGateway?: (
+    url: string,
+    token?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   /** v2.4 (section Outils) — même calcul que la bascule « Web » du composer. */
   webSearchAvailable?: boolean;
 }
@@ -531,6 +538,8 @@ export function SettingsPanel({
   appRevision = null,
   chromeHeadless = null,
   gatewayUrl = null,
+  gatewayTokenSet = false,
+  onConnectGateway,
   webSearchAvailable = false,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>("interface");
@@ -546,9 +555,9 @@ export function SettingsPanel({
     if (open) api.refresh();
   }, [open, api]);
 
-  const isDemo = connected && mode === "demo";
-  // v2.4 : « démo » seulement si AUCUN fournisseur n a de clé active —
-  // sinon le moteur intégré répond réellement via les API des fournisseurs.
+  const isLocal = connected && mode !== "gateway";
+  // « local » : réponses réelles (clés fournisseurs) si au moins une clé est
+  // active — sinon LLM intégré du service (toujours réel, sans outils).
   const poolActive = (engineProviders?.length ?? 0) > 0;
   const extUpdate = api.extensions.some((e) => e.updateAvailable);
 
@@ -607,6 +616,8 @@ export function SettingsPanel({
             appRevision={appRevision}
             chromeHeadless={chromeHeadless}
             gatewayUrl={gatewayUrl}
+            gatewayTokenSet={gatewayTokenSet}
+            onConnectGateway={onConnectGateway}
           />
         );
     }
@@ -660,18 +671,18 @@ export function SettingsPanel({
               })}
             </div>
             <div className="mt-auto px-2 pt-2 text-[11px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
-              {isDemo ? (
+              {isLocal ? (
                 poolActive ? (
                   <span className="inline-flex items-center gap-1.5">
                     <InfoTip>Les réponses viennent de l'API de vos fournisseurs — vos clés, votre quota.</InfoTip>
                     <i className="size-[6px] rounded-full bg-success" aria-hidden />
-                    moteur intégré
+                    moteur local
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5">
-                    <InfoTip>Réponses simulées par le LLM intégré du moteur — aucune clé n'est utilisée.</InfoTip>
-                    <i className="size-[6px] rounded-full bg-warning" aria-hidden />
-                    mode démo
+                    <InfoTip>Le moteur local répond via son LLM intégré — aucune clé n'est utilisée.</InfoTip>
+                    <i className="size-[6px] rounded-full bg-hermes" aria-hidden />
+                    moteur local
                   </span>
                 )
               ) : (
@@ -696,13 +707,13 @@ export function SettingsPanel({
               {pane()}
             </div>
 
-            {/* Pied : état démo + modifications en attente (v4) */}
+            {/* Pied : état du moteur + modifications en attente (v4) */}
             <div className="flex flex-none items-center gap-2.5 border-t border-border bg-background px-5 py-[9px] min-[1100px]:px-[34px]">
-              {isDemo ? (
+              {isLocal ? (
                 poolActive ? (
                   <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
                     <span className="size-[7px] flex-none rounded-full bg-success" />
-                    <span className="truncate">Moteur intégré</span>
+                    <span className="truncate">Moteur local · vos clés</span>
                     <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                       Les réponses partent sur l&apos;API de vos fournisseurs
                       (clés actives : {engineProviders!.join(", ")}). Ajoutez ou
@@ -711,12 +722,12 @@ export function SettingsPanel({
                   </div>
                 ) : (
                 <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
-                  <span className="size-[7px] flex-none rounded-full bg-warning" />
-                  <span className="truncate">Mode démo</span>
+                  <span className="size-[7px] flex-none rounded-full bg-hermes" />
+                  <span className="truncate">Moteur local · LLM intégré</span>
                   <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                    Réponses simulées par le LLM intégré. Ajoutez la clé d&apos;un
-                    fournisseur (section Fournisseurs) ou branchez la gateway
-                    Hermes pour de vraies réponses.
+                    Le moteur local répond via son LLM intégré. Ajoutez la clé
+                    d&apos;un fournisseur (section Fournisseurs) ou branchez la
+                    gateway Hermes (section Système) pour l&apos;agent réel.
                   </span>
                 </div>
                 )

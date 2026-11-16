@@ -2,7 +2,7 @@
 // consultable, éditable, effaçable. Notes persistées côté service sous
 // `hermes.memory.notes`, actives tant que `hermes.memory.enabled` vaut 1
 // (fallback : absentes = actives). La mémoire est injectée dans les
-// instructions du tour par le service (démo) — le client n'assemble rien.
+// instructions du tour par le service (moteur local) — le client n'assemble rien.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -99,7 +99,7 @@ export function MemoryCard({
         </div>
       </div>
 
-      {/* Apprentissage automatique : réglage moteur (gateway), honnête en démo */}
+      {/* Apprentissage automatique : réglage moteur (gateway), honnête en local */}
       <label
         htmlFor="memory-auto-learn"
         className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
