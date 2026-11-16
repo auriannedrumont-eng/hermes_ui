@@ -197,6 +197,7 @@ et Caddy via votre gestionnaire de paquets.
 |---|---|
 | « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
 | Téléchargement qui échoue | relancez (idempotent) ; vérifiez la connexion / le proxy |
+| Téléchargement de ffmpeg qui bloque ou échoue | le lanceur essaie deux sources dans l'ordre (miroir GitHub ~190 Mo, puis gyan.dev ~110 Mo), abandonne un serveur muet et affiche la progression ; à défaut, déposez vous-même une archive ZIP de ffmpeg Windows dans `tools\ffmpeg.zip` avant de relancer (elle sera extraite puis supprimée) |
 | Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` (une nouvelle version retente d'elle-même, une même version est retentée après 24 h) |
 | Pastille « Rendu (chrome-headless) : introuvable » dans Paramètres → Système ; vignettes/PDF/partages en échec | chrome-headless-shell se télécharge dans `tools\` au démarrage (idempotent — relancez) ; sans réseau au premier démarrage, il viendra d'un dossier déjà installé (cache Playwright) ou manquera |
 | Dictée (transcription) en échec sur un format non WAV/WebM | ffmpeg est téléchargé dans `tools\` au démarrage ; les formats WAV/WebM passent sans lui |

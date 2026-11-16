@@ -479,7 +479,10 @@ $NodeZipUrl = "https://nodejs.org/dist/$NodeVer/node-$NodeVer-win-x64.zip"
 $BunZipUrl  = 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip'
 $CaddyExeUrl= 'https://caddyserver.com/api/download?os=windows&arch=amd64'   # renvoie l'exe directement
 $ChromeZipUrl= 'https://storage.googleapis.com/chrome-for-testing-public/143.0.7499.4/win64/chrome-headless-shell-win64.zip'   # rendu PNG/PDF des artefacts et partages
-$FfmpegZipUrl= 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'   # transcription vocale (conversion WAV)
+$FfmpegZipUrls = @(   # transcription vocale (conversion WAV) : miroir GitHub rapide d'abord, gyan.dev en repli (serveur lent sur certains reseaux)
+    'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+    'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
+)
 
 # Tout ce que les outils ecrivent reste DANS le dossier : les caches npm
 # et bun (qui vivent par defaut dans le profil Windows) sont rediriges
@@ -504,49 +507,110 @@ function Get-ToolDir([string]$toolName, [string]$exe) {
     if ($d) { return $d }
     return ''
 }
+# Telechargement avec progression en direct et garde-fous. curl.exe (livre
+# avec Windows 10/11) est prefere : rapide, reessaye tout seul, et abandonne
+# un serveur qui ne repond plus (moins de 10 Ko/s pendant 30 s) — c'etait le
+# blocage du telechargement ffmpeg sur gyan.dev. A defaut de curl,
+# Invoke-WebRequest (toujours disponible, mais sans garde-fou).
 function Invoke-Download([string]$url, [string]$outFile) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+    if ($curl) {
+        $cArgs = @('-L', '--fail', '--retry', '2', '--connect-timeout', '20',
+                   '--speed-time', '30', '--speed-limit', '10240', '-sS',
+                   '-o', (Quote-Arg $outFile), (Quote-Arg $url))
+        # Le curl de Windows (Schannel) verifie la revocation des
+        # certificats, ce qui echoue derriere certains proxys d'entreprise.
+        $ver = (& $curl --version) -join ' '
+        if ($ver -match 'Schannel') { $cArgs = @('--ssl-no-revoke') + $cArgs }
+        $p = Start-Process -FilePath $curl.Source -ArgumentList $cArgs -NoNewWindow -PassThru
+        $lastMb = 0
+        while (-not $p.HasExited) {
+            Start-Sleep -Seconds 3
+            if (Test-Path $outFile) {
+                $mb = [math]::Round((Get-Item $outFile).Length / 1MB)
+                if ($mb -ge ($lastMb + 10)) { $lastMb = $mb; Log ("    ... {0} Mo" -f $mb) }
+            }
+        }
+        if ($p.ExitCode -eq 0 -and (Test-Path $outFile) -and (Get-Item $outFile).Length -gt 0) { return $true }
+        Log ("    (telechargement curl echoue, code {0} — essai d'une autre methode)" -f $p.ExitCode)
+    }
     $oldPref = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'   # la barre de progression IWB ralentit ~10x le telechargement
-    try { Invoke-WebRequest -Uri $url -OutFile $outFile -UseBasicParsing }
+    try { Invoke-WebRequest -Uri $url -OutFile $outFile -UseBasicParsing; return $true }
+    catch { Log ("    (telechargement impossible : {0})" -f $_.Exception.Message); return $false }
     finally { $ProgressPreference = $oldPref }
 }
-function Install-ZipTool([string]$toolName, [string]$url, [string]$exe) {
+# Extrait une archive et verifie que l'exe attendu y figure ; renvoie $false
+# si l'archive est corrompue (telechargement interrompu, mauvaise archive).
+function Try-ExtractZip([string]$zip, [string]$dest, [string]$toolName, [string]$exe) {
+    try { Expand-Archive -Path $zip -DestinationPath $dest -Force }
+    catch {
+        Log ("    archive inexploitable ({0})" -f $_.Exception.Message)
+        return $false
+    }
+    return [bool](Find-ExeDir $toolName $exe)
+}
+function Install-ZipTool([string]$toolName, [string[]]$urls, [string]$exe) {
     $dest = Join-Path $ToolsDir $toolName
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     $zip = Join-Path $ToolsDir "$toolName.zip"
-    Log "  telechargement de $toolName (une seule fois)..."
-    Invoke-Download $url $zip
-    Log "  extraction de $toolName..."
-    Expand-Archive -Path $zip -DestinationPath $dest -Force
-    Remove-Item $zip -Force -ErrorAction SilentlyContinue
-    $d = Find-ExeDir $toolName $exe
-    if (-not $d) { throw "$toolName telecharge mais $exe est introuvable dans l'archive — effacez $dest et reessayez" }
-    return $d
+    $part = "$zip.part"
+    # Une archive deja presente dans tools\ (deposee a la main, ou restee la
+    # lors d'un arret pendant l'extraction) est utilisee si elle est bonne :
+    # c'est aussi le moyen de contourner un telechargement qui echoue.
+    if (Test-Path $zip) {
+        Log "  archive $toolName.zip deja presente dans tools\ : utilisation..."
+        if (Try-ExtractZip $zip $dest $toolName $exe) {
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
+            return (Find-ExeDir $toolName $exe)
+        }
+        Log "    -> archive remplacee par un nouveau telechargement"
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($u in $urls) {
+        $srcHost = ([regex]::Match($u, '^https?://([^/]+)/')).Groups[1].Value
+        Log ("  telechargement de {0} depuis {1} (une seule fois ; l'archive peut faire 100 a 200 Mo)..." -f $toolName, $srcHost)
+        if (Invoke-Download $u $part) {
+            Log "  extraction de $toolName..."
+            Move-Item -Path $part -Destination $zip -Force
+            if (Try-ExtractZip $zip $dest $toolName $exe) {
+                Remove-Item $zip -Force -ErrorAction SilentlyContinue
+                return (Find-ExeDir $toolName $exe)
+            }
+        }
+        Remove-Item $part -Force -ErrorAction SilentlyContinue
+    }
+    throw ("{0} : telechargement impossible — vous pouvez deposer vous-meme l'archive ZIP dans tools\{0}.zip puis relancer" -f $toolName)
 }
-function Install-ExeTool([string]$toolName, [string]$url, [string]$exe) {
+function Install-ExeTool([string]$toolName, [string[]]$urls, [string]$exe) {
     $dest = Join-Path $ToolsDir $toolName
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     $final = Join-Path $dest $exe
     $part  = "$final.part"
-    Log "  telechargement de $toolName (une seule fois)..."
-    # telecharge en .part puis renomme : un telechargement interrompu ne
-    # laissera jamais un exe incomplet qui serait pris pour le bon au
-    # demarrage suivant.
-    Invoke-Download $url $part
-    Move-Item -Path $part -Destination $final -Force
-    return $dest
+    foreach ($u in $urls) {
+        Log "  telechargement de $toolName (une seule fois)..."
+        # telecharge en .part puis renomme : un telechargement interrompu ne
+        # laissera jamais un exe incomplet qui serait pris pour le bon au
+        # demarrage suivant.
+        if (Invoke-Download $u $part) {
+            Move-Item -Path $part -Destination $final -Force
+            return $dest
+        }
+        Remove-Item $part -Force -ErrorAction SilentlyContinue
+    }
+    throw "$toolName : telechargement impossible depuis toutes les sources"
 }
 
 # Resout un outil : copie portable de tools\ si presente, sinon
 # telechargement dans tools\ ; renvoie '' si le telechargement echoue
 # (l appelant se rabattra sur la copie systeme eventuelle).
-function Resolve-Tool([string]$toolName, [string]$exe, [string]$url, [bool]$isZip) {
+function Resolve-Tool([string]$toolName, [string]$exe, [string[]]$urls, [bool]$isZip) {
     $d = Get-ToolDir $toolName $exe
     if ($d) { return $d }
     try {
-        if ($isZip) { return (Install-ZipTool $toolName $url $exe) }
-        return (Install-ExeTool $toolName $url $exe)
+        if ($isZip) { return (Install-ZipTool $toolName $urls $exe) }
+        return (Install-ExeTool $toolName $urls $exe)
     } catch {
         Log "  telechargement de $toolName impossible ($($_.Exception.Message)) — essai avec l outil du systeme s il existe"
         return ''
@@ -579,6 +643,11 @@ function Ensure-PortableSetup {
     }
 
     New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
+
+    # ── 0. Mise a jour automatique depuis GitHub (TOUT D ABORD : les sources
+    # de telechargement des outils ci-dessous sont celles du code le plus
+    # recent, et dependances/build tiendront compte des fichiers recus) ──
+    Update-FromGit
 
     # ── 1. Node.js (node + npm vivent dans le meme dossier) ──
     # tools\ d abord (dossier autonome), telechargement sinon, copie
@@ -633,14 +702,10 @@ function Ensure-PortableSetup {
     # ── 3quater. ffmpeg (transcription vocale : conversion des enregistrements
     # en WAV avant l appel ASR). Fonction optionnelle : absent, l application
     # demarre quand meme et la dictee est simplement indisponible. ──
-    $ffDir = Resolve-Tool 'ffmpeg' 'ffmpeg.exe' $FfmpegZipUrl $true
+    $ffDir = Resolve-Tool 'ffmpeg' 'ffmpeg.exe' $FfmpegZipUrls $true
     if (-not $ffDir -and (Test-Command 'ffmpeg')) { $ffDir = Split-Path -Parent (Get-Command 'ffmpeg').Source }
     if ($ffDir -and (Test-Path (Join-Path $ffDir 'ffmpeg.exe'))) { $env:Path = "$ffDir;$env:Path" }
     else { Log "  ATTENTION : ffmpeg introuvable — transcription vocale indisponible ; le reste de l application fonctionne" }
-
-    # ── 3bis. Mise a jour automatique depuis GitHub (AVANT dependances et
-    # build : elles tiendront compte des fichiers recus) ──
-    Update-FromGit
 
     # ── 4. Dependances npm de l interface ──
     $npmDepsChanged = Test-FilesChanged @('package.json', 'package-lock.json')
