@@ -261,10 +261,14 @@ export function ModelPicker({
   const favoriteIdSet = useMemo(() => new Set(favorites.map((m) => m.id)), [favorites]);
 
   // ── Groupes : par fournisseur en gateway ou en pool vivant (v2.3) ──
+  // Le fournisseur « Chats IA web » force aussi le regroupement : il est à
+  // part (pas un modèle du moteur) et doit se voir (spec pilotage §6).
   // En grouped, le fournisseur porte le titre de section : la ligne mono ne
   // le répète pas. En flat (catalogue/moteur local), une seule section : il complète l'id.
   const byProvider =
-    (source === "gateway" && mode === "gateway") || source === "providers";
+    (source === "gateway" && mode === "gateway") ||
+    source === "providers" ||
+    list.some((m) => m.webchat);
   const grouped = useMemo(() => {
     const rest = filtered.filter((m) => !favoriteIdSet.has(m.id));
     if (byProvider) {
@@ -285,6 +289,9 @@ export function ModelPicker({
   );
 
   // ── Échelle d'effort : portée par le modèle, repli générique ───────────
+  // Les modèles « chats IA web » ne portent ni effort ni mode expert : le
+  // tour part sur le navigateur du site, pas sur une API réglable.
+  const isWebchatCurrent = current?.webchat === true;
   const efforts = current?.efforts?.length ? current.efforts : GENERIC_EFFORTS;
   const effortScaleLabel = current?.effortLabel
     ? `Échelle : ${current.effortLabel}`
@@ -302,15 +309,24 @@ export function ModelPicker({
   const renderModel = (m: ModelOption) => {
     const isSelected = m.id === selectedModel;
     const isFavorite = favoriteIds.includes(m.id);
+    const unavailable = m.available === false;
     return (
       <CommandItem
         key={m.id}
         // Valeur normalisée : sélection clavier cohérente avec la recherche
         value={norm(`${m.label} ${m.id} ${m.provider}`)}
-        onSelect={() => pick(m.id)}
+        onSelect={() => {
+          // Site non vérifié : INDISPONIBLE, pas silencieusement cassé —
+          // le clic reste no-op (idiome « Recherche web » hors gateway).
+          if (unavailable) return;
+          pick(m.id);
+        }}
+        aria-disabled={unavailable || undefined}
         role="menuitemradio"
         aria-checked={isSelected}
-        className="group/item flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left"
+        className={`group/item flex cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left ${
+          unavailable ? "cursor-not-allowed opacity-60" : ""
+        }`}
       >
         <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
           {isSelected ? <Check className="h-4 w-4 text-hermes-text" /> : null}
@@ -328,6 +344,11 @@ export function ModelPicker({
               >
                 {m.badge === "Flagship" ? <Zap className="h-2.5 w-2.5" /> : null}
                 {m.badge}
+              </span>
+            ) : null}
+            {unavailable ? (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground">
+                Indisponible
               </span>
             ) : null}
           </span>
@@ -484,8 +505,32 @@ export function ModelPicker({
             </InfoTip>
           </p>
 
-          {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné */}
+          {/* Échelle d'effort de raisonnement — portée par le modèle sélectionné.
+              Un modèle « chat IA web » n'en porte pas : à sa place, ce que ce
+              modèle NE SAIT PAS faire est dit franchement (spec pilotage §6). */}
           <div className={bare ? "hidden" : "border-t border-border/60 px-3.5 py-2.5"}>
+            {isWebchatCurrent ? (
+              <div>
+                <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    Pilotage navigateur
+                    <InfoTip>
+                      Le tour part sur une page réelle du site, conduite par le
+                      service — pas sur une API. Les réglages d'effort et du mode
+                      expert ne s'appliquent pas ici.
+                    </InfoTip>
+                  </span>
+                  <span className="text-[11px] font-medium">Chats IA web</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Réponse en un bloc (20 s à 4 min) · aucun appel d'outil ·
+                  aucune mémoire entre deux tours — chaque tour repart d'une
+                  page neuve · aucun accès au dépôt. Connexion du site à faire
+                  une fois, à la main (Paramètres → Chats web).
+                </p>
+              </div>
+            ) : (
+              <>
             <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 Effort de raisonnement
@@ -509,10 +554,13 @@ export function ModelPicker({
               className="w-full"
               classNameItem="flex-1 capitalize"
             />
+              </>
+            )}
           </div>
 
-          {/* Mode expert (F-22) : température / plafond de sortie / graine */}
-          {bare || !onExpertChange ? null : (
+          {/* Mode expert (F-22) : température / plafond de sortie / graine —
+              sans objet pour les modèles « chats IA web ». */}
+          {bare || !onExpertChange || isWebchatCurrent ? null : (
             <ExpertPanel expert={expert ?? {}} onExpertChange={onExpertChange} />
           )}
         </Command>

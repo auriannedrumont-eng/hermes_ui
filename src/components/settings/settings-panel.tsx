@@ -17,6 +17,7 @@ import { useTheme } from "next-themes";
 import {
   Cpu,
   Database,
+  Globe,
   KeyRound,
   Layers,
   Monitor,
@@ -40,6 +41,7 @@ import { Segmented } from "@/components/shared/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { InfoTip } from "@/components/shared/info-tip";
+import { WebchatSection } from "@/components/settings/webchat-section";
 import {
   getSettingDef,
   onSettingsChanged,
@@ -93,6 +95,7 @@ const SECTIONS = [
   { id: "modeles", icon: Cpu, label: "Modèles" },
   { id: "fournisseurs", icon: Layers, label: "Fournisseurs" },
   { id: "cles", icon: KeyRound, label: "Clés de services" },
+  { id: "chatsweb", icon: Globe, label: "Chats web" },
   { id: "extensions", icon: Package, label: "Extensions" },
   { id: "outils", icon: Wrench, label: "Outils" },
   { id: "skills", icon: Sparkles, label: "Skills" },
@@ -576,6 +579,8 @@ export function SettingsPanel({
         return <ProvidersSection kind="llm" api={api} />;
       case "cles":
         return <ProvidersSection kind="service" api={api} />;
+      case "chatsweb":
+        return <WebchatSection />;
       case "extensions":
         return <ExtensionsSection api={api} />;
       case "hermes":

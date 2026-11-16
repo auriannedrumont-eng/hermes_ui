@@ -47,6 +47,10 @@ export interface ModelOption {
   effortLabel?: string;
   /** Fenêtre de contexte en tokens (absente = 128k estimé). */
   contextWindow?: number;
+  /** Fournisseur « chats IA web » (pilotes navigateur) — pas un modèle du moteur. */
+  webchat?: boolean;
+  /** false = site non vérifié (verifie=false) : INDISPONIBLE, affiché comme tel. */
+  available?: boolean;
 }
 
 export interface ModelsResult {

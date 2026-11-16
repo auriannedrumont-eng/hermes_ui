@@ -14,6 +14,7 @@
 //   memory:get/set-enabled/set-auto/set-notes,
 //   share:get/create/revoke,
 //   system:renderCache/clearRenderCache (v2.4 — profils de rendu Chrome)
+//   webchat:status/open/close (fournisseur « Chats IA web » — pilotage navigateur)
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
 //   stream:done, stream:error, message:appended, message:deleted,
@@ -53,7 +54,7 @@ import {
   rowToShareView,
   type SharedConversationData,
 } from "./shares";
-import { modelLabel } from "./models";
+import { modelLabel, catalogModelsResult } from "./models";
 import { transcribeAudioBase64 } from "./asr";
 import {
   CUSTOM_INSTRUCTIONS_KEY,
@@ -105,6 +106,25 @@ import {
   toWireArtifact,
 } from "./artifacts";
 import { chromeRenderer, chromeHeadlessStatus, chromeProfileStats, clearChromeProfiles } from "./render";
+import {
+  WEBCHAT_PROVIDER_LABEL,
+  isWebchatModel,
+  readWebchatConfig,
+  readWebchatFile,
+  runWebchatTurn,
+  webchatModelLabel,
+  webchatModelOptions,
+  webchatStatus,
+} from "./webchat/engine";
+import {
+  ensureBrowser,
+  killPilotBrowser,
+  launchWatchdog,
+  readPilotInfo,
+  touchActivity,
+} from "./webchat/browser";
+import { findTab, listTargets, newTab } from "./webchat/cdp";
+import { FICHES } from "./webchat/fiches";
 
 /** Révision git du dépôt déployé (null si installation sans git — zip
  *  téléversé, bundle) : affichée telle quelle dans Paramètres → Système. */
@@ -903,9 +923,20 @@ io.on("connection", (socket) => {
   socket.on("models:list", async (cb?: (data: unknown) => void) => {
     try {
       const result = await connector.listModels();
-      if (typeof cb === "function") cb(result);
+      // Fournisseur « Chats IA web » (spec pilotage) : à part, toujours
+      // proposé — il ne dépend ni de la gateway ni des clés fournisseurs.
+      const models = [...(result.models ?? []), ...webchatModelOptions()];
+      if (typeof cb === "function") cb({ ...result, models });
     } catch {
-      if (typeof cb === "function") cb({ models: [], defaultModel: null, source: "catalogue" });
+      // Le moteur ne répond pas : catalogue honnête + groupe webchat — le
+      // modèle PAR DÉFAUT reste un modèle du catalogue (jamais un webchat).
+      const fallback = catalogModelsResult();
+      if (typeof cb === "function")
+        cb({
+          models: [...fallback.models, ...webchatModelOptions()],
+          defaultModel: fallback.defaultModel,
+          source: "catalogue",
+        });
     }
   });
 
@@ -1374,6 +1405,65 @@ io.on("connection", (socket) => {
     const { removed, kept } = clearChromeProfiles();
     if (typeof cb === "function")
       cb({ ...chromeProfileStats(), removed, kept });
+  });
+
+  // ── Chats IA web (fournisseur webchat) : sondes et navigateur de pilotage ──
+  // Le profil est DÉDIÉ à l'application : l'utilisateur se connecte aux sites
+  // UNE fois, à la main (bouton « Ouvrir le navigateur ») — le code ne saisit
+  // ni ne stocke jamais un identifiant. Fermeture : veilleur d'inactivité ou
+  // bouton « Fermer » — toujours vérifiée par la chaîne --user-data-dir du
+  // profil applicatif (le navigateur personnel n'est jamais visé).
+  socket.on("webchat:status", async (cb?: (data: unknown) => void) => {
+    if (typeof cb === "function") cb(await webchatStatus(store));
+  });
+
+  socket.on(
+    "webchat:open",
+    async (payload: { site?: string }, cb?: (data: unknown) => void) => {
+      try {
+        const config = readWebchatConfig(store);
+        const fiche = payload?.site && FICHES[payload.site as keyof typeof FICHES]
+          ? FICHES[payload.site as keyof typeof FICHES]
+          : null;
+        const ensured = await ensureBrowser({
+          port: config.port,
+          profileDir: config.profileDir,
+          browserPath: config.browserPath || undefined,
+        });
+        if (!ensured.up) {
+          if (typeof cb === "function") cb({ error: ensured.error ?? "navigateur indisponible" });
+          return;
+        }
+        // Onglet du site demandé (ou simple onglet vide pour se connecter).
+        const targets = await listTargets(config.port);
+        const existing = fiche ? findTab(targets, fiche.onglet_match) : null;
+        if (!existing) {
+          await newTab(config.port, fiche?.url_accueil ?? "about:blank");
+        }
+        touchActivity(config.profileDir);
+        launchWatchdog(config.profileDir, config.idleMin);
+        if (typeof cb === "function")
+          cb({
+            ok: true,
+            pid: ensured.pid ?? readPilotInfo(config.profileDir)?.pid ?? null,
+            port: config.port,
+          });
+      } catch (err) {
+        if (typeof cb === "function")
+          cb({ error: err instanceof Error ? err.message : "ouverture impossible" });
+      }
+    }
+  );
+
+  socket.on("webchat:close", async (cb?: (data: unknown) => void) => {
+    const config = readWebchatConfig(store);
+    const info = readPilotInfo(config.profileDir);
+    if (!info || info.pid <= 0) {
+      if (typeof cb === "function") cb({ ok: true, closed: false });
+      return;
+    }
+    const closed = killPilotBrowser(info.pid, config.profileDir);
+    if (typeof cb === "function") cb({ ok: true, closed });
   });
 
   // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────
@@ -2131,7 +2221,9 @@ io.on("connection", (socket) => {
     running.set(turnKey, controller);
 
     // 0. Résout le modèle sélectionné (libellé d'affichage)
-    const model = opts.modelId ? modelLabel(opts.modelId) || opts.modelId : null;
+    const model = opts.modelId
+      ? modelLabel(opts.modelId) || webchatModelLabel(opts.modelId) || opts.modelId
+      : null;
     const attachments = opts.attachments?.length ? opts.attachments : undefined;
 
     // 1. Prépare le tour assistant
@@ -2261,7 +2353,55 @@ io.on("connection", (socket) => {
     }
 
     try {
-      const result = await connector.runTurn(
+      let result: {
+        content: string;
+        reasoning: string;
+        model: string;
+        engine?: "pool" | "gateway";
+        provider?: string;
+        usage?: import("./llm-pool").TurnUsage;
+      };
+      if (opts.modelId && isWebchatModel(opts.modelId)) {
+        // ── Fournisseur « chats IA web » — le tour ne part pas sur un moteur
+        // LLM mais sur le pilote navigateur du site (spec « Piloter des chats
+        // IA web », §4/§6). Réponse en un bloc : le statut explique où on en
+        // est (navigateur, envoi, génération), jamais de streaming factice.
+        const wc = await runWebchatTurn({
+          modelId: opts.modelId,
+          prompt: opts.content,
+          store,
+          cb: {
+            signal: controller.signal,
+            onStatus: (status) =>
+              socket.emit("stream:status", {
+                conversationId,
+                messageId,
+                status,
+                ...(variant ? { variant } : {}),
+              }),
+            onToolEvent: (event) => emitTool(event),
+          },
+        });
+        // Mode build : les fichiers écrits sont réinjectés en blocs nommés —
+        // le suivi d'artefacts existant les transforme en cartes versionnées
+        // (une carte par fichier, aperçu et journal de versions inclus).
+        let extra = "";
+        const wcConfig = readWebchatConfig(store);
+        for (const f of wc.files ?? []) {
+          const fileContent = readWebchatFile(f.path, f.name, wcConfig.outDir);
+          if (fileContent !== null) {
+            const ext = f.name.includes(".") ? f.name.split(".").pop()! : "txt";
+            extra += `\n\n\`\`\`${ext} file="${f.name}"\n${fileContent}\n\`\`\``;
+          }
+        }
+        result = {
+          content: wc.content + extra,
+          reasoning: "",
+          model: wc.model,
+          provider: wc.provider,
+        };
+      } else {
+        result = await connector.runTurn(
         {
           content: opts.content,
           history,
@@ -2337,7 +2477,8 @@ io.on("connection", (socket) => {
             });
           },
         }
-      );
+        );
+      }
 
       // Flush final du contenu restant
       contentAcc = result.content || contentAcc;

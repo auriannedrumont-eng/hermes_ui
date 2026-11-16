@@ -156,9 +156,41 @@ Client → serveur :
 | `system:clearRenderCache` | — | `{count, bytes, removed, kept}` — purge (faite aussi à chaque démarrage) |
 | `gateway:get` | — | `{url, tokenSet, mode}` — état de la gateway (booléen pour le jeton, jamais la valeur) |
 | `gateway:set` | `{url, token?}` | `{ok, mode, url, tokenSet}` ou `{error}` — sonde la nouvelle URL en direct, persiste, rediffuse `hello` + `models:changed` ; `url: ""` = débranchement |
+| `webchat:status` | — | `{sites: [{id, label, verifie, modes, browserUp}], config: {port, timeoutS, idleMin, outDir, profileDir, browserPath, browserFound, outDirExists}}` — sondes réelles du fournisseur « Chats IA web » (F-27) |
+| `webchat:open` | `{site?}` | `{ok, pid, port}` ou `{error}` — lance le navigateur de pilotage (profil dédié) et ouvre l'onglet du site ; connexion à faire une fois, à la main |
+| `webchat:close` | — | `{ok, closed}` — ferme le navigateur de pilotage (pid vérifié par la chaîne `--user-data-dir` du profil ; jamais le navigateur personnel) |
 
 Les réglages serveur suivent le découpage `hermes.*` / `fork.*` documenté
 dans le `FORK.md` du repo (registre source de vérité : `src/lib/settings.ts`).
+
+## Chats IA web — fournisseur « webchat » (F-27)
+
+Les chats IA publics (z.ai, Google AI Studio, gemini.google.com) sont exposés
+comme un **fournisseur de modèles à part** (`models:list` ajoute le groupe
+« Chats IA web », ids `webchat:<site>:<mode>`), indépendant de la gateway et
+des clés. Le tour ne part pas sur une API : un sous-processus pilote un vrai
+navigateur (module `webchat/`), conformément à la spec
+`upload/pilotage-chats-ia-web.md`.
+
+- `models:list` → `webchat:zai:answer|build`, `webchat:aistudio:answer`,
+  `webchat:gemini-app:answer` (ce dernier **indisponible** : fiche
+  `verifie=false` — pastille dans le picker, clic no-op).
+- Un tour webchat branche `runAssistantTurn` AVANT le connecteur : statuts
+  réels (`stream:status` : navigateur, envoi, génération) + événement outil
+  par site ; réponse en UN bloc (pas de streaming factice).
+- Mode `build` (z.ai) : les fichiers écrits dans le dossier de sortie
+  (`fork.webchat.outDir`, défaut `db/webchat-out`) sont réinjectés en blocs
+  `file="…"` → pipeline d'artefacts existant (cartes versionnées).
+- Verrou mono-pilote (fichier + pid, reprise d'un mort), garde de chemin
+  (`../` refusé et rapporté, jamais écrit), plafond de génération
+  (`fork.webchat.timeoutS`, défaut 240 s) → échec franc, jamais de succès
+  tronqué. Comparaison A/B : tours webchat sérialisés (file `engine.ts`).
+- Réglages (Paramètres → Chats web, clés serveur `fork.webchat.*`) : port de
+  débogage (9222), plafond de génération (240 s), veilleur d'inactivité
+  (5 min), dossier de sortie, chemin du navigateur.
+- Aucun identifiant manipulé : la connexion des sites se fait une fois, à la
+  main, dans le navigateur de pilotage (profil dédié `db/webchat-profile`).
+
 
 ## Fournisseurs & clés + Extensions (Paramètres v2.2)
 
