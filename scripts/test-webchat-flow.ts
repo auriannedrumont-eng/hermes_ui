@@ -33,6 +33,15 @@ async function unitTests() {
   check("ids webchat : webchat:<site>:<mode>", parsed?.site === "zai" && parsed?.mode === "build");
   check("ids webchat : mode non exposé refusé", parseWebchatModelId(webchatModelId("aistudio", "build" as any)) === null);
   check("ids webchat : site inconnu refusé", parseWebchatModelId("webchat:inconnu:answer") === null);
+  check(
+    "fiches : aistudio carte_candidates présentes",
+    (FICHES.aistudio.selecteur_modele?.carte_candidates?.length ?? 0) >= 3,
+    `${FICHES.aistudio.selecteur_modele?.carte_candidates?.length ?? 0} candidat(s)`
+  );
+  check(
+    "fiches : aistudio modele=null (modèle courant — pas de slug non relevé)",
+    FICHES.aistudio.modele === null
+  );
 
   // ── Verrou mono-pilote ────────────────────────────────────────────────
   const lockDir = mkdtempSync(join(tmpdir(), "webchat-qa-"));

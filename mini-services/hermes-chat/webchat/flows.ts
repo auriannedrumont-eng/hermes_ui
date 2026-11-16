@@ -363,8 +363,49 @@ export async function runAiStudio(ctx: FlowCtx): Promise<FlowResult> {
   const sel = fiche.selecteur_modele!;
   const slug = fiche.modele ?? null;
   if (slug) {
+    // La carte se cherche parmi les CANDIDATS de la fiche (le DOM d'AI
+    // Studio bouge) — attente d'ÉTAT sous plafond : première charge après
+    // connexion, la page met du temps à rendre son en-tête.
+    const candidats = [sel.carte, ...(sel.carte_candidates ?? [])].filter(
+      (s, i, a) => s && a.indexOf(s) === i
+    );
+    const probeExpr = `(() => {
+      const cands = ${JSON.stringify(candidats)};
+      for (const s of cands) {
+        const els = [...document.querySelectorAll(s)];
+        if (els.some((e) => e.offsetParent && e.getBoundingClientRect().width > 0)) return s;
+      }
+      return null;
+    })()`;
+    const carteDeadline = Date.now() + 20_000;
+    let carteSel: string | null = null;
+    while (Date.now() < carteDeadline) {
+      ctx.onHeartbeat();
+      carteSel = (await page.evaluate(probeExpr)) as string | null;
+      if (carteSel) break;
+      await sleep(500);
+    }
+    if (!carteSel) {
+      // Diagnostic : les boutons VISIBLES du DOM réel — la fiche (en
+      // données) se corrige à partir de CE rapport, jamais à l'aveugle.
+      const boutons = (await page.evaluate(`(() => {
+        return [...document.querySelectorAll("button")]
+          .filter((b) => b.offsetParent && b.getBoundingClientRect().width > 0)
+          .slice(0, 40)
+          .map((b) => ({
+            cls: String(b.className || "").slice(0, 80),
+            label: (b.getAttribute("aria-label") || "").slice(0, 60),
+            text: (b.textContent || "").trim().slice(0, 50),
+          }));
+      })()`)) as { cls: string; label: string; text: string }[];
+      throw new Error(
+        `carte du sélecteur de modèle AI Studio introuvable (sélecteurs essayés : ` +
+          `${candidats.join(", ")}) — boutons visibles : ${JSON.stringify(boutons)}`
+      );
+    }
+    ctx.onStep(`Carte du sélecteur de modèle trouvée (${carteSel})`);
     const subtitleExpr = `(() => {
-      const card = document.querySelector(${JSON.stringify(sel.carte)});
+      const card = document.querySelector(${JSON.stringify(carteSel)});
       if (!card) return "";
       const el = card.querySelector(${JSON.stringify(sel.sous_titre)});
       return el ? (el.textContent || "").trim() : "";
@@ -372,8 +413,8 @@ export async function runAiStudio(ctx: FlowCtx): Promise<FlowResult> {
     const current = String((await page.evaluate(subtitleExpr)) ?? "").trim();
     if (current !== slug) {
       ctx.onStep(`Choix du modèle « ${slug} » (courant : « ${current || "?"} »)`);
-      if (!(await page.click(sel.carte))) {
-        throw new Error("carte du sélecteur de modèle AI Studio introuvable");
+      if (!(await page.click(carteSel))) {
+        throw new Error("carte du sélecteur de modèle AI Studio visible mais non cliquable");
       }
       await waitFor(ctx, `!!document.querySelector(${JSON.stringify(sel.palette)})`, "palette de modèles", 8_000);
       const itemFinder = `(() => {

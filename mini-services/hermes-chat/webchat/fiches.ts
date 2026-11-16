@@ -37,6 +37,9 @@ export interface SiteFiche {
   /** Sélecteurs du sélecteur de modèle (AI Studio). */
   selecteur_modele?: {
     carte: string;
+    /** Candidats supplémentaires essayés dans l'ordre (le DOM du site
+     *  bouge — la carte se cherche parmi eux, attente d'état incluse). */
+    carte_candidates?: string[];
     sous_titre: string;
     palette: string;
     item: string;
@@ -93,13 +96,24 @@ export const FICHES: Record<WebchatSiteId, SiteFiche> = {
       "le bouton d'envoi contient un enfant dont le texte vaut « Stop » ou « progress_activity »",
     selecteur_modele: {
       carte: "button.model-selector-card",
+      carte_candidates: [
+        "button.model-selector",
+        "ms-model-selector button",
+        "ms-model-selector",
+        "button[aria-label*='Select model' i]",
+        "button[aria-label*='model' i]",
+      ],
       sous_titre: "span.subtitle, .model-subtitle",
       palette: ".cdk-overlay-pane",
       item: "button.content-button",
       item_sous_titre: ".model-subtitle",
       recherche: "input[type=text]",
     },
-    modele: "gemini-4-argon",
+    // null = modèle COURANT : la page est utilisée telle quelle, l'utilisatrice
+    // choisit son modèle à la main dans le navigateur de pilotage (le profil
+    // garde la session et le choix). Forcer un slug non relevé sur la page
+    // vivante fait échouer la palette (ex. placeholder « gemini-4-argon »).
+    modele: null,
     bandeau_consentement: "/j'?ai compris|got it|i understand|accept/i",
     bruit_reponse: [
       ".turn-information",
@@ -108,6 +122,8 @@ export const FICHES: Record<WebchatSiteId, SiteFiche> = {
       "ms-turn-information",
     ],
     notes: [
+      "Pour forcer un modèle : ouvrir la palette à la main dans le navigateur de pilotage, relever le slug EXACT du sous-titre (ex. « gemini-2.5-pro »), le mettre dans modele — jamais un slug de mémoire.",
+      "Si la carte du sélecteur est introuvable : l'erreur du pilote liste les boutons visibles du DOM réel — corriger carte/carte_candidates à partir de CE rapport (la fiche est en données).",
       "Remplir le champ de recherche de la palette PAR LE SETTER NATIF (Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set) puis dispatch d'un Event('input') : une affectation .value directe ne réveille pas le framework.",
       "Après le clic sur un modèle, relire le sous-titre : si le slug n'a pas changé, échec explicite avec la liste des modèles présents.",
       "Discussion neuve : about:blank, puis l'URL d'accueil, puis vérifier que le nombre de tours vaut 0 ; sinon Page.reload avec ignoreCache.",
