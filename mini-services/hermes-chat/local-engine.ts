@@ -1,24 +1,17 @@
-// Moteur local : LLM intégré via z-ai-web-dev-sdk (streaming SSE) — les tours
-// passent par les API des fournisseurs à clé active (llm-pool) ou par ce
-// moteur. Les réponses sont RÉELLES ; seule l'exécution d'outils attend la
-// gateway Hermes. Supporte les pièces jointes : les images sont transmises en
-// contenu multimodal (vision), les autres fichiers en métadonnées textuelles.
-import ZAI from "z-ai-web-dev-sdk";
-import { readAttachmentDataUrl } from "./uploads";
-import { composeLocalSystemPrompt } from "./prompts";
+// Socle partagé des moteurs de tour (sans aucun LLM « intégré ») :
+// - les types de tour (TurnRequest / TurnCallbacks) ;
+// - les analyseurs SSE et notes de pièces jointes partagés avec le pool de
+//   clés fournisseurs (llm-pool.ts) ;
+// - le prompt système de base (aussi utilisé pour estimer la jauge de
+//   contexte).
+// Les tours passent par la gateway Hermes (chemin automatique par défaut) ou,
+// sans agent lancé, par les clés fournisseurs configurées. Aucun repli
+// simulé : sans gateway ni clé, le tour échoue avec un message clair.
 import type { Attachment, TurnSettings } from "./types";
-
-// Le pool de clés fournisseurs (llm-pool.ts) partage ces analyseurs :
-// même contrat SSE que le SDK, mêmes notes de pièces jointes — cf. les
-// `export function` correspondants plus bas.
+import { composeLocalSystemPrompt } from "./prompts";
 
 // Compose les instructions du tour local (base + custom + conversation).
-export { composeLocalSystemPrompt as composeSystemPrompt };
-
-interface VisionMessageLike {
-  role: "assistant" | "user";
-  content: string | Array<Record<string, unknown>>;
-}
+export { composeLocalSystemPrompt as composeSystemPrompt } from "./prompts";
 
 export interface TurnCallbacks {
   onDelta: (text: string) => void;
@@ -48,7 +41,7 @@ Règles de réponse :
 - Sois utile, précis et concis. Structure tes réponses en Markdown quand c'est pertinent (listes, titres, **gras**, tableaux).
 - Utilise des blocs de code avec le bon langage pour tout extrait de code.
 - Si on t'envoie des pièces jointes (images, audio, vidéo, PDF), analyse-les et réponds à leur sujet ; le protocole Hermes les supporte nativement.
-- Si on te demande qui tu es : explique que tu es Hermes, l'assistant de l'interface Hermes Web (LLM configuré côté service) ; lorsqu'une gateway Hermes est connectée (Paramètres → Système), les réponses et l'exécution d'outils (terminal, fichiers, web…) proviennent directement de l'agent Hermes réel.
+- Si on te demande qui tu es : explique que tu es Hermes, l'assistant de l'interface Hermes Web ; lorsqu'un agent Hermes est lancé (connexion automatique), les réponses et l'exécution d'outils (terminal, fichiers, web…) proviennent directement de l'agent réel.
 - N'invente jamais de faits : si tu ne sais pas, dis-le.
 
 Artefacts (fichiers générés) :
@@ -61,42 +54,11 @@ Artefacts (fichiers générés) :
 - N'annote PAS les simples extraits de code illustratifs (snippets courts dans une explication) : seuls les fichiers complets deviennent des artefacts.
 - Pour le HTML : produis des documents autonomes (styles et polices intégrés ou système, aucune dépendance externe obligatoire), avec un design soigné et une mise en page professionnelle.`;
 
-/** Instructions système de base du moteur local (composables, F-11/F-19). */
+/** Instructions système de base du tour sans agent (composables, F-11/F-19). */
 export const LOCAL_BASE_PROMPT = SYSTEM_PROMPT;
 
 /** Taille des instructions système (estimation honnête de la jauge de contexte). */
 export const SYSTEM_PROMPT_CHARS = SYSTEM_PROMPT.length;
-
-// Décodeur UTF-8 persistant : gère les caractères multi-octets coupés entre chunks
-const utf8Decoder = new TextDecoder("utf-8");
-
-// Les chunks SSE arrivent parfois sous forme d'objets indexés par octet (UTF-8)
-function chunkToString(chunk: unknown): string {
-  if (typeof chunk === "string") return chunk;
-  if (chunk && typeof (chunk as any)[Symbol.iterator] === "function") {
-    const codes = Array.from(chunk as Iterable<any>, (c) => Number(c));
-    if (codes.length && codes.every((c) => Number.isInteger(c) && c >= 0 && c < 256)) {
-      // Octets UTF-8 -> texte (mode flux pour les séquences incomplètes)
-      return utf8Decoder.decode(new Uint8Array(codes), { stream: true });
-    }
-    if (codes.length && codes.every((c) => Number.isInteger(c) && c >= 0 && c < 65536)) {
-      return String.fromCharCode(...codes);
-    }
-  }
-  return JSON.stringify(chunk);
-}
-
-/** Analyse une ligne SSE « data: … » (partagée avec le pool de clés). */
-export function parseSseLine(line: string): any | null {
-  if (!line.startsWith("data:")) return null;
-  const payload = line.slice(5).trim();
-  if (!payload || payload === "[DONE]") return null;
-  try {
-    return JSON.parse(payload);
-  } catch {
-    return null;
-  }
-}
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} o`;
@@ -115,185 +77,14 @@ export function attachmentNote(attachments: Attachment[]): string {
   return `\n\n[Pièces jointes envoyées via le protocole Hermes]\n${lines.join("\n")}`;
 }
 
-export class LocalEngine {
-  private zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-
-  async init(): Promise<void> {
-    if (!this.zai) this.zai = await ZAI.create();
-  }
-
-  async runTurn(
-    req: TurnRequest,
-    cb: TurnCallbacks
-  ): Promise<{ content: string; reasoning: string; model: string }> {
-    await this.init();
-    cb.onStatus("Hermes réfléchit…");
-
-    const images = (req.attachments ?? []).filter((a) => a.kind === "image");
-    const textContent = req.content + attachmentNote(req.attachments ?? []);
-
-    // 1. Tentative multimodale (vision) si le tour contient des images
-    if (images.length > 0) {
-      try {
-        const result = await this.runMultimodal(textContent, images, req.history, cb, req.systemPrompt);
-        if (result) {
-          return { ...result, model: req.model || req.modelId || "glm-4-plus" };
-        }
-      } catch (err) {
-        console.error(
-          "[hermes-chat] vision indisponible :",
-          err instanceof Error ? err.message : err
-        );
-        cb.onStatus("Vision indisponible — analyse textuelle…");
-      }
-    }
-
-    // 2. Chemin standard : streaming texte
-    // Instructions du tour : la base peut être étendue par le prompt de
-    // conversation (F-11) et les instructions personnalisées (F-19) — le
-    // service a déjà composé l'ensemble, sinon on garde la base seule.
-    const systemPrompt = req.systemPrompt ?? SYSTEM_PROMPT;
-    const messages: any[] = [
-      { role: "assistant", content: systemPrompt },
-      ...req.history.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: textContent },
-    ];
-
-    // Effort de raisonnement : « off » coupe le thinking, toute autre valeur
-    // du fournisseur l'active (échelle portée par le modèle, ignorée sans dommage).
-    const thinkingType: "enabled" | "disabled" =
-      req.settings?.reasoningEffort === "off" ? "disabled" : "enabled";
-
-    // Mode expert (F-22) : température / plafond de jetons / graine — déjà
-    // assainis côté service ([0,1], [16,8192], entier 32 bits) ; absents du
-    // tour = valeurs par défaut du fournisseur.
-    const expert = req.settings ?? {};
-
-    const stream = await this.zai!.chat.completions.create({
-      messages,
-      stream: true,
-      thinking: { type: thinkingType },
-      ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
-      ...(expert.maxTokens !== undefined ? { max_tokens: expert.maxTokens } : {}),
-      ...(expert.seed !== undefined ? { seed: expert.seed } : {}),
-    });
-
-    let content = "";
-    let reasoning = "";
-    let model = "glm-4-plus";
-    let buffer = "";
-
-    for await (const raw of stream as AsyncIterable<unknown>) {
-      if (cb.signal.aborted) break;
-      buffer += chunkToString(raw);
-
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        const data = parseSseLine(line.trim());
-        if (!data) continue;
-        if (data.model) model = data.model;
-        const delta = data.choices?.[0]?.delta;
-        if (!delta) continue;
-        if (delta.reasoning_content) {
-          reasoning += delta.reasoning_content;
-          cb.onReasoning(delta.reasoning_content);
-        }
-        if (delta.reasoning) {
-          reasoning += delta.reasoning;
-          cb.onReasoning(delta.reasoning);
-        }
-        if (delta.content) {
-          content += delta.content;
-          cb.onDelta(delta.content);
-        }
-      }
-    }
-
-    return { content, reasoning, model: req.model || model };
-  }
-
-  /**
-   * Synthèse de compaction : résume un fil de messages en un texte compact
-   * conservé en tête de session (l'affichage de la conversation reste intact).
-   */
-  async summarize(
-    history: { role: "user" | "assistant"; content: string }[]
-  ): Promise<string> {
-    await this.init();
-    const transcript = history
-      .map((m) => `${m.role === "user" ? "Utilisateur" : "Hermes"} : ${m.content}`)
-      .join("\n\n")
-      .slice(0, 60_000);
-    const response = await this.zai!.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content:
-            "Résume la conversation suivante pour la suite d'une session de chat avec un agent. " +
-            "Conserve : le sujet et l'objectif, les décisions prises, les fichiers/artefacts produits " +
-            "(noms), les contraintes et préférences de l'utilisateur, et les prochaines étapes en cours. " +
-            "Réponds en français, en 10 lignes maximum, sans préambule.\n\n" +
-            transcript,
-        },
-      ],
-      thinking: { type: "disabled" },
-    });
-    const content = (response as any)?.choices?.[0]?.message?.content ?? "";
-    if (typeof content !== "string" || !content.trim()) {
-      throw new Error("Résumé de compaction vide");
-    }
-    return content.trim();
-  }
-
-  /** Tour multimodal : images en content parts (format vision), réponse en un tenant. */
-  private async runMultimodal(
-    textContent: string,
-    images: Attachment[],
-    history: { role: "user" | "assistant"; content: string }[],
-    cb: TurnCallbacks,
-    systemPrompt?: string | null
-  ): Promise<{ content: string; reasoning: string } | null> {
-    const parts: any[] = [];
-    const text = textContent.trim() || "Décris et analyse ces images.";
-    parts.push({ type: "text", text });
-    let added = 0;
-    for (const img of images.slice(0, 4)) {
-      const dataUrl = readAttachmentDataUrl(img.url);
-      if (!dataUrl) continue;
-      parts.push({ type: "image_url", image_url: { url: dataUrl } });
-      added++;
-    }
-    if (added === 0) return null;
-
-    cb.onStatus(`Analyse de ${added} image${added > 1 ? "s" : ""} (vision)…`);
-
-    const messages: VisionMessageLike[] = [
-      {
-        role: "assistant",
-        content: [{ type: "text", text: systemPrompt ?? SYSTEM_PROMPT }],
-      },
-      ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: parts },
-    ];
-
-    // API vision du SDK (modèle glm-4.6v) — cf. skills/VLM
-    const response = await (this.zai!.chat.completions as any).createVision({
-      model: "glm-4.6v",
-      messages,
-      thinking: { type: "disabled" },
-    });
-    const choice = (response as any)?.choices?.[0]?.message;
-    const content: string = choice?.content ?? "";
-    if (!content) return null;
-    // Émission progressive du résultat (rendu fluide côté interface)
-    const chunks = content.match(/[\s\S]{1,90}/g) ?? [];
-    for (const chunk of chunks) {
-      if (cb.signal.aborted) break;
-      cb.onDelta(chunk);
-      await new Promise((r) => setTimeout(r, 24));
-    }
-    return { content, reasoning: "" };
+/** Analyse une ligne SSE « data: … » (partagée avec le pool de clés). */
+export function parseSseLine(line: string): any | null {
+  if (!line.startsWith("data:")) return null;
+  const payload = line.slice(5).trim();
+  if (!payload || payload === "[DONE]") return null;
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return null;
   }
 }

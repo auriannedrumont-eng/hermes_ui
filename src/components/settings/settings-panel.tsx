@@ -106,7 +106,7 @@ interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: GatewayMode | null;
-  /** Fournisseurs LLM actionnables (v2.4) — pastille « moteur intégré » honnête. */
+  /** Fournisseurs LLM actionnables (v2.4) — pastille « clés actives » honnête. */
   engineProviders?: string[] | null;
   connected: boolean;
   /** Catalogue vivant (service) pour la ligne « Modèle de conversation ». */
@@ -557,7 +557,7 @@ export function SettingsPanel({
 
   const isLocal = connected && mode !== "gateway";
   // « local » : réponses réelles (clés fournisseurs) si au moins une clé est
-  // active — sinon LLM intégré du service (toujours réel, sans outils).
+  // active — sinon état « agent non détecté » (rien n'est simulé).
   const poolActive = (engineProviders?.length ?? 0) > 0;
   const extUpdate = api.extensions.some((e) => e.updateAvailable);
 
@@ -676,13 +676,13 @@ export function SettingsPanel({
                   <span className="inline-flex items-center gap-1.5">
                     <InfoTip>Les réponses viennent de l'API de vos fournisseurs — vos clés, votre quota.</InfoTip>
                     <i className="size-[6px] rounded-full bg-success" aria-hidden />
-                    moteur local
+                    clés actives
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5">
-                    <InfoTip>Le moteur local répond via son LLM intégré — aucune clé n'est utilisée.</InfoTip>
-                    <i className="size-[6px] rounded-full bg-hermes" aria-hidden />
-                    moteur local
+                    <InfoTip>Agent Hermes non détecté — lancez l'agent (connexion automatique) ou ajoutez une clé.</InfoTip>
+                    <i className="size-[6px] rounded-full bg-muted-foreground/50" aria-hidden />
+                    agent non détecté
                   </span>
                 )
               ) : (
@@ -722,12 +722,12 @@ export function SettingsPanel({
                   </div>
                 ) : (
                 <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
-                  <span className="size-[7px] flex-none rounded-full bg-hermes" />
-                  <span className="truncate">Moteur local · LLM intégré</span>
+                  <span className="size-[7px] flex-none rounded-full bg-muted-foreground/50" />
+                  <span className="truncate">Agent Hermes non détecté</span>
                   <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                    Le moteur local répond via son LLM intégré. Ajoutez la clé
-                    d&apos;un fournisseur (section Fournisseurs) ou branchez la
-                    gateway Hermes (section Système) pour l&apos;agent réel.
+                    Lancez l'agent Hermes — la connexion est automatique.
+                    Ou ajoutez la clé d'un fournisseur (section Fournisseurs)
+                    pour répondre sans agent.
                   </span>
                 </div>
                 )

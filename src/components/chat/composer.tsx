@@ -743,7 +743,7 @@ export function Composer({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px]">
                   {mode !== "gateway"
-                    ? "Autorisations de l'agent : le moteur local n'exécute aucune action — actives quand la gateway Hermes est branchée (Paramètres → Système)."
+                    ? "Autorisations de l'agent : actives quand l'agent Hermes est lancé (connexion automatique). Lancez l'agent puis revenez ici."
                     : permissionsMode === "auto"
                       ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
                       : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}

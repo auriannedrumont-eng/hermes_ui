@@ -3,7 +3,7 @@
 // fait JAMAIS échouer le tour — l'événement outil l'affiche honnêtement dans
 // la bulle, le modèle répond alors sans contexte web.
 // Les résultats numérotés sont injectés dans les instructions du tour (mode
-// local : pool ou LLM intégré) ; en gateway, la recherche est gérée par
+// sans agent : pool de clés) ; en gateway, la recherche est gérée par
 // l'agent Hermes lui-même (le service n'injecte rien).
 import type { KeyRow, ProviderRow, Store } from "./store";
 import { pickActiveKey, providerCapabilities } from "./providers";

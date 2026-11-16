@@ -1,23 +1,29 @@
-// Connecteur moteur Hermes :
-// - Si une URL de gateway est configurée (Paramètres → Système, ou variable
-//   HERMES_GATEWAY_URL en repli) et joignable, les tours parlent le protocole
-//   de la gateway Hermes (WebSocket `/api/ws`, enveloppe `api_turn_v1`,
-//   observation des deltas de stream / événements d'outils / raisonnement).
-// - Sinon (ou en cas d'échec), le moteur local prend le relais : pool de clés
-//   fournisseurs d'abord, LLM intégré (SDK) ensuite.
+// Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat :
+// - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent
+//   Hermes suffit, rien à saisir. HERMES_GATEWAY_URL ou l'URL de l'interface
+//   (Paramètres → Système) ne servent qu'aux installations spéciales.
+// - Les tours parlent le protocole de la gateway (WebSocket `/api/ws`,
+//   enveloppe `api_turn_v1`, deltas de stream / événements d'outils /
+//   raisonnement). Sans agent lancé, re-sonde silencieuse à chaque tour
+//   (l'agent démarre plus tard → ça se branche tout seul).
+// - Sans gateway, les clés fournisseurs actives répondent (vrais modèles,
+//   réels) ; sans gateway NI clé, le tour échoue avec un message clair —
+//   JAMAIS de LLM simulé (mode démo supprimé).
 // - `listModels()` interroge l'API REST de la gateway
 //   (GET /api/model/options) et retombe sur le catalogue Hermes.
 import WebSocket from "ws";
-import { LocalEngine } from "./local-engine";
 import { catalogModelsResult } from "./models";
 import type { LlmPoolApi, PoolTurnResult, TurnUsage } from "./llm-pool";
 import type { Attachment, GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./local-engine";
 
-// Repli : variables d'environnement (l'URL saisie dans l'interface prime).
+// URL par défaut : l'agent Hermes lancé localement (gateway/run_api.py).
+// Priorité : interface (Paramètres → Système) > HERMES_GATEWAY_URL > défaut.
+const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:9120/api/ws";
 const ENV_GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? null;
 const ENV_GATEWAY_TOKEN = process.env.HERMES_GATEWAY_TOKEN ?? null;
 const HANDSHAKE_TIMEOUT_MS = 3000;
+const REPROBE_TIMEOUT_MS = 1500;
 const TURN_TIMEOUT_MS = 180_000;
 const MODELS_TIMEOUT_MS = 4000;
 
@@ -84,18 +90,13 @@ function parseModelOptions(data: any): ModelOption[] {
   return out;
 }
 
-/** Erreur du moteur local rendue pédagogique : sur un poste sans bac à sable
- *  Z.ai, le SDK échoue faute de .z-ai-config — on oriente vers les clés. */
-function friendlyLocalError(err: unknown): Error {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/z-ai-config|Configuration file not found/i.test(msg)) {
-    return new Error(
-      "Le moteur local n'a pas de LLM configuré sur cette machine (fichier .z-ai-config absent). " +
-        "Ouvrez Paramètres → Fournisseurs & clés et ajoutez une clé, ou branchez la gateway Hermes " +
-        "(Paramètres → Système) : les réponses viendront alors de l'agent réel."
-    );
-  }
-  return err instanceof Error ? err : new Error(msg);
+/** Erreur claire quand ni l'agent Hermes ni une clé fournisseur ne répondent. */
+function noEngineError(): Error {
+  return new Error(
+    "Agent Hermes non détecté (défaut ws://127.0.0.1:9120/api/ws) — lancez l'agent " +
+      "(gateway/run_api.py du dépôt hermes-agent) ; il se branche automatiquement. " +
+      "Ou ajoutez une clé fournisseur dans Paramètres → Fournisseurs & clés."
+  );
 }
 
 /** Résultat d'un tour, augmenté du moteur qui l'a produit. */
@@ -103,8 +104,8 @@ export interface TurnOutcome {
   content: string;
   reasoning: string;
   model: string;
-  /** Moteur qui a répondu : pool de clés fournisseurs, LLM intégré (SDK), ou gateway. */
-  engine?: "pool" | "sdk" | "gateway";
+  /** Moteur qui a répondu : pool de clés fournisseurs ou gateway. */
+  engine?: "pool" | "gateway";
   /** Fournisseur du pool (p. ex. « z.ai ») quand engine = "pool". */
   provider?: string;
   /** Jetons consommés par le tour (F-21), quand l'API les renvoie. */
@@ -113,13 +114,14 @@ export interface TurnOutcome {
 
 export class HermesConnector {
   mode: GatewayMode = "local";
-  /** URL de gateway active (saisie dans l'interface, repli environnement). */
-  gatewayUrl: string | null = ENV_GATEWAY_URL;
+  /** URL de gateway active (interface > environnement > défaut automatique). */
+  gatewayUrl: string | null = ENV_GATEWAY_URL ?? DEFAULT_GATEWAY_URL;
   gatewayToken: string | null = ENV_GATEWAY_TOKEN;
-  model = "Hermes (moteur local)";
-  private engine = new LocalEngine();
+  model = "hermes (gateway)";
   private modelsCache: ModelsResult | null = null;
   private pool: LlmPoolApi | null = null;
+  /** Dernière re-sonde infructueuse : throttle (une par 10 s max). */
+  private lastReprobe = 0;
 
   /** Branche le pool de clés fournisseurs (v2.3) — appelé par le service. */
   attachPool(pool: LlmPoolApi): void {
@@ -138,17 +140,17 @@ export class HermesConnector {
     }
     const reachable = await this.probe();
     this.mode = reachable ? "gateway" : "local";
-    if (reachable) this.model = "hermes (gateway)";
   }
 
   /** Branche (ou débranche, url vide/null) la gateway depuis l'interface :
-   *  re-sonde la nouvelle URL et bascule le mode en conséquence. */
+   *  re-sonde la nouvelle URL et bascule le mode en conséquence. URL vide =
+   *  retour au défaut automatique (l'agent lancé localement se branche seul). */
   async setGateway(
     url: string | null,
     token?: string | null
   ): Promise<GatewayMode> {
     const clean = typeof url === "string" ? url.trim() : "";
-    this.gatewayUrl = clean || null;
+    this.gatewayUrl = clean || ENV_GATEWAY_URL || DEFAULT_GATEWAY_URL;
     if (token !== undefined) {
       this.gatewayToken =
         typeof token === "string" && token.trim() ? token.trim() : null;
@@ -207,7 +209,7 @@ export class HermesConnector {
     }
   }
 
-  private probe(): Promise<boolean> {
+  private probe(timeoutMs: number = HANDSHAKE_TIMEOUT_MS): Promise<boolean> {
     return new Promise((resolve) => {
       let settled = false;
       const done = (ok: boolean) => {
@@ -223,9 +225,9 @@ export class HermesConnector {
       };
       const ws = new WebSocket(toWsUrl(this.gatewayUrl!), {
         headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
-        handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
+        handshakeTimeout: timeoutMs,
       });
-      const timer = setTimeout(() => done(false), HANDSHAKE_TIMEOUT_MS);
+      const timer = setTimeout(() => done(false), timeoutMs);
       ws.on("open", () => {
         clearTimeout(timer);
         done(true);
@@ -237,18 +239,29 @@ export class HermesConnector {
     });
   }
 
-  async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<TurnOutcome> {
-    if (this.mode === "gateway" && this.gatewayUrl) {
-      try {
-        return await this.runGatewayTurn(req, cb);
-      } catch {
-        cb.onStatus("Gateway Hermes injoignable — réponse par le moteur local…");
-      }
+  /** Re-sonde silencieuse (throttlée) : l'agent lancé APRÈS le service se
+   *  branche tout seul au tour suivant — aucune action utilisateur. */
+  private async reprobeIfOffline(): Promise<void> {
+    if (this.mode === "gateway" || !this.gatewayUrl) return;
+    const now = Date.now();
+    if (now - this.lastReprobe < 10_000) return;
+    this.lastReprobe = now;
+    if (await this.probe(REPROBE_TIMEOUT_MS)) {
+      this.mode = "gateway";
+      console.log(
+        `[hermes-chat] agent Hermes détecté sur ${this.gatewayUrl} → mode gateway`
+      );
     }
-    // Pool de clés fournisseurs d'abord (v2.3). Une erreur du pool ne retombe
-    // PAS silencieusement sur le SDK : l'utilisatrice croirait parler au
-    // modèle sélectionné. Repli SDK uniquement quand aucun fournisseur actif
-    // n'existe (pool.runTurn → null).
+  }
+
+  async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<TurnOutcome> {
+    await this.reprobeIfOffline();
+    if (this.mode === "gateway" && this.gatewayUrl) {
+      // Chemin unique du chat : la gateway répond, ou l'erreur est affichée
+      // telle quelle — jamais de repli silencieux vers un autre moteur.
+      return await this.runGatewayTurn(req, cb);
+    }
+    // Sans agent lancé : clés fournisseurs actives (vrais modèles, réels).
     if (this.pool) {
       const pooled: PoolTurnResult | null = await this.pool.runTurn(req, cb);
       if (pooled) {
@@ -263,17 +276,10 @@ export class HermesConnector {
         };
       }
     }
-    try {
-      const result = await this.engine.runTurn(req, cb);
-      const label = result.model || this.model;
-      this.model = label;
-      return { ...result, model: label, engine: "sdk" };
-    } catch (err) {
-      throw friendlyLocalError(err);
-    }
+    throw noEngineError();
   }
 
-  /** Synthèse de compaction : pool si possible, LLM intégré sinon. */
+  /** Synthèse de compaction : pool de clés uniquement (pas de LLM simulé). */
   async summarize(
     history: { role: "user" | "assistant"; content: string }[]
   ): Promise<string> {
@@ -281,11 +287,7 @@ export class HermesConnector {
       const pooled = await this.pool.summarize(history);
       if (pooled) return pooled;
     }
-    try {
-      return await this.engine.summarize(history);
-    } catch (err) {
-      throw friendlyLocalError(err);
-    }
+    throw noEngineError();
   }
 
   // Protocole de tour Hermes (cf. gateway/session_api_turn.py) :

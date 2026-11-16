@@ -2,8 +2,8 @@
 // Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours
 // partent sur l'API du fournisseur (clé choisie par la stratégie, compteur
 // d'usage entretenu), la liste des modèles devient vivante (GET /models) et la
-// compaction suit le même chemin. Sans fournisseur actif, le connecteur
-// retombe sur le LLM intégré du SDK (bac à sable) — comportement inchangé.
+// compaction suit le même chemin. Sans fournisseur actif ni agent Hermes,
+// le tour échoue avec un message clair — aucun LLM simulé (démo supprimée).
 //
 // Formats supportés :
 //  - OpenAI-compatible (z.ai, OpenRouter, Mistral, OpenAI, DeepSeek, Groq,

@@ -118,8 +118,8 @@ export interface SearchHit {
   createdAt: string;
 }
 
-/** Mode du moteur : « gateway » (agent Hermes réel) ou « local » (moteur
- *  intégré — vraies réponses via les API fournisseurs / SDK, sans outils). */
+/** Mode du moteur : « gateway » (agent Hermes réel, connexion automatique) ou
+ *  « local » (agent non lancé — vraies réponses via les clés fournisseurs). */
 export type GatewayMode = "gateway" | "local";
 
 /** Mode d'autorisation de l'agent (reset sur « ask » à chaque session). */

@@ -527,9 +527,9 @@ export function Sidebar({
   const [sortMode, setSortMode] = useState<string>(() => readClientSetting<string>("fork.projects.sort"));
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
 
-  // Carte de statut honnête (v2.4) : sans gateway, le moteur intégré répond
-  // dès qu au moins un fournisseur a une clé active — l'état honnête s'affiche
-  // quand les tours partent réellement sur les API des fournisseurs.
+  // Carte de statut honnête (v2.4) : l'agent Hermes connecté, les clés
+  // fournisseurs actives, ou un état « agent non détecté » clair — jamais
+  // de moteur simulé.
   const poolActive = (engineProviders?.length ?? 0) > 0;
 
   // ── Application immédiate des réglages (page Paramètres) ──────────────
@@ -1049,10 +1049,10 @@ export function Sidebar({
               {!connected
                 ? "Hors ligne"
                 : mode === "gateway"
-                  ? "Gateway Hermes connectée"
+                  ? "Agent Hermes connecté"
                   : poolActive
                     ? "Moteur local · vos clés répondent"
-                    : "Moteur local · LLM intégré"}
+                    : "Agent Hermes non détecté"}
             </p>
             {/* Entrée unique des paramètres (décision v1 confirmée v3) */}
             <button
@@ -1077,8 +1077,8 @@ export function Sidebar({
               </>
             ) : (
               <>
-                Ajoutez une clé dans Paramètres → Fournisseurs &amp; clés, ou
-                branchez l&apos;agent Hermes dans Paramètres → Système.
+                Lancez l&apos;agent Hermes — la connexion est automatique
+                (défaut ws://127.0.0.1:9120). Aucune réponse simulée.
               </>
             )}
           </p>

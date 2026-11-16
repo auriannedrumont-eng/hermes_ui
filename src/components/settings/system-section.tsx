@@ -96,8 +96,8 @@ export function SystemSection({
   };
 
   const local = mode !== "gateway";
-  // « local » : les réponses sont réelles (API fournisseurs / LLM intégré) ;
-  // seule l'exécution d'outils attend la gateway Hermes.
+  // « local » : sans agent lancé, seules les clés fournisseurs actives
+  // répondent (réel) ; sinon état « agent non détecté » — rien n'est simulé.
   const poolActive = (engineProviders?.length ?? 0) > 0;
 
   const submitGateway = async (url: string) => {
@@ -154,21 +154,19 @@ export function SystemSection({
             <div className="mt-px text-[11px] leading-snug text-muted-foreground">
               {local
                 ? poolActive
-                  ? `Moteur local — les réponses partent sur l'API de vos fournisseurs (clés actives : ${engineProviders!.join(", ")}).`
-                  : gatewayUrl
-                    ? `Gateway non branchée (${gatewayUrl}). Aucune clé fournisseur active : ajoutez-en une (Fournisseurs) pour de vraies réponses.`
-                    : "Aucune clé fournisseur active : le moteur local répond via son LLM intégré. Ajoutez une clé (Fournisseurs) ou branchez la gateway Hermes ci-dessous."
-                : "Gateway Hermes connectée — les réponses viennent de l'agent réel (outils inclus)."}
+                  ? `Agent non lancé — les réponses partent sur l'API de vos fournisseurs (clés actives : ${engineProviders!.join(", ")}).`
+                  : "Agent Hermes non détecté — lancez l'agent (connexion automatique) ou ajoutez une clé fournisseur (Fournisseurs)."
+                : "Agent Hermes connecté — les réponses viennent de l'agent réel (outils inclus)."}
             </div>
           </div>
           {local ? (
             poolActive ? (
-              <Pastille tone="ok" label="moteur" className="flex-none" />
+              <Pastille tone="ok" label="clés" className="flex-none" />
             ) : (
-              <Pastille tone="ok" label="local" className="flex-none" />
+              <Pastille tone="off" label="non détecté" className="flex-none" />
             )
           ) : (
-            <Pastille tone="ok" label="gateway" className="flex-none" />
+            <Pastille tone="ok" label="agent" className="flex-none" />
           )}
         </div>
         <div className="flex items-center gap-3 border-t border-border/60 py-[11px]">
@@ -207,7 +205,7 @@ export function SystemSection({
         <div className="mt-2.5 grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">
-              URL de la gateway
+              URL — facultative (connexion automatique par défaut)
             </span>
             <input
               type="text"
@@ -216,8 +214,8 @@ export function SystemSection({
               onKeyDown={(e) => {
                 if (e.key === "Enter") void submitGateway(urlDraft.trim());
               }}
-              placeholder="ws://127.0.0.1:9120/api/ws"
-              aria-label="URL de la gateway Hermes"
+              placeholder="auto : ws://127.0.0.1:9120/api/ws"
+              aria-label="URL de la gateway Hermes — vide pour la connexion automatique"
               className="h-9 rounded-sm border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none focus-visible:border-hermes/60"
             />
           </label>
@@ -266,14 +264,14 @@ export function SystemSection({
           <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-success">
             <Check className="size-[13px] flex-none" strokeWidth={2.5} />
             {mode === "gateway"
-              ? "Gateway connectée — l'agent Hermes répond."
-              : "Enregistré — la gateway n'a pas répondu, le moteur local prend le relais."}
+              ? "Agent connecté — Hermes répond."
+              : "Enregistré — l'agent n'a pas répondu, re-sonde automatique à chaque message."}
           </p>
         ) : (
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            La sonde teste l&apos;URL en direct : si la gateway ne répond pas,
-            l&apos;enregistrement est conservé et le moteur local continue de
-            répondre. Un échec retente à chaque tour.
+            Rien à configurer : lancer l'agent Hermes suffit (défaut
+            ws://127.0.0.1:9120/api/ws). Ce champ ne sert qu'aux installations
+            spéciales (port ou machine différents).
           </p>
         )}
       </div>

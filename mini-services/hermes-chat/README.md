@@ -15,9 +15,9 @@ bun run dev   # bun --hot index.ts → http://localhost:3003
 | Mode | Condition | Comportement |
 | --- | --- | --- |
 | **Gateway** | URL configurée et joignable (Paramètres → Système, ou `HERMES_GATEWAY_URL`) | Les tours sont envoyés à l'agent Hermes réel (protocole `api_turn_v1`), avec événements d'outils et raisonnement |
-| **Local** (défaut) | Aucune URL configurée ou gateway injoignable | Réponses RÉELLES : pool de clés fournisseurs d'abord, LLM intégré (`z-ai-web-dev-sdk`, serveur uniquement) ensuite — sans exécution d'outils |
+| **Local** (agent non lancé) | Agent Hermes absent du défaut automatique | Réponses RÉELLES : pool de clés fournisseurs actifs — sans exécution d'outils. Sans clé, le tour échoue avec un message clair (jamais de LLM simulé) |
 
-L'interface affiche le mode actif dans la sidebar (« Moteur local · LLM intégré », « Moteur local · vos clés répondent » ou « Gateway Hermes connectée »).
+L'interface affiche le mode actif dans la sidebar (« Agent Hermes connecté », « Moteur local · vos clés répondent » ou « Agent Hermes non détecté »).
 
 ## Brancher une gateway Hermes réelle
 
@@ -183,7 +183,7 @@ service, le pied du volet compte les écarts).
   dans ce cas. Jeton optionnel : `GITHUB_TOKEN` dans le `.env` du service
   (quota ×80).
 - `pickActiveKey()` (stratégies de porte-clés) est prêt pour le moteur ;
-  en moteur local les tours consomment le porte-clés avant le LLM intégré.
+  sans agent lancé, les tours consomment le porte-clés (aucun LLM simulé).
 
 ### Événements socket fournisseurs & extensions
 

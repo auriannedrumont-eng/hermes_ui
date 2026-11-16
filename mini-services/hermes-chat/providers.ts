@@ -831,7 +831,7 @@ export async function testProviderKey(
 
 // ── Stratégies de porte-clés (pools d'identifiants) ───────────────────
 // Prêtes pour le moteur ; en local elles sont exposées et testables mais
-// les tours du LLM intégré ne les consomment pas (SDK du bac à sable).
+// les tours sans agent ne les consomment pas (uniquement le porte-clés).
 
 // Curseur de rotation (round_robin) par fournisseur, en mémoire.
 const rrCursor = new Map<string, number>();

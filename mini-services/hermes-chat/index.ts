@@ -733,14 +733,15 @@ const pool = createLlmPool(store);
 connector.attachPool(pool);
 
 // ── Gateway Hermes : URL/jeton persistés (Paramètres → Système) ──────────
-// L'URL saisie dans l'interface prime sur HERMES_GATEWAY_URL (repli de
-// déploiement). Un réglage PRÉSENT mais vide = débranchement explicite.
+// L'URL saisie dans l'interface prime sur HERMES_GATEWAY_URL, qui prime sur
+// le défaut automatique (ws://127.0.0.1:9120/api/ws) : lancer l'agent Hermes
+// suffit, rien à saisir. Un réglage VIDE = retour au défaut automatique.
 const GATEWAY_URL_KEY = "hermes.gateway.url";
 const GATEWAY_TOKEN_KEY = "hermes.gateway.token";
 {
   const savedUrl = store.getSetting(GATEWAY_URL_KEY);
-  if (savedUrl !== null) {
-    connector.gatewayUrl = savedUrl.trim() || null;
+  if (savedUrl !== null && savedUrl.trim()) {
+    connector.gatewayUrl = savedUrl.trim();
     const savedToken = store.getSetting(GATEWAY_TOKEN_KEY);
     if (savedToken !== null) connector.gatewayToken = savedToken.trim() || null;
   }
@@ -823,8 +824,8 @@ function systemPromptSize(conversationId?: string): number {
 
 function helloPayload() {
   // Fournisseurs LLM réellement actionnables (clé active ou keyless) : sans
-  // eux, le message « définissez HERMES_GATEWAY_URL » reste légitime ; avec
-  // eux, la sidebar affiche un état honnête (vos clés répondent).
+  // eux, l'interface affiche un état honnête « agent non détecté » — jamais
+  // de moteur simulé ; avec eux, elle indique « vos clés répondent ».
   const engineProviders = pool.activeProviderNames();
   return {
     app: "hermes-web",
@@ -2279,10 +2280,10 @@ io.on("connection", (socket) => {
             memoryAutoLearn: store.getSettingBool(MEMORY_AUTO_KEY, false),
           },
           // Instructions système du tour (F-11/F-19) : composées par le
-          // service en local ; en mode gateway, le prompt de conversation
-          // part seul (la gateway garde ses instructions de base).
+          // service sans agent (pool de clés) ; en mode gateway, le prompt de
+          // conversation part seul (la gateway garde ses instructions de base).
           // F-12 : les résultats de recherche web sont ajoutés en fin de
-          // prompt système du tour local (pool ou LLM intégré).
+          // prompt système du tour local (pool).
           systemPrompt:
             connector.mode === "local"
               ? localSystemPrompt(conversationId) +
@@ -2940,7 +2941,7 @@ connector
       });
       if (connector.mode === "local") {
         console.log(
-          `[hermes-chat] gateway non branchée → moteur local (LLM intégré / clés fournisseurs)`
+          `[hermes-chat] agent Hermes non detecte (defaut ${connector.gatewayUrl}) — lancer l'agent, ou ajouter une cle fournisseur`
         );
       }
       // Audit passe 3, F-04 : sans jeton, socket.io (CORS *) et le 3004 sont
