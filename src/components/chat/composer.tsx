@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
-  Columns2,
   Globe,
   Loader2,
   Mic,
@@ -25,6 +24,7 @@ import {
 import { PendingAttachmentChip } from "@/components/chat/attachments";
 import { ContextGauge } from "@/components/chat/context-gauge";
 import { ModelPicker } from "@/components/chat/model-picker";
+import { ModePicker } from "@/components/chat/mode-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +52,7 @@ import type {
   ModelOption,
   PermissionsMode,
 } from "@/lib/chat-types";
+import type { ConversationMode, ModeConfig } from "@/lib/modes";
 
 const MAX_ATTACHMENTS = 6;
 const MAX_BYTES = 15 * 1024 * 1024; // aligné sur le service
@@ -81,11 +82,11 @@ interface ComposerProps {
   draftKey: string;
   models: ModelOption[];
   modelsSource: "gateway" | "catalogue" | "providers" | null;
-  /** F-17 — comparaison de modèles : état, paire choisie et actions. */
-  compareEnabled: boolean;
-  compareModels: { a: string | null; b: string | null };
-  onToggleCompare: () => void;
-  onSetCompareSlot: (slot: "a" | "b", id: string) => void;
+  /** F-30 — mode de la conversation (service fait foi) + sa config par voix.
+   *  La pastille est le SEUL décideur du traitement du prochain message. */
+  conversationMode: ConversationMode;
+  conversationModeConfig: ModeConfig | null;
+  onSetConversationMode: (mode: ConversationMode, config: ModeConfig) => void;
   mode: GatewayMode | null;
   /** F-09/F-12 — recherche web du tour (Tavily/Exa). */
   webSearch: boolean;
@@ -134,10 +135,9 @@ export function Composer({
   draftKey,
   models,
   modelsSource,
-  compareEnabled,
-  compareModels,
-  onToggleCompare,
-  onSetCompareSlot,
+  conversationMode,
+  conversationModeConfig,
+  onSetConversationMode,
   webSearch,
   onToggleWebSearch,
   webSearchAvailable,
@@ -618,60 +618,27 @@ export function Composer({
             le plus à droite. */}
         <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5 sm:px-4">
           <div className="flex min-w-0 items-center gap-1">
-            {/* F-17 — comparaison : un message, deux modèles, deux réponses */}
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onToggleCompare}
-              title={compareEnabled ? "Couper la comparaison" : "Comparer deux modèles côte à côte"}
-              aria-label={compareEnabled ? "Couper la comparaison" : "Comparer deux modèles côte à côte"}
-              aria-pressed={compareEnabled}
-              className={
-                compareEnabled
-                  ? "h-8 w-8 justify-center rounded-full bg-hermes/15 p-0 text-hermes-text hover:bg-hermes/25"
-                  : "h-8 w-8 justify-center rounded-full p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              }
-            >
-              <Columns2 className="h-3.5 w-3.5 shrink-0" />
-            </Button>
-            {compareEnabled ? (
-              <>
-                <ModelPicker
-                  bare
-                  slotLabel="A"
-                  models={models}
-                  selectedModel={compareModels.a}
-                  source={modelsSource}
-                  mode={mode}
-                  onSelect={(id) => onSetCompareSlot("a", id)}
-                  effort={effort}
-                  onEffortChange={onEffortChange}
-                />
-                <ModelPicker
-                  bare
-                  slotLabel="B"
-                  models={models}
-                  selectedModel={compareModels.b}
-                  source={modelsSource}
-                  mode={mode}
-                  onSelect={(id) => onSetCompareSlot("b", id)}
-                  effort={effort}
-                  onEffortChange={onEffortChange}
-                />
-              </>
-            ) : (
-              <ModelPicker
-                models={models}
-                selectedModel={selectedModel}
-                source={modelsSource}
-                mode={mode}
-                onSelect={onSelectModel}
-                effort={effort}
-                onEffortChange={onEffortChange}
-                expert={expert}
-                onExpertChange={onExpertChange}
-              />
-            )}
+            {/* F-30 — le sélecteur de mode arrive en tête : un seul endroit
+                décide du traitement du prochain message. « Comparer » en est
+                la 4e entrée — l'ancienne bascule quitte la barre (F-17). */}
+            <ModePicker
+              mode={conversationMode}
+              config={conversationModeConfig}
+              models={models}
+              onSetMode={onSetConversationMode}
+              disabled={disabled}
+            />
+            <ModelPicker
+              models={models}
+              selectedModel={selectedModel}
+              source={modelsSource}
+              mode={mode}
+              onSelect={onSelectModel}
+              effort={effort}
+              onEffortChange={onEffortChange}
+              expert={expert}
+              onExpertChange={onExpertChange}
+            />
 
             {/* F-09 — capacités du tour : recherche web actionnable via les
                 clés de services ; agent et images attendent la gateway. */}

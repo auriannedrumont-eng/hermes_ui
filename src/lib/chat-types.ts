@@ -1,4 +1,7 @@
 // Types du protocole de chat Hermes Web (miroir de mini-services/hermes-chat/types.ts)
+import type { ConversationMode, ModeConfig } from "@/lib/modes";
+
+export type { ConversationMode, ModeConfig };
 
 export type Role = "user" | "assistant";
 
@@ -95,6 +98,11 @@ export interface ChatMessage {
   // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
   /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
   versions?: { group: string; index: number; count: number };
+  // ── Modes du compositeur (F-30) — déroulé + étiquette du mode ──
+  /** Étiquette du mode sur la réponse finale (« Verdict · Débat — 3 tours »). */
+  modeTag?: string;
+  /** Déroulé du tour multi-voix, affiché dans la conversation au-dessus de la réponse. */
+  modeFlow?: ModeFlowRow[];
 }
 
 export interface ConversationMeta {
@@ -108,6 +116,13 @@ export interface ConversationMeta {
   pinned?: boolean;
   /** Projet de rangement (null = « Sans projet »). */
   projectId?: string | null;
+  // ── Modes du compositeur (F-30) — le service fait foi, relu à chaque envoi ──
+  /** Mode de la conversation (chat par défaut — valeur inconnue retombe sur chat). */
+  mode?: ConversationMode;
+  /** Débat : tours (3–10), null = défaut du client. */
+  modeRounds?: number | null;
+  /** JSON des voix → modèles + membres/reprises/autoDebate (par conversation). */
+  modeConfig?: ModeConfig | null;
 }
 
 // ── Projets : rangement des conversations (fork) ────────────────────
@@ -136,6 +151,20 @@ export type GatewayMode = "gateway" | "local";
 
 /** Mode d'autorisation de l'agent (reset sur « ask » à chaque session). */
 export type PermissionsMode = "ask" | "auto";
+
+// ── Modes du compositeur (F-30) — déroulé affiché dans la conversation ──
+
+export interface ModeFlowRow {
+  /** Identifiant stable de la ligne dans le déroulé. */
+  id: string;
+  /** Libellé affiché (« Tour 1 · Sceptique », « Membre A », « Plan »…). */
+  label: string;
+  /** Détail : rôle de la voix en cours, extrait de la réponse une fois terminée. */
+  detail: string;
+  /** Modèle court de la voix (absent = modèle de la conversation). */
+  model?: string;
+  status: "pending" | "running" | "done" | "error";
+}
 
 // ── Mode expert (F-22) : température, plafond de sortie, graine ────────
 

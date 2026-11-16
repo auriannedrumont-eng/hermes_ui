@@ -1,0 +1,1579 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Modes du compositeur (F-30) · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --amber:oklch(0.72 0.16 70);
+    --amber-soft:oklch(0.72 0.16 70 / 0.12);
+    --red:oklch(0.577 0.245 27.325);
+    --red-soft:oklch(0.577 0.245 27.325 / 0.10);
+    --green:oklch(0.62 0.13 150);
+    --radius:0.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none !important}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    font-size:15px;line-height:1.5;padding:40px 20px 80px;
+  }
+  .wrap{max-width:840px;margin:0 auto}
+
+  /* ── En-tête de planche ─────────────────────────────── */
+  .page-head h1{font-size:26px;font-weight:700;letter-spacing:-0.02em}
+  .page-head .sub{color:var(--muted-foreground);margin-top:6px;max-width:64ch}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;font-weight:500;padding:4px 11px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted-foreground)}
+  .chip b{color:var(--foreground);font-weight:600}
+
+  /* ── Scènes ─────────────────────────────────────────── */
+  .scene{background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:26px 26px 20px;margin-top:26px;box-shadow:0 1px 2px oklch(0.19 0.004 60 / 0.04)}
+  .scene-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .scene-num{flex:none;width:26px;height:26px;border-radius:8px;background:var(--hermes-soft);
+    color:var(--hermes);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+    transform:translateY(4px)}
+  .scene-head h2{font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  .scene-head .why{width:100%;color:var(--muted-foreground);font-size:13.5px;margin-top:4px;padding-left:38px}
+  .stage{margin:22px auto 6px;max-width:660px;background:var(--background);
+    border:1px solid var(--border);border-radius:22px;padding:34px 18px 26px;position:relative}
+  /* Hauteur réservée pour le popover du sélecteur (ouvert, ancré au pied) —
+     recalculee par le JS selon le mode actif ; la valeur CSS est le repli */
+  #stageB{padding-top:714px}
+  .stage.dim{filter:grayscale(0.15);opacity:0.85}
+  .notes{margin:16px 4px 0;padding-left:38px;list-style:none}
+  .notes li{font-size:13px;color:var(--muted-foreground);padding:3px 0 3px 22px;position:relative}
+  .notes li::before{content:attr(data-n);position:absolute;left:0;top:5px;width:15px;height:15px;
+    border-radius:5px;background:var(--muted);color:var(--card);font-size:9.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  .notes li b{color:var(--foreground);font-weight:600}
+
+  /* ── Composer (commun) ──────────────────────────────── */
+  .composer{background:var(--card);border:1px solid var(--border);border-radius:26px;
+    box-shadow:0 1px 3px oklch(0.19 0.004 60 / 0.05);transition:border-color .2s, box-shadow .2s;
+    position:relative}
+  .composer:focus-within{box-shadow:0 4px 14px oklch(0.19 0.004 60 / 0.08)}
+  .composer-row{display:flex;align-items:flex-end;gap:8px;padding:12px 14px 8px}
+  .icon-btn{flex:none;width:36px;height:36px;border-radius:999px;border:none;background:transparent;
+    color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .15s,color .15s}
+  .icon-btn:hover{background:var(--muted);color:var(--foreground)}
+  .composer textarea{flex:1;resize:none;border:none;outline:none;background:transparent;
+    font:inherit;color:inherit;min-height:26px;padding:5px 0}
+  .composer textarea::placeholder{color:var(--muted-foreground)}
+  .send-btn{flex:none;width:36px;height:36px;border-radius:999px;border:none;background:var(--hermes);
+    color:var(--hermes-foreground);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .composer-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    border-top:1px solid var(--border);padding:6px 10px 7px}
+  .foot-left{display:flex;align-items:center;gap:4px;min-width:0}
+  .foot-right{display:flex;align-items:center;gap:6px}
+
+  /* Pilules du pied (modèle · comparaison · recherche web) */
+  .pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:999px;
+    border:none;background:transparent;font:inherit;font-size:12.5px;font-weight:500;
+    color:var(--muted-foreground);cursor:pointer;transition:background .15s,color .15s}
+  .pill:hover{background:var(--muted);color:var(--foreground)}
+  .pill .model-label{max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill.on{background:var(--hermes-soft);color:var(--hermes)}
+  .pill.on:hover{background:var(--hermes-soft)}
+  .pill.off{opacity:.45}
+  .sep{width:1px;height:20px;background:var(--border);margin:0 2px}
+
+  /* Jauge anneau */
+  .gauge-btn{position:relative;flex:none;width:34px;height:34px;border-radius:999px;border:none;
+    background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .gauge-btn:hover{background:var(--muted)}
+  .gauge-btn svg{transform:rotate(-90deg)}
+  .gauge-pct{position:absolute;font-size:8px;font-weight:700;letter-spacing:-0.02em}
+
+  /* Bouton permissions */
+  .perm-btn{flex:none;width:34px;height:34px;border-radius:999px;border:none;background:transparent;
+    color:var(--muted-foreground);cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background .15s,color .15s}
+  .perm-btn:hover{background:var(--muted);color:var(--foreground)}
+
+  .kbd-hint{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted-foreground)}
+
+  /* Avant / après */
+  .compare-label{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:0.07em;color:var(--muted-foreground);margin:20px 2px 9px}
+  .compare-label .tag{font-size:9.5px;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:0.04em}
+  .compare-label.before .tag{background:var(--muted);color:var(--muted-foreground)}
+  .compare-label.after .tag{background:var(--hermes-soft);color:var(--hermes)}
+  .spotlight{position:relative;display:inline-flex;gap:7px;padding:3px 5px;
+    border:1.5px dashed oklch(0.63 0.17 42 / 0.5);border-radius:13px}
+  .new-tag{position:absolute;left:50%;transform:translateX(-50%);top:-20px;font-size:8.5px;font-weight:700;
+    letter-spacing:0.05em;background:var(--hermes);color:var(--hermes-foreground);border-radius:999px;
+    padding:1.5px 6.5px;box-shadow:0 1px 4px oklch(0.19 0.004 60 / 0.2);white-space:nowrap}
+
+  /* ── Popovers ───────────────────────────────────────── */
+  .pop{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:16px;
+    box-shadow:0 12px 40px oklch(0.19 0.004 60 / 0.14);z-index:30;animation:pop .16s ease-out}
+  @keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .pop-label{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;
+    color:var(--muted-foreground);padding:11px 12px 7px}
+  .pop-sep{height:1px;background:var(--border);margin:2px 0}
+
+  /* Popover du sélecteur de mode */
+  .mode-pop{left:10px;bottom:calc(100% + 10px);width:430px}
+  .mode-list{padding:4px 6px}
+  .mode-item{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;border:none;
+    background:transparent;font:inherit;padding:8px 8px;border-radius:10px;cursor:pointer;transition:background .12s}
+  .mode-item:hover{background:var(--muted)}
+  .mode-item.sel{background:var(--muted)}
+  .mode-item .check{flex:none;width:16px;height:16px;margin-top:3px;display:flex;align-items:center;justify-content:center}
+  .mode-item .m-ico{flex:none;margin-top:2px;color:var(--muted-foreground)}
+  .mode-item.sel .m-ico{color:var(--hermes)}
+  .mode-item .m-name{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .mode-item .m-desc{display:block;font-size:11.5px;color:var(--muted-foreground);margin-top:1px;line-height:1.4}
+  .mode-item .m-meta{flex:none;margin-left:auto;font-size:10px;font-weight:600;color:var(--muted-foreground);
+    background:var(--card);border:1px solid var(--border);border-radius:999px;padding:1.5px 8px;margin-top:2px}
+  .mode-item.sel .m-meta{color:var(--hermes);border-color:oklch(0.63 0.17 42 / 0.25);background:var(--hermes-soft)}
+  .mode-foot{padding:9px 12px 11px}
+  .foot-line{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:11.5px;font-weight:600;color:var(--muted-foreground);margin-bottom:8px}
+  .foot-note{margin-top:8px;font-size:11px;color:var(--muted-foreground);line-height:1.45}
+  .step{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:9px;
+    overflow:hidden;background:var(--card)}
+  .step button{width:26px;height:26px;border:none;background:transparent;font:inherit;font-size:14px;
+    font-weight:600;color:var(--muted-foreground);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .step button:hover{background:var(--muted);color:var(--foreground)}
+  .step button:disabled{opacity:.35;cursor:default}
+  .step .val{min-width:64px;text-align:center;font-size:11.5px;font-weight:700;color:var(--foreground);
+    border-left:1px solid var(--border);border-right:1px solid var(--border);align-self:stretch;
+    display:flex;align-items:center;justify-content:center;gap:4px}
+  .step .val small{font-weight:500;font-size:9.5px;color:var(--muted-foreground)}
+  .switch{flex:none;width:32px;height:18px;border-radius:999px;background:var(--muted);
+    position:relative;transition:background .15s;cursor:pointer;border:none}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;
+    background:var(--card);box-shadow:0 1px 2px oklch(0.19 0.004 60 / 0.2);transition:transform .15s}
+  .switch.on{background:var(--hermes)}
+  .switch.on::after{transform:translateX(14px)}
+  .who-box{margin:2px 12px 8px;padding:9px 11px;border:1.5px dashed oklch(0.63 0.17 42 / 0.4);
+    border-radius:11px;display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--muted-foreground)}
+  .who-box svg{flex:none;color:var(--hermes)}
+  .who-box .who-edit{margin-left:auto;flex:none;border:1px solid var(--border);background:var(--card);
+    font:inherit;font-size:10.5px;font-weight:600;color:var(--foreground);border-radius:999px;
+    padding:3px 10px;cursor:pointer;transition:background .12s}
+  .who-box .who-edit:hover{background:var(--muted)}
+  .mode-pop .count-foot{padding:8px 14px;font-size:11px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+
+  /* Voix & modèles — panneau « qui travaille » */
+  .voices-panel{margin:0 12px 10px;border:1px solid var(--border);border-radius:12px;background:var(--background);overflow:hidden}
+  .voice-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-top:1px solid var(--border)}
+  .voice-row:first-child{border-top:none}
+  .voice-row .v-name{flex:none;font-size:12px;font-weight:700}
+  .voice-row .v-role{flex:1;min-width:0;font-size:10.5px;color:var(--muted-foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .voice-row .v-model{flex:none;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);
+    background:var(--card);font:inherit;font-size:10.5px;font-weight:600;color:var(--foreground);
+    border-radius:999px;padding:3px 9px;cursor:pointer;max-width:195px;transition:background .12s,border-color .12s}
+  .voice-row .v-model:hover{background:var(--muted)}
+  .voice-row .v-model.custom{border-color:oklch(0.63 0.17 42 / 0.35);background:var(--hermes-soft);color:var(--hermes)}
+  .voice-row .v-model .lbl{max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .model-list{border-top:1px dashed var(--border);background:var(--card);padding:4px 6px}
+  .model-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;
+    font:inherit;font-size:11.5px;padding:5px 7px;border-radius:8px;cursor:pointer;transition:background .12s}
+  .model-opt:hover{background:var(--muted)}
+  .model-opt .dot{flex:none;width:7px;height:7px;border-radius:999px;border:1.5px solid var(--border);background:transparent}
+  .model-opt.sel .dot{border-color:var(--hermes);background:var(--hermes)}
+  .model-opt .o-lbl{font-weight:600}
+  .model-opt .o-sub{margin-left:auto;font-size:9.5px;font-weight:600;color:var(--muted-foreground);
+    background:var(--muted);border-radius:999px;padding:1px 7px;white-space:nowrap}
+  .model-opt.sel .o-sub{background:var(--hermes-soft);color:var(--hermes)}
+  .voices-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;
+    border-top:1px solid var(--border);font-size:10.5px;color:var(--muted-foreground)}
+  .voices-foot .reset{border:1px solid var(--border);background:var(--card);font:inherit;font-size:10px;
+    font-weight:600;color:var(--foreground);border-radius:999px;padding:2.5px 9px;cursor:pointer}
+  .voices-foot .reset:hover{background:var(--muted)}
+  .voices-foot .reset:disabled{opacity:.4;cursor:default}
+
+  /* ── Conversation (scènes C & D) ────────────────────── */
+  .thread{max-width:560px;margin:0 auto 18px}
+  .msg{display:flex;margin:12px 0}
+  .msg.user{justify-content:flex-end}
+  .bubble{max-width:82%;border-radius:16px;padding:10px 14px;font-size:13.5px;line-height:1.5}
+  .msg.user .bubble{background:var(--hermes);color:var(--hermes-foreground);border-bottom-right-radius:6px}
+  .msg.assistant .bubble{background:var(--card);border:1px solid var(--border);border-bottom-left-radius:6px}
+  .mode-tag{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+    padding:2px 8px;border-radius:999px;background:var(--hermes-soft);color:var(--hermes);margin-bottom:7px}
+
+  /* Encart déroulé (les modes qui bouclent affichent leurs tours) */
+  .flow{max-width:82%;border:1px solid var(--border);border-radius:14px;background:var(--card);overflow:hidden}
+  .flow-head{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--muted);font-size:12px;font-weight:600}
+  .flow-head .chip-mode{font-size:9.5px;font-weight:700;padding:1.5px 8px;border-radius:999px;
+    background:var(--hermes-soft);color:var(--hermes)}
+  .flow-head .live{margin-left:auto;font-size:10px;font-weight:600;color:var(--hermes);display:inline-flex;align-items:center;gap:5px}
+  .flow-row{display:flex;align-items:center;gap:9px;padding:7px 13px;font-size:12.5px;border-top:1px solid var(--border)}
+  .flow-row:first-of-type{border-top:none}
+  .flow-row .who{font-weight:600;white-space:nowrap}
+  .flow-row .what{color:var(--muted-foreground);font-size:11.5px;min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .flow-row .st{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;
+    font-size:10.5px;font-weight:600;color:var(--muted-foreground)}
+  .flow-row .st.done{color:var(--green)}
+  .flow-row .st.run{color:var(--hermes)}
+  .flow-row .vm{flex:none;font-size:8.5px;font-weight:700;letter-spacing:.02em;color:var(--hermes);
+    background:var(--hermes-soft);border-radius:999px;padding:1px 6px;white-space:nowrap;margin-left:6px}
+  .spin{animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .pulse{animation:pl 1.2s ease-in-out infinite}
+  @keyframes pl{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* Scène D : deux moitiés côte à côte — minmax(0,1fr) : les ellipsis
+     des lignes peuvent tronquer sans pousser les colonnes hors du cadre */
+  .duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;max-width:620px;margin:0 auto}
+  @media (max-width:640px){.duo{grid-template-columns:minmax(0,1fr)}}
+  .duo>div{min-width:0}
+  .duo .flow{max-width:none;min-width:0}
+  .duo-cap{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;
+    color:var(--muted-foreground);margin:0 2px 9px}
+
+  /* ── Tableau de spec ────────────────────────────────── */
+  .spec{margin-top:26px}
+  .spec h2{font-size:17px;font-weight:600;margin-bottom:4px}
+  .spec .sub{color:var(--muted-foreground);font-size:13.5px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--muted-foreground);padding:7px 10px;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  td code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+  tr:last-child td{border-bottom:none}
+  .spec .files{margin-top:16px;font-size:12.5px;color:var(--muted-foreground)}
+  .spec .files code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+
+  /* ── Scène E : Comparer — deux réponses côte à côte (F-17) ───── */
+  .cmp-wrap{max-width:82%}
+  .cmp-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-top:9px}
+  .cmp-col{min-width:0;border:1px solid var(--border);border-radius:14px;background:var(--card);overflow:hidden}
+  .cmp-head{display:flex;align-items:center;gap:7px;padding:7px 11px;background:var(--muted);font-size:11.5px;font-weight:600}
+  .cmp-head .ab{flex:none;width:18px;height:18px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:9.5px;font-weight:800;color:var(--hermes-foreground)}
+  .cmp-head .ab-a{background:var(--hermes)}
+  .cmp-head .ab-b{background:var(--amber);color:var(--foreground)}
+  .cmp-head .re{margin-left:auto;border:1px solid var(--border);background:var(--card);font:inherit;font-size:9.5px;
+    font-weight:600;color:var(--muted-foreground);border-radius:999px;padding:2px 8px;cursor:pointer}
+  .cmp-head .re:hover{color:var(--foreground)}
+  .cmp-body{padding:10px 12px;font-size:12.5px;line-height:1.55;color:var(--foreground)}
+
+  /* ── Scène F : Paramètres → Modes de chat (idiome maquette-parametres v5) ── */
+  .set-stage{max-width:780px}
+  .set-panel{display:flex;height:560px;background:var(--card);border:1px solid var(--border);
+    border-radius:16px;overflow:hidden;text-align:left}
+  .rail{flex:0 0 192px;background:var(--background);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:14px 10px 10px;gap:2px}
+  .rail-top{display:flex;align-items:center;gap:8px;padding:2px 8px 12px}
+  .rail-top .logo{width:24px;height:24px;border-radius:8px;background:var(--hermes);color:var(--hermes-foreground);
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .rail-top b{font-size:13px;letter-spacing:-.01em}
+  .rail-nav{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;min-height:0}
+  .rn{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:9px;border:none;background:none;
+    font:inherit;font-size:12px;color:var(--muted-foreground);cursor:pointer;text-align:left;width:100%;
+    transition:background .15s,color .15s}
+  .rn:hover{background:var(--muted);color:var(--foreground)}
+  .rn.on{background:var(--hermes-soft);color:var(--hermes);font-weight:600}
+  .rn svg{flex:none}
+  .rail-foot{padding:10px 8px 2px;font-size:10.5px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+  .set-main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .set-mainhead{flex:none;height:42px;display:flex;align-items:center;justify-content:flex-end;
+    padding:0 14px;border-bottom:1px solid var(--border)}
+  .x-btn{width:28px;height:30px;border-radius:9px;border:1px solid var(--border);background:var(--card);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted-foreground)}
+  .x-btn:hover{color:var(--red);border-color:var(--red)}
+  .set-scroll{flex:1;overflow-y:auto;padding:18px 22px 24px}
+  .set-scroll::-webkit-scrollbar{width:8px}
+  .set-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:999px}
+  .set-scroll h1{font-size:18px;font-weight:700;letter-spacing:-.015em}
+  .psub{font-size:12px;color:var(--muted-foreground);margin-top:4px;margin-bottom:16px;max-width:460px;line-height:1.5}
+  /* Une carte par mode — la structure rend les sections visibles */
+  .msec{border:1px solid var(--border);border-radius:14px;background:var(--muted);
+    padding:0 16px 6px;margin:14px 0}
+  .msec-head{display:flex;align-items:center;gap:11px;padding:12px 0 10px;border-bottom:1px solid var(--border)}
+  .msec-ico{flex:none;width:30px;height:30px;border-radius:9px;background:var(--card);color:var(--hermes);
+    border:1px solid oklch(0.63 0.17 42 / 0.28);display:flex;align-items:center;justify-content:center}
+  .msec-title{font-size:14px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+  .msec-sub{font-size:11px;color:var(--muted-foreground);margin-top:1px;line-height:1.35}
+  .mlab{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-foreground);
+    margin:13px 0 7px}
+  .msec .vgrid{background:var(--card);margin:2px 0 12px}
+  .msec .pcard{background:var(--card);margin-bottom:8px}
+  .msec .pcard:last-child{margin-bottom:2px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:11px 0;
+    border-bottom:1px solid var(--border)}
+  .rt{min-width:0;flex:1;max-width:360px}
+  .rt .lbl{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .rt .desc{font-size:11.5px;color:var(--muted-foreground);line-height:1.45;margin-top:2px}
+  .rc{flex:none;display:flex;align-items:center;gap:8px}
+  .roval{font-size:12px;font-weight:600;white-space:nowrap}
+  .tip{position:relative;display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;
+    border:1px solid var(--border);color:var(--muted-foreground);font-size:9.5px;font-weight:700;cursor:help;flex:none}
+  .tip-pop{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-55%);width:max-content;max-width:240px;
+    background:var(--foreground);color:var(--background);font-size:10.5px;font-weight:400;line-height:1.5;
+    padding:7px 10px;border-radius:9px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:60;
+    box-shadow:0 8px 22px oklch(0.19 0.004 60 / 0.22)}
+  .tip:hover .tip-pop,.tip:focus-visible .tip-pop{opacity:1}
+  .sel-wrap{position:relative}
+  .sel-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--card);
+    border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer;min-width:170px;
+    justify-content:space-between;transition:border-color .15s;color:var(--foreground)}
+  .sel-btn:hover{border-color:var(--hermes)}
+  .sel-btn .sv{font-weight:600}
+  .sel-btn svg{color:var(--muted-foreground)}
+  .sel-list{position:absolute;top:calc(100% + 6px);right:0;z-index:40;background:var(--card);
+    border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px oklch(0.19 0.004 60 / 0.14);
+    padding:5px;min-width:250px}
+  .sel-item{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;font:inherit;
+    font-size:12px;padding:6px 8px;border-radius:8px;cursor:pointer;text-align:left;color:var(--foreground)}
+  .sel-item:hover{background:var(--muted)}
+  .sel-item .check{flex:none;width:15px;height:15px}
+  .m-body{display:flex;flex-direction:column;line-height:1.3}
+  .m-name{font-weight:600}
+  .m-id{font-size:10.5px;color:var(--muted-foreground)}
+  .vgrid{border:1px solid var(--border);border-radius:12px;background:var(--background);
+    margin:-4px 0 14px;overflow:hidden}
+  .note{display:flex;gap:8px;align-items:flex-start;font-size:11px;color:var(--muted-foreground);
+    margin-top:14px;line-height:1.5}
+  .note svg{flex:none;margin-top:1px;color:var(--muted-foreground)}
+  .note code{font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);
+    border-radius:4px;padding:0 4px}
+  @media (max-width:700px){
+    .cmp-pair{grid-template-columns:minmax(0,1fr)}
+    .set-panel{flex-direction:column;height:auto}
+    .rail{flex:none;flex-direction:row;align-items:center;overflow-x:auto;border-right:none;
+      border-bottom:1px solid var(--border);padding:10px}
+    .rail-nav{flex-direction:row}
+    .rail-top{padding:0 8px 0 0}
+    .rail-foot{display:none}
+  }
+
+  .page-foot{margin-top:30px;text-align:center;font-size:11.5px;color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>Maquette interactive — Modes du compositeur</h1>
+    <p class="sub">Hermes Web · chantier F-30. La zone de message (le compositeur) gagne un sélecteur de mode :
+    un seul endroit décide comment votre message sera traité. Certains modes font parler plusieurs « voix » —
+    un débat, un conseil, un enchaînement automatique — ou deux réponses côte à côte — Comparer, l'ancienne
+    comparaison devenue mode. Chaque voix peut avoir son propre modèle, choisi dans le panneau « qui travaille » ;
+    sans choix, elle suit le modèle de la conversation. Cliquez partout pour essayer.
+    Palette et rayons officiels du projet.</p>
+    <div class="chips">
+      <span class="chip">7 modes : <b>Chat · Plan · Code · Comparer · Débat · Conseil · Auto</b></span>
+      <span class="chip">« Comparer » devient <b>un mode</b> — l'ancienne bascule disparaît</span>
+      <span class="chip">Mode mémorisé <b>par conversation</b> — pas par fenêtre</span>
+      <span class="chip">Vérifié à <b>chaque message envoyé</b></span>
+      <span class="chip">Limites : <b>débat 3–10 tours</b> · <b>conseil 2–5 membres</b> · <b>auto jusqu'à 3 reprises</b></span>
+      <span class="chip">Modèles : <b>un choix par voix</b> — sinon le modèle de la conversation</span>
+      <span class="chip">Paramètres : <b>section « Modes de chat »</b> — les réglages par défaut</span>
+      <span class="chip">Chaque mode ajoute <b>ses consignes à vos messages</b></span>
+      <span class="chip">Consignes : <b>modifiables dans Paramètres</b> — <a href="maquette-parametres-modes.html" style="color:var(--hermes);font-weight:600;text-decoration:none">voir la maquette dédiée</a></span>
+    </div>
+  </header>
+
+  <!-- ══════════ SCÈNE A ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">A</span>
+      <h2>Le sélecteur s'installe en bas de la zone de message — avant / après</h2>
+      <p class="why">La zone de texte ne change pas. En bas, une pastille de mode s'ajoute avant tout le reste :
+      c'est elle qui décide du traitement du prochain message — un seul endroit, aucun doublon.</p>
+    </div>
+    <div class="stage" id="stageA">
+      <div class="compare-label before"><span class="tag">Aujourd'hui</span> comparaison · modèle · recherche web</div>
+      <div class="composer dim">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1" readonly>Peux-tu revoir le plan de tests du module projets ?</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill" style="cursor:default" title="Comparer deux modèles côte à côte">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
+            </button>
+            <button class="pill" style="cursor:default">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+            <span class="sep"></span>
+            <button class="pill" style="cursor:default">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" aria-hidden="true" tabindex="-1">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" aria-hidden="true" tabindex="-1">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">24</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="compare-label after"><span class="tag">Après</span> la pastille de mode arrive en tête — ici « Plan » est actif sur cette conversation</div>
+      <div class="composer">
+        <div class="composer-row">
+          <button class="icon-btn" title="Joindre des fichiers" aria-label="Joindre des fichiers">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1" placeholder="Envoyer un message à Hermes… (/ pour les commandes)">Découpe la migration du store en étapes, sans rien modifier.</textarea>
+          <button class="send-btn" aria-label="Envoyer">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <span class="spotlight">
+              <span class="new-tag">1 nouveauté</span>
+              <button class="pill on" id="pillA" title="Mode de la conversation : Plan — cliquez pour changer">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+                <span class="model-label" id="pillALabel">Plan</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </span>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+            <span class="sep"></span>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" title="Autorisations : confirmation avant chaque action" aria-label="Autorisations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" title="Contexte : ≈ 30.6k / 128k tokens" aria-label="Contexte et consommation de tokens">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">24</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Un seul endroit décide : la pastille de mode est le premier contrôle du groupe de gauche — aucun autre réglage de l'écran ne change le traitement du message.</li>
+      <li data-n="2">La pastille s'allume dès que la conversation n'est pas en mode <b>Chat</b> — son état reste visible sans ouvrir le menu.</li>
+      <li data-n="3">La comparaison quitte la barre : elle devient la 7ᵉ entrée du sélecteur (scène B) — la barre garde mode · modèle · recherche web, un seul réglage du traitement.</li>
+      <li data-n="4">Le mode appartient à la conversation : deux conversations ouvertes en même temps peuvent être dans deux modes différents. Ordre du groupe de droite inchangé : bouclier · jauge.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE B ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">B</span>
+      <h2>Le menu du sélecteur — sept modes, limites, voix &amp; modèles</h2>
+      <p class="why">Cliquez la pastille pour ouvrir ou fermer. Le bas du menu change avec le mode : membres du
+      conseil (2 à 5), tours du débat (3 à 10), reprises de l'auto (0 à 3) — limites affichées et respectées à la saisie.
+      Le panneau « qui travaille » liste les voix du mode actif — conseillers, membres, étapes, colonnes A/B —
+      chacune peut avoir son propre modèle, ou suivre le modèle de la conversation.</p>
+    </div>
+    <div class="stage" id="stageB">
+      <div class="composer" id="composerB">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1">Faut-il migrer le store vers Prisma ? Prends une décision argumentée.</textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill on" id="pillB" title="Mode de la conversation : Conseil — cliquez pour changer">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+              <span class="model-label" id="pillBLabel">Conseil · 3 membres</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+            <span class="sep"></span>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" aria-hidden="true" tabindex="-1">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" aria-hidden="true" tabindex="-1">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">24</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Popover du sélecteur de mode (ouvert) -->
+        <div class="pop mode-pop" id="modePop">
+          <div class="pop-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+            Mode du prochain message — propre à cette conversation
+          </div>
+          <div class="mode-list" id="modeList">
+            <button class="mode-item" data-mode="chat" data-label="Chat" data-search="chat discussion simple">
+              <span class="check"></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+              <span>
+                <span class="m-name">Chat</span>
+                <span class="m-desc">La conversation ordinaire — rien n'est ajouté.</span>
+              </span>
+            </button>
+            <button class="mode-item" data-mode="plan" data-label="Plan" data-search="plan étapes planification">
+              <span class="check"></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>
+              <span>
+                <span class="m-name">Plan</span>
+                <span class="m-desc">Un plan d'étapes d'abord — rien n'est modifié.</span>
+              </span>
+            </button>
+            <button class="mode-item" data-mode="code" data-label="Code" data-search="code correction exécution">
+              <span class="check"></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+              <span>
+                <span class="m-name">Code</span>
+                <span class="m-desc">Lire avant de changer — chaque changement est prouvé.</span>
+              </span>
+            </button>
+            <button class="mode-item" data-mode="compare" data-label="Comparer" data-search="comparer comparaison côte à côte deux modèles a b f-17">
+              <span class="check"></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg></span>
+              <span>
+                <span class="m-name">Comparer</span>
+                <span class="m-desc">Le même message à deux modèles, côte à côte.</span>
+              </span>
+            </button>
+            <button class="mode-item" data-mode="debate" data-label="Débat" data-search="débat conseillers juge verdict controverse">
+              <span class="check"></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2Z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></span>
+              <span>
+                <span class="m-name">Débat</span>
+                <span class="m-desc">3 conseillers débattent, un juge tranche.</span>
+              </span>
+            </button>
+            <button class="mode-item sel" data-mode="council" data-label="Conseil" data-search="conseil membres parallèle avis fusion président">
+              <span class="check"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              <span>
+                <span class="m-name">Conseil</span>
+                <span class="m-desc">Des avis en parallèle, anonymisés — le président les réunit.</span>
+              </span>
+            </button>
+            <button class="mode-item" data-mode="auto" data-label="Auto" data-search="auto chaîne complète bout en bout test reprises">
+              <span class="check"></span>
+              <span class="m-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+              <span>
+                <span class="m-name">Auto</span>
+                <span class="m-desc">Débat, plan, code, test — et il retente en cas d'échec.</span>
+              </span>
+            </button>
+          </div>
+          <div class="pop-sep"></div>
+          <div class="mode-foot">
+            <div class="foot-line" id="footLine" hidden>
+              <span>Tours du débat</span>
+              <span class="step" id="stepDebate">
+                <button type="button" id="debMinus" aria-label="Moins de tours">−</button>
+                <span class="val"><span id="debVal">3</span><small>/ 10 max</small></span>
+                <button type="button" id="debPlus" aria-label="Plus de tours">+</button>
+              </span>
+            </div>
+            <div class="foot-line" id="footLineCouncil" hidden>
+              <span>Membres du conseil</span>
+              <span class="step" id="stepCouncil">
+                <button type="button" id="councilMinus" aria-label="Moins de membres">−</button>
+                <span class="val"><span id="councilVal">3</span><small>/ 5 max</small></span>
+                <button type="button" id="councilPlus" aria-label="Plus de membres">+</button>
+              </span>
+            </div>
+            <div class="foot-line" id="footLineAuto" hidden>
+              <span>Reprises après échec</span>
+              <span class="step" id="stepAuto">
+                <button type="button" id="autoMinus" aria-label="Moins de reprises">−</button>
+                <span class="val"><span id="autoVal">2</span><small>/ 3 max</small></span>
+                <button type="button" id="autoPlus" aria-label="Plus de reprises">+</button>
+              </span>
+            </div>
+            <div class="foot-line" id="footLineAutoDebate" hidden>
+              <span>Débat préalable (cadrage avant d'agir)</span>
+              <button class="switch on" id="autoDebateSwitch" role="switch" aria-checked="true" aria-label="Débat préalable"></button>
+            </div>
+            <div class="who-box" id="whoBox">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span id="whoText">Qui travaille — 3 voix ont leur modèle, 1 suit la conversation</span>
+              <button class="who-edit" id="voicesEdit" title="Choisir le modèle de chaque voix — membres, conseillers, rôles">Fermer</button>
+            </div>
+            <div class="voices-panel" id="voicesPanel" hidden></div>
+            <p class="foot-note" id="footNote">Les membres répondent en parallèle, sans se voir et sans rien modifier — anonymisés (A, B, C…). Le président compare ensuite leurs avis, les réunit et dit ce qu'il écarte.</p>
+          </div>
+          <div class="count-foot">Le mode s'applique au message qui suit, même en cours de conversation — toute valeur inconnue retombe sur Chat.</div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Sept modes à l'écran : <b>Chat · Plan · Code · Comparer · Débat · Conseil · Auto</b>. Si un mode enregistré n'est plus reconnu — après une mise à jour, par exemple — la conversation repasse en Chat au lieu de planter.</li>
+      <li data-n="2">Les limites sont dites à l'écran : <b>2 à 5 membres</b> pour un conseil (borne à confirmer), <b>3 à 10 tours</b> pour un débat, <b>0 à 3 reprises</b> pour l'auto. Impossible de dépasser : le compteur s'arrête tout seul.</li>
+      <li data-n="3">« Qui travaille » : chaque voix — conseiller du débat, membre du conseil, étape de l'auto, colonne A/B — peut avoir <b>son propre modèle</b>, choisi dans le panneau ; sans choix, elle suit le modèle de la conversation (pour Comparer, le défaut de la page Paramètres). Le sélecteur de modèle, à côté, reste le modèle général — il ne règle pas les voix.</li>
+      <li data-n="4">Les consignes du mode sont ajoutées au message au moment de l'envoi : changer de mode prend effet au message suivant, et rien ne traîne de l'ancien mode.</li>
+      <li data-n="5">Plan : au premier message, le moteur est aussi prié de se mettre en mode plan ; s'il ne sait pas, le message part quand même — la consigne écrite reste la garantie.</li>
+      <li data-n="6">« Comparer » devient un mode du sélecteur : l'ancienne bascule disparaît, et un seul mode est actif à la fois — plus de règle spéciale.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE C ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">C</span>
+      <h2>Le déroulé d'un débat, dans la conversation</h2>
+      <p class="why">Les modes à plusieurs tours s'affichent dans la conversation : on voit le débat se dérouler
+      au lieu d'attendre dans le flou. Une seule réponse reste enregistrée — le verdict.</p>
+    </div>
+    <div class="stage" id="stageC">
+      <div class="thread">
+        <div class="msg user">
+          <div class="bubble">Faut-il migrer le store vers Prisma ? Prends une décision argumentée.</div>
+        </div>
+        <div class="msg assistant">
+          <div class="flow">
+            <div class="flow-head">
+              <span class="chip-mode">Débat</span>
+              3 conseillers · 3 tours
+              <span class="live pulse">déroule…</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Tour 1 · Sceptique <span class="vm" title="Modèle de cette voix : Hermes 4 405B">H4 405B</span></span>
+              <span class="what">bun:sqlite suffit à ce volume ; Prisma ajoute une couche…</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Tour 1 · Pragmatique <span class="vm" title="Modèle de cette voix : Hermes 4 70B">H4 70B</span></span>
+              <span class="what">le coût de migration est réel mais une seule table à changer…</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Tour 1 · Innovateur <span class="vm" title="Modèle de cette voix : Hermes 3 405B">H3 405B</span></span>
+              <span class="what">Drizzle offre l'ergonomie sans le runtime…</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Tour 2 · Sceptique <span class="vm" title="Modèle de cette voix : Hermes 4 405B">H4 405B</span></span>
+              <span class="what">répond au pragmatique : mesure la surface réellement…</span>
+              <span class="st run"><svg class="spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>en cours</span>
+            </div>
+          </div>
+        </div>
+        <div class="msg assistant">
+          <div class="bubble">
+            <span class="mode-tag">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              Verdict · Débat — 3 conseillers · 3 tours
+            </span><br>
+            Non, ne pas migrer. Le sceptique a montré que bun:sqlite couvre la totalité des
+            requêtes du service avec des index déjà en place ; le pragmatique n'a trouvé qu'une
+            table à réécrire, pour un gain d'ergonomie que le fork n'exploite pas aujourd'hui.
+            La migration ne se justifierait qu'au-delà de ~100k messages par conversation.
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1" placeholder="Envoyer un message à Hermes… (/ pour les commandes)"></textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill on" style="cursor:default">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+              <span class="model-label">Débat · 3 tours</span>
+            </button>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" aria-hidden="true" tabindex="-1">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" aria-hidden="true" tabindex="-1">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="40.6"/>
+              </svg>
+              <span class="gauge-pct">31</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Le déroulé vit dans la conversation, au-dessus du verdict — pas dans un panneau à part. Chaque tour porte son rôle et sa posture.</li>
+      <li data-n="2">Trois postures réglables (sceptique, pragmatique, innovateur) ; chaque tour voit ce qui a été dit avant, pour contredire sur des faits. Chaque voix utilise le modèle choisi dans « qui travaille » — le juge reste sur le modèle de la conversation.</li>
+      <li data-n="3">Une seule réponse reste enregistrée : le verdict, marqué du mode. La conversation reste propre à la lecture et au partage.</li>
+      <li data-n="4">Un seul tour à la fois par conversation : le débat ne peut pas s'emmêler avec un autre envoi.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE D ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">D</span>
+      <h2>Conseil et Auto — les deux autres déroulés</h2>
+      <p class="why">Le Conseil fait d'abord diverger les avis, puis les réunit (membres en parallèle, anonymisés, sans rien modifier).
+      L'Auto enchaîne sans demander confirmation et, en cas d'échec, corrige la vraie cause avant de retenter.</p>
+    </div>
+    <div class="stage" id="stageD">
+      <div class="duo">
+        <div>
+          <div class="duo-cap">Conseil — d'abord diverger, puis réunir</div>
+          <div class="flow">
+            <div class="flow-head">
+              <span class="chip-mode">Conseil</span>
+              3 membres en parallèle
+              <span class="live pulse">fusion…</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Membre A <span class="vm" title="Modèle de cette voix : Hermes 4 405B">H4 405B</span></span>
+              <span class="what">répond de son côté, sans voir les autres</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Membre B <span class="vm" title="Modèle de cette voix : Hermes 4 70B">H4 70B</span></span>
+              <span class="what">il lit tout, il ne modifie rien</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Membre C <span class="vm" title="Modèle de cette voix : Hermes 3 405B">H3 405B</span></span>
+              <span class="what">couvre l'angle que les autres n'ont pas vu</span>
+              <span class="st run"><svg class="spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>en cours</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Président <span class="vm" title="Président sur le modèle de la conversation : Hermes 4 405B">fil · H4 405B</span></span>
+              <span class="what">compare les avis anonymisés, garde le meilleur, dit ce qu'il écarte</span>
+              <span class="st">en attente</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="duo-cap">Auto — la chaîne complète</div>
+          <div class="flow">
+            <div class="flow-head">
+              <span class="chip-mode">Auto</span>
+              débat → plan → code → test
+              <span class="live pulse">étape 3/4…</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">1 · Débat <span class="vm" title="Rôle sur Hermes 3 405B">H3 405B</span></span>
+              <span class="what">cadrage préalable (3 tours) — désactivable</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">2 · Plan <span class="vm" title="Rôle sur Hermes 4 70B">H4 70B</span></span>
+              <span class="what">5 étapes, sans estimation de durée</span>
+              <span class="st done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>terminé</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">3 · Code <span class="vm" title="Rôle sur Hermes 4 405B">H4 405B</span></span>
+              <span class="what">2 fichiers modifiés — chaque version conservée</span>
+              <span class="st run"><svg class="spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>en cours</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">4 · Test <span class="vm" title="Rôle sur Hermes 4 14B">H4 14B</span></span>
+              <span class="what">la commande qui prouve que ça marche</span>
+              <span class="st">en attente</span>
+            </div>
+            <div class="flow-row">
+              <span class="who">Reprises</span>
+              <span class="what">en cas d'échec : on corrige la vraie cause, jamais une rustine</span>
+              <span class="st">0 / 2</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">Conseil ≠ Débat : dans le débat, les conseillers dialoguent ; dans le conseil, ils répondent à part, puis leurs avis sont réunis. Les membres répondent en parallèle, sans se voir et sans rien modifier — anonymisés avant la comparaison.</li>
+      <li data-n="2">Auto : aucune demande de confirmation en route — soit on choisit ce mode et il enchaîne, soit on ne le prend pas. Le testeur travaille dans une session à part.</li>
+      <li data-n="3">Sans les outils d'exécution : le mode Code produit des fichiers versionnés et la preuve reste décrite ; avec l'agent Hermes branché, tout s'exécute pour de vrai — l'interface le dit honnêtement.</li>
+      <li data-n="4">Chaque voix a son modèle — débat préalable, plan, code, test, membres du conseil — choisi dans « qui travaille » avant l'envoi ; le président suit le modèle de la conversation, sauf choix contraire.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE E ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">E</span>
+      <h2>« Comparer » devient un mode — deux réponses côte à côte</h2>
+      <p class="why">La comparaison qui existe déjà entre dans le sélecteur comme 7ᵉ entrée : l'ancienne bascule quitte
+      la zone de message et un seul mode est actif à la fois. Le mécanisme ne change pas : deux réponses partent en
+      parallèle, s'affichent côte à côte et chaque côté peut être régénéré seul.</p>
+    </div>
+    <div class="stage" id="stageE">
+      <div class="thread">
+        <div class="msg user">
+          <div class="bubble">Rédige la note de version de la v2.4 — propose-la sous deux angles et compare-les.</div>
+        </div>
+        <div class="msg assistant">
+          <div class="cmp-wrap">
+            <span class="mode-tag">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z"/></svg>
+              Comparer · 2 modèles en parallèle
+            </span>
+            <div class="cmp-pair" aria-label="Réponses comparées">
+              <div class="cmp-col">
+                <div class="cmp-head"><span class="ab ab-a">A</span>Hermes 4 405B<button class="re" type="button">régénérer</button></div>
+                <div class="cmp-body">Version 2.4 — « La précision avant tout ». Trois correctifs de fond :
+                le store ne réécrit plus les versions à chaque sauvegarde, la jauge de contexte affiche
+                sa source, le partage publie les artefacts…</div>
+              </div>
+              <div class="cmp-col">
+                <div class="cmp-head"><span class="ab ab-b">B</span>Hermes 4 70B<button class="re" type="button">régénérer</button></div>
+                <div class="cmp-body">Version 2.4 — « Plus vite, à identique ». Le démarrage passe sous la
+                seconde, la compression tourne en tâche de fond, les réponses amorcent pendant…
+                même format, mêmes tests, un seul changelog.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="composer-row">
+          <button class="icon-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea rows="1" placeholder="Envoyer un message à Hermes… (/ pour les commandes)"></textarea>
+          <button class="send-btn" aria-hidden="true" tabindex="-1">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4.5 7L19 19z"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <div class="foot-left">
+            <button class="pill on" style="cursor:default">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
+              <span class="model-label">Comparer · 2 modèles</span>
+            </button>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--hermes)"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              <span class="model-label">Hermes 4 405B</span>
+            </button>
+            <span class="sep"></span>
+            <button class="pill">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            </button>
+          </div>
+          <div class="foot-right">
+            <span class="kbd-hint">Entrée pour envoyer</span>
+            <button class="perm-btn" aria-hidden="true" tabindex="-1">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button class="gauge-btn" aria-hidden="true" tabindex="-1">
+              <svg width="22" height="22" viewBox="0 0 22 22">
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--muted)" stroke-width="2.6"/>
+                <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--hermes)" stroke-width="2.6"
+                  stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="34.2"/>
+              </svg>
+              <span class="gauge-pct">36</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">L'ancienne bascule est retirée ; choisir Comparer dans le sélecteur active exactement le même mécanisme — les deux réponses partent en parallèle.</li>
+      <li data-n="2">Les colonnes utilisent les modèles des voix A/B — choisis dans « qui travaille », défauts réglés à la page Paramètres (scène F).</li>
+      <li data-n="3">Un message → deux réponses côte à côte, toutes deux gardées ; chaque côté se régénère seul, comme aujourd'hui.</li>
+      <li data-n="4">Plus de règle d'exclusion spéciale : un seul mode actif à la fois, point. Débat, conseil, auto et comparer ne se combinent pas.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SCÈNE F ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">F</span>
+      <h2>Paramètres — la section « Modes de chat »</h2>
+      <p class="why">Les réglages par défaut des sept modes reçoivent une section dédiée de Paramètres — une carte
+      par mode, présentée comme les autres sections (libellé et description à gauche, réglage à droite).
+      La page ne s'applique qu'aux nouvelles conversations — la zone de message et « qui travaille » restent maîtres dans chaque conversation.</p>
+    </div>
+    <div class="stage set-stage" id="stageF">
+      <div class="set-panel">
+        <nav class="rail" aria-label="Sections des paramètres">
+          <div class="rail-top">
+            <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+            <b>Paramètres</b>
+          </div>
+          <div class="rail-nav">
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              Interface</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+              Modèles</button>
+            <button class="rn on" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+              Modes de chat</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>
+              Fournisseurs</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+              Hermes</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Profils</button>
+          </div>
+          <div class="rail-foot">moteur v2.4.1</div>
+        </nav>
+        <div class="set-main">
+          <div class="set-mainhead">
+            <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="set-scroll">
+            <h1>Modes de chat</h1>
+            <p class="psub">Les réglages par défaut des sept modes — une carte par mode. Une conversation
+            peut toujours les changer depuis la zone de message : c'est elle qui décide du traitement du
+            prochain message.</p>
+
+            <section class="msec">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></span>
+                <div>
+                  <div class="msec-title">Général</div>
+                  <div class="msec-sub">ce que toute nouvelle conversation utilise</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Mode des nouvelles conversations</div>
+                <div class="desc">Le mode de démarrage d'une nouvelle conversation — Chat pour parler simplement.</div>
+              </div>
+              <div class="rc">
+                <div class="sel-wrap" id="selDefMode">
+                  <button class="sel-btn" type="button"><span class="sv">Chat</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="Chat"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Chat</span><span class="m-id">rien n'est ajouté à votre message</span></span></button>
+                    <button class="sel-item" type="button" data-v="Plan"><span class="check"></span><span class="m-body"><span class="m-name">Plan</span><span class="m-id">un plan d'étapes d'abord — rien n'est modifié</span></span></button>
+                    <button class="sel-item" type="button" data-v="Code"><span class="check"></span><span class="m-body"><span class="m-name">Code</span><span class="m-id">lire avant de changer — chaque changement prouvé</span></span></button>
+                    <button class="sel-item" type="button" data-v="Comparer"><span class="check"></span><span class="m-body"><span class="m-name">Comparer</span><span class="m-id">le même message à deux modèles</span></span></button>
+                    <button class="sel-item" type="button" data-v="Débat"><span class="check"></span><span class="m-body"><span class="m-name">Débat</span><span class="m-id">3 à 10 tours — un juge tranche</span></span></button>
+                    <button class="sel-item" type="button" data-v="Conseil"><span class="check"></span><span class="m-body"><span class="m-name">Conseil</span><span class="m-id">2 à 5 membres — le président réunit les avis</span></span></button>
+                    <button class="sel-item" type="button" data-v="Auto"><span class="check"></span><span class="m-body"><span class="m-name">Auto</span><span class="m-id">débat, plan, code, test — enchaîne sans confirmation</span></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Déroulé dans la conversation</div>
+                <div class="desc">Tours du débat, membres du conseil, étapes de l'auto s'affichent dans la conversation, au-dessus de la réponse.</div>
+              </div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Déroulé dans la conversation"></button></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles dans le déroulé</div>
+                <div class="desc">Chaque voix affiche son modèle ; désactivé, les modèles ne restent visibles que dans « qui travaille ».</div>
+              </div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Modèles dans le déroulé"></button></div>
+            </div>
+            </section>
+            <section class="msec" data-m="compare">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg></span>
+                <div>
+                  <div class="msec-title">Comparer</div>
+                  <div class="msec-sub">le même message à deux modèles, côte à côte</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles A et B</div>
+                <div class="desc">Le défaut des nouvelles conversations — chacune ajuste ensuite ses deux colonnes dans « qui travaille ».</div>
+              </div>
+              <div class="rc"><span class="roval">2 colonnes</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Voix A</span><span class="v-role">première colonne</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Voix B</span><span class="v-role">seconde colonne</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+            </section>
+            <section class="msec" data-m="debate">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2Z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></span>
+                <div>
+                  <div class="msec-title">Débat</div>
+                  <div class="msec-sub">3 conseillers dialoguent, un juge tranche</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Tours par défaut</div>
+                <div class="desc">3 à 10 — le compteur s'arrête ici comme dans le menu du sélecteur.</div>
+              </div>
+              <div class="rc"><span class="step"><button type="button" id="defDebMinus" aria-label="Moins de tours">−</button><span class="val"><span id="defDebVal">3</span><small>/ 10 max</small></span><button type="button" id="defDebPlus" aria-label="Plus de tours">+</button></span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Angles des conseillers<span class="tip">?<span class="tip-pop">Sceptique cherche ce qui casse, pragmatique pèse le coût réel, innovateur cherche l'angle neuf — trois postures pour contredire sur des faits.</span></span></div>
+                <div class="desc">Trois postures fixes — le débat n'invente pas ses conseillers.</div>
+              </div>
+              <div class="rc"><span class="roval">Sceptique · Pragmatique · Innovateur</span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles des voix — débat</div>
+                <div class="desc">Un modèle par conseiller et pour le juge ; sans choix, celui de la conversation.</div>
+              </div>
+              <div class="rc"><span class="roval">3 modèles choisis · 1 sur la conversation</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Sceptique</span><span class="v-role">cherche ce qui casse</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Pragmatique</span><span class="v-role">pèse le coût réel</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Innovateur</span><span class="v-role">cherche l'angle neuf</span><button class="v-model custom" type="button" data-model="hermes-3-405b"><span class="lbl">Hermes 3 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Juge</span><span class="v-role">compare les tours, rend le verdict</span><button class="v-model" type="button" data-model=""><span class="lbl">Modèle de la conversation</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+            </section>
+            <section class="msec" data-m="council">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                <div>
+                  <div class="msec-title">Conseil</div>
+                  <div class="msec-sub">membres en parallèle · lecture seule · président fusionne</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Membres par défaut</div>
+                <div class="desc">2 à 5 — anonymisés A, B, C… dans la conversation.</div>
+              </div>
+              <div class="rc"><span class="step"><button type="button" id="defCnMinus" aria-label="Moins de membres">−</button><span class="val"><span id="defCnVal">3</span><small>/ 5 max</small></span><button type="button" id="defCnPlus" aria-label="Plus de membres">+</button></span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Lecture seule<span class="tip">?<span class="tip-pop">Ce n'est pas un réglage : c'est la règle du conseil. Les membres ne peuvent rien écrire ni exécuter — seul le président rédige la réponse finale.</span></span></div>
+                <div class="desc">Les membres répondent sans pouvoir rien modifier.</div>
+              </div>
+              <div class="rc"><span class="roval" style="color:var(--hermes)">toujours en place</span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles des voix — conseil</div>
+                <div class="desc">Un modèle par membre et pour le président ; sans choix, celui de la conversation.</div>
+              </div>
+              <div class="rc"><span class="roval">2 modèles choisis · 2 sur la conversation</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Membre A</span><span class="v-role">lecture seule — ne voit pas les autres</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Membre B</span><span class="v-role">lecture seule — ne voit pas les autres</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Membre C</span><span class="v-role">lecture seule — ne voit pas les autres</span><button class="v-model" type="button" data-model=""><span class="lbl">Modèle de la conversation</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Président</span><span class="v-role">compare les avis anonymisés, fusionne</span><button class="v-model" type="button" data-model=""><span class="lbl">Modèle de la conversation</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+            </section>
+            <section class="msec" data-m="auto">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+                <div>
+                  <div class="msec-title">Auto</div>
+                  <div class="msec-sub">débat → plan → code → test · sans confirmation</div>
+                </div>
+              </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Débat préalable</div>
+                <div class="desc">Cadrage avant d'agir — désactivable pour les tâches évidentes.</div>
+              </div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Débat préalable"></button></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Reprises après échec</div>
+                <div class="desc">0 à 3 — on corrige la vraie cause, jamais une rustine.</div>
+              </div>
+              <div class="rc"><span class="step"><button type="button" id="defAuMinus" aria-label="Moins de reprises">−</button><span class="val"><span id="defAuVal">2</span><small>/ 3 max</small></span><button type="button" id="defAuPlus" aria-label="Plus de reprises">+</button></span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles des étapes</div>
+                <div class="desc">Un modèle par étape ; sans choix, celui de la conversation.</div>
+              </div>
+              <div class="rc"><span class="roval">4 modèles choisis</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Débat</span><span class="v-role">cadrage préalable — 3 tours</span><button class="v-model custom" type="button" data-model="hermes-3-405b"><span class="lbl">Hermes 3 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Plan</span><span class="v-role">chef de projet — étapes</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Code</span><span class="v-role">constructeur — applique</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Test</span><span class="v-role">testeur — prouve</span><button class="v-model custom" type="button" data-model="hermes-4-14b"><span class="lbl">Hermes 4 14B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+            </section>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Consignes des modes<span class="tip">?<span class="tip-pop">Ce que chaque mode ajoute à vos messages — 13 consignes modifiables, avec des mots-clés {angle} {tours} {membres} {reprises} remplacés au moment de l'envoi ; chaque consigne se réinitialise séparément.</span></span></div>
+                <div class="desc">Chaque mode garde ses consignes dans sa carte — 13 textes modifiables, appliqués dès le prochain message de toutes les conversations.</div>
+              </div>
+              <div class="rc"><a class="roval" href="maquette-parametres-modes.html" style="color:var(--hermes);text-decoration:none;cursor:pointer">voir la maquette dédiée →</a></div>
+            </div>
+
+            <div class="note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              <span>Tous ces réglages sont enregistrés dans les réglages du moteur (clés <code>hermes.modes.…</code>) — et ne s'appliquent qu'aux nouvelles conversations : chaque conversation garde son propre mode et ses modèles.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li data-n="1">La page ne règle que les valeurs par défaut : le sélecteur de la zone de message et le panneau « qui travaille » restent maîtres dans chaque conversation — changer ici n'altère aucune conversation existante.</li>
+      <li data-n="2">Chaque réglage a sa place dans les réglages du moteur (<code style="font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);border-radius:4px;padding:0 4px">settings.ts</code>) — rien n'est dispersé ; les modèles des voix sont mémorisés ensemble (<code style="font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);border-radius:4px;padding:0 4px">hermes.modes.voices</code>).</li>
+      <li data-n="3">Les limites affichées sont celles du code (3–10 tours · 2–5 membres · 0–3 reprises) : le compteur s'arrête comme dans le menu, et le moteur revérifie à l'envoi.</li>
+      <li data-n="4">« Lecture seule » du conseil n'est pas un réglage : c'est la règle du mode — la page l'explique, elle ne le propose pas.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SPEC ══════════ -->
+  <section class="scene spec">
+    <h2>Spec — décisions verrouillées par la maquette</h2>
+    <p class="sub">Ce que la maquette fixe avant implémentation (F-30a → F-30c), conformément au
+    document « Les modes d'un compositeur de chat » et aux conventions FORK.md.</p>
+    <table>
+      <tr><th>Décision</th><th>Valeur retenue</th><th>Où ça vit</th></tr>
+      <tr><td>Un seul décideur du traitement</td><td>la pastille de mode, en tête du pied de la zone de message — aucun autre réglage ne décide du traitement</td><td><code>src/components/chat/mode-picker.tsx</code> (nouveau)</td></tr>
+      <tr><td>Identifiants des modes</td><td><code>chat · plan · code · compare · debate · council · auto</code> — libellés FR à l'écran</td><td><code>mini-services/hermes-chat/modes.ts</code> (nouveau)</td></tr>
+      <tr><td>Valeur inconnue</td><td>retombe sur chat au chargement et à l'envoi, sans casser l'écran</td><td><code>modes.ts — resolveMode()</code></td></tr>
+      <tr><td>Portage du mode</td><td>par conversation : <code>conversations.mode</code> + <code>mode_rounds</code> + <code>mode_config</code> (JSON des voix → modèles, migration sans rupture)</td><td><code>store.ts</code> — R2 additives</td></tr>
+      <tr><td>Relu à chaque envoi</td><td><code>runAssistantTurn</code> relit le mode de la conversation — le service fait foi, pas l'écran</td><td><code>index.ts</code> + socket <code>conversations:setMode</code></td></tr>
+      <tr><td>Consigne chat / plan / code</td><td>ajoutée au systemPrompt du tour, recomposé à chaque envoi — aucune consigne fantôme possible</td><td><code>composeLocalSystemPrompt()</code> + settings gateway</td></tr>
+      <tr><td>Commande de planification</td><td><code>plan_mode:true</code> tenté au premier tour, refus non bloquant — la consigne reste le filet</td><td><code>api_turn_v1.settings</code></td></tr>
+      <tr><td>Multi-voix</td><td>débat, conseil, auto : orchestrateur dédié — une seule réponse conservée (le verdict / la fusion / le bilan)</td><td><code>mini-services/hermes-chat/orchestrator.ts</code> (nouveau)</td></tr>
+      <tr><td>Modèles par voix</td><td>chaque voix peut avoir son modèle (sinon celui de la conversation) — choisi dans « qui travaille », mémorisé avec le mode, relu au service</td><td><code>conversations.mode_config</code> (JSON)</td></tr>
+      <tr><td>Conseil</td><td>membres 2–5 (borne à valider) en parallèle, lecture seule, anonymisés A–E, président compare les avis anonymisés puis fusionne</td><td><code>orchestrator.ts</code> + <code>modes.ts</code></td></tr>
+      <tr><td>« Comparer » devient un mode</td><td>le mode <code>compare</code> — l'ancienne bascule est retirée de la zone de message ; le mécanisme interne (Promise.all, variant a|b) est conservé — un seul mode actif par tour, plus d'exclusion spéciale</td><td><code>mode-picker.tsx</code> + <code>composer.tsx</code></td></tr>
+      <tr><td>Voix du comparer</td><td>slots A/B éditables dans « qui travaille » — par défaut, ceux de la page Paramètres</td><td><code>conversations.mode_config</code> (JSON)</td></tr>
+      <tr><td>Bornes affichées</td><td>débat 3–10 tours · auto 0–3 reprises — arrêtées à la saisie ET revalidées par le service</td><td><code>mode-picker.tsx</code> + <code>modes.ts</code></td></tr>
+      <tr><td>Déroulé visible</td><td>l'encart du déroulé s'affiche dans la conversation, au-dessus de la réponse — pas dans un panneau séparé</td><td><code>message-list.tsx</code></td></tr>
+      <tr><td>Nommage code (R7)</td><td><code>ConversationMode</code> pour les sept modes — <code>GatewayMode</code> ("gateway"|"local") reste réservé au moteur</td><td><code>chat-types.ts</code> ↔ <code>types.ts</code></td></tr>
+      <tr><td>Défauts au registre (R5)</td><td><code>hermes.modes.defaultMode</code> (chat) · <code>hermes.modes.debateRounds</code> (3) · <code>hermes.modes.councilMembers</code> (3) · <code>hermes.modes.autoRetries</code> (2) · <code>hermes.modes.autoDebate</code> (true) · <code>hermes.modes.showModels</code> · <code>hermes.modes.voices</code> (JSON : conseillers, membres, président, étapes, A/B) · <code>hermes.modes.prompts</code> (JSON : consignes des 7 modes)</td><td><code>src/lib/settings.ts</code></td></tr>
+      <tr><td>Prompts des modes</td><td>13 consignes modifiables dans Paramètres — mots-clés <code>{angle} {tours} {membres} {reprises}</code> remplacés au tour, réinitialisation par consigne, limite de 4 000 caractères ; le défaut vit dans <code>modes.ts</code>, l'édition est enregistrée dans les réglages et s'applique au prochain envoi (systemPrompt recomposé)</td><td>maquette <code>maquette-parametres-modes.html</code></td></tr>
+      <tr><td>Page Paramètres</td><td>nouvelle section « Modes de chat » — les réglages ci-dessus et l'édition des consignes, limites affichées, dépassables par conversation via <code>mode_config</code></td><td><code>settings-panel.tsx</code> (édition)</td></tr>
+    </table>
+    <p class="files">Nouveaux fichiers : <code>modes.ts</code> · <code>orchestrator.ts</code> · <code>mode-picker.tsx</code> · cette maquette.
+    Éditions chirurgicales (R4) : <code>store.ts</code> · <code>index.ts</code> · <code>composer.tsx</code> ·
+    <code>use-hermes-chat.ts</code> · <code>page.tsx</code> · <code>chat-types.ts</code> · <code>types.ts</code> ·
+    <code>settings.ts</code> · <code>settings-panel.tsx</code> · <code>message-list.tsx</code>.</p>
+  </section>
+
+  <footer class="page-foot">F-30 · maquette de référence — à valider avant implémentation (convention design/) · palette et rayons officiels du projet</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ── Référentiel des modes (miroir du futur modes.ts) ─────────────────
+  var MODES = {
+    chat:    { label: "Chat",
+               note: "La conversation ordinaire : une question, une explication, une analyse — rien n'est ajouté à votre message.",
+               loop: null },
+    plan:    { label: "Plan",
+               note: "Hermes agit en chef de projet : il propose un plan d'étapes numérotées, sans estimation de durée, et ne modifie rien tant que le plan n'est pas accepté.",
+               loop: null },
+    code:    { label: "Code",
+               note: "Hermes lit les fichiers avant de changer quoi que ce soit, et prouve chaque modification par une commande et son résultat — jamais de « c'est fait » sans la preuve.",
+               loop: null },
+    debate:  { label: "Débat",
+               note: "Les conseillers se répondent tour après tour et contredisent sur des faits, pas sur des généralités. À la fin, un juge tranche.",
+               loop: "debate" },
+    council: { label: "Conseil",
+               note: "Les membres répondent en parallèle, sans se voir et sans rien modifier — anonymisés (A, B, C). Le président compare ensuite leurs avis, les réunit et dit ce qu'il écarte.",
+               loop: null },
+    auto:    { label: "Auto",
+               note: "Hermes enchaîne tout seul : débat, plan, code, test — sans demander confirmation. En cas d'échec, il corrige la vraie cause puis retente.",
+               loop: "auto" },
+    compare: { label: "Comparer",
+               note: "Votre message part vers deux modèles — A et B — et les deux réponses s'affichent côte à côte ; chaque côté peut être régénéré seul. Même mécanique qu'aujourd'hui : la bascule devient un mode.",
+               loop: null }
+  };
+  var MULTI = { debate: true, council: true, auto: true };
+  var HASVOICES = { debate: true, council: true, auto: true, compare: true };
+
+  // ── Catalogue de modèles (miroir du models.ts du service) ────────────
+  var MODELS = [
+    { id: "hermes-4-405b", label: "Hermes 4 405B", sub: "Flagship" },
+    { id: "hermes-4-70b",  label: "Hermes 4 70B",  sub: "Défaut" },
+    { id: "hermes-4-14b",  label: "Hermes 4 14B",  sub: "Léger" },
+    { id: "hermes-3-405b", label: "Hermes 3 405B", sub: "Précédent" },
+    { id: "hermes-3-8b",   label: "Hermes 3 8B",   sub: "Instantané" }
+  ];
+  var FIL_MODEL_LABEL = "Hermes 4 405B"; // le modèle courant du fil (pilule du composer)
+
+  // Démo : chaque voix peut porter son modèle — null/absent = modèle du fil
+  var state = {
+    mode: "council",
+    debateRounds: 3, autoRetries: 2, autoDebate: true, councilMembers: 3,
+    voices: {
+      debate:  { sceptique: "hermes-4-405b", pragmatique: "hermes-4-70b", innovateur: "hermes-3-405b", juge: null },
+      council: { "membre-a": "hermes-4-405b", "membre-b": "hermes-4-70b", "membre-c": "hermes-3-405b", president: null },
+      auto:    { "auto-debat": "hermes-3-405b", "auto-plan": "hermes-4-70b", "auto-code": "hermes-4-405b", "auto-test": "hermes-4-14b" },
+      compare: { "voix-a": "hermes-4-405b", "voix-b": "hermes-4-70b" }
+    }
+  };
+
+  // ── Scène B : le popover du sélecteur ────────────────────────────────
+  var pillB = document.getElementById("pillB");
+  var pillBLabel = document.getElementById("pillBLabel");
+  var pop = document.getElementById("modePop");
+  var footLine = document.getElementById("footLine");
+  var footLineAuto = document.getElementById("footLineAuto");
+  var footLineAutoDebate = document.getElementById("footLineAutoDebate");
+  var whoBox = document.getElementById("whoBox");
+  var whoText = document.getElementById("whoText");
+  var footNote = document.getElementById("footNote");
+  var footLineCouncil = document.getElementById("footLineCouncil");
+  var voicesPanel = document.getElementById("voicesPanel");
+  var voicesEdit = document.getElementById("voicesEdit");
+  var voicesOpen = true, openVoice = "membre-a";
+
+  function pillLabelFor(mode){
+    if(mode === "debate") return "Débat · " + state.debateRounds + " tours";
+    if(mode === "compare") return "Comparer · 2 modèles";
+    if(mode === "council") return "Conseil · " + state.councilMembers + " membres";
+    if(mode === "auto") return "Auto · " + state.autoRetries + " reprise" + (state.autoRetries > 1 ? "s" : "");
+    return MODES[mode].label;
+  }
+  function modelLabel(id){
+    for(var i = 0; i < MODELS.length; i++) if(MODELS[i].id === id) return MODELS[i].label;
+    return id;
+  }
+  // Les voix du mode actif — miroir du futur orchestrator.ts
+  function voicesFor(mode){
+    if(mode === "debate") return [
+      { id: "sceptique",   name: "Sceptique",   role: "conseiller — cherche ce qui casse" },
+      { id: "pragmatique", name: "Pragmatique", role: "conseiller — pèse le coût réel" },
+      { id: "innovateur",  name: "Innovateur",  role: "conseiller — cherche l'angle neuf" },
+      { id: "juge",        name: "Juge",        role: "compare les tours, rend le verdict" }
+    ];
+    if(mode === "council"){
+      var letters = ["A","B","C","D","E"], out = [];
+      for(var i = 0; i < state.councilMembers; i++)
+        out.push({ id: "membre-" + letters[i].toLowerCase(), name: "Membre " + letters[i],
+                   role: "lecture seule — ne voit pas les autres" });
+      out.push({ id: "president", name: "Président", role: "compare les avis anonymisés, fusionne" });
+      return out;
+    }
+    if(mode === "compare") return [
+      { id: "voix-a", name: "Voix A", role: "première colonne" },
+      { id: "voix-b", name: "Voix B", role: "seconde colonne" }
+    ];
+    if(mode === "auto"){
+      var roles = [];
+      if(state.autoDebate) roles.push({ id: "auto-debat", name: "Débat", role: "cadrage préalable — 3 tours" });
+      roles.push({ id: "auto-plan", name: "Plan", role: "chef de projet — étapes" });
+      roles.push({ id: "auto-code", name: "Code", role: "constructeur — applique" });
+      roles.push({ id: "auto-test", name: "Test", role: "testeur — prouve" });
+      return roles;
+    }
+    return [];
+  }
+  function whoTextFor(mode){
+    var voices = voicesFor(mode);
+    if(!voices.length) return "Qui travaille — le modèle de la conversation décide";
+    var custom = 0;
+    voices.forEach(function(v){ if(state.voices[mode][v.id]) custom++; });
+    if(custom === 0) return "Qui travaille — " + voices.length + " voix, toutes suivent la conversation";
+    return "Qui travaille — " + custom + " voix ont leur modèle, " + (voices.length - custom) + " suivent la conversation";
+  }
+  function noteFor(mode){
+    if(mode === "debate") return MODES.debate.note;
+    if(mode === "auto") return MODES.auto.note + " Débat préalable : " + (state.autoDebate ? "activé" : "désactivé") + ".";
+    return MODES[mode].note;
+  }
+  function fitStage(){
+    var s = document.getElementById("stageB");
+    s.style.paddingTop = pop.style.display === "none"
+      ? "118px"
+      : Math.ceil(pop.getBoundingClientRect().height + 50) + "px";
+  }
+  function render(){
+    var mode = state.mode;
+    var m = MODES[mode];
+    pillBLabel.textContent = pillLabelFor(mode);
+    pillB.classList.toggle("on", mode !== "chat");
+    pillB.title = "Mode de la conversation : " + m.label + " — cliquez pour changer";
+    // « Comparer » est un mode comme les autres : plus de bascule, plus d'exclusion spéciale
+    var multi = MULTI[mode] === true;
+    // Pied du popover : bornes des modes + boîte « qui travaille » avec ses voix
+    footLine.hidden = m.loop !== "debate";
+    footLineCouncil.hidden = mode !== "council";
+    footLineAuto.hidden = m.loop !== "auto";
+    footLineAutoDebate.hidden = m.loop !== "auto";
+    whoBox.style.display = HASVOICES[mode] ? "" : "none";
+    whoText.textContent = whoTextFor(mode);
+    footNote.textContent = noteFor(mode);
+    renderVoices();
+    refreshSteps();
+    fitStage();
+  }
+  document.querySelectorAll("#modeList .mode-item").forEach(function(item){
+    item.addEventListener("click", function(){
+      document.querySelectorAll("#modeList .mode-item").forEach(function(x){
+        x.classList.remove("sel");
+        x.querySelector(".check").innerHTML = "";
+      });
+      item.classList.add("sel");
+      item.querySelector(".check").innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+      state.mode = item.dataset.mode;
+      voicesOpen = HASVOICES[state.mode] === true;
+      openVoice = null;
+      render();
+    });
+  });
+  pillB.addEventListener("click", function(){
+    var open = pop.style.display !== "none";
+    pop.style.display = open ? "none" : "";
+    fitStage();
+  });
+
+  // ── Bornes : clamp appliqué à la saisie (jamais de refus muet) ───────
+  function wireStepper(minusId, plusId, valId, get, set, min, max, render){
+    var minus = document.getElementById(minusId);
+    var plus = document.getElementById(plusId);
+    var val = document.getElementById(valId);
+    function refresh(){
+      val.textContent = String(get());
+      minus.disabled = get() <= min;
+      plus.disabled = get() >= max;
+    }
+    minus.addEventListener("click", function(){ set(Math.max(min, get() - 1)); refresh(); render(); });
+    plus.addEventListener("click", function(){ set(Math.min(max, get() + 1)); refresh(); render(); });
+    return refresh;
+  }
+  var refreshSteps = function(){};
+  refreshSteps = (function(){
+    var a, b, c;
+    a = wireStepper("debMinus", "debPlus", "debVal",
+      function(){ return state.debateRounds; },
+      function(v){ state.debateRounds = v; }, 3, 10, render);
+    b = wireStepper("autoMinus", "autoPlus", "autoVal",
+      function(){ return state.autoRetries; },
+      function(v){ state.autoRetries = v; }, 0, 3, render);
+    c = wireStepper("councilMinus", "councilPlus", "councilVal",
+      function(){ return state.councilMembers; },
+      function(v){ state.councilMembers = v; renderVoices(); }, 2, 5, render);
+    return function(){ a(); b(); c(); };
+  })();
+  document.getElementById("autoDebateSwitch").addEventListener("click", function(){
+    state.autoDebate = !state.autoDebate;
+    this.classList.toggle("on", state.autoDebate);
+    this.setAttribute("aria-checked", state.autoDebate ? "true" : "false");
+    renderVoices();
+    render();
+  });
+  voicesEdit.addEventListener("click", function(){
+    voicesOpen = !voicesOpen;
+    if(!voicesOpen) openVoice = null;
+    renderVoices();
+    fitStage();
+  });
+
+  // ── Voix & modèles : panneau « qui travaille » ───────────────────────
+  function modelOptionsHtml(current, voiceId){
+    var html = '<div class="model-list">';
+    html += '<button class="model-opt' + (!current ? " sel" : "") + '" data-voice="' + voiceId + '" data-model="">';
+    html += '<span class="dot"></span><span class="o-lbl">Modèle de la conversation</span>';
+    html += '<span class="o-sub">' + FIL_MODEL_LABEL + '</span></button>';
+    MODELS.forEach(function(mo){
+      html += '<button class="model-opt' + (current === mo.id ? " sel" : "") + '" data-voice="' + voiceId + '" data-model="' + mo.id + '">';
+      html += '<span class="dot"></span><span class="o-lbl">' + mo.label + '</span>';
+      html += '<span class="o-sub">' + mo.sub + '</span></button>';
+    });
+    return html + '</div>';
+  }
+  function renderVoices(){
+    var mode = state.mode;
+    var voices = voicesFor(mode);
+    var hasVoices = HASVOICES[mode] === true;
+    var show = hasVoices && voices.length > 0 && voicesOpen;
+    voicesPanel.hidden = !show;
+    voicesEdit.textContent = voicesOpen && hasVoices ? "Fermer" : "Modifier";
+    if(!show) return;
+    var custom = 0;
+    var html = "";
+    voices.forEach(function(v){
+      var modelId = state.voices[mode][v.id] || null;
+      if(modelId) custom++;
+      html += '<div class="voice-row">'
+        + '<span class="v-name">' + v.name + '</span>'
+        + '<span class="v-role">' + v.role + '</span>'
+        + '<button class="v-model' + (modelId ? " custom" : "") + '" data-voice="' + v.id + '" title="Modèle de cette voix">'
+        + '<span class="lbl">' + (modelId ? modelLabel(modelId) : "Modèle de la conversation") + '</span>'
+        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'
+        + '</button></div>';
+      if(openVoice === v.id) html += modelOptionsHtml(modelId, v.id);
+    });
+    html += '<div class="voices-foot"><span>' + custom + ' voix ont leur modèle · '
+      + (voices.length - custom) + ' suivent la conversation</span>'
+      + '<button class="reset" id="voicesReset"' + (custom ? "" : " disabled") + '>Tout ramener à la conversation</button></div>';
+    voicesPanel.innerHTML = html;
+    voicesPanel.querySelectorAll(".v-model").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var vid = this.dataset.voice;
+        openVoice = openVoice === vid ? null : vid;
+        renderVoices();
+        fitStage();
+      });
+    });
+    voicesPanel.querySelectorAll(".model-opt").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var vid = this.dataset.voice, mid = this.dataset.model || null;
+        if(mid) state.voices[mode][vid] = mid;
+        else delete state.voices[mode][vid];
+        render();
+      });
+    });
+    var reset = document.getElementById("voicesReset");
+    if(reset) reset.addEventListener("click", function(){
+      voices.forEach(function(v){ delete state.voices[mode][v.id]; });
+      render();
+    });
+  }
+  render();
+
+  // ── Scène F : Paramètres → Modes de chat (les défauts du registre R5) ─
+  var CHECK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var defs = { debateRounds: 3, councilMembers: 3, autoRetries: 2 };
+  wireStepper("defDebMinus", "defDebPlus", "defDebVal",
+    function(){ return defs.debateRounds; }, function(v){ defs.debateRounds = v; }, 3, 10, function(){});
+  wireStepper("defCnMinus", "defCnPlus", "defCnVal",
+    function(){ return defs.councilMembers; }, function(v){ defs.councilMembers = v; }, 2, 5, function(){});
+  wireStepper("defAuMinus", "defAuPlus", "defAuVal",
+    function(){ return defs.autoRetries; }, function(v){ defs.autoRetries = v; }, 0, 3, function(){});
+
+  document.querySelectorAll(".set-panel .switch").forEach(function(sw){
+    sw.addEventListener("click", function(){
+      var on = sw.classList.toggle("on");
+      sw.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  });
+
+  // Mode des nouvelles conversations — liste déroulante
+  (function(){
+    var wrap = document.getElementById("selDefMode");
+    if(!wrap) return;
+    var btn = wrap.querySelector(".sel-btn"), list = wrap.querySelector(".sel-list");
+    btn.addEventListener("click", function(){ list.hidden = !list.hidden; });
+    list.querySelectorAll(".sel-item").forEach(function(it){
+      it.addEventListener("click", function(){
+        list.querySelectorAll(".sel-item").forEach(function(x){
+          x.classList.remove("on"); x.querySelector(".check").innerHTML = "";
+        });
+        it.classList.add("on");
+        it.querySelector(".check").innerHTML = CHECK;
+        btn.querySelector(".sv").textContent = it.dataset.v;
+        list.hidden = true;
+      });
+    });
+  })();
+
+  // Modèles des voix — un choix par ligne, une liste à la fois
+  function settingsModelList(current){
+    var html = '<button class="model-opt' + (!current ? " sel" : "") + '" data-model="">'
+      + '<span class="dot"></span><span class="o-lbl">Modèle de la conversation</span>'
+      + '<span class="o-sub">' + FIL_MODEL_LABEL + '</span></button>';
+    MODELS.forEach(function(mo){
+      html += '<button class="model-opt' + (current === mo.id ? " sel" : "") + '" data-model="' + mo.id + '">'
+        + '<span class="dot"></span><span class="o-lbl">' + mo.label + '</span>'
+        + '<span class="o-sub">' + mo.sub + '</span></button>';
+    });
+    return html;
+  }
+  document.querySelectorAll(".set-panel .vgrid").forEach(function(grid){
+    grid.querySelectorAll(".v-model").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var row = btn.parentElement;
+        var open = row.nextElementSibling;
+        if(open && open.classList.contains("model-list")){ open.remove(); return; }
+        grid.querySelectorAll(".model-list").forEach(function(l){ l.remove(); });
+        var div = document.createElement("div");
+        div.className = "model-list";
+        div.innerHTML = settingsModelList(btn.dataset.model || "");
+        row.after(div);
+        div.querySelectorAll(".model-opt").forEach(function(opt){
+          opt.addEventListener("click", function(){
+            var mid = opt.dataset.model || "";
+            btn.dataset.model = mid;
+            btn.querySelector(".lbl").textContent = mid ? modelLabel(mid) : "Modèle de la conversation";
+            btn.classList.toggle("custom", !!mid);
+            div.remove();
+          });
+        });
+      });
+    });
+  });
+
+  // ── Scène A : la pilule d'aperçu bascule aussi (démo Plan ↔ Chat) ────
+  var pillA = document.getElementById("pillA");
+  var pillALabel = document.getElementById("pillALabel");
+  var aOn = true;
+  pillA.addEventListener("click", function(){
+    aOn = !aOn;
+    pillALabel.textContent = aOn ? "Plan" : "Chat";
+    pillA.classList.toggle("on", aOn);
+    pillA.title = "Mode de la conversation : " + (aOn ? "Plan" : "Chat") + " — cliquez pour changer";
+  });
+})();
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
+import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
 import { useToast } from "@/hooks/use-toast";
 import {
   contextWindowOf,
@@ -32,7 +33,6 @@ import type {
 } from "@/lib/chat-types";
 
 const MODEL_SETTING_KEY = "hermes.model"; // registre des réglages (FORK.md §6)
-const COMPARE_KEY = "hermes.compare.models"; // F-17 : paire [a, b] persistée
 const EFFORT_SETTING_KEY = "hermes.reasoning.effort";
 const PERMISSIONS_SETTING_KEY = "hermes.permissions.mode";
 // Mode expert (F-22) — registre des réglages (FORK.md §6)
@@ -82,13 +82,21 @@ export function useHermesChat() {
   const streams = useMemo(() => Object.values(streamsRecord), [streamsRecord]);
   const streaming = streams[0] ?? null;
 
-  // F-17 — état du mode comparaison (paire persistée dans le registre).
-  const [compareEnabled, setCompareEnabled] = useState(false);
-  const [compareModels, setCompareModels] = useState<{ a: string | null; b: string | null }>({ a: null, b: null });
-  const compareEnabledRef = useRef(compareEnabled);
-  compareEnabledRef.current = compareEnabled;
-  const compareModelsRef = useRef(compareModels);
-  compareModelsRef.current = compareModels;
+  // ── F-30 — mode de la conversation : le service fait foi ──────────
+  /** Mode/config choisis avant qu'une conversation n'existe (état « nouveau »).
+   *  Appliqués à la création, puis vidés. */
+  const [pendingMode, setPendingMode] = useState<{
+    mode: ConversationMode;
+    config: ModeConfig;
+  } | null>(null);
+  /** Déroulé vivant du tour multi-voix (modes débat / conseil / auto).
+   *  La réponse finale le porte en persistance — ce live n'est que le chemin. */
+  const [modeFlowLive, setModeFlowLive] = useState<{
+    messageId: string;
+    rows: import("@/lib/chat-types").ModeFlowRow[];
+  } | null>(null);
+  const pendingModeRef = useRef(pendingMode);
+  pendingModeRef.current = pendingMode;
   /** Erreur persistante du dernier tour (F-04) : affichée dans le fil jusqu'à
    *  réessai / changement de conversation — plus d'effacement automatique. */
   const [turnError, setTurnError] = useState<{ messageId: string; error: string } | null>(null);
@@ -215,19 +223,6 @@ export function useHermesChat() {
   useEffect(() => {
     const saved = readClientSetting<string | null>(MODEL_SETTING_KEY);
     if (saved) setSelectedModelState(saved);
-    // F-17 : paire de comparaison mémorisée (best effort, ignorée si invalide)
-    try {
-      const raw = readClientSetting<string>(COMPARE_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(parsed) && parsed.length === 2) {
-        const [a, b] = parsed;
-        if (typeof a === "string" && typeof b === "string" && a && b) {
-          setCompareModels({ a, b });
-        }
-      }
-    } catch {
-      /* paire illisible : on repart à vide */
-    }
     const savedEffort = readClientSetting<string>(EFFORT_SETTING_KEY);
     if (savedEffort) setEffortState(savedEffort);
     // Mode expert (F-22) : champs individuels, absents = défaut du fournisseur
@@ -336,12 +331,53 @@ export function useHermesChat() {
 
   const isBusy = streaming !== null || uploadingCount > 0;
 
-  /** Paire de comparaison actuellement actionnable (F-17), sinon null. */
-  const activeComparePair = useMemo(() => {
-    const { a, b } = compareModelsRef.current;
-    if (!compareEnabled || !a || !b || a === b) return null;
-    return [a, b] as [string, string];
-  }, [compareEnabled, compareModels]);
+  // ── F-30 — mode effectif de la conversation ouverte ───────────────────
+  // La liste des conversations fait foi (meta du service) ; sans
+  // conversation, le choix « nouveau » (pastille avant la première
+  // conversation) prime, sinon le réglage hermes.modes.defaultMode.
+  const activeConv = useMemo(
+    () => conversations.find((c) => c.id === activeId) ?? null,
+    [conversations, activeId]
+  );
+  const conversationMode: ConversationMode = useMemo(() => {
+    if (activeConv) return resolveMode(activeConv.mode ?? "chat");
+    if (pendingMode) return pendingMode.mode;
+    return resolveMode(readClientSetting<string>("hermes.modes.defaultMode"));
+  }, [activeConv, pendingMode]);
+  const conversationModeConfig: ModeConfig | null =
+    activeConv?.modeConfig ?? pendingMode?.config ?? null;
+
+  /** F-30 — change le mode de la conversation (ou prépare l'état « nouveau »).
+   *  Le service résout, borne et persiste ; l'écran suit son ack. */
+  const setConversationMode = useCallback(
+    (mode: ConversationMode, config: ModeConfig) => {
+      const conversationId = activeIdRef.current;
+      if (!conversationId) {
+        // Pas encore de conversation : mémorisé, appliqué à la création
+        setPendingMode({ mode, config });
+        return;
+      }
+      getSocket().emit(
+        "conversations:setMode",
+        { conversationId, mode, config },
+        (res: { ok?: boolean; conversation?: ConversationMeta; error?: string } | null) => {
+          if (res?.ok && res.conversation) {
+            const conv = res.conversation;
+            setConversations((prev) =>
+              prev.map((c) => (c.id === conversationId ? { ...c, ...conv } : c))
+            );
+          } else if (res?.error) {
+            toast({
+              title: "Changement de mode impossible",
+              description: res.error,
+              variant: "destructive",
+            });
+          }
+        }
+      );
+    },
+    [toast]
+  );
 
   /** Retrouve l'id d'un modèle depuis le libellé d'une réponse
    *  (« glm-4.6 · z.ai » — v2.3 : le suffixe fournisseur est retiré). */
@@ -532,6 +568,9 @@ export function useHermesChat() {
       if (p.message) {
         setMessages((prev) => [...prev, p.message as ChatMessage]);
       }
+      // F-30 : le déroulé vivant a fini de courir — la réponse persistée le
+      // porte désormais (messages.mode_flow) ; le live ne sert qu'en vol.
+      setModeFlowLive((cur) => (cur?.messageId === p.messageId ? null : cur));
       // F-17 : ne retirer que CE tour — l'autre variante peut couler encore.
       setStreamsRecord((prev) => {
         if (!(p.messageId in prev)) return prev;
@@ -560,6 +599,11 @@ export function useHermesChat() {
         );
       }
       setTurnError({ messageId: p.messageId ?? p.message?.id ?? "", error: p.error });
+      // F-30 : un déroulé vivant s'arrête avec son tour (la réponse partielle
+      // ne porte pas de déroulé — rien ne reste « en cours » à l'écran).
+      setModeFlowLive((cur) =>
+        !p.messageId || cur?.messageId === p.messageId ? null : cur
+      );
       // F-17 : un côté peut échouer pendant que l'autre termine — on ne
       // retire que le tour concerné.
       setStreamsRecord((prev) => {
@@ -757,6 +801,33 @@ export function useHermesChat() {
     // — les listes vivantes sont rechargées, la sélection s'aligne dessus.
     const onModelsChanged = () => fetchModels();
 
+    // F-30 — déroulé vivant du tour multi-voix (débat, conseil, auto) :
+    // chaque étape est poussée par le service, la réponse finale portera
+    // le déroulé en persistance.
+    const onModeFlow = (p: {
+      conversationId: string;
+      messageId: string;
+      rows: import("@/lib/chat-types").ModeFlowRow[];
+    }) => {
+      if (p.conversationId !== activeIdRef.current) return;
+      setModeFlowLive({ messageId: p.messageId, rows: p.rows ?? [] });
+    };
+    // F-30 — mode changé (depuis cette session ou une autre) : toutes les
+    // fenêtres suivent la conversation en direct.
+    const onConversationMode = (p: {
+      conversationId: string;
+      conversation?: ConversationMeta;
+    }) => {
+      if (p.conversation) {
+        const conv = p.conversation;
+        setConversations((prev) =>
+          prev.some((c) => c.id === conv.id)
+            ? prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c))
+            : prev
+        );
+      }
+    };
+
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("hello", onHello);
@@ -797,6 +868,8 @@ export function useHermesChat() {
     socket.on("artifact:delta", onArtifactDelta);
     socket.on("artifact:updated", onArtifactUpdated);
     socket.on("models:changed", onModelsChanged);
+    socket.on("mode:flow", onModeFlow);
+    socket.on("conversations:mode", onConversationMode);
 
     if (socket.connected) onConnect();
 
@@ -830,6 +903,8 @@ export function useHermesChat() {
       socket.off("artifact:delta", onArtifactDelta);
       socket.off("artifact:updated", onArtifactUpdated);
       socket.off("models:changed", onModelsChanged);
+      socket.off("mode:flow", onModeFlow);
+      socket.off("conversations:mode", onConversationMode);
     };
   }, [refreshConversations, fetchProjects, fetchModels, fetchArtifacts]);
 
@@ -838,9 +913,18 @@ export function useHermesChat() {
     async (projectId?: string | null): Promise<string | null> => {
       const socket = getSocket();
       return new Promise((resolve) => {
+        // F-30 : le mode des nouvelles conversations = choix « nouveau » de la
+        // pastille, sinon le réglage hermes.modes.defaultMode. Le service le
+        // résout et le borne (valeur inconnue → chat).
+        const pending = pendingModeRef.current;
+        const mode =
+          pending?.mode ?? resolveMode(readClientSetting<string>("hermes.modes.defaultMode"));
         socket.emit(
           "conversations:create",
-          { projectId: projectId ?? null },
+          {
+            projectId: projectId ?? null,
+            ...(mode !== "chat" ? { mode, modeConfig: pending?.config } : {}),
+          },
           (res: { conversation?: ConversationMeta }) => {
             if (res.conversation) {
               activeIdRef.current = res.conversation.id;
@@ -849,6 +933,8 @@ export function useHermesChat() {
               setMessages([]);
               setTurnError(null);
               setCompactInfo(null);
+              setModeFlowLive(null);
+              setPendingMode(null);
               resolve(res.conversation.id);
             } else {
               resolve(null);
@@ -869,6 +955,8 @@ export function useHermesChat() {
       setStreamsRecord({});
       setTurnError(null);
       setCompactInfo(null);
+      setModeFlowLive(null);
+      setPendingMode(null);
       // Le panneau appartient à la conversation : on le referme au changement
       setPanelOpen(false);
       setPanelArtifactId(null);
@@ -1040,16 +1128,14 @@ export function useHermesChat() {
         }
       }
 
-      // F-17 : mode comparaison — un message, deux modèles, deux réponses.
-      const pair = activeComparePair;
+      // F-30 : le mode de la conversation (Comparer compris) est relu par le
+      // SERVICE à chaque envoi — l'écran n'envoie plus de paire de comparaison.
       socket.emit(
         "chat:send",
         {
           conversationId,
           content,
-          ...(pair
-            ? { compare: pair }
-            : { model: selectedModelRef.current ?? undefined }),
+          model: selectedModelRef.current ?? undefined,
           attachments: attachments.length ? attachments : undefined,
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
@@ -1067,7 +1153,7 @@ export function useHermesChat() {
         }
       );
     },
-    [newConversation, streaming, activeComparePair, autoCompactBeforeSend]
+    [newConversation, streaming, autoCompactBeforeSend]
   );
 
   const stopGeneration = useCallback(() => {
@@ -1085,7 +1171,6 @@ export function useHermesChat() {
       const variant = rawVariant === "a" || rawVariant === "b" ? rawVariant : undefined;
       const conversationId = activeIdRef.current;
       if (!conversationId || streaming) return;
-      const pair = activeComparePair;
       const base = {
         effort: effortRef.current ?? undefined,
         permissionsMode: permissionsRef.current,
@@ -1095,7 +1180,7 @@ export function useHermesChat() {
       const resync = (res: { ok?: boolean; error?: string } | null) => {
         if (!res?.ok) openConversation(conversationId);
       };
-      if (variant && !pair) {
+      if (variant) {
         // Côté d'une comparaison (mode coupé ou session rechargée) :
         // retrouve le modèle de ce côté depuis le libellé de sa réponse.
         const last = [...messages].reverse().find((m) => m.variant === variant);
@@ -1113,17 +1198,9 @@ export function useHermesChat() {
         getSocket().emit("chat:regenerate", { conversationId, variant, model: id, ...base }, resync);
         return;
       }
-      if (pair) {
-        // Comparaison active : les deux côtés repartent ensemble.
-        setMessages((prev) => {
-          const next = [...prev];
-          while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
-          return next;
-        });
-        getSocket().emit("chat:regenerate", { conversationId, compare: pair, ...base }, resync);
-        return;
-      }
-      // Tour simple : comportement historique (optimiste + resync au refus).
+      // Tour simple — le service relu le mode de la conversation : en mode
+      // Comparer, les DEUX côtés repartent ensemble ; en mode orchestré, la
+      // chaîne complète rejoue (une seule réponse conservée, comme à l'envoi).
       setMessages((prev) => {
         const next = [...prev];
         while (next.length > 0 && next[next.length - 1].role === "assistant") next.pop();
@@ -1135,7 +1212,7 @@ export function useHermesChat() {
         resync
       );
     },
-    [openConversation, streaming, activeComparePair, messages, modelIdFromLabel]
+    [openConversation, streaming, messages, modelIdFromLabel]
   );
 
   /** Masque l'erreur du dernier tour (le partiel éventuel reste dans le fil). */
@@ -1164,34 +1241,6 @@ export function useHermesChat() {
     setWebSearchState((v) => {
       const next = !v;
       writeClientSetting("hermes.tools.web", next);
-      return next;
-    });
-  }, []);
-
-  /** F-17 — active/coupe la comparaison ; à l'activation, pré-remplit le
-   *  côté A avec le modèle courant et le côté B avec le premier modèle
-   *  différent du catalogue. La paire est mémorisée dans le registre. */
-  const toggleCompare = useCallback(() => {
-    setCompareEnabled((on) => {
-      if (on) return false; // simple extinction
-      setCompareModels((cur) => {
-        const a = cur.a ?? selectedModelRef.current ?? models[0]?.id ?? null;
-        const b =
-          cur.b ?? models.find((m) => m.id !== a)?.id ?? null;
-        if (a && b && a !== b) writeClientSetting(COMPARE_KEY, JSON.stringify([a, b]));
-        return { a, b };
-      });
-      return true;
-    });
-  }, [models]);
-
-  /** F-17 — choisit le modèle d'un côté (a/b) et mémorise la paire. */
-  const setCompareSlot = useCallback((slot: "a" | "b", id: string) => {
-    setCompareModels((cur) => {
-      const next = { ...cur, [slot]: id };
-      if (next.a && next.b && next.a !== next.b) {
-        writeClientSetting(COMPARE_KEY, JSON.stringify([next.a, next.b]));
-      }
       return next;
     });
   }, []);
@@ -1226,10 +1275,10 @@ export function useHermesChat() {
           conversationId,
           messageId,
           content: clean,
-          // F-17 : en mode comparaison, l'édition relance les deux côtés.
-          ...(activeComparePair
-            ? { compare: activeComparePair }
-            : { model: selectedModelRef.current ?? undefined }),
+          // F-30 : le mode de la conversation (Comparer compris) est relu par
+          // le service — l'édition relance ce que le mode décide, sans paire
+          // envoyée par l'écran.
+          model: selectedModelRef.current ?? undefined,
           effort: effortRef.current ?? undefined,
           permissionsMode: permissionsRef.current,
           ...expertRef.current,
@@ -1240,7 +1289,7 @@ export function useHermesChat() {
         }
       );
     },
-    [openConversation, streaming, activeComparePair]
+    [openConversation, streaming]
   );
 
   /** Supprime un message individuel. */
@@ -1605,11 +1654,11 @@ export function useHermesChat() {
     /** F-17 : TOUS les streams actifs (tour simple + variantes a/b). */
     streams,
     isBusy,
-    // F-17 — comparaison de modèles
-    compareEnabled,
-    compareModels,
-    toggleCompare,
-    setCompareSlot,
+    // F-30 — modes du compositeur (le service fait foi)
+    conversationMode,
+    conversationModeConfig,
+    setConversationMode,
+    modeFlowLive,
     turnState,
     turnError,
     dismissTurnError,

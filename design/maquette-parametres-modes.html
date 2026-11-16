@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Paramètres · Modes de chat (F-30) · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --amber:oklch(0.72 0.16 70);
+    --amber-soft:oklch(0.72 0.16 70 / 0.12);
+    --red:oklch(0.577 0.245 27.325);
+    --red-soft:oklch(0.577 0.245 27.325 / 0.10);
+    --green:oklch(0.62 0.13 150);
+    --radius:0.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none !important}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    font-size:15px;line-height:1.5;padding:40px 20px 80px;
+  }
+  .wrap{max-width:840px;margin:0 auto}
+
+  /* ── En-tête de planche ─────────────────────────────── */
+  .page-head h1{font-size:26px;font-weight:700;letter-spacing:-0.02em}
+  .page-head .sub{color:var(--muted-foreground);margin-top:6px;max-width:64ch}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;font-weight:500;padding:4px 11px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted-foreground)}
+  .chip b{color:var(--foreground);font-weight:600}
+
+  /* ── Scènes ─────────────────────────────────────────── */
+  .scene{background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:26px 26px 20px;margin-top:26px;box-shadow:0 1px 2px oklch(0.19 0.004 60 / 0.04)}
+  .scene-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .scene-num{flex:none;width:26px;height:26px;border-radius:8px;background:var(--hermes-soft);
+    color:var(--hermes);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+    transform:translateY(4px)}
+  .scene-head h2{font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  .scene-head .why{width:100%;color:var(--muted-foreground);font-size:13.5px;margin-top:4px;padding-left:38px}
+  .stage{margin:22px auto 6px;max-width:660px;background:var(--background);
+    border:1px solid var(--border);border-radius:22px;padding:34px 18px 26px;position:relative}
+  .stage.dim{filter:grayscale(0.15);opacity:0.85}
+  .notes{margin:16px 4px 0;padding-left:38px;list-style:none}
+  .notes li{font-size:13px;color:var(--muted-foreground);padding:3px 0 3px 22px;position:relative}
+  .notes li::before{content:attr(data-n);position:absolute;left:0;top:5px;width:15px;height:15px;
+    border-radius:5px;background:var(--muted);color:var(--card);font-size:9.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  .notes li b{color:var(--foreground);font-weight:600}
+
+  /* ── Popovers ───────────────────────────────────────── */
+  .pop{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:16px;
+    box-shadow:0 12px 40px oklch(0.19 0.004 60 / 0.14);z-index:30;animation:pop .16s ease-out}
+  @keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .pop-label{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;
+    color:var(--muted-foreground);padding:11px 12px 7px}
+  .pop-sep{height:1px;background:var(--border);margin:2px 0}
+
+  /* Popover du sélecteur de mode */
+  .mode-pop{left:10px;bottom:calc(100% + 10px);width:430px}
+  .mode-list{padding:4px 6px}
+  .mode-item{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;border:none;
+    background:transparent;font:inherit;padding:8px 8px;border-radius:10px;cursor:pointer;transition:background .12s}
+  .mode-item:hover{background:var(--muted)}
+  .mode-item.sel{background:var(--muted)}
+  .mode-item .check{flex:none;width:16px;height:16px;margin-top:3px;display:flex;align-items:center;justify-content:center}
+  .mode-item .m-ico{flex:none;margin-top:2px;color:var(--muted-foreground)}
+  .mode-item.sel .m-ico{color:var(--hermes)}
+  .mode-item .m-name{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .mode-item .m-desc{display:block;font-size:11.5px;color:var(--muted-foreground);margin-top:1px;line-height:1.4}
+  .mode-item .m-meta{flex:none;margin-left:auto;font-size:10px;font-weight:600;color:var(--muted-foreground);
+    background:var(--card);border:1px solid var(--border);border-radius:999px;padding:1.5px 8px;margin-top:2px}
+  .mode-item.sel .m-meta{color:var(--hermes);border-color:oklch(0.63 0.17 42 / 0.25);background:var(--hermes-soft)}
+  .mode-foot{padding:9px 12px 11px}
+  .foot-line{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:11.5px;font-weight:600;color:var(--muted-foreground);margin-bottom:8px}
+  .foot-note{margin-top:8px;font-size:11px;color:var(--muted-foreground);line-height:1.45}
+  .step{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:9px;
+    overflow:hidden;background:var(--card)}
+  .step button{width:26px;height:26px;border:none;background:transparent;font:inherit;font-size:14px;
+    font-weight:600;color:var(--muted-foreground);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .step button:hover{background:var(--muted);color:var(--foreground)}
+  .step button:disabled{opacity:.35;cursor:default}
+  .step .val{min-width:64px;text-align:center;font-size:11.5px;font-weight:700;color:var(--foreground);
+    border-left:1px solid var(--border);border-right:1px solid var(--border);align-self:stretch;
+    display:flex;align-items:center;justify-content:center;gap:4px}
+  .step .val small{font-weight:500;font-size:9.5px;color:var(--muted-foreground)}
+  .switch{flex:none;width:32px;height:18px;border-radius:999px;background:var(--muted);
+    position:relative;transition:background .15s;cursor:pointer;border:none}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;
+    background:var(--card);box-shadow:0 1px 2px oklch(0.19 0.004 60 / 0.2);transition:transform .15s}
+  .switch.on{background:var(--hermes)}
+  .switch.on::after{transform:translateX(14px)}
+  .who-box{margin:2px 12px 8px;padding:9px 11px;border:1.5px dashed oklch(0.63 0.17 42 / 0.4);
+    border-radius:11px;display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--muted-foreground)}
+  .who-box svg{flex:none;color:var(--hermes)}
+  .who-box .who-edit{margin-left:auto;flex:none;border:1px solid var(--border);background:var(--card);
+    font:inherit;font-size:10.5px;font-weight:600;color:var(--foreground);border-radius:999px;
+    padding:3px 10px;cursor:pointer;transition:background .12s}
+  .who-box .who-edit:hover{background:var(--muted)}
+  .mode-pop .count-foot{padding:8px 14px;font-size:11px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+
+  /* Voix & modèles — panneau « qui travaille » */
+  .voices-panel{margin:0 12px 10px;border:1px solid var(--border);border-radius:12px;background:var(--background);overflow:hidden}
+  .voice-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-top:1px solid var(--border)}
+  .voice-row:first-child{border-top:none}
+  .voice-row .v-name{flex:none;font-size:12px;font-weight:700}
+  .voice-row .v-role{flex:1;min-width:0;font-size:10.5px;color:var(--muted-foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .voice-row .v-model{flex:none;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);
+    background:var(--card);font:inherit;font-size:10.5px;font-weight:600;color:var(--foreground);
+    border-radius:999px;padding:3px 9px;cursor:pointer;max-width:195px;transition:background .12s,border-color .12s}
+  .voice-row .v-model:hover{background:var(--muted)}
+  .voice-row .v-model.custom{border-color:oklch(0.63 0.17 42 / 0.35);background:var(--hermes-soft);color:var(--hermes)}
+  .voice-row .v-model .lbl{max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .model-list{border-top:1px dashed var(--border);background:var(--card);padding:4px 6px}
+  .model-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;
+    font:inherit;font-size:11.5px;padding:5px 7px;border-radius:8px;cursor:pointer;transition:background .12s}
+  .model-opt:hover{background:var(--muted)}
+  .model-opt .dot{flex:none;width:7px;height:7px;border-radius:999px;border:1.5px solid var(--border);background:transparent}
+  .model-opt.sel .dot{border-color:var(--hermes);background:var(--hermes)}
+  .model-opt .o-lbl{font-weight:600}
+  .model-opt .o-sub{margin-left:auto;font-size:9.5px;font-weight:600;color:var(--muted-foreground);
+    background:var(--muted);border-radius:999px;padding:1px 7px;white-space:nowrap}
+  .model-opt.sel .o-sub{background:var(--hermes-soft);color:var(--hermes)}
+  .voices-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;
+    border-top:1px solid var(--border);font-size:10.5px;color:var(--muted-foreground)}
+  .voices-foot .reset{border:1px solid var(--border);background:var(--card);font:inherit;font-size:10px;
+    font-weight:600;color:var(--foreground);border-radius:999px;padding:2.5px 9px;cursor:pointer}
+  .voices-foot .reset:hover{background:var(--muted)}
+  .voices-foot .reset:disabled{opacity:.4;cursor:default}
+
+  /* ── Tableau de spec ────────────────────────────────── */
+  .spec{margin-top:26px}
+  .spec h2{font-size:17px;font-weight:600;margin-bottom:4px}
+  .spec .sub{color:var(--muted-foreground);font-size:13.5px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--muted-foreground);padding:7px 10px;border-bottom:1px solid var(--border)}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  td code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+  tr:last-child td{border-bottom:none}
+  .spec .files{margin-top:16px;font-size:12.5px;color:var(--muted-foreground)}
+  .spec .files code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--muted);
+    border-radius:5px;padding:1px 6px}
+
+  /* ── Scène F : Paramètres → Modes de chat (idiome maquette-parametres v5) ── */
+  .set-stage{max-width:780px}
+  .set-panel{display:flex;height:560px;background:var(--card);border:1px solid var(--border);
+    border-radius:16px;overflow:hidden;text-align:left}
+  .rail{flex:0 0 192px;background:var(--background);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:14px 10px 10px;gap:2px}
+  .rail-top{display:flex;align-items:center;gap:8px;padding:2px 8px 12px}
+  .rail-top .logo{width:24px;height:24px;border-radius:8px;background:var(--hermes);color:var(--hermes-foreground);
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .rail-top b{font-size:13px;letter-spacing:-.01em}
+  .rail-nav{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;min-height:0}
+  .rn{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:9px;border:none;background:none;
+    font:inherit;font-size:12px;color:var(--muted-foreground);cursor:pointer;text-align:left;width:100%;
+    transition:background .15s,color .15s}
+  .rn:hover{background:var(--muted);color:var(--foreground)}
+  .rn.on{background:var(--hermes-soft);color:var(--hermes);font-weight:600}
+  .rn svg{flex:none}
+  .rail-foot{padding:10px 8px 2px;font-size:10.5px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+  .set-main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .set-mainhead{flex:none;height:42px;display:flex;align-items:center;justify-content:flex-end;
+    padding:0 14px;border-bottom:1px solid var(--border)}
+  .x-btn{width:28px;height:30px;border-radius:9px;border:1px solid var(--border);background:var(--card);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted-foreground)}
+  .x-btn:hover{color:var(--red);border-color:var(--red)}
+  .set-scroll{flex:1;overflow-y:auto;padding:18px 22px 24px}
+  .set-scroll::-webkit-scrollbar{width:8px}
+  .set-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:999px}
+  .set-scroll h1{font-size:18px;font-weight:700;letter-spacing:-.015em}
+  .psub{font-size:12px;color:var(--muted-foreground);margin-top:4px;margin-bottom:16px;max-width:460px;line-height:1.5}
+  /* Une carte par mode — la structure rend les sections visibles */
+  .msec{border:1px solid var(--border);border-radius:14px;background:var(--muted);
+    padding:0 16px 6px;margin:14px 0}
+  .msec-head{display:flex;align-items:center;gap:11px;padding:12px 0 10px;border-bottom:1px solid var(--border)}
+  .msec-ico{flex:none;width:30px;height:30px;border-radius:9px;background:var(--card);color:var(--hermes);
+    border:1px solid oklch(0.63 0.17 42 / 0.28);display:flex;align-items:center;justify-content:center}
+  .msec-title{font-size:14px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+  .msec-sub{font-size:11px;color:var(--muted-foreground);margin-top:1px;line-height:1.35}
+  .mlab{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-foreground);
+    margin:13px 0 7px}
+  .msec .vgrid{background:var(--card);margin:2px 0 12px}
+  .msec .pcard{background:var(--card);margin-bottom:8px}
+  .msec .pcard:last-child{margin-bottom:2px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:11px 0;
+    border-bottom:1px solid var(--border)}
+  .rt{min-width:0;flex:1;max-width:360px}
+  .rt .lbl{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .rt .desc{font-size:11.5px;color:var(--muted-foreground);line-height:1.45;margin-top:2px}
+  .rc{flex:none;display:flex;align-items:center;gap:8px}
+  .roval{font-size:12px;font-weight:600;white-space:nowrap}
+  .tip{position:relative;display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;
+    border:1px solid var(--border);color:var(--muted-foreground);font-size:9.5px;font-weight:700;cursor:help;flex:none}
+  .tip-pop{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-55%);width:max-content;max-width:240px;
+    background:var(--foreground);color:var(--background);font-size:10.5px;font-weight:400;line-height:1.5;
+    padding:7px 10px;border-radius:9px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:60;
+    box-shadow:0 8px 22px oklch(0.19 0.004 60 / 0.22)}
+  .tip:hover .tip-pop,.tip:focus-visible .tip-pop{opacity:1}
+  .sel-wrap{position:relative}
+  .sel-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--card);
+    border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer;min-width:170px;
+    justify-content:space-between;transition:border-color .15s;color:var(--foreground)}
+  .sel-btn:hover{border-color:var(--hermes)}
+  .sel-btn .sv{font-weight:600}
+  .sel-btn svg{color:var(--muted-foreground)}
+  .sel-list{position:absolute;top:calc(100% + 6px);right:0;z-index:40;background:var(--card);
+    border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px oklch(0.19 0.004 60 / 0.14);
+    padding:5px;min-width:250px}
+  .sel-item{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;font:inherit;
+    font-size:12px;padding:6px 8px;border-radius:8px;cursor:pointer;text-align:left;color:var(--foreground)}
+  .sel-item:hover{background:var(--muted)}
+  .sel-item .check{flex:none;width:15px;height:15px}
+  .m-body{display:flex;flex-direction:column;line-height:1.3}
+  .m-name{font-weight:600}
+  .m-id{font-size:10.5px;color:var(--muted-foreground)}
+  .vgrid{border:1px solid var(--border);border-radius:12px;background:var(--background);
+    margin:2px 0 12px;overflow:hidden}
+  .note{display:flex;gap:8px;align-items:flex-start;font-size:11px;color:var(--muted-foreground);
+    margin-top:14px;line-height:1.5}
+  .note svg{flex:none;margin-top:1px;color:var(--muted-foreground)}
+  .note code{font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);
+    border-radius:4px;padding:0 4px}
+  @media (max-width:700px){
+    .cmp-pair{grid-template-columns:minmax(0,1fr)}
+    .set-panel{flex-direction:column;height:auto}
+    .rail{flex:none;flex-direction:row;align-items:center;overflow-x:auto;border-right:none;
+      border-bottom:1px solid var(--border);padding:10px}
+    .rail-nav{flex-direction:row}
+    .rail-top{padding:0 8px 0 0}
+    .rail-foot{display:none}
+  }
+
+  .page-foot{margin-top:30px;text-align:center;font-size:11.5px;color:var(--muted-foreground)}
+
+  /* ── Éditeur de prompts (cette planche) ─────────────── */
+  .set-panel{height:660px}
+  .pcard{border:1px solid var(--border);border-radius:12px;background:var(--background);
+    padding:12px 14px 11px;margin-bottom:10px}
+  .pcard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .pcard-title{font-size:12.5px;font-weight:700}
+  .pcard-used{font-size:10.5px;color:var(--muted-foreground);margin-top:1px}
+  .pta{width:100%;min-height:78px;resize:vertical;margin-top:9px;font-family:ui-monospace,SFMono-Regular,monospace;
+    font-size:11.5px;line-height:1.55;color:var(--foreground);background:var(--card);
+    border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+  .pta:focus{outline:none;border-color:var(--hermes)}
+  .pta::placeholder{color:var(--muted-foreground)}
+  .pfoot{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .ph{font-family:ui-monospace,monospace;font-size:10.5px;font-weight:600;background:var(--hermes-soft);
+    color:var(--hermes);border:none;border-radius:5px;padding:2px 7px;cursor:pointer}
+  .ph:hover{background:var(--hermes);color:var(--hermes-foreground)}
+  .pcount{font-size:10.5px;color:var(--muted-foreground);margin-left:auto;font-variant-numeric:tabular-nums}
+  .preset{border:1px solid var(--border);background:var(--card);font:inherit;font-size:11px;font-weight:600;
+    color:var(--muted-foreground);border-radius:8px;padding:4px 11px;cursor:pointer}
+  .preset:hover{color:var(--red);border-color:var(--red)}
+  .phint{margin-top:8px;font-size:10.5px;line-height:1.5;color:var(--muted-foreground);
+    border-left:2px solid oklch(0.63 0.17 42 / 0.4);padding-left:9px}
+  .phint b{color:var(--foreground)}
+  .crossref{font-size:11px;color:var(--muted-foreground);margin:8px 2px 0;line-height:1.5}
+  .crossref a{color:var(--hermes);font-weight:600;text-decoration:none}
+  .crossref a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>Maquette interactive — Paramètres · Modes de chat</h1>
+    <p class="sub">Hermes Web · chantier F-30. La section « Modes de chat » de Paramètres règle les réglages
+    par défaut des sept modes — comportements, modèles de chaque voix, et désormais les <b>consignes</b> :
+    ce que chaque mode ajoute à vos messages se modifie ici, avec des mots-clés remplacés au moment de l'envoi,
+    une réinitialisation par consigne et un effet dès le prochain message. Tout est cliquable pour essayer.
+    Palette et rayons officiels du projet.</p>
+    <div class="chips">
+      <span class="chip">Une <b>carte par mode</b> — réglages, voix et consignes réunis</span>
+      <span class="chip"><b>13 consignes</b> modifiables — Chat et Comparer vides par défaut</span>
+      <span class="chip">Mots-clés <b>{angle} {tours} {membres} {reprises}</b> — remplacés à l'envoi</span>
+      <span class="chip">Une modification s'applique <b>dès le prochain message</b></span>
+      <span class="chip"><b>Réinitialiser</b> par consigne — retour au texte d'origine</span>
+      <span class="chip">Limite de <b>4 000 caractères</b> par consigne</span>
+      <span class="chip">Des <b>réglages par défaut</b> — chaque conversation peut les dépasser</span>
+    </div>
+  </header>
+
+  <!-- ══════════ LA PAGE ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">A</span>
+      <h2>La page « Modes de chat » — une carte par mode</h2>
+      <p class="why">Présentation identique aux autres sections de Paramètres (maquette-parametres v5 :
+      libellé et description à gauche, réglage à droite) — mais une carte par mode, dans l'ordre du
+      sélecteur : Général, Chat, Plan, Code, Comparer, Débat, Conseil, Auto. Dans chaque carte, tout
+      le mode au même endroit : réglages, voix et modèles, puis les consignes modifiables — une par voix, avec
+      des mots-clés cliquables. Le bouton Réinitialiser n'apparaît que si le texte a été modifié.</p>
+    </div>
+    <div class="stage set-stage">
+      <div class="set-panel">
+        <nav class="rail" aria-label="Sections des paramètres">
+          <div class="rail-top">
+            <span class="logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg></span>
+            <b>Paramètres</b>
+          </div>
+          <div class="rail-nav">
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              Interface</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+              Modèles</button>
+            <button class="rn on" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+              Modes de chat</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>
+              Fournisseurs</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+              Hermes</button>
+            <button class="rn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Profils</button>
+          </div>
+          <div class="rail-foot">moteur v2.4.1</div>
+        </nav>
+        <div class="set-main">
+          <div class="set-mainhead">
+            <button class="x-btn" title="Fermer (Échap)" aria-label="Fermer les paramètres">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="set-scroll">
+            <h1>Modes de chat</h1>
+            <p class="psub">Une carte par mode, dans l'ordre du sélecteur : réglages, voix et modèles,
+            puis les consignes — ce que le mode ajoute à chaque message. Les consignes se modifient ici :
+            effet dès le prochain message, 4 000 caractères maximum, réinitialisation un par un. Une
+            conversation peut toujours changer ces réglages depuis la zone de message : c'est elle qui
+            décide du traitement du prochain message.</p>
+
+            <section class="msec">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></span>
+                <div>
+                  <div class="msec-title">Général</div>
+                  <div class="msec-sub">ce que toute nouvelle conversation utilise</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Mode des nouvelles conversations</div>
+                <div class="desc">Le mode de démarrage d'une nouvelle conversation — Chat pour parler simplement.</div>
+              </div>
+              <div class="rc">
+                <div class="sel-wrap" id="selDefMode">
+                  <button class="sel-btn" type="button"><span class="sv">Chat</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="sel-list" hidden>
+                    <button class="sel-item on" type="button" data-v="Chat"><span class="check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="m-body"><span class="m-name">Chat</span><span class="m-id">rien n'est ajouté à votre message</span></span></button>
+                    <button class="sel-item" type="button" data-v="Plan"><span class="check"></span><span class="m-body"><span class="m-name">Plan</span><span class="m-id">un plan d'étapes d'abord — rien n'est modifié</span></span></button>
+                    <button class="sel-item" type="button" data-v="Code"><span class="check"></span><span class="m-body"><span class="m-name">Code</span><span class="m-id">lire avant de changer — chaque changement prouvé</span></span></button>
+                    <button class="sel-item" type="button" data-v="Comparer"><span class="check"></span><span class="m-body"><span class="m-name">Comparer</span><span class="m-id">le même message à deux modèles</span></span></button>
+                    <button class="sel-item" type="button" data-v="Débat"><span class="check"></span><span class="m-body"><span class="m-name">Débat</span><span class="m-id">3 à 10 tours — un juge tranche</span></span></button>
+                    <button class="sel-item" type="button" data-v="Conseil"><span class="check"></span><span class="m-body"><span class="m-name">Conseil</span><span class="m-id">2 à 5 membres — le président réunit les avis</span></span></button>
+                    <button class="sel-item" type="button" data-v="Auto"><span class="check"></span><span class="m-body"><span class="m-name">Auto</span><span class="m-id">débat, plan, code, test — enchaîne sans confirmation</span></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Déroulé dans la conversation</div>
+                <div class="desc">Tours du débat, membres du conseil, étapes de l'auto s'affichent dans la conversation, au-dessus de la réponse.</div>
+              </div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Déroulé dans la conversation"></button></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles dans le déroulé</div>
+                <div class="desc">Chaque voix affiche son modèle ; désactivé, les modèles ne restent visibles que dans « qui travaille ».</div>
+              </div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Modèles dans le déroulé"></button></div>
+            </div>
+            </section>
+            <section class="msec" data-m="chat">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+                <div>
+                  <div class="msec-title">Chat</div>
+                  <div class="msec-sub">la conversation simple — rien d'ajouté par défaut</div>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Consigne du mode Chat</div>
+                    <div class="pcard-used">ajoutée à chaque message, telle quelle — optionnelle</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="chat.main" placeholder="Laisser vide — rien n'est ajouté. Écrire ici une consigne courte si besoin."></textarea>
+                <div class="pfoot">
+                  <span class="pcount">0 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+            </section>
+            <section class="msec" data-m="plan">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>
+                <div>
+                  <div class="msec-title">Plan</div>
+                  <div class="msec-sub">un plan d'étapes d'abord — rien n'est modifié avant votre accord</div>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Consigne du mode Plan</div>
+                    <div class="pcard-used">appliquée à chaque message d'une conversation en mode Plan</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="plan.main">Tu es chef de projet. Avant toute modification, propose un plan d'étapes numérotées — une seule fin par étape, jamais d'estimation de durée. Ne modifie rien tant que le plan n'est pas accepté.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">192 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+                <div class="phint">Au premier message, le moteur est aussi prié de se mettre en mode plan — s'il ne
+                sait pas, le message part quand même : cette consigne reste la garantie. Modifier ici ne change que le texte ajouté.</div>
+              </div>
+            </section>
+            <section class="msec" data-m="code">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+                <div>
+                  <div class="msec-title">Code</div>
+                  <div class="msec-sub">lire avant de changer — chaque changement est prouvé</div>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Consigne du mode Code</div>
+                    <div class="pcard-used">appliquée à chaque message d'une conversation en mode Code</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="code.main">Lis avant de changer : ouvre les fichiers concernés, ne renomme rien sans raison, prouve chaque modification par une commande et sa sortie. Jamais de « c'est fait » sans la preuve qui le montre.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">194 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+            </section>
+            <section class="msec" data-m="compare">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg></span>
+                <div>
+                  <div class="msec-title">Comparer</div>
+                  <div class="msec-sub">le même message à deux modèles, côte à côte</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles A et B</div>
+                <div class="desc">Le défaut des nouvelles conversations — chacune ajuste ensuite ses deux colonnes dans « qui travaille ».</div>
+              </div>
+              <div class="rc"><span class="roval">2 colonnes</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Voix A</span><span class="v-role">première colonne</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Voix B</span><span class="v-role">seconde colonne</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+
+              <div class="mlab">Consigne</div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Consigne commune</div>
+                    <div class="pcard-used">ajoutée aux deux colonnes si renseignée — sinon le message part tel quel</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="compare.main" placeholder="Laisser vide — le même message part vers A et B sans consigne ajoutée."></textarea>
+                <div class="pfoot">
+                  <span class="pcount">0 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+                <div class="phint">Contrairement au débat et au conseil, Comparer n'a qu'une consigne — les deux
+                colonnes reçoivent <b>exactement le même texte</b> : la différence doit venir des modèles (A/B), pas des instructions.</div>
+              </div>
+            </section>
+            <section class="msec" data-m="debate">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2Z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></span>
+                <div>
+                  <div class="msec-title">Débat</div>
+                  <div class="msec-sub">3 conseillers dialoguent, un juge tranche</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Tours par défaut</div>
+                <div class="desc">3 à 10 — le compteur s'arrête ici comme dans le menu du sélecteur.</div>
+              </div>
+              <div class="rc"><span class="step"><button type="button" id="defDebMinus" aria-label="Moins de tours">−</button><span class="val"><span id="defDebVal">3</span><small>/ 10 max</small></span><button type="button" id="defDebPlus" aria-label="Plus de tours">+</button></span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Angles des conseillers<span class="tip">?<span class="tip-pop">Sceptique cherche ce qui casse, pragmatique pèse le coût réel, innovateur cherche l'angle neuf — trois postures pour contredire sur des faits.</span></span></div>
+                <div class="desc">Trois postures fixes — le débat n'invente pas ses conseillers.</div>
+              </div>
+              <div class="rc"><span class="roval">Sceptique · Pragmatique · Innovateur</span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles des voix — débat</div>
+                <div class="desc">Un modèle par conseiller et pour le juge ; sans choix, celui de la conversation.</div>
+              </div>
+              <div class="rc"><span class="roval">3 modèles choisis · 1 sur la conversation</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Sceptique</span><span class="v-role">cherche ce qui casse</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Pragmatique</span><span class="v-role">pèse le coût réel</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Innovateur</span><span class="v-role">cherche l'angle neuf</span><button class="v-model custom" type="button" data-model="hermes-3-405b"><span class="lbl">Hermes 3 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Juge</span><span class="v-role">compare les tours, rend le verdict</span><button class="v-model" type="button" data-model=""><span class="lbl">Modèle de la conversation</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+
+              <div class="mlab">Consignes — une par voix</div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Conseiller</div>
+                    <div class="pcard-used">utilisée par chaque conseiller — Sceptique · Pragmatique · Innovateur</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="debate.conseiller">Tu es conseiller ({angle}) dans un débat de {tours} tours. Chaque tour voit ce qui a été dit avant : contredis sur des faits, jamais sur des généralités. Cite ce qui casse, ce qui tient, et à quelles conditions.</textarea>
+                <div class="pfoot">
+                  <button class="ph" type="button" data-ins="{angle}" title="Insère {angle} au curseur — remplacé à l'envoi par la posture du conseiller">{angle}</button>
+                  <button class="ph" type="button" data-ins="{tours}" title="Insère {tours} au curseur — remplacé à l'envoi par le nombre de tours du débat">{tours}</button>
+                  <span class="pcount">211 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Juge</div>
+                    <div class="pcard-used">utilisée au tour du verdict — une seule fois par débat</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="debate.juge">Tu rends le verdict après {tours} tours. Compare les arguments réellement tenus, tranche une seule position, dis ce que tu écartes et pourquoi. Une position tranchée vaut mieux qu'une synthèse tiède.</textarea>
+                <div class="pfoot">
+                  <button class="ph" type="button" data-ins="{tours}" title="Insère {tours} au curseur — remplacé à l'envoi par le nombre de tours du débat">{tours}</button>
+                  <span class="pcount">199 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+            </section>
+            <section class="msec" data-m="council">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                <div>
+                  <div class="msec-title">Conseil</div>
+                  <div class="msec-sub">membres en parallèle · lecture seule · président fusionne</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Membres par défaut</div>
+                <div class="desc">2 à 5 — anonymisés A, B, C… dans la conversation.</div>
+              </div>
+              <div class="rc"><span class="step"><button type="button" id="defCnMinus" aria-label="Moins de membres">−</button><span class="val"><span id="defCnVal">3</span><small>/ 5 max</small></span><button type="button" id="defCnPlus" aria-label="Plus de membres">+</button></span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Lecture seule<span class="tip">?<span class="tip-pop">Ce n'est pas un réglage : c'est la règle du conseil. Les membres ne peuvent rien écrire ni exécuter — seul le président rédige la réponse finale.</span></span></div>
+                <div class="desc">Les membres répondent sans pouvoir rien modifier.</div>
+              </div>
+              <div class="rc"><span class="roval" style="color:var(--hermes)">toujours en place</span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles des voix — conseil</div>
+                <div class="desc">Un modèle par membre et pour le président ; sans choix, celui de la conversation.</div>
+              </div>
+              <div class="rc"><span class="roval">2 modèles choisis · 2 sur la conversation</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Membre A</span><span class="v-role">lecture seule — ne voit pas les autres</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Membre B</span><span class="v-role">lecture seule — ne voit pas les autres</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Membre C</span><span class="v-role">lecture seule — ne voit pas les autres</span><button class="v-model" type="button" data-model=""><span class="lbl">Modèle de la conversation</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Président</span><span class="v-role">compare les avis anonymisés, fusionne</span><button class="v-model" type="button" data-model=""><span class="lbl">Modèle de la conversation</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+
+              <div class="mlab">Consignes — une par rôle</div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Membre</div>
+                    <div class="pcard-used">utilisée par chaque membre, en parallèle et sans se connaître</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="council.membre">Tu es membre d'un conseil en lecture seule : tu ne vois ni les autres membres ni leurs avis, tu ne peux rien modifier. Donne un avis autonome en points fermes, avec ce qui reste à vérifier.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">189 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Président</div>
+                    <div class="pcard-used">utilisée après la collecte anonymisée A, B, C…</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="council.president">Tu présides un conseil de {membres} voix. Les avis sont anonymisés : juge les arguments, pas les auteurs. Écarte explicitement ce qui ne tient pas, puis fusionne le reste en une réponse unique et tranchée — signée de toi seul.</textarea>
+                <div class="pfoot">
+                  <button class="ph" type="button" data-ins="{membres}" title="Insère {membres} au curseur — remplacé à l'envoi par le nombre de membres du conseil">{membres}</button>
+                  <span class="pcount">226 / 4 000</span>
+                  <button class="preset" type="button">Réinitialiser</button>
+                </div>
+                <div class="phint">Texte modifié : le texte d'origine demandait de « comparer puis fusionner » — cette
+                version ajoute « juge les arguments, pas les auteurs ». <b>Réinitialiser</b> remet le texte d'origine.</div>
+              </div>
+            </section>
+            <section class="msec" data-m="auto">
+              <div class="msec-head">
+                <span class="msec-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+                <div>
+                  <div class="msec-title">Auto</div>
+                  <div class="msec-sub">débat → plan → code → test · sans confirmation</div>
+                </div>
+              </div>
+<div class="row">
+              <div class="rt">
+                <div class="lbl">Débat préalable</div>
+                <div class="desc">Cadrage avant d'agir — désactivable pour les tâches évidentes.</div>
+              </div>
+              <div class="rc"><button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Débat préalable"></button></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Reprises après échec</div>
+                <div class="desc">0 à 3 — on corrige la vraie cause, jamais une rustine.</div>
+              </div>
+              <div class="rc"><span class="step"><button type="button" id="defAuMinus" aria-label="Moins de reprises">−</button><span class="val"><span id="defAuVal">2</span><small>/ 3 max</small></span><button type="button" id="defAuPlus" aria-label="Plus de reprises">+</button></span></div>
+            </div>
+            <div class="row">
+              <div class="rt">
+                <div class="lbl">Modèles des étapes</div>
+                <div class="desc">Un modèle par étape ; sans choix, celui de la conversation.</div>
+              </div>
+              <div class="rc"><span class="roval">4 modèles choisis</span></div>
+            </div>
+            <div class="vgrid">
+              <div class="voice-row"><span class="v-name">Débat</span><span class="v-role">cadrage préalable — 3 tours</span><button class="v-model custom" type="button" data-model="hermes-3-405b"><span class="lbl">Hermes 3 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Plan</span><span class="v-role">chef de projet — étapes</span><button class="v-model custom" type="button" data-model="hermes-4-70b"><span class="lbl">Hermes 4 70B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Code</span><span class="v-role">constructeur — applique</span><button class="v-model custom" type="button" data-model="hermes-4-405b"><span class="lbl">Hermes 4 405B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+              <div class="voice-row"><span class="v-name">Test</span><span class="v-role">testeur — prouve</span><button class="v-model custom" type="button" data-model="hermes-4-14b"><span class="lbl">Hermes 4 14B</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            </div>
+
+              <div class="mlab">Consignes — une par étape</div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Débat</div>
+                    <div class="pcard-used">étape de cadrage — si Débat préalable est activé</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="auto.debat">Cadrage express avant d'agir : ce qui fait consensus, ce qui reste ouvert, l'angle d'attaque retenu. Pas de code à ce stade.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">124 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Plan</div>
+                    <div class="pcard-used">étape de planification</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="auto.plan">Établis le plan d'exécution : étapes numérotées, critère de réussite par étape, fichiers concernés. Rien n'est modifié à ce stade.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">130 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Code</div>
+                    <div class="pcard-used">étape de modification</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="auto.code">Applique le plan, une étape à la fois : preuve par commande et sortie pour chaque modification. Ne renomme rien sans raison.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">124 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Test</div>
+                    <div class="pcard-used">étape de preuve</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="auto.test">Prouve que ça tient : rejoue les critères du plan et montre la sortie qui les valide. Tout écart devient la cause racine de la reprise.</textarea>
+                <div class="pfoot">
+                  <span class="pcount">135 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+              </div>
+              <div class="pcard">
+                <div class="pcard-head">
+                  <div>
+                    <div class="pcard-title">Reprise</div>
+                    <div class="pcard-used">après un échec prouvé — 0 à 3 fois, selon le réglage de la conversation</div>
+                  </div>
+                </div>
+                <textarea class="pta" data-key="auto.reprise">L'échec est prouvé : identifie LA cause racine — jamais la rustine au jugé — corrige à cet endroit précis, puis repasse le test. Reprises restantes : {reprises}.</textarea>
+                <div class="pfoot">
+                  <button class="ph" type="button" data-ins="{reprises}" title="Insère {reprises} au curseur — remplacé à l'envoi par le nombre de reprises restantes">{reprises}</button>
+                  <span class="pcount">161 / 4 000</span>
+                  <button class="preset" type="button" hidden>Réinitialiser</button>
+                </div>
+                <div class="phint">La vraie cause est obligatoire — jamais de rustine posée au hasard : c'est la règle du mode,
+                pas un réglage. Cette consigne encadre chaque reprise, pas la chaîne entière.</div>
+              </div>
+            </section>
+            <p class="crossref">Ces consignes agissent là où la maquette du compositeur les montre :
+            <a href="maquette-modes.html">maquette-modes.html</a> — sélecteur de modes, panneau « qui travaille », déroulé dans la conversation.</p>
+
+            <div class="note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              <span>Tous ces réglages sont enregistrés dans les réglages du moteur (clés <code>hermes.modes.…</code>) — et ne
+              concernent que les nouveaux comportements : chaque conversation garde son propre mode et ses modèles,
+              et une consigne modifiée s'applique dès le prochain message de toutes les conversations.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+<ul class="notes">
+      <li data-n="1">La page ne règle que les valeurs par défaut : le sélecteur de la zone de message et le panneau « qui travaille » restent maîtres dans chaque conversation — changer ici n'altère aucune conversation existante.</li>
+      <li data-n="2">Chaque réglage a sa place dans les réglages du moteur (<code style="font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);border-radius:4px;padding:0 4px">settings.ts</code>) — les consignes sont mémorisées ensemble (<code style="font-family:ui-monospace,monospace;font-size:10.5px;background:var(--muted);border-radius:4px;padding:0 4px">hermes.modes.prompts</code>) : sans version modifiée, le texte d'origine s'applique.</li>
+      <li data-n="3">Modifier une consigne ne crée pas de version propre à chaque conversation : une conversation garde ses voix (modèles), pas ses textes — la page Paramètres est le seul endroit où une consigne se modifie.</li>
+      <li data-n="4">Les mots-clés <b>{angle} {tours} {membres} {reprises}</b> sont remplacés au moment de l'envoi — jamais enregistrés déjà remplacés : le texte modifié reste générique et réutilisable.</li>
+      <li data-n="5">Les limites affichées sont celles du code (3–10 tours · 2–5 membres · 0–3 reprises · 4 000 caractères) : le compteur et l'éditeur s'arrêtent à la saisie, et le moteur revérifie à l'envoi.</li>
+      <li data-n="6">« Lecture seule » du conseil n'est ni un réglage ni une phrase modifiable au hasard : c'est la règle du mode — la consigne Membre le rappelle, et le moteur le fait respecter de toute façon.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════ SPEC ══════════ -->
+  <section class="scene spec">
+    <h2>Spec — l'édition des consignes, verrouillée par la maquette</h2>
+    <p class="sub">Ce que cette page fixe avant implémentation, en complément de la maquette du compositeur
+    (maquette-modes.html) — mêmes conventions FORK.md, même registre.</p>
+    <table>
+      <tr><th>Décision</th><th>Valeur retenue</th><th>Où ça vit</th></tr>
+      <tr><td>Consignes modifiables</td><td>13 consignes — chat et comparer vides par défaut ; débat et conseil dédoublées (Conseiller/Juge, Membre/Président) ; auto découpée par étape (Débat/Plan/Code/Test/Reprise)</td><td><code>modes.ts</code> (défauts) · <code>settings-panel.tsx</code> (édition)</td></tr>
+      <tr><td>Clé au registre (R5)</td><td><code>hermes.modes.prompts</code> — JSON <code>{ mode: { voix: texte } }</code> ; surcharge absente ou <code>null</code> = défaut de modes.ts</td><td><code>src/lib/settings.ts</code></td></tr>
+      <tr><td>Résolution au tour</td><td>réglage modifié d'abord, défaut sinon, mots-clés remplacés — la consigne rejoint le systemPrompt recomposé</td><td><code>modes.ts — resolvePrompt()</code> · <code>orchestrator.ts</code></td></tr>
+      <tr><td>Effectivité</td><td>le systemPrompt est recomposé à chaque envoi : une édition s'applique au prochain message de toutes les conversations, sans redémarrage ni migration</td><td><code>composeLocalSystemPrompt()</code> · <code>getConversationPrompt()</code></td></tr>
+      <tr><td>Placeholders</td><td><code>{angle}</code> <code>{tours}</code> <code>{membres}</code> <code>{reprises}</code> — remplacés au moment de l'envoi, jamais enregistrés remplacés ; une valeur inconnue reste telle quelle plutôt que de casser l'envoi</td><td><code>orchestrator.ts</code></td></tr>
+      <tr><td>Réinitialisation</td><td>un bouton par consigne, visible seulement si le texte a été modifié — remet exactement le texte d'origine (modes.ts) ; la carte est le seul indicateur — plus de pastille d'onglet</td><td><code>settings-panel.tsx</code></td></tr>
+      <tr><td>Longueur</td><td>4 000 caractères par consigne — arrêtée à la saisie et revalidée par le service</td><td><code>modes.ts</code> · <code>settings-panel.tsx</code></td></tr>
+      <tr><td>Périmètre</td><td>les consignes modifiées sont des défauts globaux — une conversation ne garde pas ses propres textes : son <code>mode_config</code> porte les voix (modèles), pas les consignes</td><td>conventions R5 · <code>conversations.mode_config</code></td></tr>
+      <tr><td>Contrat intact</td><td>modifier une consigne ne contourne pas la définition du mode : lecture seule du conseil, vraie cause de la reprise, retour en Chat d'un mode inconnu restent appliqués par le service</td><td><code>modes.ts</code> · <code>orchestrator.ts</code></td></tr>
+      <tr><td>Cohérence F-17</td><td>la consigne commune du comparer s'ajoute aux deux colonnes ; les modèles A/B restent réglés par <code>hermes.compare.models</code> et le mode_config de la conversation</td><td><code>hermes.compare.models</code> (R5)</td></tr>
+    </table>
+    <p class="files">Nouveau fichier : <code>modes.ts</code> (défauts de prompts + resolvePrompt) · cette maquette.
+    Éditions chirurgicales (R4) : <code>settings.ts</code> · <code>settings-panel.tsx</code> · <code>orchestrator.ts</code> ·
+    <code>index.ts</code> (recomposition du systemPrompt).</p>
+  </section>
+
+  <footer class="page-foot">F-30 · maquette Paramètres — à valider avant implémentation (convention design/) · palette et rayons officiels du projet</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+
+  // ── Catalogue de modèles (miroir du models.ts du service) ────────────
+  var FIL_MODEL_LABEL = "Hermes 4 405B"; // le modèle courant du fil (pilule du composer)
+  var MODELS = [
+    { id: "hermes-4-405b", label: "Hermes 4 405B", sub: "Flagship" },
+    { id: "hermes-4-70b",  label: "Hermes 4 70B",  sub: "Défaut" },
+    { id: "hermes-4-14b",  label: "Hermes 4 14B",  sub: "Léger" },
+    { id: "hermes-3-405b", label: "Hermes 3 405B", sub: "Précédent" },
+    { id: "hermes-3-8b",   label: "Hermes 3 8B",   sub: "Instantané" }
+  ];
+  var LIMIT = 4000;
+
+  function modelLabel(mid){
+    for(var i = 0; i < MODELS.length; i++) if(MODELS[i].id === mid) return MODELS[i].label;
+    return mid;
+  }
+
+  // ── Bornes : steppers des groupes Débat / Conseil / Auto (clamp, jamais de refus muet) ──
+  function wireStepper(minusId, plusId, valId, min, max){
+    var minus = document.getElementById(minusId),
+        plus  = document.getElementById(plusId),
+        val   = document.getElementById(valId),
+        v = parseInt(val.textContent, 10);
+    function render(){
+      val.textContent = v;
+      minus.disabled = v <= min;
+      plus.disabled  = v >= max;
+    }
+    minus.addEventListener("click", function(){ if(v > min){ v--; render(); } });
+    plus.addEventListener("click",  function(){ if(v < max){ v++; render(); } });
+    render();
+  }
+  wireStepper("defDebMinus", "defDebPlus", "defDebVal", 3, 10);
+  wireStepper("defCnMinus",  "defCnPlus",  "defCnVal",  2, 5);
+  wireStepper("defAuMinus",  "defAuPlus",  "defAuVal",  0, 3);
+
+  // ── Interrupteurs ────────────────────────────────────────────────────
+  document.querySelectorAll(".set-panel .switch").forEach(function(sw){
+    sw.addEventListener("click", function(){
+      var on = sw.classList.toggle("on");
+      sw.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  });
+
+  // ── Mode des nouvelles conversations — liste déroulante ──────────────
+  var CHECK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--hermes)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  (function(){
+    var wrap = document.getElementById("selDefMode");
+    if(!wrap) return;
+    var btn = wrap.querySelector(".sel-btn"), list = wrap.querySelector(".sel-list");
+    btn.addEventListener("click", function(){ list.hidden = !list.hidden; });
+    list.querySelectorAll(".sel-item").forEach(function(it){
+      it.addEventListener("click", function(){
+        list.querySelectorAll(".sel-item").forEach(function(x){
+          x.classList.remove("on"); x.querySelector(".check").innerHTML = "";
+        });
+        it.classList.add("on");
+        it.querySelector(".check").innerHTML = CHECK;
+        btn.querySelector(".sv").textContent = it.dataset.v;
+        list.hidden = true;
+      });
+    });
+  })();
+
+  // ── Modèles des voix — un choix par ligne, une liste à la fois ───────
+  function settingsModelList(current){
+    var html = '<button class="model-opt' + (!current ? " sel" : "") + '" data-model="">'
+      + '<span class="dot"></span><span class="o-lbl">Modèle de la conversation</span>'
+      + '<span class="o-sub">' + FIL_MODEL_LABEL + '</span></button>';
+    MODELS.forEach(function(mo){
+      html += '<button class="model-opt' + (current === mo.id ? " sel" : "") + '" data-model="' + mo.id + '">'
+        + '<span class="dot"></span><span class="o-lbl">' + mo.label + '</span>'
+        + '<span class="o-sub">' + mo.sub + '</span></button>';
+    });
+    return html;
+  }
+  document.querySelectorAll(".set-panel .vgrid").forEach(function(grid){
+    grid.querySelectorAll(".v-model").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var row = btn.parentElement;
+        var open = row.nextElementSibling;
+        if(open && open.classList.contains("model-list")){ open.remove(); return; }
+        grid.querySelectorAll(".model-list").forEach(function(l){ l.remove(); });
+        var div = document.createElement("div");
+        div.className = "model-list";
+        div.innerHTML = settingsModelList(btn.dataset.model || "");
+        row.after(div);
+        div.querySelectorAll(".model-opt").forEach(function(opt){
+          opt.addEventListener("click", function(){
+            var mid = opt.dataset.model || "";
+            btn.dataset.model = mid;
+            btn.querySelector(".lbl").textContent = mid ? modelLabel(mid) : "Modèle de la conversation";
+            btn.classList.toggle("custom", !!mid);
+            div.remove();
+          });
+        });
+      });
+    });
+  });
+
+  // ── Éditeur de prompts ───────────────────────────────────────────────
+  // DEFAULTS : miroir du futur modes.ts — le texte par défaut de chaque consigne.
+  // (conseil.president est volontairement édité dans la planche pour montrer l'état « modifié »)
+  var DEFAULTS = {
+    "chat.main": "",
+    "plan.main": "Tu es chef de projet. Avant toute modification, propose un plan d'étapes numérotées — une seule fin par étape, jamais d'estimation de durée. Ne modifie rien tant que le plan n'est pas accepté.",
+    "code.main": "Lis avant de changer : ouvre les fichiers concernés, ne renomme rien sans raison, prouve chaque modification par une commande et sa sortie. Jamais de « c'est fait » sans la preuve qui le montre.",
+    "debate.conseiller": "Tu es conseiller ({angle}) dans un débat de {tours} tours. Chaque tour voit ce qui a été dit avant : contredis sur des faits, jamais sur des généralités. Cite ce qui casse, ce qui tient, et à quelles conditions.",
+    "debate.juge": "Tu rends le verdict après {tours} tours. Compare les arguments réellement tenus, tranche une seule position, dis ce que tu écartes et pourquoi. Une position tranchée vaut mieux qu'une synthèse tiède.",
+    "council.membre": "Tu es membre d'un conseil en lecture seule : tu ne vois ni les autres membres ni leurs avis, tu ne peux rien modifier. Donne un avis autonome en points fermes, avec ce qui reste à vérifier.",
+    "council.president": "{membres} avis anonymisés t'ont été remis, sans attribution. Compare-les, dis ce que tu écartes et pourquoi, puis fusionne en une seule réponse qui tranche — la fusion est signée de toi seul.",
+    "auto.debat": "Cadrage express avant d'agir : ce qui fait consensus, ce qui reste ouvert, l'angle d'attaque retenu. Pas de code à ce stade.",
+    "auto.plan": "Établis le plan d'exécution : étapes numérotées, critère de réussite par étape, fichiers concernés. Rien n'est modifié à ce stade.",
+    "auto.code": "Applique le plan, une étape à la fois : preuve par commande et sortie pour chaque modification. Ne renomme rien sans raison.",
+    "auto.test": "Prouve que ça tient : rejoue les critères du plan et montre la sortie qui les valide. Tout écart devient la cause racine de la reprise.",
+    "auto.reprise": "L'échec est prouvé : identifie LA cause racine — jamais la rustine au jugé — corrige à cet endroit précis, puis repasse le test. Reprises restantes : {reprises}.",
+    "compare.main": ""
+  };
+
+  function refresh(ta){
+    var card = ta.closest(".pcard");
+    var def = DEFAULTS[ta.dataset.key];
+    var dirty = ta.value !== def;
+    card.querySelector(".preset").hidden = !dirty;
+    card.querySelector(".pcount").textContent = ta.value.length + " / " + LIMIT;
+  }
+
+  document.querySelectorAll(".pta").forEach(function(ta){
+    ta.addEventListener("input", function(){
+      if(ta.value.length > LIMIT){ ta.value = ta.value.slice(0, LIMIT); } // clamp — la saisie est ramenée
+      refresh(ta);
+    });
+    refresh(ta);
+  });
+
+  // Placeholders : insertion à l'endroit du curseur — remplacés au tour, jamais stockés interpolés
+  document.querySelectorAll(".ph").forEach(function(chip){
+    chip.addEventListener("click", function(){
+      var ta = chip.closest(".pcard").querySelector(".pta");
+      var pos = ta.selectionStart || ta.value.length;
+      ta.setRangeText(chip.dataset.ins, pos, pos, "end");
+      ta.focus();
+      if(ta.value.length > LIMIT) ta.value = ta.value.slice(0, LIMIT);
+      refresh(ta);
+    });
+  });
+
+  // Réinitialisation : remet exactement le texte par défaut de modes.ts
+  document.querySelectorAll(".preset").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var ta = btn.closest(".pcard").querySelector(".pta");
+      ta.value = DEFAULTS[ta.dataset.key];
+      refresh(ta);
+    });
+  });
+})();
+</script>
+</body>
+</html>
+

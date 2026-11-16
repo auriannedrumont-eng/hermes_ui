@@ -1,5 +1,8 @@
 // Types partagés du protocole de chat Hermes Web
 // (dupliqués côté frontend dans src/lib/chat-types.ts)
+import type { ConversationMode, ModeConfig } from "./modes";
+
+export type { ConversationMode, ModeConfig };
 
 export type Role = "user" | "assistant";
 
@@ -85,6 +88,11 @@ export interface ChatMessage {
   // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
   /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
   versions?: { group: string; index: number; count: number };
+  // ── Modes du compositeur (F-30) — déroulé + étiquette du mode ──
+  /** Étiquette du mode sur la réponse finale (« Verdict · Débat — 3 tours »). */
+  modeTag?: string;
+  /** Déroulé du tour multi-voix, affiché dans la conversation au-dessus de la réponse. */
+  modeFlow?: ModeFlowRow[];
 }
 
 // ── Artefacts : fichiers générés par l'agent, objets de première classe ──
@@ -167,6 +175,13 @@ export interface ConversationMeta {
   pinned?: boolean;
   /** Projet de rangement (null = « Sans projet »). */
   projectId?: string | null;
+  // ── Modes du compositeur (F-30) — le service fait foi, relu à chaque envoi ──
+  /** Mode de la conversation (chat par défaut — valeur inconnue retombe sur chat). */
+  mode?: ConversationMode;
+  /** Débat : tours (3–10), null = défaut du client. */
+  modeRounds?: number | null;
+  /** JSON des voix → modèles + membres/reprises/autoDebate (par conversation). */
+  modeConfig?: ModeConfig | null;
 }
 
 // ── Projets : rangement des conversations (fork) ────────────────────
@@ -211,6 +226,9 @@ export interface TurnSettings {
   maxTokens?: number;
   /** Graine de reproductibilité (entier 32 bits). */
   seed?: number;
+  // ── Mode Plan (F-30) : mise en plan demandée au moteur au premier tour —
+  // tenté une fois, refus non bloquant — la consigne écrite reste la garantie.
+  planMode?: boolean;
 }
 
 // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────
@@ -243,6 +261,20 @@ export interface CompactInfo {
   untilMessageId: string;
   summaryChars: number;
   summarizedCount: number;
+}
+
+// ── Modes du compositeur (F-30) — déroulé affiché dans la conversation ──
+
+export interface ModeFlowRow {
+  /** Identifiant stable de la ligne dans le déroulé. */
+  id: string;
+  /** Libellé affiché (« Tour 1 · Sceptique », « Membre A », « Plan »…). */
+  label: string;
+  /** Détail : rôle de la voix en cours, extrait de la réponse une fois terminée. */
+  detail: string;
+  /** Modèle court de la voix (absent = modèle de la conversation). */
+  model?: string;
+  status: "pending" | "running" | "done" | "error";
 }
 
 export interface ServerHello {

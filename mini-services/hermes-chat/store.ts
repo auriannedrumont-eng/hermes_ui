@@ -8,6 +8,9 @@ import type { ShareRow } from "./shares";
 import type { SystemPromptRow } from "./prompts";
 import type { WebSource } from "./web-search";
 import { MAX_PINNED, MAX_VERSIONS, isIdenticalReissue, restoreLabel, restoredStatus, selectPurgeable } from "./versions";
+import { resolveMode } from "./modes";
+import type { ConversationMode, ModeConfig } from "./modes";
+import type { ModeFlowRow } from "./types";
 import type {
   Artifact,
   ArtifactKind,
@@ -23,6 +26,26 @@ import type {
 const DB_PATH =
   process.env.HERMES_CHAT_DB ??
   join(import.meta.dir, "..", "..", "db", "hermes-chat.sqlite");
+
+/** mode_config stocké en JSON — charge invalide = null (jamais de plantage). */
+function parseModeConfigWire(raw: string): ModeConfig | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as ModeConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** mode_flow stocké en JSON — charge invalide = absent. */
+function parseModeFlowWire(raw: string): ModeFlowRow[] | undefined {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) && parsed.length ? (parsed as ModeFlowRow[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Ligne interne d'artefact (une par version, contenu source inclus). */
 export interface ArtifactRow {
@@ -226,6 +249,38 @@ export class Store {
     // Migration douce : colonne des conversations épinglées
     try {
       this.db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+    } catch {
+      /* colonne déjà présente */
+    }
+    // Migration douce (F-30) : mode du compositeur — chat | plan | code |
+    // compare | debate | council | auto (valeur inconnue retombe sur chat).
+    try {
+      this.db.exec("ALTER TABLE conversations ADD COLUMN mode TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
+    // Migration douce (F-30) : tours du débat (3–10), null = défaut du client.
+    try {
+      this.db.exec("ALTER TABLE conversations ADD COLUMN mode_rounds INTEGER");
+    } catch {
+      /* colonne déjà présente */
+    }
+    // Migration douce (F-30) : config du mode par conversation (JSON —
+    // voix → modèles, membres du conseil, reprises de l'auto, débat préalable).
+    try {
+      this.db.exec("ALTER TABLE conversations ADD COLUMN mode_config TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
+    // Migration douce (F-30) : étiquette du mode sur la réponse finale
+    // (« Verdict · Débat — 3 tours ») et déroulé du tour multi-voix (JSON).
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN mode_tag TEXT");
+    } catch {
+      /* colonne déjà présente */
+    }
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN mode_flow TEXT");
     } catch {
       /* colonne déjà présente */
     }
@@ -966,7 +1021,7 @@ export class Store {
   listConversations(): ConversationMeta[] {
     const rows = this.db
       .query(
-        `SELECT c.id, c.title, c.created_at, c.updated_at, c.pinned, c.project_id,
+        `SELECT c.id, c.title, c.created_at, c.updated_at, c.pinned, c.project_id, c.mode, c.mode_rounds, c.mode_config,
                 COUNT(m.id) AS message_count,
                 (SELECT content FROM messages m2 WHERE m2.conversation_id = c.id AND m2.role = 'user' ORDER BY m2.created_at DESC LIMIT 1) AS preview
          FROM conversations c
@@ -984,19 +1039,37 @@ export class Store {
       preview: (r.preview ?? "").slice(0, 90),
       pinned: !!r.pinned,
       projectId: r.project_id ?? null,
+      mode: (r.mode as ConversationMeta["mode"]) ?? "chat",
+      modeRounds: r.mode_rounds ?? null,
+      modeConfig: r.mode_config ? parseModeConfigWire(r.mode_config) : null,
     }));
   }
 
-  createConversation(title: string, projectId?: string | null): ConversationMeta {
+  createConversation(
+    title: string,
+    projectId?: string | null,
+    mode?: ConversationMode,
+    modeRounds?: number | null,
+    modeConfig?: ModeConfig | null,
+  ): ConversationMeta {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     // Le projet n'est appliqué que s'il existe réellement
     const project = projectId ? this.getProject(projectId) : null;
     this.db
       .query(
-        "INSERT INTO conversations (id, title, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO conversations (id, title, created_at, updated_at, project_id, mode, mode_rounds, mode_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(id, title, now, now, project ? project.id : null);
+      .run(
+        id,
+        title,
+        now,
+        now,
+        project ? project.id : null,
+        mode ?? null,
+        modeRounds ?? null,
+        modeConfig && Object.keys(modeConfig).length ? JSON.stringify(modeConfig) : null,
+      );
     return {
       id,
       title,
@@ -1005,6 +1078,9 @@ export class Store {
       messageCount: 0,
       preview: "",
       projectId: project ? project.id : null,
+      mode: mode ?? "chat",
+      modeRounds: modeRounds ?? null,
+      modeConfig: modeConfig ?? null,
     };
   }
 
@@ -1025,7 +1101,7 @@ export class Store {
   getConversation(id: string): ConversationMeta | null {
     const r = this.db
       .query(
-        "SELECT id, title, created_at, updated_at, pinned, project_id FROM conversations WHERE id = ?"
+        "SELECT id, title, created_at, updated_at, pinned, project_id, mode, mode_rounds, mode_config FROM conversations WHERE id = ?"
       )
       .get(id) as any;
     if (!r) return null;
@@ -1043,7 +1119,52 @@ export class Store {
       preview: "",
       pinned: !!(r as any).pinned,
       projectId: (r as any).project_id ?? null,
+      mode: (r.mode as ConversationMeta["mode"]) ?? "chat",
+      modeRounds: r.mode_rounds ?? null,
+      modeConfig: r.mode_config ? parseModeConfigWire(r.mode_config) : null,
     };
+  }
+
+  // ── Modes du compositeur (F-30) — le service fait foi, relu à chaque envoi ──
+
+  /** État du mode d'une conversation : mode résolu (inconnu → chat) + config. */
+  getConversationModeState(conversationId: string): {
+    mode: ConversationMode;
+    rounds: number | null;
+    config: ModeConfig | null;
+  } {
+    const r = this.db
+      .query("SELECT mode, mode_rounds, mode_config FROM conversations WHERE id = ?")
+      .get(conversationId) as any;
+    return {
+      mode: resolveMode(r?.mode ?? "chat"),
+      rounds: typeof r?.mode_rounds === "number" ? r.mode_rounds : null,
+      config: r?.mode_config ? parseModeConfigWire(r.mode_config) : null,
+    };
+  }
+
+  /** Change le mode d'une conversation (valeurs bornées en amont par
+    * normalizeModeConfig) et renvoie la conversation à jour. */
+  setConversationMode(
+    id: string,
+    mode: ConversationMode,
+    rounds: number | null,
+    config: ModeConfig | null,
+  ): ConversationMeta | null {
+    const conv = this.getConversation(id);
+    if (!conv) return null;
+    this.db
+      .query(
+        "UPDATE conversations SET mode = ?, mode_rounds = ?, mode_config = ?, updated_at = ? WHERE id = ?"
+      )
+      .run(
+        mode,
+        rounds ?? null,
+        config && Object.keys(config).length ? JSON.stringify(config) : null,
+        new Date().toISOString(),
+        id,
+      );
+    return this.getConversation(id);
   }
 
   /** Épingle / détache une conversation (remonte en haut de la liste). */
@@ -1105,6 +1226,8 @@ export class Store {
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
       variant: (r.variant as "a" | "b" | null) ?? undefined,
+      modeTag: r.mode_tag ?? undefined,
+      modeFlow: r.mode_flow ? parseModeFlowWire(r.mode_flow) : undefined,
       usage:
         r.usage_input != null || r.usage_output != null || r.usage_cost != null
           ? {
@@ -1131,7 +1254,7 @@ export class Store {
     const createdAt = msg.createdAt ?? new Date().toISOString();
     this.db
       .query(
-        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active, usage_input, usage_output, usage_cost, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, role, content, reasoning, tool_events, attachments, model, created_at, stopped, variant, version_group, version_index, version_active, usage_input, usage_output, usage_cost, sources, mode_tag, mode_flow) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         id,
@@ -1151,7 +1274,11 @@ export class Store {
         msg.usage?.input ?? null,
         msg.usage?.output ?? null,
         msg.usage?.cost ?? null,
-        msg.sources ? JSON.stringify(msg.sources) : null
+        msg.sources ? JSON.stringify(msg.sources) : null,
+        (msg as { modeTag?: string }).modeTag ?? null,
+        (msg as { modeFlow?: ModeFlowRow[] }).modeFlow?.length
+          ? JSON.stringify((msg as { modeFlow?: ModeFlowRow[] }).modeFlow)
+          : null
       );
     return { ...msg, id, createdAt } as ChatMessage;
   }
@@ -1258,6 +1385,8 @@ export class Store {
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
       variant: (r.variant as "a" | "b" | null) ?? undefined,
+      modeTag: r.mode_tag ?? undefined,
+      modeFlow: r.mode_flow ? parseModeFlowWire(r.mode_flow) : undefined,
       usage:
         r.usage_input != null || r.usage_output != null || r.usage_cost != null
           ? {
@@ -1380,7 +1509,10 @@ export class Store {
       : messages;
     const forked = this.createConversation(
       `${src.title.slice(0, 60)} (branche)`.slice(0, 120),
-      src.projectId // la branche reste dans le même projet
+      src.projectId, // la branche reste dans le même projet
+      src.mode, // F-30 : la branche hérite du mode de la conversation d'origine
+      src.modeRounds ?? null,
+      src.modeConfig ?? null,
     );
     // Mapping ancien id -> nouvel id pour re-ancrer les artefacts du fork
     const messageIdMap = new Map<string, string>();
@@ -1396,6 +1528,8 @@ export class Store {
         createdAt: m.createdAt,
         stopped: m.stopped,
         variant: m.variant,
+        modeTag: m.modeTag,
+        modeFlow: m.modeFlow,
       });
       messageIdMap.set(m.id, copy.id);
     }

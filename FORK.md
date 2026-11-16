@@ -693,6 +693,99 @@ affiche la page RENDUE (`/view`), encart terminal déplié avec les 4 lignes
 horodatées ; captures `download/qa-f28/`. `bunx tsc --noEmit` 0 erreur ;
 `bun run build` vert ; eslint propre sur les fichiers touchés.
 
+### 7.14 Fait — Modes du compositeur (F-30)
+
+Maquettes validées par l'utilisatrice avant implémentation (convention
+`design/`) : `maquette-modes.html` (sélecteur, « qui travaille », déroulés)
+et `maquette-parametres-modes.html` (section Paramètres, 13 consignes).
+Sept modes : **chat · plan · code · comparer · débat · conseil · auto** —
+« Comparer » (F-17) devient un mode du sélecteur, l'ancienne bascule quitte
+la zone de message, plus de règle d'exclusion spéciale : un seul mode actif
+à la fois. La pastille de mode est le premier contrôle du pied du composer :
+un seul endroit décide du traitement du prochain message.
+
+**Côté service — le service fait foi.** Nouveau `modes.ts` : référentiel
+(`resolveMode` : valeur inconnue → chat, au chargement comme à l'envoi),
+bornes affichées et revalidées (débat 3–10 tours, conseil 2–5 membres, auto
+0–3 reprises), voix des modes multi-acteurs, les 13 consignes par défaut
+(`chat/plan/code.main`, `debate.conseiller/juge`, `council.membre/president`,
+`auto.debat/plan/code/test/reprise`, `compare.main`) avec interpolation des
+mots-clés `{angle} {tours} {membres} {reprises}` AU TOUR — jamais enregistrés
+remplacés. Les surcharges vivent dans la table settings (clé
+`hermes.modes.prompts`, JSON `{mode:{voix:texte}}`) et sont relues à chaque
+envoi : une édition s'applique au prochain message de toutes les
+conversations, sans redémarrage. Persistance additive (R2, migration douce) :
+`conversations.mode` + `mode_rounds` + `mode_config` (JSON voix → modèles +
+membres/reprises/autoDebate, par conversation), `messages.mode_tag` +
+`mode_flow` ; le fork hérite du mode. Socket : `conversations:setMode`
+(résolu + borné côté service, ack `{ok, conversation}`) + diffusion
+`conversations:mode` (toutes les fenêtres suivent) ; `conversations:create`
+accepte `mode`/`modeConfig`. `runAssistantTurn` RELIT le mode à chaque envoi :
+`compare` → re-split en deux variantes a/b avec les modèles des voix A/B
+(mécanisme F-17 inchangé, l'écran n'envoie plus de paire) ; `debate`,
+`council`, `auto` → orchestrateur ; `plan`/`code`/`chat` → consigne ajoutée
+au systemPrompt recomposé (local ET gateway), `plan_mode:true` tenté au
+premier tour en gateway (refus non bloquant — la consigne reste la garantie).
+
+**Orchestrateur** (`orchestrator.ts`, nouveau) — une seule réponse conservée
+(verdict / fusion / bilan), le déroulé vit dans la conversation : débat
+séquentiel (les conseillers se répondent tour après tour, contredisent sur
+des faits, le juge streame le verdict), conseil (membres EN PARALLÈLE, sans
+se voir, lecture seule — règle du mode rappelée à chaque membre, avis
+anonymisés A/B/C…, le président streame la fusion), auto (débat facultatif →
+plan → code → test ; échec prouvé = réponse débutant par ÉCHEC/FAIL → reprise
+qui corrige LA cause racine puis re-test, jusqu'au quota ; le bilan = code +
+preuve). Chaque voix porte le modèle choisi dans « qui travaille »
+(`mode_config.voices`), sans choix = modèle de la conversation. Déroulé
+poussé en direct (`mode:flow`, rows : label/détail/extrait/modèle/statut)
+puis persisté avec la réponse (`mode_flow` + `mode_tag`) — visible au
+rechargement. Un échec de voix est honnête (ligne « échec », la fusion
+continue avec les avis reçus). `runVoiceTurn` est injecté : la QA orchestre
+sans LLM.
+
+**Côté client.** `src/lib/modes.ts` (miroir d'affichage : libellés simples,
+voix, bornes, defaults des voix) + registre R5
+(`hermes.modes.defaultMode/debateRounds/councilMembers/autoRetries/autoDebate/
+showFlow/showModels/voices` — défauts des NOUVELLES conversations, chaque
+conversation garde le sien). `mode-picker.tsx` (nouveau) : pastille allumée
+hors chat (« Débat · 3 tours », « Conseil · 3 membres », « Auto · 2
+reprises », « Comparer · 2 modèles »), popover à 7 modes, bornes en steppers
+arrêtés à la saisie, panneau « qui travaille » (une voix par acteur, son
+modèle ou « Modèle de la conversation ») ; le choix avant la première
+conversation est appliqué à la création. Composer : pastille en tête du
+groupe de gauche, bascule Comparer retirée. `message-bubble` rend le
+déroulé + l'étiquette (« ★ Verdict · Débat — 3 tours ») au-dessus de la
+réponse conservée ; chip « Comparer » au-dessus des paires en mode compare ;
+réglages `hermes.modes.showFlow/showModels` respectés. Paramètres : rail à
+10 sections, nouvelle section « Modes de chat » (`modes-section.tsx`) —
+une carte par mode dans l'ordre du sélecteur (séparation visuelle forte,
+libellés directs sans jargon), steppers des défauts, voix et modèles, et
+les 13 consignes éditables (compteur /4 000 arrêté à la saisie,
+Réinitialiser un par un visible si modifié, chips de mots-clés) —
+enregistrées côté service au fil de la frappe.
+
+QA : `scripts/test-modes-flow.ts` **70/70 verts** — A. unitaires sans LLM
+(`resolveMode` inconnu → chat, bornes clampées jamais refusées,
+interpolation + valeur inconnue intacte, 13 consignes, surcharge >
+4 000 rejetée à la résolution, voix par mode, orchestrateur sur FAUX moteur :
+débat 3×3 + verdict avec tours qui se répondent et consigne `{angle}/{tours}`
+remplacée, conseil parallèle (temps < 2 tours séquentiels) + avis anonymisés
++ règle lecture seule, auto 1 débat + 1 plan + 1 code + 3 tests + 2 reprises
+avec `{reprises}` restant, bilan = code + preuve, `testFailed`, store :
+persistance mode/config/déroulé, fork hérite, mode inconnu en base → chat) ;
+B. service réel (ports dédiés + base jetable) : `conversations:create` avec
+mode (inconnu → chat, bornes appliquées), `conversations:setMode` (ack +
+bornes + diffusion `conversations:mode`), consigne serveur enregistrée avec
+mots-clés non interpolés. QA navigateur sur la pile complète (Next :3000 +
+service :3003 + `qa-proxy.ts` :8181) : popover 7 modes, sélection Conseil →
+pastille « Conseil · N membres » + panneau « qui travaille », tour conseil
+RÉEL via `fake-gateway.ts` → déroulé en direct (Membre A terminé, Membre B
+échec honnête, Président fusion), réponse unique « ★ Fusion · Conseil —
+2 membres », persistance au rechargement, section Paramètres « Modes de
+chat » complète (édition + Réinitialiser vérifiés en base), mobile 390 px.
+`bunx tsc --noEmit` 0 erreur ; `bun run build` vert ; eslint : aucune
+remontée nouvelle (les 2 `set-state-in-effect` préexistantes demeurent).
+
 ## 8. Dettes techniques et pièges
 
 - ~~`prisma/schema.prisma` et les scripts `db:*`~~ **retirés le 2026-11-14 (v2.4)** :
@@ -820,3 +913,4 @@ horodatées ; captures `download/qa-f28/`. `bunx tsc --noEmit` 0 erreur ;
 | 2026-11-16 (46) | **Mise à jour : flux visible en direct — « ça serait bien d'avoir une sorte de stream »** (retour : « j'ai l'impression que la mise à jour de l'interface n'a pas fonctionné »). Diagnostic : le chantier (44) déposait un drapeau et l'interface restait aveugle ensuite — ET le lanceur qui tourne exécute la version chargée à son démarrage : si le processus date d'avant le correctif, le drapeau n'est jamais ramassé et RIEN ne se passe, sans un mot. (a) **Journal du lanceur** (`desktop/runtime/maj.log` — .ps1 et .sh) : `Write-MajLog`/`maj_log` (actifs seulement quand une demande interface est en cours — les démarrages ordinaires ne polluent pas) raconte chaque étape horodatée : MAJ DEBUT, arrêt des services, consultation de GitHub, déjà à jour / appliquée N fichiers / sauvegarde+alignement / GitHub injoignable, reconstruction, relance, et marqueurs terminaux **« MAJ OK - pile relancee… »** / **« MAJ ERREUR - … »** (Die y passe aussi — port épuisé, échec d'installation). (b) **Mini-service** : `system:update-request` démarre le journal (ligne d'attente horodatée, page blanche à chaque demande) ; nouveau handler `system:update-log` (lecture, plafond 64 Ko) + relais en direct `system:update-log:changed` (sondage 2 s, diffusion seulement sur changement — le lanceur écrit le fichier, jamais le service). (c) **Interface** (`system-section.tsx`) : la carte gagne une **console live** (mono, défilement collé en bas) — verdict « Mise à jour terminée » en vert avec bouton **« Recharger la page »** (plus de F5 à deviner), « Échec » en rouge avec renvoi au lanceur, « reconnexion en cours » pendant la coupure (le lanceur arrête ce service pour le relancer — reprise sur socket connect), et après 45 s sans étape nouvelle le message franc « le lanceur ne réagit pas — il date probablement d'avant cette fonction, relancez le .bat une fois puis redemandez » ; reprise au montage (un F5 pendant la mise à jour ne perd pas la console). (d) **README desktop** : section mise à jour réécrite autour de la console. **QA** : `scripts/probe-maj-stream.ts` **7/7 sur service réel** (ack+drapeau+journal démarré, relecture, relais d'une étape en <2 s, verdict MAJ OK) ; bunx tsc --noEmit 0 erreur ; bash -n OK ; équilibre {} () [] du .ps1 vérifié hors chaînes/commentaires (pas de PowerShell au sandbox, même limite qu'aux chantiers 37/39) ; QA webchat SUCCÈS ; eslint — la seule remontée (`react-hooks/set-state-in-effect`, sonde renderCache) existe déjà au commit précédent. **À confirmer chez vous** : bouton « Mettre à jour » avec la fenêtre du lanceur ouverte — le déroulé doit s'afficher ligne à ligne jusqu'à « Mise à jour terminée » ; et si le lanceur est muet, le message d'incompatibilité apparaît au bout de 45 s. |
 | 2026-11-16 (47) | **Paramètres v2.6 — passe d'épuration + ajout unifié « nom ou adresse »** (demandes : « refais une passe » ; « que l'ajout de tools ou de services, mcp, skills, soit moins chiant : soit taper un nom, soit donner une url et le moteur va chercher et installer tout seul le service. si besoin d'une clé api, je l'ajoute une fois le service installé et visible dans la page de parametre » ; « retire des listes les services que je n'aurais pas encore installé moi même (à part les fournisseurs de modeles ia) »). (a) **Rail à 9 sections** : Outils + Extensions + Skills fusionnées en « Outils & extensions » (`outils-extensions-section.tsx` nouveau ; `tools-section.tsx` et `skills-section.tsx` supprimés ; `extensions-section.tsx` réduit à la carte `ExtensionRow` exportée) — plus de navigation entre trois vues qui parlaient des mêmes choses. (b) **Ajout unifié** : événement socket `registry:install` (service) — une entrée libre est résolue dans l'ordre : dépôt GitHub (URL / owner/repo / git@) → extension `repo` résolue réellement (fetchRepoSnapshot) ; adresse https OU commande de lancement (npx/uvx/bunx/node/python/docker) → serveur MCP ; nom connu du catalogue → fournisseur créé avec le kind du catalogue (service → fiche « Clés de services », llm → « Fournisseurs »), doublon = message qui renvoie à la fiche existante ; le reste = erreur explicite. La clé API n'est jamais demandée à l'installation — elle s'ajoute sur la fiche. Côté client : `installAnything` (use-providers) + composant `AddAnything` (champ unique + hint court, toasts qui disent où la fiche est apparue), posé en tête de la section fusionnée (toujours visible, zéro clic) ET dans « Clés de services » (le catalogue déroulant Tavily/Exa/FAL/xAI de l'ancien panneau d'ajout service disparaît — c'était la liste de services non installés) ; « Fournisseurs » garde son sélecteur (catalogue de modèles IA exempté par la demande). (c) **Listes épurées de ce qui n'existe pas** : les 6 lignes d'outils verrouillés « gateway » (navigateur, X, images, vidéo, terminal, fichiers) sortent de la liste — ne restent que les trois outils réellement livrés ; blocs « à venir » retirés (Hermes : fichiers .md moteur / comportement moteur ; Modèles : note modèle d'arrière-plan), lignes Skills réduites à un état vide honnête d'une ligne. (d) **Dédoublonnage et langue** : statut moteur affiché en pied de volet SEULEMENT (le double du rail tombe, la version du service reste) ; libellés « Endpoint » → « Adresse » partout dans l'UI (toasts inclus) ; Chats web : descriptions de fiches courtes (« Prêt » / « Pas encore prêt »), réglages des pilotes repliés derrière « Réglages avancés » (idiome ProviderCard), paragraphe CDP/--user-data-dir remplacé par une ligne de réassurance ; Profils : note « bus de réglages » tombée (le flash le dit déjà) ; Modèles : descriptions et états vides raccourcis. **QA** : `bunx tsc --noEmit` 0 erreur, `bun run build` vert ; `scripts/probe-registry-install.ts` **8/8 sur service réel** (tavily→service, openrouter→llm, doublon→« déjà configuré », octocat/Hello-World→repo résolu (branche+tête), https→MCP, npx→MCP, inconnu→erreur, nettoyage base vérifié) ; pile complète au navigateur (Next :3000 + service :3003 + Caddy :81 — le socket passe par le proxy XTransformPort, sans Caddy la page reste muette) : rail 9 sections, champ unifié rendu, install « tavily » depuis « Clés de services » → carte « Tavily · 0 clé » apparue en direct puis retirée (base propre), captures des sections refondues. |
 | 2026-11-16 (48) | **Artefacts : ouvrir dans un onglet + terminal du tour** (demandes : « pour apercu des artefacts, je veux une icone pour ouvrir l'artefact dans un nouvel onglet » ; « dans le panneau des artefact, j'aimerais un encart en bas avec le terminal dont se sert le llm » ; cadre « ui épurée, intuitive, moins de clics possibles, pas de redondances »). **Décision structurante : le HTML s'ouvre rendu derrière un bac à sable CSP** — route `GET /artifacts/<id>/view` (`text/html` + `Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups allow-modals`, origine opaque : ni cookies ni stockage ni jetons accessibles) plutôt que d'ouvrir la vignette PNG : c'est le seul choix qui donne un vrai artefact exploitable dans l'onglet sans toucher aux garde-fous XSS existants (`/raw` et `/download` restent texte brut — la règle « jamais servi comme text/html » vaut désormais pour les origines app, pas pour une origine opaque). Champ `viewUrl` (html seul) dans le payload wire + types miroir ; `openArtifactInTab()` (viewUrl sinon rawUrl). Deux icônes `ExternalLink` : la carte (l'ancien bouton « Ouvrir » qui rouvrait le panneau — doublon du clic carte — devient l'action nouvelle) et l'en-tête panneau/visionneuse mobile (désactivée hors `ready`). **Terminal du tour** (`artifact-terminal.tsx`, composant unique panneau + visionneuse) : l'activité outil du message qui porte l'artefact — stream vivant d'abord (`streams[messageId]`), événements persistés ensuite (`message.toolEvents`) ; barre fine repliée (point pulsant si vivant, « N étapes » sinon), console sombre heure/statut/nom/détail collée en bas, s'ouvre seule quand le tour vit (repli manuel respecté, rien ne bouge à la clôture), **absente sans données** — pas d'encart mort ; clé = messageId (reset par tour) ; `resolveTurnTools` fourni par la page ; ouverture auto portée par le pattern « état dérivé pendant le rendu » (la règle `set-state-in-effect` interdit l'effet — idiome déjà utilisé par le panneau). QA : `scripts/probe-artifact-view.ts` **16/16** (service réel ports dédiés + base jetable) ; pile complète navigateur via `scripts/qa-proxy.ts` (nouveau, remplace Caddy en sandbox — XTransformPort + tunnel TCP des WebSockets ; **tourne sous node** : l'`upgrade` node:http de Bun ne pipe pas) + `qa-seed-view.ts` : carte → panneau → onglet rendu → terminal déplié (4 lignes horodatées) ; captures `download/qa-f28/` ; tsc 0 erreur, build vert, eslint propre. |
+| 2026-11-17 (49) | **F-30 livré — Modes du compositeur** (maquettes validées par l'utilisatrice avant implémentation, convention `design/` : `maquette-modes.html` + `maquette-parametres-modes.html` ; demandes cumulées : explications simples, zéro badge, Comparer avant Débat, sections Paramètres bien séparées, textes user friendly « pas langage machine »). **Sept modes : chat · plan · code · comparer · débat · conseil · auto** — Comparer (F-17) devient le 4ᵉ mode du sélecteur, la bascule quitte le composer, plus d'exclusion spéciale : un seul mode actif à la fois ; la pastille est le premier contrôle du pied, elle seule décide du traitement du prochain message. **Service fait foi** : nouveau `mini-services/hermes-chat/modes.ts` (résolution `inconnu → chat`, bornes 3–10 tours / 2–5 membres / 0–3 reprises clampées à la saisie ET revalidées, 13 consignes par défaut + surcharges en table settings `hermes.modes.prompts` relues À CHAQUE ENVOI, mots-clés `{angle} {tours} {membres} {reprises}` interpolés au tour jamais en base) ; store : colonnes additives `conversations.mode/mode_rounds/mode_config` + `messages.mode_tag/mode_flow`, fork hérite du mode ; socket `conversations:setMode` (résolu + borné + ack) + diffusion `conversations:mode`, `conversations:create` accepte le mode ; `runAssistantTurn` relit le mode à chaque envoi — compare → re-split variantes a/b via les voix (l'écran n'envoie plus de paire), débat/conseil/auto → orchestrateur, plan/code/chat → consigne dans le systemPrompt recomposé (local ET gateway) + `plan_mode:true` tenté au premier tour (refus non bloquant). **Orchestrateur** (`orchestrator.ts`, `runVoiceTurn` injecté pour la QA) : débat séquentiel qui se répond + juge streamé, conseil parallèle lecture seule avis anonymisés A/B/C + président streamé, auto débat facultatif → plan → code → test avec reprises sur échec prouvé (tête ÉCHEC/FAIL) — une seule réponse conservée, le déroulé (`mode:flow` en direct puis `mode_flow` persisté) vit dans la conversation au-dessus de la réponse, modèles par voix (`mode_config.voices`) sinon modèle de la conversation, échec de voix honnête sans casser la fusion. **Client** : `src/lib/modes.ts` miroir d'affichage, registre R5 `hermes.modes.*` (défauts des nouvelles conversations), `mode-picker.tsx` (pastille allumée hors chat + popover 7 modes + steppers + « qui travaille »), composer épuré (bascule Comparer retirée), `mode-flow.tsx` (encart déroulé + étiquette ★), bubble/liste rendent déroulé persisté au rechargement, chip « Comparer » sur les paires, Paramètres rail 10 sections + `modes-section.tsx` (une carte par mode, 13 éditeurs de consignes compteur/Réinitialiser/chips, voix et modèles) — textes simples partout, zéro badge, zéro jargon. **QA** : `scripts/test-modes-flow.ts` **70/70** (unitaires sans LLM sur faux moteur : ordre des tours, parallélisme, anonymisation, reprises, interpolation, bornes, store, fork ; service réel ports dédiés : création avec mode, setMode + diffusion, consigne serveur) ; navigateur pile complète (qa-proxy :8181 + `fake-gateway.ts` :9120) : popover, tour conseil réel avec déroulé vivant et « ★ Fusion · Conseil — 2 membres », section Paramètres vérifiée en base (édition + réinitialisation), mobile 390 px ; tsc 0 erreur, build vert, eslint sans remontée nouvelle ; conversations QA nettoyées de la base de dev. |

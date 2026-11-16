@@ -184,6 +184,88 @@ export const HERMES_SETTINGS: SettingDef[] = [
     scope: "client",
     category: "Agent Hermes",
   },
+  // ── Modes du compositeur (F-30) — réglages PAR DÉFAUT, applicables aux
+  // nouvelles conversations ; chaque conversation garde son propre mode et
+  // ses modèles (conversations.mode côté service). La consigne éditable des
+  // modes vit CÔTÉ SERVICE (clé hermes.modes.prompts de la table settings —
+  // lisons par settings:get/set dans la section « Modes de chat »).
+  {
+    key: "hermes.modes.defaultMode",
+    type: "enum",
+    options: ["chat", "plan", "code", "compare", "debate", "council", "auto"],
+    default: "chat",
+    label: "Mode des nouvelles conversations",
+    description:
+      "Le mode de démarrage d'une nouvelle conversation — Chat pour parler simplement.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.debateRounds",
+    type: "number",
+    default: 3,
+    label: "Tours du débat",
+    description: "3 à 10 — le compteur s'arrête ici comme dans le menu du sélecteur.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.councilMembers",
+    type: "number",
+    default: 3,
+    label: "Membres du conseil",
+    description: "2 à 5 — anonymisés A, B, C… dans la conversation.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.autoRetries",
+    type: "number",
+    default: 2,
+    label: "Reprises de l'auto",
+    description: "0 à 3 — en cas d'échec, on corrige la vraie cause, jamais une rustine.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.autoDebate",
+    type: "boolean",
+    default: true,
+    label: "Débat préalable de l'auto",
+    description: "Cadrage avant d'agir — désactivable pour les tâches évidentes.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.showFlow",
+    type: "boolean",
+    default: true,
+    label: "Déroulé dans la conversation",
+    description:
+      "Tours du débat, membres du conseil, étapes de l'auto s'affichent dans la conversation, au-dessus de la réponse.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.showModels",
+    type: "boolean",
+    default: true,
+    label: "Modèles dans le déroulé",
+    description:
+      "Chaque voix affiche son modèle ; désactivé, les modèles ne restent visibles que dans « qui travaille ».",
+    scope: "client",
+    category: "Agent Hermes",
+  },
+  {
+    key: "hermes.modes.voices",
+    type: "string",
+    default: "{}",
+    label: "Modèles par défaut des voix",
+    description:
+      "Un modèle par voix (conseillers, membres, étapes, colonnes A/B) — JSON ; interne, édité dans la section Modes de chat.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
 ];
 
 // ── Réglages propres au fork ───────────────────────────────────────────

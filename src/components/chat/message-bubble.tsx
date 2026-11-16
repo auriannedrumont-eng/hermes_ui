@@ -35,12 +35,13 @@ import { HermesAvatar } from "@/components/chat/hermes-logo";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AttachmentsList } from "@/components/chat/attachments";
 import { ArtifactCard } from "@/components/chat/artifact-card";
+import { ModeFlowCard, ModeTag, modeFromTag, modeFlowSummary } from "@/components/chat/mode-flow";
 import { stripArtifactBlocks, downloadArtifactZip } from "@/lib/artifact-utils";
 import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import { estimateTokens } from "@/lib/tokens";
 import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
 import { useModelPricing } from "@/hooks/use-pricing";
-import type { Artifact, ChatMessage, ToolEvent, WebSource } from "@/lib/chat-types";
+import type { Artifact, ChatMessage, ModeFlowRow, ToolEvent, WebSource } from "@/lib/chat-types";
 
 function ToolEventRow({ event }: { event: ToolEvent }) {
   return (
@@ -367,6 +368,11 @@ interface MessageBubbleProps {
   onRetryArtifact?: (artifactId: string) => void;
   /** F-14 — navigation entre les versions d'une réponse (‹ n/m ›). */
   onSetVersion?: (message: ChatMessage, index: number) => void;
+  /** F-30 — déroulé du tour multi-voix + étiquette du mode (persistés). */
+  modeTag?: string;
+  modeFlow?: ModeFlowRow[];
+  /** F-30 — les modèles dans le déroulé (hermes.modes.showModels). */
+  showFlowModels?: boolean;
 }
 
 export function MessageBubble({
@@ -387,6 +393,9 @@ export function MessageBubble({
   onOpenArtifact,
   onRetryArtifact,
   onSetVersion,
+  modeTag,
+  modeFlow,
+  showFlowModels = true,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -565,10 +574,22 @@ export function MessageBubble({
   const cards = artifactCards ?? [];
   const waitingFirstToken =
     isStreaming && !content && !reasoning && tools.length === 0 && cards.length === 0;
+  // F-30 — déroulé + étiquette du mode : l'encart vivant (props) prime, la
+  // réponse persistée porte le sien (message.mode_flow) au rechargement.
+  const flowTag = modeTag ?? message.modeTag;
+  const flowRows = modeFlow ?? message.modeFlow;
 
   // Réponse devenue invisible (bloc artefact retiré du flux) et sans carte
-  // ancrée ici : pas de bulle vide dans la conversation.
-  if (!isStreaming && !content && !reasoning && tools.length === 0 && cards.length === 0) {
+  // ancrée ici : pas de bulle vide dans la conversation. Le déroulé du mode
+  // (F-30) compte comme du contenu — la bulle le porte même sans texte.
+  if (
+    !isStreaming &&
+    !content &&
+    !reasoning &&
+    tools.length === 0 &&
+    cards.length === 0 &&
+    !flowRows?.length
+  ) {
     return null;
   }
 
@@ -576,6 +597,17 @@ export function MessageBubble({
     <div className="message-in flex gap-3">
       <HermesAvatar />
       <div className="min-w-0 flex-1 space-y-2.5">
+        {/* F-30 — l'étiquette du mode et le déroulé vivent au-dessus de la
+            réponse conservée : on voit le débat/conseil/auto se dérouler. */}
+        {flowTag ? <ModeTag tag={flowTag} /> : null}
+        {flowRows?.length ? (
+          <ModeFlowCard
+            mode={modeFromTag(flowTag)}
+            summary={modeFlowSummary(modeFromTag(flowTag), flowRows)}
+            rows={flowRows}
+            showModels={showFlowModels}
+          />
+        ) : null}
         {tools.length > 0 ? (
           <div className="space-y-1.5">
             {tools.map((ev, i) => (

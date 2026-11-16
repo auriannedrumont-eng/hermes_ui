@@ -1,6 +1,6 @@
 // Service de chat Hermes Web — socket.io sur le port 3003
 // Événements client -> serveur :
-//   hello, conversations:list/create/rename/delete/open/pin/fork/search,
+//   hello, conversations:list/create/rename/delete/open/pin/fork/search/setMode,
 //   chat:send, chat:stop, chat:regenerate (réglages expert F-22 : temperature/maxTokens/seed, assainis),
 //   message:edit, message:delete,
 //   models:list, attachments:upload, audio:transcribe,
@@ -20,6 +20,8 @@
 // Événements serveur -> client :
 //   stream:start, stream:delta, stream:reasoning, stream:status, stream:tool,
 //   stream:done, stream:error, message:appended, message:deleted,
+//   mode:flow (F-30 — déroulé du tour multi-voix, en direct),
+//   conversations:mode (F-30 — mode changé, diffusé à toutes les sessions),
 //   conversations:created, conversations:pinned,
 //   artifact:created, artifact:delta, artifact:updated,
 //   settings:changed, providers:changed, models:changed, extensions:changed,
@@ -59,6 +61,26 @@ import {
 } from "./shares";
 import { modelLabel, catalogModelsResult } from "./models";
 import { transcribeAudioBase64 } from "./asr";
+import {
+  DEFAULT_MODEL_ID,
+} from "./models";
+import {
+  MODE_LABELS,
+  normalizeModeConfig,
+  resolveMode,
+  resolveModePrompt,
+  modePromptSection,
+  voicesFor,
+  voiceModel,
+  type ConversationMode,
+  type ModeConfig,
+  type ModeVoice,
+} from "./modes";
+import {
+  runOrchestratedTurn,
+  type OrchestratorDeps,
+  type OrchestratorPrompts,
+} from "./orchestrator";
 import {
   CUSTOM_INSTRUCTIONS_KEY,
   MAX_CUSTOM_INSTRUCTIONS_CHARS,
@@ -845,6 +867,112 @@ function localSystemPrompt(conversationId: string): string {
   });
 }
 
+// ── Modes du compositeur (F-30) — le service fait foi, relu à chaque envoi ──
+
+/** État du mode d'une conversation : mode résolu (inconnu → chat), tours
+ *  du débat et config (voix → modèles, membres, reprises). */
+function conversationModeState(conversationId: string): {
+  mode: ConversationMode;
+  rounds: number | null;
+  config: ModeConfig | null;
+} {
+  const state = store.getConversationModeState(conversationId);
+  return {
+    mode: resolveMode(state.mode),
+    rounds: state.rounds,
+    config: state.config,
+  };
+}
+
+/** Section « mode » du systemPrompt (chat/plan/code) — recomposée à chaque
+ *  envoi : une consigne modifiée s'applique au prochain message, sans
+ *  redémarrage. Retourne "" pour les modes orchestrés (consignes par voix).
+ */
+function modeSystemPromptSection(
+  conversationId: string,
+  modeState: { mode: ConversationMode; rounds: number | null; config: ModeConfig | null },
+): string {
+  const mode = modeState.mode;
+  if (mode === "debate" || mode === "council" || mode === "auto") return ""; // orchestrateur
+  const key = `${mode}.main`;
+  const text = resolveModePrompt(store, key);
+  if (!text) return "";
+  return modePromptSection(MODE_LABELS[mode], text);
+}
+
+/** Résout les consignes des voix d'un mode orchestré au moment du tour
+ *  (placeholders {angle} {tours} {membres} {reprises} remplacés ici). */
+function resolveOrchestratorPrompts(
+  mode: ConversationMode,
+  rounds: number | null,
+  config: ModeConfig | null,
+): OrchestratorPrompts {
+  const varsBase = {
+    tours: Math.round(rounds ?? 3),
+    membres: Math.round(config?.members ?? 3),
+  };
+  if (mode === "debate") {
+    return {
+      // {angle} reste intact ici : remplacé par l'orchestrateur, voix par voix
+      conseiller:
+        resolveModePrompt(store, "debate.conseiller", varsBase) ?? "",
+      juge: resolveModePrompt(store, "debate.juge", varsBase) ?? "",
+    };
+  }
+  if (mode === "council") {
+    return {
+      membre: resolveModePrompt(store, "council.membre") ?? "",
+      president:
+        resolveModePrompt(store, "council.president", varsBase) ?? "",
+    };
+  }
+  return {
+    debat: resolveModePrompt(store, "auto.debat") ?? "",
+    plan: resolveModePrompt(store, "auto.plan") ?? "",
+    code: resolveModePrompt(store, "auto.code") ?? "",
+    test: resolveModePrompt(store, "auto.test") ?? "",
+    // {reprises} reste intact : remplacé par l'orchestrateur à chaque reprise
+    reprise: resolveModePrompt(store, "auto.reprise") ?? "",
+  };
+}
+
+/** Paire A/B du mode Comparer : voix de la config par conversation,
+ *  repli catalogue (A = flagship, B = défaut). Le mécanisme interne
+ *  (deux tours parallèles, variantes a|b) ne change pas. */
+function comparePairFromMode(modeState: {
+  config: ModeConfig | null;
+}): [string, string] {
+  const a = voiceModel("compare", modeState.config, "a");
+  const b = voiceModel("compare", modeState.config, "b");
+  if (a && b && a !== b) return [a, b];
+  if (a && b === a) return [a, DEFAULT_MODEL_ID === a ? "hermes-4-405b" : DEFAULT_MODEL_ID];
+  return [a ?? DEFAULT_MODEL_ID, b ?? (a ? "hermes-4-405b" : "hermes-4-70b")];
+}
+
+/** Dépendances de l'orchestrateur : un tour de voix passe par le connecteur
+ *  (gateway ou pool de clés) SANS streamer vers le chat — capture silencieuse. */
+const orchestratorDeps: OrchestratorDeps = {
+  runVoiceTurn: (req, cb) =>
+    connector.runTurn(
+      {
+        content: req.content,
+        history: req.history,
+        modelId: req.modelId,
+        model: req.modelId ? modelLabel(req.modelId) : null,
+        attachments: req.attachments,
+        settings: req.settings,
+        systemPrompt: req.systemPrompt,
+      },
+      {
+        signal: cb.signal,
+        onDelta: (delta) => cb.onDelta?.(delta),
+        onReasoning: () => {},
+        onStatus: (status) => cb.onStatus?.(status),
+        onToolEvent: () => {},
+      },
+    ),
+};
+
 /** Taille réelle des instructions système (jauge honnête) : base + mémoire +
  * F-19 + prompt de la conversation donnée (le hello envoie la base + F-19). */
 function systemPromptSize(conversationId?: string): number {
@@ -1022,16 +1150,72 @@ io.on("connection", (socket) => {
   socket.on(
     "conversations:create",
     (
-      payload: { projectId?: string | null } | ((data: unknown) => void),
+      payload:
+        | { projectId?: string | null; mode?: string; modeConfig?: unknown }
+        | ((data: unknown) => void),
       maybeCb?: (data: unknown) => void
     ) => {
       // Compat : emit("conversations:create", cb) sans payload
       const cb = typeof payload === "function" ? payload : maybeCb;
-      const projectId =
-        payload && typeof payload === "object" ? (payload.projectId ?? null) : null;
-      const conversation = store.createConversation("Nouvelle conversation", projectId);
+      const src = payload && typeof payload === "object" ? payload : {};
+      const projectId = src.projectId ?? null;
+      // F-30 : le mode des nouvelles conversations part du client (réglage
+      // hermes.modes.defaultMode) — résolu et borné ici (valeur inconnue → chat).
+      const mode = resolveMode(src.mode);
+      const modeConfig = normalizeModeConfig(src.modeConfig);
+      const rounds = mode === "debate" ? (modeConfig.rounds ?? null) : null;
+      const conversation = store.createConversation(
+        "Nouvelle conversation",
+        projectId,
+        mode === "chat" ? undefined : mode,
+        rounds,
+        Object.keys(modeConfig).length ? modeConfig : null,
+      );
       if (typeof cb === "function") cb({ conversation });
       else socket.emit("conversations:created", { conversation });
+    }
+  );
+
+  // ── Modes du compositeur (F-30) : change le mode d'une conversation ──
+  // Le client ne décide pas du traitement : il demande, le service résout
+  // (valeur inconnue → chat), borne les nombres et persiste. Diffusé à
+  // toutes les sessions — deux fenêtres suivent le même mode en direct.
+  socket.on(
+    "conversations:setMode",
+    (
+      payload: {
+        conversationId?: string;
+        mode?: string;
+        config?: unknown;
+      },
+      cb?: (data: unknown) => void
+    ) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId) {
+        if (typeof cb === "function") cb({ error: "conversationId requis" });
+        return;
+      }
+      const mode = resolveMode(payload?.mode);
+      const config = normalizeModeConfig(payload?.config);
+      const rounds = mode === "debate" ? (config.rounds ?? null) : null;
+      const conversation = store.setConversationMode(
+        conversationId,
+        mode,
+        rounds,
+        Object.keys(config).length ? config : null,
+      );
+      if (!conversation) {
+        if (typeof cb === "function") cb({ error: "Conversation introuvable" });
+        return;
+      }
+      if (typeof cb === "function") cb({ ok: true, conversation });
+      io.emit("conversations:mode", {
+        conversationId,
+        mode,
+        rounds,
+        config,
+        conversation,
+      });
     }
   );
 
@@ -2381,6 +2565,22 @@ io.on("connection", (socket) => {
     }
   ) => {
     const variant = opts.variant;
+    // ── F-30 : le mode de la conversation est relu ICI, à chaque envoi —
+    // le service fait foi, jamais l'écran. Comparer devient un mode : deux
+    // tours parallèles (variantes a/b, mécanisme F-17 inchangé) avec les
+    // modèles des voix A/B ; débat, conseil et auto passent par l'orchestrateur.
+    const modeState = conversationModeState(conversationId);
+    if (!variant && modeState.mode === "compare") {
+      const [idA, idB] = comparePairFromMode(modeState);
+      await Promise.all([
+        runAssistantTurn(conversationId, { ...opts, modelId: idA, variant: "a" }),
+        runAssistantTurn(conversationId, { ...opts, modelId: idB, variant: "b" }),
+      ]);
+      return;
+    }
+    const orchestrated =
+      !variant &&
+      (modeState.mode === "debate" || modeState.mode === "council" || modeState.mode === "auto");
     const versionIndex = opts.versionGroup
       ? store.countVersions(opts.versionGroup) + 1
       : null;
@@ -2463,6 +2663,10 @@ io.on("connection", (socket) => {
     let lastEmit = 0;
     let lastSent = 0;
     let usedModel = model ?? connector.model;
+    // F-30 : étiquette du mode et déroulé du tour multi-voix (remplis par
+    // l'orchestrateur — absents pour un tour simple ou une comparaison).
+    let modeTagOut: string | undefined = undefined;
+    let modeFlowOut: import("./types").ModeFlowRow[] | undefined = undefined;
 
     // Suivi des artefacts générés pendant le tour (blocs fichier du contenu)
     const tracker = new ArtifactTracker(store, conversationId, messageId, {
@@ -2499,7 +2703,7 @@ io.on("connection", (socket) => {
         ...(variant ? { variant } : {}),
       });
     };
-    if (opts.webSearch) {
+    if (opts.webSearch && !orchestrated) {
       if (connector.mode === "gateway") {
         emitTool({
           name: "Recherche web",
@@ -2530,6 +2734,13 @@ io.on("connection", (socket) => {
       }
     }
 
+    // ── F-30 : consigne du mode (chat/plan/code) — ajoutée au systemPrompt
+    // du tour, recomposé à chaque envoi (aucune consigne fantôme possible).
+    // Comparer et les modes orchestrés portent leurs consignes par voix.
+    const modeSection = orchestrated || variant
+      ? ""
+      : modeSystemPromptSection(conversationId, modeState);
+
     try {
       let result: {
         content: string;
@@ -2539,7 +2750,65 @@ io.on("connection", (socket) => {
         provider?: string;
         usage?: import("./llm-pool").TurnUsage;
       };
-      if (opts.modelId && isWebchatModel(opts.modelId)) {
+      if (orchestrated) {
+        // ── Débat / Conseil / Auto : l'orchestrateur enchaîne les voix et
+        // NE CONSERVE qu'une réponse (verdict / fusion / bilan). Le déroulé
+        // vit dans la conversation : chaque ligne est poussée en direct via
+        // `mode:flow`, puis persistée avec la réponse (mode_flow).
+        const flowEmit = (rows: import("./types").ModeFlowRow[]) =>
+          socket.emit("mode:flow", { conversationId, messageId, rows });
+        const outcome = await runOrchestratedTurn(
+          {
+            conversationId,
+            messageId,
+            mode: modeState.mode as "debate" | "council" | "auto",
+            config: modeState.config,
+            rounds: modeState.rounds,
+            userContent: opts.content,
+            history,
+            attachments,
+            settings: opts.settings,
+            prompts: resolveOrchestratorPrompts(
+              modeState.mode,
+              modeState.rounds,
+              modeState.config,
+            ),
+            signal: controller.signal,
+            onFlow: flowEmit,
+            onFinalDelta: (delta) => {
+              contentAcc += delta;
+              const now = Date.now();
+              if (now - lastEmit > 16) {
+                lastEmit = now;
+                socket.emit("stream:delta", {
+                  conversationId,
+                  messageId,
+                  delta: contentAcc.slice(lastSent),
+                  ...(variant ? { variant } : {}),
+                });
+                lastSent = contentAcc.length;
+                tracker.update(contentAcc);
+              }
+            },
+            onFinalStatus: (status) =>
+              socket.emit("stream:status", {
+                conversationId,
+                messageId,
+                status,
+                ...(variant ? { variant } : {}),
+              }),
+          },
+          orchestratorDeps,
+        );
+        modeTagOut = outcome.tag;
+        modeFlowOut = outcome.rows;
+        result = {
+          content: outcome.content,
+          reasoning: outcome.reasoning,
+          model: outcome.model,
+          usage: outcome.usage,
+        };
+      } else if (opts.modelId && isWebchatModel(opts.modelId)) {
         // ── Fournisseur « chats IA web » — le tour ne part pas sur un moteur
         // LLM mais sur le pilote navigateur du site (spec « Piloter des chats
         // IA web », §4/§6). Réponse en un bloc : le statut explique où on en
@@ -2602,11 +2871,20 @@ io.on("connection", (socket) => {
           // conversation part seul (la gateway garde ses instructions de base).
           // F-12 : les résultats de recherche web sont ajoutés en fin de
           // prompt système du tour local (pool).
+          // F-30 : la consigne du mode (chat/plan/code) est ajoutée dans les
+          // deux cas — recomposée à chaque envoi, jamais stockée fantôme.
           systemPrompt:
             connector.mode === "local"
               ? localSystemPrompt(conversationId) +
+                (modeSection ? `\n\n${modeSection}` : "") +
                 (webSources ? webSearchSection(webSources) : "")
-              : store.getConversationPrompt(conversationId)?.content ?? null,
+              : (() => {
+                  const conv = store.getConversationPrompt(conversationId)?.content ?? null;
+                  const withMode = conv || modeSection
+                    ? [conv ?? "", modeSection].filter(Boolean).join("\n\n")
+                    : null;
+                  return withMode || null;
+                })(),
         },
         {
           signal: controller.signal,
@@ -2708,6 +2986,8 @@ io.on("connection", (socket) => {
         model: usedModel,
         stopped: stopped || undefined,
         variant,
+        modeTag: modeTagOut,
+        modeFlow: modeFlowOut,
         // F-21 : jetons réels quand l'API les renvoie (pool de clés)
         usage: result.usage,
         // F-12 : sources de la recherche web du tour
@@ -2728,6 +3008,8 @@ io.on("connection", (socket) => {
         createdAt: new Date().toISOString(),
         stopped: stopped || undefined,
         variant,
+        modeTag: modeTagOut,
+        modeFlow: modeFlowOut,
         usage: result.usage,
         sources: webSources,
         ...(opts.versionGroup
@@ -2876,11 +3158,18 @@ io.on("connection", (socket) => {
       //    les streams suivent par les événements stream:*.
       if (typeof cb === "function")
         cb({ ok: true, message: userMessage, ...(compareIds ? { compare: true } : {}) });
-      const turnSettings = {
+      const turnSettings: TurnSettings = {
         reasoningEffort: payload?.effort || undefined,
         permissionsMode: payload?.permissionsMode || undefined,
         ...sanitizeExpertSettings(payload),
       };
+      // F-30 — Mode Plan : le moteur est prié de se mettre en mode plan au
+      // PREMIER tour (tenté une fois, refus non bloquant) — la consigne écrite
+      // du mode reste la garantie dans tous les cas.
+      const modeForPlan = conversationModeState(conversationId);
+      if (modeForPlan.mode === "plan" && isFirstUserMessage) {
+        turnSettings.planMode = true;
+      }
       // F-17 : comparaison — deux tours parallèles, un par modèle. Le
       // message utilisateur est unique ; chaque réponse assistant porte
       // sa variante (a/b) et son modèle.

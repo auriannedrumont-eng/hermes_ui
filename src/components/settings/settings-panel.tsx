@@ -45,6 +45,7 @@ import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { InfoTip } from "@/components/shared/info-tip";
 import { WebchatSection } from "@/components/settings/webchat-section";
+import { ModesSection } from "@/components/settings/modes-section";
 import {
   getSettingDef,
   onSettingsChanged,
@@ -90,10 +91,12 @@ const SORT_LABELS: Record<string, string> = {
   title: "Nom",
 };
 
-// ── Rail v2.6 : 9 sections (Outils + Extensions + Skills fusionnées) ──
+// ── Rail v2.7 (F-30) : 10 sections — « Modes de chat » rejoint le rail
+// entre Modèles et Fournisseurs (ordre du maquette-parametres-modes.html).
 const SECTIONS = [
   { id: "interface", icon: Monitor, label: "Interface" },
   { id: "modeles", icon: Cpu, label: "Modèles" },
+  { id: "modes", icon: Layers, label: "Modes de chat" },
   { id: "fournisseurs", icon: Layers, label: "Fournisseurs" },
   { id: "cles", icon: KeyRound, label: "Clés de services" },
   { id: "chatsweb", icon: Globe, label: "Chats web" },
@@ -566,6 +569,8 @@ export function SettingsPanel({
         return <InterfacePane projects={projects} />;
       case "modeles":
         return <ModelesPane models={models} selectedModel={selectedModel} />;
+      case "modes":
+        return <ModesSection models={models} />;
       case "fournisseurs":
         return <ProvidersSection kind="llm" api={api} />;
       case "cles":

@@ -15,9 +15,12 @@ import {
 } from "lucide-react";
 import { HermesLogo } from "@/components/chat/hermes-logo";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { ModeFlowCard } from "@/components/chat/mode-flow";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { readClientSetting, onSettingsChanged } from "@/lib/settings";
 import type { Artifact, ChatMessage, StreamingState } from "@/lib/chat-types";
+import type { ConversationMode } from "@/lib/modes";
 
 const SUGGESTIONS = [
   {
@@ -93,6 +96,10 @@ interface MessageListProps {
   onFork: (messageId: string) => void;
   onOpenArtifact: (artifact: Artifact) => void;
   onRetryArtifact: (artifactId: string) => void;
+  /** F-30 — mode de la conversation (chip « Comparer » sur les paires). */
+  conversationMode?: ConversationMode;
+  /** F-30 — déroulé vivant du tour multi-voix (modes orchestrés). */
+  modeFlowLive?: { messageId: string; rows: NonNullable<ChatMessage["modeFlow"]> } | null;
 }
 
 /** Une colonne de comparaison : réponse persistée et/ou stream en cours. */
@@ -170,12 +177,32 @@ export function MessageList({
   onFork,
   onOpenArtifact,
   onRetryArtifact,
+  conversationMode = "chat",
+  modeFlowLive = null,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
   /** Tour simple (sans variante) — la bulle de stream en bas de fil. */
   const streaming = streams.find((st) => !st.variant) ?? null;
+  // F-30 — réglages du déroulé (hermes.modes.showFlow / showModels) : lus
+  // au rendu et suivis par le bus des réglages (idiome InterfacePane).
+  const [flowRev, setFlowRev] = useState(0);
+  const showFlow = useMemo(
+    () => readClientSetting<boolean>("hermes.modes.showFlow") !== false,
+    [flowRev]
+  );
+  const showFlowModels = useMemo(
+    () => readClientSetting<boolean>("hermes.modes.showModels") !== false,
+    [flowRev]
+  );
+  useEffect(() => onSettingsChanged(() => setFlowRev((r) => r + 1)), []);
+
+  // Déroulé vivant : rendu dans la bulle du stream si elle existe déjà,
+  // sinon tout seul en bas de fil (la première ligne suffit à l'ouvrir).
+  const liveFlowStreaming =
+    modeFlowLive && streams.some((s) => s.messageId === modeFlowLive.messageId);
+  const liveFlowPending = modeFlowLive && !liveFlowStreaming;
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -277,6 +304,7 @@ export function MessageList({
                     artifactStreams={artifactStreams}
                     onOpenArtifact={onOpenArtifact}
                     onRetryArtifact={onRetryArtifact}
+                    showFlowModels={showFlowModels}
                   />
                 </div>
               ) : (
@@ -293,6 +321,7 @@ export function MessageList({
                   onFork={onFork}
                   onOpenArtifact={onOpenArtifact}
                   onRetryArtifact={onRetryArtifact}
+                  showChip={conversationMode === "compare"}
                 />
               )
             )}
@@ -315,8 +344,24 @@ export function MessageList({
                   artifactStreams={artifactStreams}
                   onOpenArtifact={onOpenArtifact}
                   onRetryArtifact={onRetryArtifact}
+                  modeFlow={
+                    liveFlowStreaming && showFlow ? (modeFlowLive?.rows ?? undefined) : undefined
+                  }
+                  showFlowModels={showFlowModels}
                 />
               </div>
+            ) : null}
+
+            {/* F-30 — déroulé vivant sans bulle encore (le verdict streame
+                plus tard) : l'encart s'affiche seul, première ligne ouverte. */}
+            {liveFlowPending && showFlow ? (
+              <ModeFlowCard
+                mode={conversationMode}
+                summary=""
+                rows={modeFlowLive?.rows ?? []}
+                live
+                showModels={showFlowModels}
+              />
             ) : null}
 
             {/* Erreur persistante du dernier tour (F-04) : le partiel éventuel
@@ -391,6 +436,7 @@ function ComparePair({
   onFork,
   onOpenArtifact,
   onRetryArtifact,
+  showChip = false,
 }: {
   pair: Extract<Row, { kind: "pair" }>;
   isBusy: boolean;
@@ -403,13 +449,24 @@ function ComparePair({
   onFork: (messageId: string) => void;
   onOpenArtifact: (artifact: Artifact) => void;
   onRetryArtifact: (artifactId: string) => void;
+  /** F-30 — conversation en mode Comparer : la chip le dit au-dessus. */
+  showChip?: boolean;
 }) {
   const slots: Array<{ variant: "a" | "b"; cell?: CompareCell }> = [
     { variant: "a", cell: pair.a },
     { variant: "b", cell: pair.b },
   ];
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Réponses comparées">
+    <div className="min-w-0">
+      {showChip ? (
+        <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-hermes/10 px-2.5 py-0.5 text-[10px] font-bold text-hermes-text">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z" />
+          </svg>
+          Comparer · 2 modèles en parallèle
+        </span>
+      ) : null}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Réponses comparées">
       {slots.map(({ variant, cell }) => (
         <div
           key={variant}
@@ -483,6 +540,7 @@ function ComparePair({
           )}
         </div>
       ))}
+      </div>
     </div>
   );
 }

@@ -429,6 +429,8 @@ export default function HermesWebPage() {
             onFork={handleFork}
             onOpenArtifact={handleOpenArtifact}
             onRetryArtifact={chat.retryArtifact}
+            conversationMode={chat.conversationMode}
+            modeFlowLive={chat.modeFlowLive}
           />
           <Composer
             disabled={!chat.connected}
@@ -439,10 +441,9 @@ export default function HermesWebPage() {
             mode={chat.mode}
             selectedModel={chat.selectedModel}
             onSelectModel={chat.setSelectedModel}
-            compareEnabled={chat.compareEnabled}
-            compareModels={chat.compareModels}
-            onToggleCompare={chat.toggleCompare}
-            onSetCompareSlot={chat.setCompareSlot}
+            conversationMode={chat.conversationMode}
+            conversationModeConfig={chat.conversationModeConfig}
+            onSetConversationMode={chat.setConversationMode}
             effort={chat.effort}
             onEffortChange={chat.setEffort}
             expert={chat.expert}

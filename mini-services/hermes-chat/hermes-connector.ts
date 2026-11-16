@@ -349,6 +349,10 @@ export class HermesConnector {
           ...(req.settings?.permissionsMode
             ? { permissions: req.settings.permissionsMode }
             : {}),
+          // F-30 — Mode Plan : mise en plan demandée au premier tour
+          // (tenté une fois, refus non bloquant — la consigne écrite du
+          // mode reste la garantie).
+          ...(req.settings?.planMode ? { plan_mode: true } : {}),
           ...(req.systemPrompt ? { system_prompt: req.systemPrompt } : {}),
           // Mémoire utilisateur (F-18) : notes actives + apprentissage
           // automatique — clés à valider contre la gateway (même convention
