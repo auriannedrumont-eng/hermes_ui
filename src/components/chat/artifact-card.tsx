@@ -27,7 +27,7 @@ import {
   type Artifact,
   type ArtifactKind,
 } from "@/lib/chat-types";
-import { artifactUrl, downloadArtifact } from "@/lib/artifact-utils";
+import { artifactUrl, downloadArtifact, openArtifactInTab } from "@/lib/artifact-utils";
 import { VersionPopover } from "@/components/chat/version-popover";
 
 function KindIcon({ kind, className }: { kind: ArtifactKind; className?: string }) {
@@ -175,18 +175,18 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
-          ) : (
+          ) : artifact.status === "ready" ? (
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
-              onClick={() => onOpen(artifact)}
-              aria-label={`Ouvrir ${artifact.name}`}
-              title="Ouvrir"
+              onClick={() => openArtifactInTab(artifact)}
+              aria-label={`Ouvrir ${artifact.name} dans un nouvel onglet`}
+              title="Ouvrir dans un nouvel onglet"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </Button>
-          )}
+          ) : null}
           {!isError ? (
             <Button
               variant="ghost"

@@ -9,6 +9,14 @@ export interface ToolEvent {
   at: string;
 }
 
+/** Activité outil d'un tour — encart terminal du panneau artefacts. */
+export interface TurnTools {
+  /** Événements du tour, dans l'ordre d'arrivée. */
+  events: ToolEvent[];
+  /** Tour encore vivant (stream en cours) : l'encart s'ouvre seul. */
+  live: boolean;
+}
+
 // ── Sources citées par un tour avec recherche web (F-09/F-12) ──────────
 export interface WebSource {
   /** Rang de citation, 1-based (le modèle cite sous la forme [n]). */
@@ -219,6 +227,8 @@ export interface Artifact {
   preview?: string;
   url: string;
   rawUrl: string;
+  /** Vue « nouvel onglet » (HTML rendu derrière un bac à sable CSP). */
+  viewUrl?: string;
   thumbnailUrl?: string;
   pdfUrl?: string;
   pdfSize?: number;

@@ -17,6 +17,11 @@ export function downloadArtifact(artifact: Artifact, prefer?: "pdf" | "source"):
   window.open(artifactUrl(path), "_blank", "noopener");
 }
 
+/** Ouvre l'artefact dans un nouvel onglet (HTML rendu quand disponible). */
+export function openArtifactInTab(artifact: Artifact): void {
+  window.open(artifactUrl(artifact.viewUrl ?? artifact.rawUrl), "_blank", "noopener");
+}
+
 /** Archive zip de plusieurs artefacts (bouton « Tout télécharger »). */
 export function downloadArtifactZip(artifacts: Artifact[]): void {
   if (artifacts.length === 0) return;

@@ -246,6 +246,8 @@ export function toWireArtifact(row: ArtifactRow, anchorMessageId?: string): Arti
     rawUrl: `/artifacts/${row.id}/raw`,
     createdAt: row.created_at,
   };
+  // Vue « nouvel onglet » : le HTML s'ouvre rendu (bac à sable CSP côté HTTP).
+  if (row.kind === "html") (base as any).viewUrl = `/artifacts/${row.id}/view`;
   const thumb = artifactThumbPath(row.id);
   const pdf = artifactPdfPath(row.id);
   if (existsSync(thumb)) {

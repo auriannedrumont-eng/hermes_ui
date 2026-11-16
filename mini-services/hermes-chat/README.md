@@ -106,6 +106,7 @@ la carte). Un artefact régénéré reste ancré sur la carte d'origine.
 | Route | Rôle |
 | --- | --- |
 | `GET /artifacts/<id>/raw` | source brute (texte ; SVG servi en `image/svg+xml` derrière un CSP `default-src 'none'`) |
+| `GET /artifacts/<id>/view` | vue « nouvel onglet » — HTML servi rendu (`text/html`) derrière un CSP `sandbox` (origine opaque) ; autres kinds : comportement `raw` |
 | `GET /artifacts/<id>/download` | téléchargement de la source (attachment) |
 | `GET /artifacts/<id>/thumb` | vignette PNG (rendu plein page pour le HTML) |
 | `GET /artifacts/<id>/pdf` | export PDF vectoriel (HTML) |

@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  ExternalLink,
   FileDown,
   GitCompare,
   Globe,
@@ -45,13 +46,16 @@ import {
   artifactKindLabel,
   formatArtifactBytes,
   type Artifact,
+  type TurnTools,
 } from "@/lib/chat-types";
 import {
   artifactUrl,
   diffLines,
   downloadArtifact,
+  openArtifactInTab,
   parseCsv,
 } from "@/lib/artifact-utils";
+import { ArtifactTerminal } from "@/components/chat/artifact-terminal";
 import { serviceFetchInit } from "@/lib/service";
 
 // ── Chargement du source (cache module partagé panneau / visionneuse) ───
@@ -595,6 +599,17 @@ function ArtifactHeaderActions({
   const canDownload = artifact.status === "ready";
   return (
     <div className="flex shrink-0 items-center gap-0.5">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+        onClick={() => openArtifactInTab(artifact)}
+        disabled={!canDownload}
+        aria-label="Ouvrir dans un nouvel onglet"
+        title="Ouvrir dans un nouvel onglet"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+      </Button>
       {versions.length > 1 ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -716,6 +731,8 @@ export interface ArtifactPanelProps {
   artifacts: Artifact[];
   selectedId: string | null;
   streamingArtifacts: Record<string, string>;
+  /** Activité outil du tour qui porte un artefact (encart terminal). */
+  resolveTurnTools: (messageId?: string) => TurnTools;
   onSelectVersion: (artifact: Artifact) => void;
   onClose: () => void;
   onRetry: (artifactId: string) => void;
@@ -726,6 +743,7 @@ export function ArtifactPanel({
   artifacts,
   selectedId,
   streamingArtifacts,
+  resolveTurnTools,
   onSelectVersion,
   onClose,
   onRetry,
@@ -833,6 +851,10 @@ export function ArtifactPanel({
         onRetry={onRetry}
         fetchVersions={fetchVersions}
       />
+      <ArtifactTerminal
+        key={selected.messageId}
+        {...resolveTurnTools(selected.messageId)}
+      />
       <ArtifactMetaLine artifact={selected} />
     </div>
   );
@@ -846,6 +868,7 @@ export function ArtifactViewerDialog({
   artifacts,
   selectedId,
   streamingArtifacts,
+  resolveTurnTools,
   onSelectVersion,
   onRetry,
   fetchVersions,
@@ -855,6 +878,8 @@ export function ArtifactViewerDialog({
   artifacts: Artifact[];
   selectedId: string | null;
   streamingArtifacts: Record<string, string>;
+  /** Activité outil du tour qui porte un artefact (encart terminal). */
+  resolveTurnTools: (messageId?: string) => TurnTools;
   onSelectVersion: (artifact: Artifact) => void;
   onRetry: (artifactId: string) => void;
   fetchVersions: (key: string) => Promise<Artifact[]>;
@@ -983,6 +1008,12 @@ export function ArtifactViewerDialog({
             </div>
           )}
         </div>
+        {selected ? (
+          <ArtifactTerminal
+            key={selected.messageId}
+            {...resolveTurnTools(selected.messageId)}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

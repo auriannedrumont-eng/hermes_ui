@@ -417,7 +417,7 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
   }
 
   // /artifacts/<id>/<action>
-  const artMatch = /^\/artifacts\/([a-zA-Z0-9-]{8,64})\/(raw|download|thumb|pdf)$/.exec(
+  const artMatch = /^\/artifacts\/([a-zA-Z0-9-]{8,64})\/(raw|view|download|thumb|pdf)$/.exec(
     u.pathname
   );
   if (artMatch) {
@@ -450,9 +450,24 @@ function handleArtifactFile(
   }
   try {
     const name = encodeURIComponent(row.name);
-    if (action === "raw") {
-      // Le HTML généré n'est JAMAIS servi comme text/html (XSS) — texte brut,
-      // sauf SVG (nécessaire pour <img>) derrière un CSP qui neutralise les scripts.
+    if (action === "view" && row.kind === "html") {
+      // Vue « nouvel onglet » du HTML : servi rendu (text/html) derrière un
+      // bac à sable CSP — origine opaque, ni cookies ni stockage ni jetons de
+      // l'application accessibles. /raw reste texte brut (img, fetch panel).
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": Buffer.byteLength(row.content, "utf-8"),
+        "Content-Security-Policy":
+          "sandbox allow-scripts allow-forms allow-popups allow-modals",
+        "X-Content-Type-Options": "nosniff",
+      });
+      res.end(row.content, "utf-8");
+      return;
+    }
+    if (action === "raw" || action === "view") {
+      // Le HTML n'est servi rendu QUE par la branche ci-dessus (bac à sable
+      // CSP, origine opaque) — ici texte brut (XSS), sauf SVG (nécessaire
+      // pour <img>) derrière un CSP qui neutralise les scripts.
       const isSvg = row.kind === "svg";
       const headers: Record<string, string | number> = {
         "Content-Type": isSvg ? "image/svg+xml" : "text/plain; charset=utf-8",

@@ -31,7 +31,7 @@ import { useHermesChat } from "@/hooks/use-hermes-chat";
 import { exportJson, exportMarkdown, exportPdf } from "@/lib/export";
 import { flashTitle, playCompletionBeep, setGeneratingTitle } from "@/lib/notify";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
-import type { Artifact, ShareView } from "@/lib/chat-types";
+import type { Artifact, ShareView, TurnTools } from "@/lib/chat-types";
 
 const SIDEBAR_WIDTH_KEY = "fork.ui.sidebar.width"; // registre des réglages (FORK.md §6)
 
@@ -227,6 +227,20 @@ export default function HermesWebPage() {
       if (isMobile) setViewerOpen(true);
     },
     [chat, isMobile]
+  );
+
+  // ── Terminal du tour : activité outil du message qui porte l'artefact ─
+  // Le stream vivant d'abord (étapes en direct), le message persisté ensuite.
+  const resolveTurnTools = useCallback(
+    (messageId?: string): TurnTools => {
+      const stream = messageId ? chat.streams[messageId] : undefined;
+      if (stream) return { events: stream.toolEvents, live: true };
+      const msg = messageId
+        ? chat.messages.find((m) => m.id === messageId)
+        : undefined;
+      return { events: msg?.toolEvents ?? [], live: false };
+    },
+    [chat.streams, chat.messages]
   );
 
   // ── Export de la conversation active ────────────────────────────────
@@ -469,6 +483,7 @@ export default function HermesWebPage() {
               artifacts={chat.artifacts}
               selectedId={chat.panelArtifactId}
               streamingArtifacts={chat.streamingArtifacts}
+              resolveTurnTools={resolveTurnTools}
               onSelectVersion={chat.selectArtifactVersion}
               onClose={chat.closePanel}
               onRetry={chat.retryArtifact}
@@ -493,6 +508,7 @@ export default function HermesWebPage() {
         artifacts={chat.artifacts}
         selectedId={chat.panelArtifactId}
         streamingArtifacts={chat.streamingArtifacts}
+        resolveTurnTools={resolveTurnTools}
         onSelectVersion={chat.selectArtifactVersion}
         onRetry={chat.retryArtifact}
         fetchVersions={chat.fetchArtifactVersions}

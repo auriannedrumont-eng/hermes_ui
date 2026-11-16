@@ -129,6 +129,8 @@ export interface Artifact {
   url: string;
   /** Source brute (inline, pour le panneau). */
   rawUrl: string;
+  /** Vue « nouvel onglet » (HTML rendu derrière un bac à sable CSP). */
+  viewUrl?: string;
   /** Vignette PNG (rendu plein page pour le HTML). */
   thumbnailUrl?: string;
   /** Export PDF vectoriel (HTML rendu par Chrome). */
