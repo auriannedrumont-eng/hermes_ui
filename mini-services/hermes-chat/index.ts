@@ -517,7 +517,19 @@ function handleArtifactZip(u: URL, res: ServerResponse): void {
       return;
     }
     const zipPath = join(tmp, "artefacts.zip");
-    const zipRes = spawnSync("zip", ["-q", "-X", zipPath, ...fileNames], { cwd: tmp });
+    // zip.exe n'existe pas en standard sous Windows : en cas d'échec
+    // (binaire absent ou code non nul), repli sur bsdtar — tar.exe est
+    // intégré à Windows 10+ et son option -a déduit le format zip de
+    // l'extension .zip. Sous Linux/macOS, le zip du système suffit.
+    let zipRes = spawnSync("zip", ["-q", "-X", zipPath, ...fileNames], { cwd: tmp });
+    if ((zipRes.error || zipRes.status !== 0) && process.platform === "win32") {
+      try {
+        rmSync(zipPath, { force: true });
+      } catch {
+        /* rien à effacer */
+      }
+      zipRes = spawnSync("tar", ["-a", "-c", "-f", zipPath, ...fileNames], { cwd: tmp });
+    }
     if (zipRes.status !== 0 || !existsSync(zipPath)) {
       res.writeHead(500, { "Content-Type": "text/plain" });
       res.end("Échec de la création de l'archive");

@@ -20,12 +20,52 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import WebSocket from "ws";
 
+// Résolution du binaire chrome-headless-shell, multiplateforme :
+// 1) variable CHROME_HEADLESS_PATH (le lanceur portable la règle sur tools\) ;
+// 2) caches Playwright — %LOCALAPPDATA%\ms-playwright sous Windows,
+//    ~/.cache/ms-playwright sous Linux/macOS ($PLAYWRIGHT_BROWSERS_PATH
+//    honoré aussi) — en scannant TOUTES les révisions : le dossier
+//    « chromium_headless_shell-<rev> » change de numéro à chaque version de
+//    Playwright, et épingler un chemin Linux en dur rendait le binaire
+//    introuvable sous Windows même correctement installé ;
+// 3) binaires système connus, en dernier recours.
+const IS_WIN = process.platform === "win32";
+const SHELL_EXE = IS_WIN ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+const SHELL_SUBDIRS = IS_WIN
+  ? ["chrome-headless-shell-win64"]
+  : ["chrome-headless-shell-linux64", "chrome-headless-shell-mac-arm64", "chrome-headless-shell-mac"];
+
+function scanPlaywrightShellCandidates(): string[] {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  const bases = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    IS_WIN && process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, "ms-playwright")
+      : null,
+    home ? join(home, IS_WIN ? "AppData/Local/ms-playwright" : ".cache/ms-playwright") : null,
+  ].filter((b): b is string => !!b);
+  const hits: string[] = [];
+  for (const base of bases) {
+    let revisions: string[];
+    try {
+      revisions = readdirSync(base)
+        .filter((d) => d.startsWith("chromium_headless_shell-"))
+        .sort()
+        .reverse(); // révision la plus récente d'abord
+    } catch {
+      continue; // cache absent de cette machine
+    }
+    for (const rev of revisions) {
+      for (const sub of SHELL_SUBDIRS) hits.push(join(base, rev, sub, SHELL_EXE));
+      hits.push(join(base, rev, SHELL_EXE)); // archive extraite sans sous-dossier
+    }
+  }
+  return hits;
+}
+
 const CHROME_CANDIDATES = [
-  process.env.CHROME_HEADLESS_PATH,
-  join(
-    process.env.HOME ?? "/home/z",
-    ".cache/ms-playwright/chromium_headless_shell-1200/chrome-headless-shell-linux64/chrome-headless-shell"
-  ),
+  process.env.CHROME_HEADLESS_PATH || null,
+  ...scanPlaywrightShellCandidates(),
   "/usr/bin/chrome-headless-shell",
   "/usr/bin/chromium",
 ];

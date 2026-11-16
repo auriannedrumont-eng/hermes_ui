@@ -478,6 +478,8 @@ $NodeVer    = 'v22.20.0'    # LTS ; Next 16 exige Node >= 20.9
 $NodeZipUrl = "https://nodejs.org/dist/$NodeVer/node-$NodeVer-win-x64.zip"
 $BunZipUrl  = 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip'
 $CaddyExeUrl= 'https://caddyserver.com/api/download?os=windows&arch=amd64'   # renvoie l'exe directement
+$ChromeZipUrl= 'https://storage.googleapis.com/chrome-for-testing-public/143.0.7499.4/win64/chrome-headless-shell-win64.zip'   # rendu PNG/PDF des artefacts et partages
+$FfmpegZipUrl= 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'   # transcription vocale (conversion WAV)
 
 # Tout ce que les outils ecrivent reste DANS le dossier : les caches npm
 # et bun (qui vivent par defaut dans le profil Windows) sont rediriges
@@ -564,7 +566,9 @@ function Ensure-PortableSetup {
                    -not (Test-Path (Join-Path $Root 'mini-services\hermes-chat\node_modules')) -or
                    -not (Get-ToolDir 'node' 'node.exe') -or
                    -not (Get-ToolDir 'bun' 'bun.exe') -or
-                   -not (Get-ToolDir 'caddy' 'caddy.exe')
+                   -not (Get-ToolDir 'caddy' 'caddy.exe') -or
+                   -not (Get-ToolDir 'chrome-headless-shell' 'chrome-headless-shell.exe') -or
+                   -not (Get-ToolDir 'ffmpeg' 'ffmpeg.exe')
     if ($needInstall) {
         Write-Host ''
         Write-Host '  ═══ PREMIER DEMARRAGE : installation automatique ═══'
@@ -608,6 +612,31 @@ function Ensure-PortableSetup {
     foreach ($t in @('node', 'bun', 'caddy')) {
         if (-not (Test-Command $t)) { Die "l outil « $t » reste introuvable apres l installation" }
     }
+
+    # ── 3ter. chrome-headless-shell (rendu PNG/PDF : vignettes des artefacts,
+    # documents des conversations partagees) — le mini-service lit d'abord la
+    # variable CHROME_HEADLESS_PATH : on la regle sur la copie portable. ──
+    $chromeDir = Resolve-Tool 'chrome-headless-shell' 'chrome-headless-shell.exe' $ChromeZipUrl $true
+    $chromeExe = ''
+    if ($chromeDir) { $chromeExe = Join-Path $chromeDir 'chrome-headless-shell.exe' }
+    if (-not $chromeExe -and $env:LOCALAPPDATA) {
+        # repli : un cache Playwright deja present sur la machine
+        $pwDir = Join-Path $env:LOCALAPPDATA 'ms-playwright'
+        if (Test-Path $pwDir) {
+            $hit = Get-ChildItem -Path $pwDir -Filter 'chrome-headless-shell.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { $chromeExe = $hit.FullName }
+        }
+    }
+    if ($chromeExe) { $env:CHROME_HEADLESS_PATH = $chromeExe }
+    else { Log "  ATTENTION : chrome-headless-shell introuvable — vignettes/PDF/partages desactives ; le reste de l application fonctionne" }
+
+    # ── 3quater. ffmpeg (transcription vocale : conversion des enregistrements
+    # en WAV avant l appel ASR). Fonction optionnelle : absent, l application
+    # demarre quand meme et la dictee est simplement indisponible. ──
+    $ffDir = Resolve-Tool 'ffmpeg' 'ffmpeg.exe' $FfmpegZipUrl $true
+    if (-not $ffDir -and (Test-Command 'ffmpeg')) { $ffDir = Split-Path -Parent (Get-Command 'ffmpeg').Source }
+    if ($ffDir -and (Test-Path (Join-Path $ffDir 'ffmpeg.exe'))) { $env:Path = "$ffDir;$env:Path" }
+    else { Log "  ATTENTION : ffmpeg introuvable — transcription vocale indisponible ; le reste de l application fonctionne" }
 
     # ── 3bis. Mise a jour automatique depuis GitHub (AVANT dependances et
     # build : elles tiendront compte des fichiers recus) ──

@@ -5,7 +5,8 @@
 
 - **1er double-clic** : installe automatiquement tout ce qui manque **à
   l'intérieur du dossier hermes** (sous-dossier `tools\`) — Node.js v22 LTS,
-  Bun, Caddy, puis les dépendances npm/bun et le build de
+  Bun, Caddy, chrome-headless-shell (rendu PNG/PDF des artefacts et partages)
+  et ffmpeg (transcription vocale), puis les dépendances npm/bun et le build de
   production de l'interface. Aucune ligne de commande, aucun droit
   administrateur, **rien n'est écrit hors du dossier**. Comptez quelques
   minutes (téléchargements + installations) avec la progression affichée
@@ -47,7 +48,9 @@ fonctionnera. La télémétrie de Next.js est désactivée.
    — même si l'outil est déjà installé sur le système, pour que le dossier
    déplacé reste complet ; en cas d'échec du téléchargement, la copie du
    système est utilisée à défaut. Node v22.20.0 (LTS) et Bun en zip
-   officiels, Caddy en exe officiel.
+   officiels, Caddy en exe officiel, chrome-headless-shell en zip Chrome
+   for Testing (la variable `CHROME_HEADLESS_PATH` est réglée par le lanceur)
+   et ffmpeg en zip « essentials ».
 3. **Mise à jour automatique** (si le dossier est un clone git) : les
    derniers commits poussés sur GitHub sont récupérés et appliqués par
    fusion rapide. Si le dossier contient des différences locales (anciens
@@ -195,6 +198,9 @@ et Caddy via votre gestionnaire de paquets.
 | « n'a pas démarré » | `desktop\logs\launcher.log` (cause en clair) |
 | Téléchargement qui échoue | relancez (idempotent) ; vérifiez la connexion / le proxy |
 | Build en échec | messages dans la fenêtre au 1er lancement ; `tools\build-echoue.flag` (une nouvelle version retente d'elle-même, une même version est retentée après 24 h) |
+| Pastille « Rendu (chrome-headless) : introuvable » dans Paramètres → Système ; vignettes/PDF/partages en échec | chrome-headless-shell se télécharge dans `tools\` au démarrage (idempotent — relancez) ; sans réseau au premier démarrage, il viendra d'un dossier déjà installé (cache Playwright) ou manquera |
+| Dictée (transcription) en échec sur un format non WAV/WebM | ffmpeg est téléchargé dans `tools\` au démarrage ; les formats WAV/WebM passent sans lui |
+| Export ZIP d'artefacts en échec | Windows 10+ : via tar intégré automatiquement (repli de secours) ; Linux/macOS : installez `zip` du système |
 | Mise à jour non appliquée | `desktop\logs\launcher.log` (cause en clair) ; les différences locales sont sauvegardées dans `desktop\runtime\maj-sauvegarde-…\` puis la version GitHub est appliquée. Vos données (conversations, clés) ne sont jamais touchées |
 | Page blanche / erreur | `desktop\logs\interface-err.log` |
 | Chat ne répond pas | `desktop\logs\mini-service-err.log` |
