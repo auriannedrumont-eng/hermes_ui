@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   Columns2,
-  CornerDownLeft,
   Globe,
   Loader2,
   Mic,
@@ -718,11 +717,13 @@ export function Composer({
 
           </div>
           <div className="flex items-center gap-1.5">
-            <p className="hidden items-center gap-1.5 text-[11px] text-muted-foreground lg:flex">
-              <CornerDownLeft className="h-3 w-3" />
-              Entrée pour envoyer
-            </p>
-            {/* Bouclier des autorisations — sans objet en mode démo (pas d'outils) */}
+            {/* Bouclier des autorisations — sans objet en mode démo (pas
+                d'outils) : même idiome que la recherche web — le bouton reste
+                survolable et le tooltip explique pourquoi il est inactif,
+                au lieu d'un bouton désactivé sans explication visible. */}
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
             <Button
               type="button"
               variant="ghost"
@@ -732,14 +733,7 @@ export function Composer({
                 if (permissionsMode === "auto") onPermissionsChange("ask");
                 else setPermDialogOpen(true);
               }}
-              disabled={mode !== "gateway"}
-              title={
-                mode === "gateway"
-                  ? permissionsMode === "auto"
-                    ? "Autorisations : tout exécuter sans confirmation — cliquer pour revenir en mode « ask »"
-                    : "Autorisations : confirmation avant chaque action"
-                  : "Sans objet en mode démo — actif avec une gateway"
-              }
+              aria-disabled={mode !== "gateway"}
               aria-label="Autorisations de l'agent"
               className={`h-9 w-[34px] shrink-0 rounded-full transition-colors ${
                 permissionsMode === "auto"
@@ -749,6 +743,16 @@ export function Composer({
             >
               <ShieldCheck className="h-4 w-4" />
             </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px]">
+                  {mode !== "gateway"
+                    ? "Autorisations de l'agent : sans objet en mode démo — l'agent démo n'exécute aucun outil. Actives avec une gateway."
+                    : permissionsMode === "auto"
+                      ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
+                      : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {/* Jauge de contexte — visible selon fork.context.gauge */}
             {gaugeVisible ? (
               <ContextGauge
