@@ -274,7 +274,7 @@ export class ChromeRenderer {
       method: "PUT",
     });
     if (!res.ok) throw new Error(`Impossible d'ouvrir une page CDP (${res.status})`);
-    const target = await res.json();
+    const target = (await res.json()) as { webSocketDebuggerUrl: string; id: string };
     const ws = new WebSocket(target.webSocketDebuggerUrl, { perMessageDeflate: false });
     await new Promise<void>((resolve, reject) => {
       ws.once("open", () => resolve());

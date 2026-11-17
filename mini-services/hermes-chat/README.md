@@ -444,3 +444,12 @@ pour repartir de zéro.
 - `asr.ts` — transcription audio (ASR + conversion ffmpeg)
 - `uploads.ts` — pièces jointes multimédia (disque, service HTTP, nettoyage)
 - `types.ts` — types partagés (miroir : `src/lib/chat-types.ts` côté frontend)
+
+## Développement
+
+Le service a son **propre `tsconfig.json`** (types `bun-types`) : `bunx tsc
+--noEmit` dans ce dossier vérifie réellement le code du service — sans lui,
+`tsc` remonte au `tsconfig.json` racine qui **exclut** `mini-services/` et le
+contrôle ne vérifie aucun fichier (c'est ce qui a laissé passer le `label` non
+défini de `webchat/cdp.ts`). L'étape « Typecheck mini-service » de la CI
+s'appuie dessus.

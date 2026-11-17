@@ -142,6 +142,9 @@ export const FICHES: Record<WebchatSiteId, SiteFiche> = {
     compositeur_pret: "",
     sel_envoyer: "",
     sel_reponse: "",
+    // Site non vérifié : signal à relever (cf. notes) — jamais piloté tant
+    // que verifie=false, la valeur reste vide sans mentir sur un constat.
+    en_cours: "",
     notes: [
       "SÉLECTEURS À RELEVER : aucun n'a été constaté. Le compositeur n'est probablement pas un textarea mais une zone éditable riche.",
       "Signal de fin : disparition du bouton d'arrêt (aria-label du type « Stop response ») puis texte stable sur 3 relevés.",

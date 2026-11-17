@@ -1843,7 +1843,7 @@ export class Store {
       .join(", ");
     this.db
       .query(`UPDATE extensions SET ${sets} WHERE id = ?`)
-      .run(...Object.values(cols), id);
+      .run(...(Object.values(cols) as (string | number | bigint | boolean | null)[]), id);
     return this.getExtensionRow(id);
   }
 

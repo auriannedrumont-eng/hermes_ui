@@ -14,12 +14,16 @@ function argOf(flag: string): string | null {
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : null;
 }
 
-const profileDir = argOf("--profile");
-const idleMin = Number(argOf("--idle-min") ?? "5");
+const profileArg = argOf("--profile");
+const idleArg = Number(argOf("--idle-min") ?? "5");
 
-if (!profileDir || !Number.isFinite(idleMin) || idleMin <= 0) {
+if (!profileArg || !Number.isFinite(idleArg) || idleArg <= 0) {
   process.exit(2);
 }
+// Resserrés pour le reste du module (les fermetures ci-dessous ne héritent
+// pas du rétrécissement de flux de la garde ci-dessus).
+const profileDir: string = profileArg;
+const idleMin: number = idleArg;
 
 const IDLE_MS = idleMin * 60_000;
 const POLL_MS = 30_000;

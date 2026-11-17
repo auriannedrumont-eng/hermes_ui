@@ -9,7 +9,7 @@ import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ModelOption } from "../types";
 import { trace } from "../trace";
-import { FICHES, parseWebchatModelId, webchatModelId, type WebchatSiteId } from "./fiches";
+import { FICHES, parseWebchatModelId, webchatModelId, type WebchatMode, type WebchatSiteId } from "./fiches";
 import { isBrowserUp } from "./browser";
 import { resolveUnder } from "./paths";
 

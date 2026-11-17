@@ -307,6 +307,13 @@ function isLoopbackOrigin(origin: string): boolean {
 
 const PORT = Number(process.env.HERMES_CHAT_PORT ?? 3003);
 const FILES_PORT = Number(process.env.HERMES_CHAT_FILES_PORT ?? 3004); // service HTTP dédié aux pièces jointes
+// Écoute en boucle locale (complète le Lot 1, audit L1-1) : Caddy bind déjà
+// 127.0.0.1 mais le service écoutait sur TOUTES les interfaces — le correctif
+// « Caddy loopback seul » était incomplet, la pile restait joignable du réseau
+// local. HERMES_CHAT_HOST existe pour un usage exposé explicite et assumé
+// (définir alors AUSSI HERMES_SERVICE_TOKEN — les gardes d'origine seules ne
+// suffisent pas hors boucle locale).
+const HOST = process.env.HERMES_CHAT_HOST ?? "127.0.0.1";
 const MAX_HISTORY = 30;
 
 mkdirSync(ARTIFACTS_DIR, { recursive: true });
@@ -1272,6 +1279,38 @@ function compactInfoWire(conversationId: string): CompactInfo | null {
   return info;
 }
 
+// ── Mise à jour depuis l'interface : journal live du lanceur ────────────
+// Dépose un drapeau que le lanceur (desktop/hermes-ui.ps1 | .sh — boucle
+// de surveillance) ramasse. Le relais du journal (system:update-log:changed)
+// vit AU NIVEAU DU SERVICE : un seul intervalle pour toutes les connexions
+// (fix fuite — il était posé dans io.on("connection"), donc un par socket,
+// jamais annulé : N connexions = N intervalles et N diffusions dupliquées).
+const majFlag = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj-demandee.flag");
+const majLog = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj.log");
+// Dernier contenu diffusé : on ne re-diffuse que sur changement réel.
+let majLogSig = "";
+const majLogRead = (): { exists: boolean; text: string; mtimeMs: number } => {
+  try {
+    const st = statSync(majLog);
+    // Plafond 64 Ko : un journal ne doit jamais gonfler un message socket.
+    const buf = readFileSync(majLog);
+    const text = buf.length > 65_536 ? buf.subarray(buf.length - 65_536).toString("utf-8") : buf.toString("utf-8");
+    return { exists: true, text, mtimeMs: st.mtimeMs };
+  } catch {
+    return { exists: false, text: "", mtimeMs: 0 };
+  }
+};
+// Relais en direct : le fichier est écrit par le lanceur, pas par nous —
+// sondage léger (2 s), diffusion seulement si le contenu a vraiment changé.
+setInterval(() => {
+  const snap = majLogRead();
+  if (!snap.exists) return;
+  const sig = `${snap.mtimeMs}:${snap.text.length}`;
+  if (sig === majLogSig) return;
+  majLogSig = sig;
+  io.emit("system:update-log:changed", snap);
+}, 2000);
+
 io.on("connection", (socket) => {
   console.log(`[hermes-chat] client connecté : ${socket.id}`);
   trace("socket", `client connecté (${socket.id})`);
@@ -1834,21 +1873,6 @@ io.on("connection", (socket) => {
   // au lieu de croiser les doigts. Sans lanceur vivant (ou lanceur trop
   // ancien pour connaître le drapeau), rien ne bouge : l'interface le
   // détecte et l'affiche — le prochain démarrage efface le drapeau.
-  const majFlag = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj-demandee.flag");
-  const majLog = join(import.meta.dir, "..", "..", "desktop", "runtime", "maj.log");
-  // Dernier contenu diffusé : on ne re-diffuse que sur changement réel.
-  let majLogSig = "";
-  const majLogRead = (): { exists: boolean; text: string; mtimeMs: number } => {
-    try {
-      const st = statSync(majLog);
-      // Plafond 64 Ko : un journal ne doit jamais gonfler un message socket.
-      const buf = readFileSync(majLog);
-      const text = buf.length > 65_536 ? buf.subarray(buf.length - 65_536).toString("utf-8") : buf.toString("utf-8");
-      return { exists: true, text, mtimeMs: st.mtimeMs };
-    } catch {
-      return { exists: false, text: "", mtimeMs: 0 };
-    }
-  };
   socket.on("system:update-request", (cb?: (data: unknown) => void) => {
     const done = (res: Record<string, unknown>) => {
       if (typeof cb === "function") cb(res);
@@ -1875,16 +1899,8 @@ io.on("connection", (socket) => {
   socket.on("system:update-log", (cb?: (data: unknown) => void) => {
     if (typeof cb === "function") cb(majLogRead());
   });
-  // Relais en direct : le fichier est écrit par le lanceur, pas par nous —
-  // sondage léger (2 s), diffusion seulement si le contenu a vraiment changé.
-  setInterval(() => {
-    const snap = majLogRead();
-    if (!snap.exists) return;
-    const sig = `${snap.mtimeMs}:${snap.text.length}`;
-    if (sig === majLogSig) return;
-    majLogSig = sig;
-    io.emit("system:update-log:changed", snap);
-  }, 2000);
+  // (Le relais en direct system:update-log:changed vit au niveau du module —
+  // un seul intervalle pour tout le service, cf. déclaration ci-dessus.)
 
   // ── Système (v2.4) : profils de rendu Chrome — sonde réelle ─────────
   // Le cache des rendus, ce sont les profils « hermes-chrome-* » du tmp :
@@ -3853,12 +3869,12 @@ connector
     } catch {
       /* liste chargée à la demande par le client */
     }
-    httpServer.listen(PORT, () => {
-      console.log(`[hermes-chat] service démarré sur le port ${PORT} — mode : ${connector.mode}`);
-      trace("boot", `service écoutant sur ${PORT} — mode ${connector.mode}`);
-      filesServer.listen(FILES_PORT, () => {
+    httpServer.listen(PORT, HOST, () => {
+      console.log(`[hermes-chat] service démarré sur ${HOST}:${PORT} — mode : ${connector.mode}`);
+      trace("boot", `service écoutant sur ${HOST}:${PORT} — mode ${connector.mode}`);
+      filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
-        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${FILES_PORT}`);
+        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
       });
       if (connector.mode === "local") {
         console.log(
@@ -3877,12 +3893,12 @@ connector
   })
   .catch((err) => {
     console.error("[hermes-chat] échec d'initialisation du connecteur :", err);
-    httpServer.listen(PORT, () => {
-      console.log(`[hermes-chat] service démarré sur le port ${PORT} — mode : ${connector.mode}`);
-      trace("boot", `service écoutant sur ${PORT} — mode ${connector.mode}`);
-      filesServer.listen(FILES_PORT, () => {
+    httpServer.listen(PORT, HOST, () => {
+      console.log(`[hermes-chat] service démarré sur ${HOST}:${PORT} — mode : ${connector.mode}`);
+      trace("boot", `service écoutant sur ${HOST}:${PORT} — mode ${connector.mode}`);
+      filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
-        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${FILES_PORT}`);
+        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
       });
     });
   });

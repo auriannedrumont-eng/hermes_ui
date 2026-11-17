@@ -558,6 +558,10 @@ async function main() {
     try { socket?.close?.(); } catch {}
     try { service?.kill?.("SIGKILL"); } catch {}
     try { mockServer?.close?.(); } catch {}
+    // Hygiène (audit) : la base jetable ne doit pas survivre au test —
+    // db-test-integration/ s'accumulait à chaque passage de la suite
+    // (le contrôle WAL ci-dessus a déjà lu ce qu'il devait lire).
+    try { rmSync(DB_DIR, { recursive: true, force: true }); } catch {}
   }
   process.exit(failures === 0 ? 0 : 1);
 }

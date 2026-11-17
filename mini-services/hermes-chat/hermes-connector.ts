@@ -191,7 +191,7 @@ export class HermesConnector {
       );
       clearTimeout(timer);
       if (!res.ok) return null;
-      const data = await res.json();
+      const data = (await res.json()) as Record<string, unknown>;
       const models = parseModelOptions(data);
       if (!models.length) return null;
       const result: ModelsResult = {

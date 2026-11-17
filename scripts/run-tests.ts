@@ -388,6 +388,18 @@ async function main() {
   } finally {
     sharedProc?.kill();
     e2eMockServer?.close();
+    // Hygiène (audit) : la base jetable de la suite E2E ne doit pas survivre
+    // au passage — db-test-e2e/ s'accumulait à chaque --e2e. Best effort :
+    // sous Windows le fichier SQLite peut rester ouvert un instant après le
+    // kill (échec silencieux, le prochain passage nettoie au départ de toute
+    // façon).
+    if (sharedProc) {
+      try {
+        rmSync(E2E_DB_DIR, { recursive: true, force: true });
+      } catch {
+        /* fichier encore ouvert : nettoyé au prochain départ */
+      }
+    }
   }
 
   const failed = results.filter((r) => r.status === "ÉCHEC" || r.status === "TIMEOUT");

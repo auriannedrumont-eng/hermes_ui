@@ -68,11 +68,14 @@ export function findTab(targets: TargetInfo[], match: string): TargetInfo | null
 
 export class CdpPage {
   private ws: WebSocket;
+  /** Nom de la connexion dans les messages d'erreur/close (diagnostic). */
+  private label: string;
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 
-  constructor(ws: WebSocket) {
+  constructor(ws: WebSocket, label = "CDP") {
     this.ws = ws;
+    this.label = label;
     this.ws.on("message", (data: WebSocket.RawData) => {
       let msg: CdpMessage;
       try {
@@ -92,10 +95,10 @@ export class CdpPage {
     // tué) et les requêtes en vol attendaient leur timeout 20 s. Erreur et
     // fermeture rejettent maintenant toutes les pending immédiatement.
     this.ws.on("error", (err: Error) =>
-      this.rejectAllPending(`WebSocket ${label} : ${err.message}`)
+      this.rejectAllPending(`WebSocket ${this.label} : ${err.message}`)
     );
     this.ws.on("close", () =>
-      this.rejectAllPending(`WebSocket ${label} fermée (navigateur fermé ou crashé)`)
+      this.rejectAllPending(`WebSocket ${this.label} fermée (navigateur fermé ou crashé)`)
     );
   }
 

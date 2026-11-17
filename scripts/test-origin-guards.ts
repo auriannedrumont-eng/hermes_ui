@@ -14,6 +14,7 @@
 //   8. 3004 /diagnostics sans Origin (curl) → 200
 import { createRequire } from "node:module";
 import { spawn, spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
 
 const { io } = createRequire(
   new URL("../mini-services/hermes-chat/package.json", import.meta.url).pathname
@@ -104,6 +105,16 @@ async function main() {
     check("3004 sans Origin (curl) → 200", r5.status === 200, `statut ${r5.status}`);
   } finally {
     killFixture();
+    // Hygiène (audit) : la base jetable ne doit pas survivre au test —
+    // db-test-origin-guards/ s'accumulait à chaque passage de la suite.
+    try {
+      rmSync(new URL("../db-test-origin-guards", import.meta.url).pathname, {
+        recursive: true,
+        force: true,
+      });
+    } catch {
+      /* déjà parti */
+    }
   }
 
   console.log(failures === 0 ? "\nGardes d'origine : 0 échec" : `\nGardes d'origine : ${failures} échec(s)`);
