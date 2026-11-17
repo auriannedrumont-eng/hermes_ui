@@ -53,6 +53,29 @@ export interface PoolTurnResult {
 }
 
 /** Contrat consommé par le connecteur (hermes-connector.ts). */
+/** Tour LLM en vol — suivi interne, alimenté à chaque octet par la garde. */
+interface StreamTraceEntry {
+  provider: string;
+  model: string;
+  startedAt: number;
+  lastByteAt: number;
+  bytes: number;
+}
+
+/** Instantané public d'un tour en vol — /diagnostics (F-31ter) tranche
+ *  « fournisseur lent » (octets récents) vs « mort » (silence long) PENDANT
+ *  le tour, sans attendre la garde d'inactivité. */
+export interface PoolStreamSnapshot {
+  provider: string;
+  model: string;
+  /** Secondes depuis le lancement du tour. */
+  startedAgoS: number;
+  /** Secondes depuis le DERNIER octet reçu du fournisseur. */
+  lastByteAgeS: number;
+  /** Octets bruts reçus (encadrement SSE compris). */
+  bytes: number;
+}
+
 export interface LlmPoolApi {
   listModels(): Promise<ModelsResult | null>;
   runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<PoolTurnResult | null>;
@@ -62,6 +85,8 @@ export interface LlmPoolApi {
   /** Noms des fournisseurs LLM actionnables (clé active ou keyless) —
    *  alimente la carte de statut honnête de la sidebar (v2.4). */
   activeProviderNames(): string[];
+  /** Tours LLM en vol à l'instant T — section pool du pont de dépannage. */
+  activeStreams(): PoolStreamSnapshot[];
 }
 
 // ── Endpoints LLM connus ───────────────────────────────────────────────
@@ -287,6 +312,9 @@ function isVisionModel(id: string): boolean {
 export function createLlmPool(store: Store): LlmPoolApi {
   // Cache des listes par fournisseur (vidé par invalidate()).
   const modelsCache = new Map<string, ModelOption[] | null>();
+  // Tours LLM en vol — rempli par stallGuard à chaque lancement, vidé en
+  // finally à chaque fin ; alimente la section pool de /diagnostics (F-31ter).
+  const activeStreamEntries = new Set<StreamTraceEntry>();
   // Adresses déjà signalées (évite les logs en boucle).
   const warned = new Set<string>();
 
@@ -428,24 +456,38 @@ export function createLlmPool(store: Store): LlmPoolApi {
   // cessent) bloque le tour indéfiniment. C'est une garde d'INACTIVITÉ : le
   // minuteur repart à chaque octet reçu — une réponse longue mais vivante
   // reste licite, un fournisseur muet est coupé avec un motif parlant.
-  const TURN_STALL_TIMEOUT_MS = 120_000;
+  // Surcharge par env pour les preuves (jamais en production).
+  const TURN_STALL_TIMEOUT_MS = Math.max(
+    5_000,
+    Number(process.env.HERMES_TURN_STALL_MS) || 120_000,
+  );
 
   /** Signal combiné pour un tour streaming : annulation utilisateur (cb.signal)
    *  + minuteur d'inactivité. reset() repart le minuteur (octet reçu) ;
    *  done() nettoie à la fin du tour. Le déclenchement annule le fetch avec un
    *  motif parlant — l'erreur remonte telle quelle jusqu'à l'interface. */
-  function stallGuard(signal: AbortSignal, stallMs: number, label: string) {
+  function stallGuard(signal: AbortSignal, stallMs: number, label: string, modelId: string) {
     const controller = new AbortController();
     const onUserAbort = () => controller.abort(signal.reason);
     if (signal.aborted) onUserAbort();
     else signal.addEventListener("abort", onUserAbort, { once: true });
+    // Suivi live (F-31ter) : l'entrée existe du lancement au nettoyage (done,
+    // en finally) — /diagnostics la lit pour trancher lent vs mort en vol.
+    const entry: StreamTraceEntry = {
+      provider: label,
+      model: modelId,
+      startedAt: Date.now(),
+      lastByteAt: Date.now(),
+      bytes: 0,
+    };
+    activeStreamEntries.add(entry);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const arm = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         controller.abort(
           new Error(
-            `${label} : plus aucun octet reçu depuis ${Math.round(stallMs / 1000)} s — tour abandonné (garde d'inactivité)`
+            `${label} : plus aucun octet reçu depuis ${Math.round(stallMs / 1000)} s — tour abandonné (garde d'inactivité)`,
           ),
         );
       }, stallMs);
@@ -453,9 +495,14 @@ export function createLlmPool(store: Store): LlmPoolApi {
     arm();
     return {
       signal: controller.signal,
-      reset: arm,
+      reset(bytes = 0) {
+        entry.lastByteAt = Date.now();
+        entry.bytes += bytes;
+        arm();
+      },
       done() {
         if (timer) clearTimeout(timer);
+        activeStreamEntries.delete(entry);
         signal.removeEventListener("abort", onUserAbort);
       },
     };
@@ -494,7 +541,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
       ...(expert.seed !== undefined ? { seed: expert.seed } : {}),
     };
 
-    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel);
+    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
     let res: Response;
     try {
       res = await fetch(`${endpoint.base}/chat/completions`, {
@@ -569,7 +616,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
         if (cb.signal.aborted) break;
         const { done, value } = await reader.read();
         if (done) break;
-        guard.reset();
+        guard.reset(value.byteLength);
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -610,7 +657,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
       ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
     };
 
-    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel);
+    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
     let res: Response;
     try {
       res = await fetch(`${endpoint.base}/messages`, {
@@ -695,7 +742,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
         if (cb.signal.aborted) break;
         const { done, value } = await reader.read();
         if (done) break;
-        guard.reset();
+        guard.reset(value.byteLength);
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -919,5 +966,17 @@ export function createLlmPool(store: Store): LlmPoolApi {
     return [...names];
   }
 
-  return { listModels, runTurn, summarize, invalidate, activeProviderNames };
+  /** Instantané des tours LLM en vol (F-31ter) — vide une fois le vol fini. */
+  function activeStreams(): PoolStreamSnapshot[] {
+    const now = Date.now();
+    return [...activeStreamEntries].map((e) => ({
+      provider: e.provider,
+      model: e.model,
+      startedAgoS: Math.round((now - e.startedAt) / 1000),
+      lastByteAgeS: Math.round((now - e.lastByteAt) / 1000),
+      bytes: e.bytes,
+    }));
+  }
+
+  return { listModels, runTurn, summarize, invalidate, activeProviderNames, activeStreams };
 }

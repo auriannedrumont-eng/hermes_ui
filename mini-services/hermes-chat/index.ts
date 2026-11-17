@@ -495,6 +495,9 @@ async function handleDiagnostics(res: ServerResponse): Promise<void> {
       profileDir: config.profileDir,
       browserPath: config.browserPath || null,
     },
+    // Tours LLM en vol (F-31ter) : lastByteAgeS grand = fournisseur muet,
+    // petit = réponse lente mais vivante. Vide = aucun tour en cours.
+    pool: { streams: pool.activeStreams() },
     trace: traceDump(150),
     traceMeta: traceMeta(),
   };
