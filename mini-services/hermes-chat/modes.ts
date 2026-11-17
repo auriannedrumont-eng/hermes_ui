@@ -79,7 +79,8 @@ export interface ModeConfig {
   autoDebate?: boolean;
   /** Débat : les voix d'un MÊME tour partient ensemble — chacune voit les
    *  tours précédents mais pas les voix de son tour (elles répondent en même
-   *  temps). ~3× plus rapide ; désactivée par défaut (débat enchaîné). */
+   *  temps). ~3× plus rapide ; ACTIVÉE par défaut (F-57) — false pour revenir
+   *  au débat enchaîné, où chaque voix répond à celles qui précèdent. */
   debateParallel?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;

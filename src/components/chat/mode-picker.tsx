@@ -381,12 +381,12 @@ export function ModePicker({
                 />
               </div>
               <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
-                <span>Voix du tour en parallèle (plus rapide)</span>
+                <span>Voix du tour en parallèle (par défaut, rapide)</span>
                 <SwitchMini
-                  on={current.debateParallel === true}
+                  on={current.debateParallel !== false}
                   ariaLabel="Voix du tour en parallèle"
                   onToggle={() =>
-                    patch((c) => ({ ...c, debateParallel: c.debateParallel !== true }))
+                    patch((c) => ({ ...c, debateParallel: c.debateParallel === false }))
                   }
                 />
               </div>

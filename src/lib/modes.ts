@@ -67,7 +67,8 @@ export interface ModeConfig {
   /** Auto : débat préalable de cadrage (désactivable pour les tâches évidentes). */
   autoDebate?: boolean;
   /** Débat : les voix d'un MÊME tour partent ensemble (voient les tours
-   *  précédents, pas celles de leur tour) — ~3× plus rapide. */
+   *  précédents, pas celles de leur tour) — ~3× plus rapide, activé par
+   *  défaut (F-57). */
   debateParallel?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;

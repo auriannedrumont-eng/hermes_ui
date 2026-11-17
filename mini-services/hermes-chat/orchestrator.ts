@@ -223,11 +223,13 @@ async function runDebate(
   rounds: number,
 ): Promise<OrchestratorResult> {
   const transcript: string[] = [];
-  // Option « voix du tour en parallèle » : les trois voix partent ENSEMBLE et
-  // chacune ne voit que les tours PRÉCÉDENTS (les voix de son tour répondent
-  // en même temps — elles seront lisibles au suivant). Le débat enchaîné reste
-  // le défaut : c'est le seul où chaque voix répond à celles qui précèdent.
-  const parallel = ctx.config?.debateParallel === true;
+  // « Voix du tour en parallèle » : les trois voix partent ENSEMBLE et chacune
+  // ne voit que les tours PRÉCÉDENTS (les voix de son tour répondent en même
+  // temps — elles seront lisibles au suivant). PAR DÉFAUT (F-57 : 61 minutes
+  // pour un débat de 3 tours, c'est insoutenable) ; l'enchaîné — le seul où
+  // chaque voix répond à celles qui précèdent — reste au tarif d'un
+  // interrupteur dans la config du débat.
+  const parallel = ctx.config?.debateParallel !== false;
   for (let r = 1; r <= rounds; r++) {
     if (ctx.signal.aborted) break;
     if (parallel) {
@@ -253,7 +255,9 @@ async function runDebate(
             `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. ` +
             `Vous voyez les tours précédents ; les autres voix de votre tour répondent ` +
             `en même temps que vous : vous ne les lirez qu'au tour suivant. Contredisez ` +
-            `sur des faits, jamais sur des généralités.`;
+            `sur des faits, jamais sur des généralités. Votre intervention tient en ` +
+            `2000 caractères maximum : droit au but, sans préambule ni répétition de ` +
+            `ce qui a déjà été dit.`;
           try {
             const outcome = await runVoiceWithRow(
               deps,
@@ -309,7 +313,12 @@ async function runDebate(
           model: shortModel(v.model),
           status: "running",
         });
-        const note = `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. Chaque tour voit ce qui a été dit avant : contredisez sur des faits, jamais sur des généralités.`;
+        const note =
+          `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. ` +
+          `Chaque tour voit ce qui a été dit avant : contredisez sur des faits, ` +
+          `jamais sur des généralités. Votre intervention tient en 2000 caractères ` +
+          `maximum : droit au but, sans préambule ni répétition de ce qui a déjà ` +
+          `été dit.`;
         const outcome = await runVoiceWithRow(
           deps,
           ctx,

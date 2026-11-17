@@ -122,11 +122,12 @@ async function main() {
     done = true;
   });
 
+  // SANS champ debateParallel : le DÉFAUT doit être parallèle (F-57) — c'est
+  // le chemin exact d'une conversation existante créée avant l'option.
   const conv = await emitAck(s, "conversations:create", {
     mode: "debate",
     modeConfig: {
       rounds: 1,
-      debateParallel: true,
       voices: {
         debate: { sceptique: MODEL, pragmatique: MODEL, innovateur: MODEL, juge: MODEL },
       },
