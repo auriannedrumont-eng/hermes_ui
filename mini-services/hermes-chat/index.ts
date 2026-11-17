@@ -966,6 +966,45 @@ function abortRunning(conversationId: string): void {
   running.get(`${conversationId}:b`)?.abort();
 }
 
+// Tours en vol pour la RÉ-ATTACHE : quand le client quitte une conversation
+// dont le tour continue puis y revient, son état de stream local est perdu
+// (stream:start ne se reproduira pas, deltas sans entrée ignorés) et le
+// message assistant n'est pas encore persisté — il ne l'est qu'à la clôture
+// du tour. conversations:open renvoie donc ces tours avec leur contenu
+// accumulé : le client re-sème son état de stream SANS trou, les deltas
+// suivants s'y raccordent (contenu au retour = préfixe exact du final).
+interface LiveTurnWire {
+  conversationId: string;
+  messageId: string;
+  /** Variante de comparaison (F-17) — absent = tour simple. */
+  variant?: "a" | "b";
+  content: string;
+  reasoning: string;
+  status: string | null;
+  toolEvents: ToolEvent[];
+}
+const liveTurns = new Map<string, LiveTurnWire>();
+
+// Réalignement de la position d'émission : après un re-semis client, les
+// deltas suivants ne doivent porter que la croissance postérieure au
+// snapshot (sinon la queue coalescée non encore émise serait dupliquée —
+// elle est déjà dans le contenu re-semé).
+const liveResync = new Map<string, () => void>();
+
+/** Instantané des tours en vol de cette conversation (simple + variantes
+ *  a/b) : contenu accumulé copié, puis position d'émission alignée sur ce
+ *  contenu — les deltas suivants raccordent le client sans trou ni doublon. */
+function liveTurnsOf(conversationId: string): LiveTurnWire[] {
+  const snapshot: LiveTurnWire[] = [];
+  for (const k of [conversationId, `${conversationId}:a`, `${conversationId}:b`]) {
+    const t = liveTurns.get(k);
+    if (!t) continue;
+    snapshot.push({ ...t, toolEvents: [...t.toolEvents] });
+    liveResync.get(k)?.();
+  }
+  return snapshot;
+}
+
 /** Charge compare valide : exactement 2 ids distincts non vides. */
 function validCompareIds(raw: unknown): [string, string] | null {
   if (!Array.isArray(raw) || raw.length !== 2) return null;
@@ -1435,8 +1474,12 @@ io.on("connection", (socket) => {
     const messages = store.getMessages(id);
     attachArtifactCards(id, messages);
     const compact = compactInfoWire(id);
-    if (typeof cb === "function") cb({ conversationId: id, messages, compact });
-    else socket.emit("conversations:messages", { conversationId: id, messages, compact });
+    // Ré-attache : les tours en vol de cette conversation (contenu accumulé
+    // inclus) partent avec le snapshot — le client qui revit la conversation
+    // pendant une génération raccroche le fil au lieu de voir un tour mort.
+    const live = liveTurnsOf(id);
+    if (typeof cb === "function") cb({ conversationId: id, messages, compact, live });
+    else socket.emit("conversations:messages", { conversationId: id, messages, compact, live });
   });
 
   // ── Artefacts ─────────────────────────────────────────────────────────
@@ -2798,6 +2841,17 @@ io.on("connection", (socket) => {
       model,
       ...(variant ? { variant } : {}),
     });
+    // Ré-attache : le tour se déclare dans le registre dès son départ —
+    // liveSync maintient l'instantané au fil des deltas (cf. LiveTurnWire).
+    liveTurns.set(turnKey, {
+      conversationId,
+      messageId,
+      variant,
+      content: "",
+      reasoning: "",
+      status: "Hermes réfléchit…",
+      toolEvents: [],
+    });
 
     // Historique : tout ce qui précède le dernier message utilisateur.
     // Si la conversation est compactée, le résumé remplace les messages
@@ -2854,6 +2908,33 @@ io.on("connection", (socket) => {
     let modeTagOut: string | undefined = undefined;
     let modeFlowOut: import("./types").ModeFlowRow[] | undefined = undefined;
 
+    // Ré-attache : maintient l'instantané du tour en vol (contenu/reasoning
+    // accumulés + patch optionnel). No-op si un tour plus récent a déjà
+    // repris la clé (même garde que running.delete dans le finally).
+    const liveSync = (patch?: Partial<Pick<LiveTurnWire, "status" | "toolEvents">>) => {
+      const cur = liveTurns.get(turnKey);
+      if (!cur || cur.messageId !== messageId) return;
+      liveTurns.set(turnKey, {
+        ...cur,
+        content: contentAcc,
+        reasoning: reasoningAcc,
+        ...(patch ?? {}),
+      });
+    };
+    liveResync.set(turnKey, () => {
+      lastSent = contentAcc.length;
+    });
+    // Clôture du tour dans le registre de ré-attache : même garde
+    // d'identité que running.delete — un tour plus récent qui aurait repris
+    // la clé ne doit pas être retiré par le finally de l'ancien.
+    const liveClose = () => {
+      const cur = liveTurns.get(turnKey);
+      if (cur?.messageId === messageId) {
+        liveTurns.delete(turnKey);
+        liveResync.delete(turnKey);
+      }
+    };
+
     // Suivi des artefacts générés pendant le tour (blocs fichier du contenu)
     const tracker = new ArtifactTracker(store, conversationId, messageId, {
       onCreated: (artifact) =>
@@ -2888,6 +2969,7 @@ io.on("connection", (socket) => {
         event: toolEvent,
         ...(variant ? { variant } : {}),
       });
+      liveSync({ toolEvents: [...toolEvents] });
     };
     if (opts.webSearch && !orchestrated) {
       if (connector.mode === "gateway") {
@@ -2970,6 +3052,7 @@ io.on("connection", (socket) => {
             onFlow: flowEmit,
             onFinalDelta: (delta) => {
               contentAcc += delta;
+              liveSync();
               const now = Date.now();
               if (now - lastEmit > 16) {
                 lastEmit = now;
@@ -2983,13 +3066,15 @@ io.on("connection", (socket) => {
                 tracker.update(contentAcc);
               }
             },
-            onFinalStatus: (status) =>
+            onFinalStatus: (status) => {
+              liveSync({ status });
               socket.emit("stream:status", {
                 conversationId,
                 messageId,
                 status,
                 ...(variant ? { variant } : {}),
-              }),
+              });
+            },
           },
           orchestratorDeps,
         );
@@ -3017,13 +3102,15 @@ io.on("connection", (socket) => {
           store,
           cb: {
             signal: controller.signal,
-            onStatus: (status) =>
+            onStatus: (status) => {
+              liveSync({ status });
               socket.emit("stream:status", {
                 conversationId,
                 messageId,
                 status,
                 ...(variant ? { variant } : {}),
-              }),
+              });
+            },
             onToolEvent: (event) => emitTool(event),
           },
         });
@@ -3079,6 +3166,7 @@ io.on("connection", (socket) => {
           signal: controller.signal,
           onDelta: (delta) => {
             contentAcc += delta;
+            liveSync();
             const now = Date.now();
             // Coalescence légère des deltas très rapprochés
             if (now - lastEmit > 16) {
@@ -3096,6 +3184,7 @@ io.on("connection", (socket) => {
           },
           onReasoning: (delta) => {
             reasoningAcc += delta;
+            liveSync();
             socket.emit("stream:reasoning", {
               conversationId,
               messageId,
@@ -3104,6 +3193,7 @@ io.on("connection", (socket) => {
             });
           },
           onStatus: (status) => {
+            liveSync({ status });
             socket.emit("stream:status", {
               conversationId,
               messageId,
@@ -3111,16 +3201,7 @@ io.on("connection", (socket) => {
               ...(variant ? { variant } : {}),
             });
           },
-          onToolEvent: (event) => {
-            const toolEvent: ToolEvent = { ...event, at: new Date().toISOString() };
-            toolEvents.push(toolEvent);
-            socket.emit("stream:tool", {
-              conversationId,
-              messageId,
-              event: toolEvent,
-              ...(variant ? { variant } : {}),
-            });
-          },
+          onToolEvent: (event) => emitTool(event),
         }
         );
       }
@@ -3128,6 +3209,7 @@ io.on("connection", (socket) => {
       // Flush final du contenu restant
       contentAcc = result.content || contentAcc;
       reasoningAcc = result.reasoning || reasoningAcc;
+      liveSync();
       if (result.model) {
         usedModel =
           result.engine === "pool" && result.provider
@@ -3146,6 +3228,11 @@ io.on("connection", (socket) => {
       // Arrêt utilisateur (chat:stop) : le connecteur revient avec le partiel —
       // ce n'est pas une erreur, le tour se clôt normalement avec le marqueur.
       const stopped = controller.signal.aborted;
+
+      // Le tour touche à sa fin : il quitte le registre de ré-attache AVANT
+      // tout événement terminal — un conversations:open pendant la clôture ne
+      // doit pas ré-attacher un tour déjà clos.
+      liveClose();
 
       // Arrêt avant le premier jeton : rien à conserver, pas de bulle vide
       if (stopped && !contentAcc && !reasoningAcc && toolEvents.length === 0) {
@@ -3216,6 +3303,9 @@ io.on("connection", (socket) => {
         ...(variant ? { variant } : {}),
       });
     } catch (err) {
+      // Échec/arrêt : le tour quitte le registre de ré-attache avant les
+      // événements terminaux (même garde d'identité qu'en fin de try).
+      liveClose();
       // Sauvegarde du partiel déjà reçu (quota F-26 appliqué aussi aux tours interrompus)
       const finalizedRows = tracker.finalize(contentAcc, true);
       enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
@@ -3280,6 +3370,9 @@ io.on("connection", (socket) => {
       if (running.get(turnKey) === controller) {
         running.delete(turnKey);
       }
+      // Filet du registre de ré-attache : si aucun chemin terminal n'a
+      // retiré l'entrée, le finally reste l'ultime propriétaire du nettoyage.
+      liveClose();
     }
   };
 

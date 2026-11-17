@@ -1073,6 +1073,15 @@ export function useHermesChat() {
           conversationId: string;
           messages: ChatMessage[];
           compact?: CompactInfo | null;
+          /** Ré-attache : tours en vol de cette conversation (contenu accumulé). */
+          live?: {
+            messageId: string;
+            variant?: "a" | "b";
+            content?: string;
+            reasoning?: string;
+            status?: string | null;
+            toolEvents?: ToolEvent[];
+          }[];
         } = {} as any) => {
           // Garde de course (Lot 1, audit L1-5) : l'ack compare à la
           // conversation ACTIVE (activeIdRef), pas à la closure — navigation
@@ -1082,6 +1091,31 @@ export function useHermesChat() {
           if (res.conversationId === id) {
             setMessages(res.messages ?? []);
             setCompactInfo(res.compact ?? null);
+            // Ré-attache des tours en vol : quitter puis revenir pendant une
+            // génération a effacé l'état de stream local (setStreamsRecord({})
+            // au changement) et le message n'est pas encore persisté — sans
+            // re-semis, les deltas suivants étaient jetés (pas d'entrée) et le
+            // tour paraissait mort. Le service renvoie le contenu accumulé ;
+            // les deltas suivants s'y raccordent sans trou ni doublon.
+            for (const t of res.live ?? []) {
+              if (!t?.messageId) continue;
+              setStreamsRecord((prev) =>
+                prev[t.messageId]
+                  ? prev
+                  : {
+                      ...prev,
+                      [t.messageId]: {
+                        messageId: t.messageId,
+                        conversationId: id,
+                        variant: t.variant,
+                        content: t.content ?? "",
+                        reasoning: t.reasoning ?? "",
+                        status: t.status ?? null,
+                        toolEvents: t.toolEvents ?? [],
+                      },
+                    },
+              );
+            }
           }
           setLoadingHistory(false);
         }
