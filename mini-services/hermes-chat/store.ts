@@ -2,8 +2,9 @@
 // Le chemin est surchargeable par HERMES_CHAT_DB (tests d'intégration —
 // sinon la base de dev du service).
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { artifactPdfPath, artifactThumbPath } from "./artifacts";
 import type { ShareRow } from "./shares";
 import type { SystemPromptRow } from "./prompts";
 import type { WebSource } from "./web-search";
@@ -27,6 +28,18 @@ import type {
 const DB_PATH =
   process.env.HERMES_CHAT_DB ??
   join(import.meta.dir, "..", "..", "db", "hermes-chat.sqlite");
+
+/** JSON.parse protégé pour les colonnes persistées (audit L2-6) : une ligne
+ *  malformée ne doit jamais rendre une conversation impossible à ouvrir — la
+ *  valeur par défaut du champ est rendue à la place. */
+function parseJsonWire<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 /** mode_config stocké en JSON — charge invalide = null (jamais de plantage).
  *  Les ids webchat du format historique (webchat:<site>:<mode>) sont ramenés
@@ -600,19 +613,23 @@ export class Store {
     token: string
   ): ShareRow {
     const now = new Date().toISOString();
-    this.db
-      .query(
-        `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0, title = ''
-         WHERE conversation_id = ? AND revoked_at IS NULL`
-      )
-      .run(now, conversationId);
-    const id = crypto.randomUUID();
-    this.db
-      .query(
-        `INSERT INTO shares (id, token, conversation_id, title, snapshot, message_count, created_at, revoked_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
-      )
-      .run(id, token, conversationId, title.slice(0, 300), snapshot, messageCount, now);
+    // Transaction (Lot 2, audit L2-5) : révocation + création sont un seul
+    // acte — un crash entre les deux laisserait un partage fantôme.
+    this.db.transaction(() => {
+      this.db
+        .query(
+          `UPDATE shares SET revoked_at = ?, snapshot = '', message_count = 0, title = ''
+           WHERE conversation_id = ? AND revoked_at IS NULL`
+        )
+        .run(now, conversationId);
+      const id = crypto.randomUUID();
+      this.db
+        .query(
+          `INSERT INTO shares (id, token, conversation_id, title, snapshot, message_count, created_at, revoked_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
+        )
+        .run(id, token, conversationId, title.slice(0, 300), snapshot, messageCount, now);
+    })();
     return this.getShareByToken(token)!;
   }
 
@@ -798,6 +815,25 @@ export class Store {
     return rows;
   }
 
+  /** Supprime les lignes d'artefacts ancrées sur les messages donnés (Lot 2,
+   *  audit L2-1) et les renvoie — l'appelant nettoie ensuite les fichiers
+   *  dérivés (deleteArtifactFiles) pour ne pas laisser de PNG/PDF orphelins.
+   *  Une v2 supprimée ne reste plus « ancrée » sur la carte de la v1. */
+  deleteArtifactsOfMessages(conversationId: string, messageIds: string[]): ArtifactRow[] {
+    if (messageIds.length === 0) return [];
+    const rows: ArtifactRow[] = [];
+    const stmt = this.db.query(
+      "SELECT * FROM artifacts WHERE conversation_id = ? AND message_id = ?"
+    );
+    for (const mid of messageIds) {
+      rows.push(...(stmt.all(conversationId, mid) as ArtifactRow[]));
+    }
+    for (const r of rows) {
+      this.db.query("DELETE FROM artifacts WHERE id = ?").run(r.id);
+    }
+    return rows;
+  }
+
   // ── Versionnage fichiers (F-26) : actions humaines sur le journal ───────
 
   /** Étiquette une version (double-clic dans le journal) ; null = efface. */
@@ -894,43 +930,63 @@ export class Store {
     return doomed;
   }
 
-  /** Duplique les artefacts d'une conversation vers un fork (re-ancrage des messages). */
+  /** Duplique les artefacts d'une conversation vers un fork (re-ancrage des
+   *  messages). Lot 2 (audit L2-2) : seuls les artefacts des messages
+   *  RÉELLEMENT copiés suivent — un fork depuis un message intermédiaire
+   *  n'hérite plus des artefacts du futur — et les fichiers dérivés (vignette
+   *  PNG, PDF) sont copiés vers le NOUVEL id. */
   copyArtifactsToFork(
     fromConversationId: string,
     toConversationId: string,
     messageIdMap: Map<string, string>
   ): void {
-    const rows = this.listConversationArtifacts(fromConversationId);
-    for (const r of rows) {
-      const newMessageId = messageIdMap.get(r.message_id) ?? r.message_id;
-      // Conserve le numéro de version d'origine (identité stable dans le fork)
-      // F-26 : l'étiquette, l'épinglage et le marqueur de restauration suivent.
-      this.db
-        .query(
-          `INSERT OR IGNORE INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          crypto.randomUUID(),
-          toConversationId,
-          newMessageId,
-          r.key,
-          r.version,
-          r.kind,
-          r.name,
-          r.language,
-          r.mime,
-          r.content,
-          r.size,
-          r.status,
-          r.status_label,
-          r.error,
-          r.label,
-          r.pinned,
-          r.restored_from,
-          r.created_at
-        );
-    }
+    const rows = this.listConversationArtifacts(fromConversationId).filter((r) =>
+      messageIdMap.has(r.message_id)
+    );
+    if (rows.length === 0) return;
+    this.db.transaction(() => {
+      for (const r of rows) {
+        const newMessageId = messageIdMap.get(r.message_id)!;
+        // Nouvel id de ligne : les fichiers dérivés doivent suivre (une
+        // suppression dans le fork ne doit pas effacer ceux de l'original).
+        const newId = crypto.randomUUID();
+        this.db
+          .query(
+            `INSERT OR IGNORE INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            newId,
+            toConversationId,
+            newMessageId,
+            r.key,
+            r.version,
+            r.kind,
+            r.name,
+            r.language,
+            r.mime,
+            r.content,
+            r.size,
+            r.status,
+            r.status_label,
+            r.error,
+            r.label,
+            r.pinned,
+            r.restored_from,
+            r.created_at
+          );
+        for (const [from, to] of [
+          [artifactThumbPath(r.id), artifactThumbPath(newId)],
+          [artifactPdfPath(r.id), artifactPdfPath(newId)],
+        ] as const) {
+          try {
+            if (existsSync(from)) copyFileSync(from, to);
+          } catch {
+            /* vignette/PDF absents ou illisibles — la carte reste lisible */
+          }
+        }
+      }
+    })();
   }
 
   // ── Projets : rangement des conversations ─────────────────────────
@@ -981,10 +1037,14 @@ export class Store {
   /** Réordonne les projets selon la liste d'ids fournie (positions 0..n-1). */
   reorderProjects(ids: string[]): Project[] {
     const known = new Set(this.listProjects().map((p) => p.id));
-    ids.forEach((pid, i) => {
-      if (!known.has(pid)) return;
-      this.db.query("UPDATE projects SET position = ? WHERE id = ?").run(i, pid);
-    });
+    // Transaction (Lot 2, audit L2-5) : un crash au milieu du réordonnancement
+    // ne doit pas laisser deux projets avec la même position.
+    this.db.transaction(() => {
+      ids.forEach((pid, i) => {
+        if (!known.has(pid)) return;
+        this.db.query("UPDATE projects SET position = ? WHERE id = ?").run(i, pid);
+      });
+    })();
     return this.listProjects();
   }
 
@@ -1239,8 +1299,8 @@ export class Store {
       role: r.role as Role,
       content: r.content,
       reasoning: r.reasoning ?? undefined,
-      toolEvents: r.tool_events ? (JSON.parse(r.tool_events) as ToolEvent[]) : undefined,
-      attachments: r.attachments ? (JSON.parse(r.attachments) as Attachment[]) : undefined,
+      toolEvents: parseJsonWire<ToolEvent[] | undefined>(r.tool_events, undefined),
+      attachments: parseJsonWire<Attachment[] | undefined>(r.attachments, undefined),
       model: r.model ?? undefined,
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
@@ -1255,7 +1315,7 @@ export class Store {
               cost: (r.usage_cost as number | null) ?? undefined,
             }
           : undefined,
-      sources: r.sources ? (JSON.parse(r.sources) as WebSource[]) : undefined,
+      sources: parseJsonWire<WebSource[] | undefined>(r.sources, undefined),
     }));
   }
 
@@ -1344,7 +1404,12 @@ export class Store {
         )
         .run(group, m.versions?.index ?? 1, conversationId, m.id);
       supersededIds.push(m.id);
-      const key = variant === undefined ? "plain" : m.variant;
+      // Lot 3 (audit L3-4) : en régénération SANS variante (Comparer = les
+      // deux côtés), la clé ne doit pas être « plain » pour tout — sinon
+      // groups.a/groups.b restent indéfinis et les nouveaux tours partent
+      // SANS versionGroup : le sélecteur ‹ 1/2 › n'apparaît jamais. La clé
+      // suit la variante du message traversé (a/b), « plain » sans variante.
+      const key = variant === undefined ? (m.variant ?? "plain") : m.variant;
       if (key === "a" || key === "b" || key === "plain") {
         if (!groups[key]) groups[key] = group;
       }
@@ -1363,16 +1428,20 @@ export class Store {
   ): ChatMessage[] | null {
     const count = this.countVersions(group);
     if (count < 1 || index < 1 || index > count) return null;
-    this.db
-      .query(
-        "UPDATE messages SET version_active = 0 WHERE conversation_id = ? AND version_group = ?"
-      )
-      .run(conversationId, group);
-    this.db
-      .query(
-        "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND version_group = ? AND version_index = ?"
-      )
-      .run(conversationId, group, index);
+    // Transaction (Lot 2, audit L2-5) : un crash entre les deux UPDATE
+    // laisserait le groupe SANS version active.
+    this.db.transaction(() => {
+      this.db
+        .query(
+          "UPDATE messages SET version_active = 0 WHERE conversation_id = ? AND version_group = ?"
+        )
+        .run(conversationId, group);
+      this.db
+        .query(
+          "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND version_group = ? AND version_index = ?"
+        )
+        .run(conversationId, group, index);
+    })();
     return this.getMessages(conversationId);
   }
 
@@ -1398,8 +1467,8 @@ export class Store {
       role: r.role as Role,
       content: r.content,
       reasoning: r.reasoning ?? undefined,
-      toolEvents: r.tool_events ? (JSON.parse(r.tool_events) as ToolEvent[]) : undefined,
-      attachments: r.attachments ? (JSON.parse(r.attachments) as Attachment[]) : undefined,
+      toolEvents: parseJsonWire<ToolEvent[] | undefined>(r.tool_events, undefined),
+      attachments: parseJsonWire<Attachment[] | undefined>(r.attachments, undefined),
       model: r.model ?? undefined,
       createdAt: r.created_at,
       stopped: r.stopped ? true : undefined,
@@ -1414,7 +1483,7 @@ export class Store {
               cost: (r.usage_cost as number | null) ?? undefined,
             }
           : undefined,
-      sources: r.sources ? (JSON.parse(r.sources) as WebSource[]) : undefined,
+      sources: parseJsonWire<WebSource[] | undefined>(r.sources, undefined),
     };
   }
 
@@ -1533,26 +1602,32 @@ export class Store {
       src.modeRounds ?? null,
       src.modeConfig ?? null,
     );
-    // Mapping ancien id -> nouvel id pour re-ancrer les artefacts du fork
-    const messageIdMap = new Map<string, string>();
-    for (const m of upto) {
-      const copy = this.appendMessage({
-        conversationId: forked.id,
-        role: m.role,
-        content: m.content,
-        reasoning: m.reasoning,
-        toolEvents: m.toolEvents,
-        attachments: m.attachments,
-        model: m.model,
-        createdAt: m.createdAt,
-        stopped: m.stopped,
-        variant: m.variant,
-        modeTag: m.modeTag,
-        modeFlow: m.modeFlow,
-      });
-      messageIdMap.set(m.id, copy.id);
-    }
-    this.copyArtifactsToFork(conversationId, forked.id, messageIdMap);
+    // Transaction (Lot 2, audit L2-5) : la copie des messages ET le
+    // re-ancrage des artefacts sont un seul acte — un crash au milieu laissait
+    // un fork à moitié rempli (transaction imbriquée = savepoint chez
+    // bun:sqlite, donc copyArtifactsToFork reste correct).
+    this.db.transaction(() => {
+      // Mapping ancien id -> nouvel id pour re-ancrer les artefacts du fork
+      const messageIdMap = new Map<string, string>();
+      for (const m of upto) {
+        const copy = this.appendMessage({
+          conversationId: forked.id,
+          role: m.role,
+          content: m.content,
+          reasoning: m.reasoning,
+          toolEvents: m.toolEvents,
+          attachments: m.attachments,
+          model: m.model,
+          createdAt: m.createdAt,
+          stopped: m.stopped,
+          variant: m.variant,
+          modeTag: m.modeTag,
+          modeFlow: m.modeFlow,
+        });
+        messageIdMap.set(m.id, copy.id);
+      }
+      this.copyArtifactsToFork(conversationId, forked.id, messageIdMap);
+    })();
     return this.getConversation(forked.id);
   }
 
@@ -1560,7 +1635,7 @@ export class Store {
   searchMessages(query: string, limit = 30): SearchHit[] {
     const q = query.trim();
     if (q.length < 2) return [];
-    const pattern = `%${q.replace(/[%,_]/g, (c) => `\${c}`)}%`;
+    const pattern = `%${q.replace(/[%_\\]/g, (c) => "\\" + c)}%`;
     const rows = this.db
       .query(
         `SELECT m.id, m.conversation_id, m.role, m.content, m.created_at,

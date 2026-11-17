@@ -101,7 +101,7 @@ class CdpPage {
   private ws: WebSocket;
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
-  private eventWaiters: Array<{ method: string; resolve: (p: any) => void; timer: NodeJS.Timeout }> = [];
+  private eventWaiters: Array<{ method: string; resolve: (p: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }> = [];
 
   constructor(ws: WebSocket) {
     this.ws = ws;
@@ -130,6 +130,29 @@ class CdpPage {
         }
       }
     });
+    // Lot 2 (audit L2-8) : après le handshake il n'y avait PLUS aucun listener
+    // « error » — un crash de Chrome levait une exception non gérée (processus
+    // tué) et les requêtes en vol attendaient leur timeout 20 s. Erreur et
+    // fermeture rejettent maintenant toutes les pending immédiatement.
+    this.ws.on("error", (err: Error) =>
+      this.rejectAllPending(`WebSocket CDP (rendu) : ${err.message}`)
+    );
+    this.ws.on("close", () =>
+      this.rejectAllPending("WebSocket CDP (rendu) fermée (Chrome fermé ou crashé)")
+    );
+  }
+
+  /** Rejette toutes les requêtes en vol (erreur/fermeture de la WebSocket). */
+  private rejectAllPending(reason: string): void {
+    for (const p of this.pending.values()) p.reject(new Error(reason));
+    this.pending.clear();
+    // Les attentes d'événements aussi : elles n'arriveront jamais — rejet
+    // explicite (même sémantique que leur timeout).
+    for (const w of this.eventWaiters) {
+      clearTimeout(w.timer);
+      w.reject(new Error(reason));
+    }
+    this.eventWaiters = [];
   }
 
   send(method: string, params?: any, timeoutMs = 20_000): Promise<any> {
@@ -161,7 +184,7 @@ class CdpPage {
         if (idx >= 0) this.eventWaiters.splice(idx, 1);
         reject(new Error(`Événement non reçu : ${method}`));
       }, timeoutMs);
-      this.eventWaiters.push({ method, resolve, timer });
+      this.eventWaiters.push({ method, resolve, reject, timer });
     });
   }
 

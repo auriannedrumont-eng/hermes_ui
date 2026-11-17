@@ -57,6 +57,15 @@ export function useSystemPrompts(activeConversationId: string | null) {
   // Prompt de la conversation active : chargé au changement (ack), suivi par
   // bus. Le reset passe par la clé d'effet : la valeur chargée du précédent id
   // ne fuit jamais vers la nouvelle conversation (guarded par comparaison).
+  // Lot 3 (audit L3-3) : sans conversation active, le prompt de la PRÉCÉDENTE
+  // restait affiché — remise à null pendant le rendu (motif React officiel
+  // « adjust state when a prop changes » ; un setState synchrones dans un
+  // effet est interdit par la règle react-hooks).
+  const [lastActiveId, setLastActiveId] = useState<string | null>(null);
+  if ((activeConversationId ?? null) !== lastActiveId) {
+    setLastActiveId(activeConversationId ?? null);
+    if (!activeConversationId) setPrompt(null);
+  }
   useEffect(() => {
     if (!activeConversationId) return;
     const socket = getSocket();

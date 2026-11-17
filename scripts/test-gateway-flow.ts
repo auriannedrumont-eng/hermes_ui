@@ -70,10 +70,15 @@ async function main() {
   check("hello suit le branchement (gatewayUrl renseigné)", hello2?.gatewayUrl === "ws://127.0.0.1:9399/api/ws", String(hello2?.gatewayUrl));
 
   // ── 5. débranchement ───────────────────────────────────────────────
+  // Lot 4 : contrat ACTUEL du service (connecteur) — une URL vide revient au
+  // DÉFAUT automatique (ws://127.0.0.1:9120/api/ws : l'agent lancé
+  // localement se branche seul), pas à null. L'ancien test encodait null.
+  const DEFAULT_URL = "ws://127.0.0.1:9120/api/ws";
   const off2 = await emitAck(socket, "gateway:set", { url: "" });
-  check("url vide → débranchement {ok:true}", off2?.ok === true && off2?.url === null, JSON.stringify(off2));
+  check("url vide → débranchement {ok:true} (retour au défaut)",
+    off2?.ok === true && off2?.url === DEFAULT_URL, JSON.stringify(off2));
   const hello3 = await emitAck(socket, "hello");
-  check("hello revient à gatewayUrl null", hello3?.gatewayUrl === null, String(hello3?.gatewayUrl));
+  check("hello suit le défaut automatique", hello3?.gatewayUrl === DEFAULT_URL, String(hello3?.gatewayUrl));
 
   // ── 6. normalisation d'URL (http → ws + /api/ws) ────────────────────
   const norm = await emitAck(socket, "gateway:set", { url: "http://127.0.0.1:9120" });

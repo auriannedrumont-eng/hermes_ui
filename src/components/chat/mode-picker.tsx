@@ -228,6 +228,12 @@ export function ModePicker({
         config?.autoDebate ??
         (readClientSetting<boolean>("hermes.modes.autoDebate") !== false),
       voices: config?.voices,
+      // Lot 3 (audit L3-1) : ces deux clés doivent suivre la config effective —
+      // sans elles, chaque patch()/setVoiceModel()/switchTo() (spread de
+      // current) EFFAÇAIT debateParallel et model : le toggle réaffichait
+      // toujours « parallèle ON » et le modèle du mode repartait à null.
+      debateParallel: config?.debateParallel,
+      model: config?.model,
     };
   }, [config]);
 

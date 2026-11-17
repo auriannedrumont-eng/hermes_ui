@@ -60,14 +60,10 @@ export interface ChatPromptInfo {
   presetTitle?: string | null;
 }
 
-/** Prompt système de la conversation active (F-11) — injecté par la page
- *  depuis le hook dédié `useSystemPrompts`, pour la jauge de contexte. */
-export interface ChatPromptInfo {
-  content: string;
-  presetTitle?: string | null;
-}
-
 export function useHermesChat() {
+  // Garde anti double-émission de conversations:create (Lot 3, audit L3-5).
+  const creatingRef = useRef(false);
+
   const { toast } = useToast();
   const [connected, setConnected] = useState(false);
   const [serverInfo, setServerInfo] = useState<ServerHello | null>(null);
@@ -491,29 +487,46 @@ export function useHermesChat() {
 
     const onConnect = () => {
       setConnected(true);
+      // Lot 3 (audit L3-5) : reconnexion arrivée à temps — le verdict
+      // « connexion perdue » programmé n'a plus lieu d'être.
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
+      }
       socket.emit("hello", (info: ServerHello) => setServerInfo(info));
       refreshConversations();
       fetchProjects();
       fetchModels();
     };
+    // Lot 3 (audit L3-5) : une déconnexion BRÈVE (réseau qui tremble) se
+    // rétablit seule — le tour continue côté service et les événements
+    // reprennent au reconnect (les handlers restent attachés). Le verdict
+    // « connexion perdue, rien n'arrivera davantage » n'est prononcé que si
+    // la coupure PERSISTE 4 s ; sinon l'utilisateur voyait une erreur
+    // définitive fausse puis la réponse arriver quand même.
+    let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
     const onDisconnect = () => {
       setConnected(false);
-      // F-31 : si un tour était en vol, l'utilisateur a le droit de savoir
-      // POURQUOI l'écran retombe — avant, le flux disparaissait en silence
-      // et le déroulé restait « en cours » sans fin ni erreur.
-      setStreamsRecord((prev) => {
-        const inFlight = Object.keys(prev)[0];
-        if (inFlight) {
-          setTurnError({
-            messageId: inFlight,
-            error:
-              "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
-              "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
-              "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
-          });
-        }
-        return {};
-      });
+      if (disconnectTimer) clearTimeout(disconnectTimer);
+      disconnectTimer = setTimeout(() => {
+        disconnectTimer = null;
+        // F-31 : si un tour était en vol, l'utilisateur a le droit de savoir
+        // POURQUOI l'écran retombe — avant, le flux disparaissait en silence
+        // et le déroulé restait « en cours » sans fin ni erreur.
+        setStreamsRecord((prev) => {
+          const inFlight = Object.keys(prev)[0];
+          if (inFlight) {
+            setTurnError({
+              messageId: inFlight,
+              error:
+                "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
+                "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
+                "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
+            });
+          }
+          return {};
+        });
+      }, 4000);
     };
     // v2.4 : le service rediffuse le hello quand le porte-clés change —
     // la carte de statut de la sidebar suit l état réel du moteur en direct.
@@ -623,7 +636,12 @@ export function useHermesChat() {
         return;
       }
       if (p.message) {
-        setMessages((prev) => [...prev, p.message as ChatMessage]);
+        // Lot 3 (audit L3-5) : dédoublonnage — un stream:done reçu deux fois
+        // (rediffusion après reconnexion) dupliquait la réponse dans le fil.
+        const done = p.message;
+        setMessages((prev) =>
+          prev.some((m) => m.id === done.id) ? prev : [...prev, done as ChatMessage]
+        );
       }
       // F-30 : le déroulé vivant a fini de courir — la réponse persistée le
       // porte désormais (messages.mode_flow) ; le live ne sert qu'en vol.
@@ -664,8 +682,12 @@ export function useHermesChat() {
       // F-17 : un côté peut échouer pendant que l'autre termine — on ne
       // retire que le tour concerné.
       setStreamsRecord((prev) => {
+        // Lot 3 (audit L3-5) : l'ancien code renvoyait {} dès que la cible
+        // était absente — une erreur service sans messageId (ou visant un
+        // tour déjà clos) VIDAIT tous les streams en vol, y compris l'autre
+        // côté d'une comparaison qui, lui, continue normalement.
         const key = p.messageId ?? p.message?.id;
-        if (!key || !(key in prev)) return {};
+        if (!key || !(key in prev)) return prev;
         const next = { ...prev };
         delete next[key];
         return next;
@@ -987,6 +1009,10 @@ export function useHermesChat() {
   const newConversation = useCallback(
     async (projectId?: string | null): Promise<string | null> => {
       const socket = getSocket();
+      // Lot 3 (audit L3-5) : garde anti double-émission — un double-clic sur
+      // « Nouvelle conversation » avant l'ack créait DEUX conversations.
+      if (creatingRef.current) return null;
+      creatingRef.current = true;
       return new Promise((resolve) => {
         // F-30 : le mode des nouvelles conversations = choix « nouveau » de la
         // pastille, sinon le réglage hermes.modes.defaultMode. Le service le
@@ -1010,8 +1036,10 @@ export function useHermesChat() {
               setCompactInfo(null);
               setModeFlowLive(null);
               setPendingMode(null);
+              creatingRef.current = false;
               resolve(res.conversation.id);
             } else {
+              creatingRef.current = false;
               resolve(null);
             }
           }
@@ -1238,7 +1266,10 @@ export function useHermesChat() {
 
   const stopGeneration = useCallback(() => {
     if (!activeIdRef.current) return;
-    getSocket().emit("chat:stop", { conversationId: activeIdRef.current });
+    // Lot 3 (audit L3-5) : le stop est désormais acquitté par le service —
+    // l'état « interrompu » reste porté par stream:status/stream:done ; l'ack
+    // ne fait que fermer la promesse (aucun toast en cas de succès).
+    getSocket().emit("chat:stop", { conversationId: activeIdRef.current }, () => {});
   }, []);
 
   /** Régénère la dernière réponse (relance le tour depuis le dernier message utilisateur). */

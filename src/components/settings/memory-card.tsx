@@ -5,7 +5,7 @@
 // instructions du tour par le service (moteur local) — le client n'assemble rien.
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Brain, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
@@ -26,14 +26,12 @@ export function MemoryCard({
   onSetAuto,
   onSaveNotes,
 }: MemoryCardProps) {
-  // Brouillon local, initialisé paresseusement (le service est un système
-  // externe) — suit la valeur du service au premier chargement / broadcast.
+  // Lot 3 (audit L3-2) : brouillon matérialisé UNIQUEMENT sur frappe —
+  // l'initialisation par effet figeait « "" » avant la réponse socket et la
+  // valeur serveur n'était plus jamais suivie (effacement involontaire au
+  // premier « Enregistrer »). draft === null = « suit la valeur du service ».
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initialisation paresseuse du brouillon (système externe)
-    if (draft === null) setDraft(state?.notes ?? "");
-  }, [state?.notes]);
 
   const notesValue = draft ?? state?.notes ?? "";
   const maxChars = state?.maxChars ?? 12_000;
@@ -46,14 +44,14 @@ export function MemoryCard({
     setSaving(true);
     const ok = await onSaveNotes(notesValue.trim());
     setSaving(false);
-    if (ok) setDraft(notesValue.trim());
+    if (ok) setDraft(null); // re-suit la valeur du service (confirmée)
   };
 
   const erase = async () => {
     setSaving(true);
     const ok = await onSaveNotes("");
     setSaving(false);
-    if (ok) setDraft("");
+    if (ok) setDraft(null); // re-suit la valeur du service ("" confirmé)
   };
 
   return (

@@ -49,13 +49,20 @@ export function SystemPromptPanel({
   // Pattern « reset by key » : le corps du sheet est remonté à chaque ouverture
   // (key = timestamp d'ouverture), l'état d'édition repart de l'état serveur —
   // pas de resynchronisation par effet.
+  // Lot 3 (audit L3-3) : le timestamp est REMIS À ZÉRO à la fermeture — sinon
+  // la key ne change qu'une fois par vie de l'app et rouvrir sur une AUTRE
+  // conversation rééditait le prompt de la première. La key embarque aussi la
+  // conversation cible + l'horodatage du prompt serveur : si la cible change
+  // pendant que le sheet est ouvert (sync socket), le corps remonte aussi.
   const openedAtRef = useRef<number>(0);
   if (open && openedAtRef.current === 0) {
     openedAtRef.current = Date.now();
+  } else if (!open && openedAtRef.current !== 0) {
+    openedAtRef.current = 0;
   }
   const body = (
     <PromptPanelBody
-      key={openedAtRef.current}
+      key={`${openedAtRef.current}|${prompt?.conversationId ?? "none"}|${prompt?.updatedAt ?? ""}`}
       prompt={prompt}
       presets={presets}
       conversationTitle={conversationTitle}

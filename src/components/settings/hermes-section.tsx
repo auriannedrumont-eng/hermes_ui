@@ -224,13 +224,11 @@ export function HermesSection({
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Suit la valeur du service (premier chargement / broadcast) : dérivation
-  // cléée par l'état serveur, sans effet — draft démarre à null (« suit »).
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initialisation paresseuse du brouillon (le service est un système externe)
-    if (draft === null) setDraft(customInstructions ?? "");
-  }, [customInstructions]);
-
+  // Lot 3 (audit L3-2) : le brouillon n'est matérialisé QUE sur frappe —
+  // l'ancienne initialisation par effet passait de null à « "" » avant la
+  // réponse socket, puis ne suivait plus jamais la valeur serveur (un
+  // sauvegarde distraite pouvait EFFACER les instructions). draft === null =
+  // « suit la valeur du service » (premier chargement comme broadcast).
   const instructionsValue = draft ?? customInstructions ?? "";
   const remaining = customMaxChars - instructionsValue.length;
   const instructionsDirty =
@@ -268,7 +266,7 @@ export function HermesSection({
     setSaving(true);
     const ok = await onSaveCustomInstructions(instructionsValue.trim());
     setSaving(false);
-    if (ok) setDraft(instructionsValue.trim());
+    if (ok) setDraft(null); // re-suit la valeur du service (confirmée)
   };
 
   return (

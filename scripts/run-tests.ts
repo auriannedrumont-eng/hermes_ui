@@ -9,7 +9,16 @@
 //   bun scripts/run-tests.ts --e2e      → la suite complète : démarre le
 //                                         mini-service sur 3003/3004 si aucune
 //                                         instance n'écoute déjà (le stoppe en
-//                                         fin de course si elle l'a démarré)
+//                                         fin de course si elle l'a démarré),
+//                                         avec un FAUX MOTEUR LLM local et une
+//                                         base jetable (db-test-e2e). NB : les
+//                                         tests qui vérifient le CONTENU des
+//                                         réponses (mémoire citée, lettre du
+//                                         prompt système, fichiers produits,
+//                                         comparaisons a/b) exigent le VRAI
+//                                         moteur (clés fournisseur ou agent) —
+//                                         avec le faux moteur de base, ils
+//                                         échouent chez eux, c'est attendu.
 //   bun scripts/run-tests.ts --qa-dom   → chaîne les scripts/qa-*-dom.ts
 //                                         (pile complète + navigateur requis,
 //                                         hors CI)
@@ -23,8 +32,10 @@
 // les variables HERMES_* du shell courant sont retirées de l'env des tests
 // pour qu'un jeton/port hérité ne change pas leur verdict.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { createServer } from "node:http";
+import { io } from "socket.io-client";
 
 const ROOT = join(import.meta.dir, "..");
 const SCRIPTS = join(ROOT, "scripts");
@@ -77,6 +88,102 @@ function waitHttp(url: string, tries = 60): Promise<boolean> {
     }
     return false;
   })();
+}
+
+// ── Faux moteur LLM de la suite E2E (Lot 4) ──────────────────────────────
+// Les tests E2E demandent des tours RÉELS : sans moteur (base neuve, aucune
+// clé, pas d'agent), le service répond noEngineError et la suite entière
+// échoue — elle ne tournait que sur le poste de l'autrice (clés/Ollama).
+// Le runner démarre un serveur OpenAI-compatible local, le pré-déclare au
+// service via providers:add + providers:add-key, et pointe le service sur
+// une base jetable (db-test-e2e) : zéro pollution de la base de dev.
+const E2E_MOCK_PORT = 4619;
+const E2E_DB_DIR = join(ROOT, "db-test-e2e");
+let e2eMockServer: ReturnType<typeof createServer> | null = null;
+
+function startE2eMockLlm(): Promise<void> {
+  return new Promise((resolve) => {
+    e2eMockServer = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      if (req.method === "GET" && url.pathname === "/models") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data: [{ id: "mock-e2e" }] }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/chat/completions") {
+        let raw = "";
+        req.on("data", (c: Buffer) => (raw += c.toString()));
+        req.on("end", () => {
+          let stream = false;
+          try { stream = Boolean(JSON.parse(raw || "{}").stream); } catch { /* non JSON */ }
+          if (!stream) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+              choices: [{ message: { content: "Résumé mock — sujet, décisions, artefacts, prochaines étapes." } }],
+            }));
+            return;
+          }
+          // SSE rythmé (~1,5 s) : les tours restent stoppables en vol
+          res.writeHead(200, { "Content-Type": "text/event-stream" });
+          let i = 0;
+          const timer = setInterval(() => {
+            i++;
+            if (i <= 12) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: ` mot${i}` } }] })}\n\n`);
+            else {
+              clearInterval(timer);
+              res.write("data: [DONE]\n\n");
+              res.end();
+            }
+          }, 120);
+          res.on("close", () => clearInterval(timer));
+        });
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("not found");
+    });
+    e2eMockServer.listen(E2E_MOCK_PORT, "127.0.0.1", () => resolve());
+  });
+}
+
+/** Déclare le faux moteur au service E2E (socket éphémère, jeton absent). */
+async function seedE2eProvider(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = io("http://127.0.0.1:3003", { transports: ["websocket"], timeout: 8000 });
+    const done = (ok: boolean) => {
+      socket.disconnect();
+      resolve(ok);
+    };
+    const fail = setTimeout(() => done(false), 8000);
+    socket.on("connect", async () => {
+      const emit = (ev: string, payload: unknown) =>
+        new Promise<any>((r) => socket.emit(ev, payload, (res: any) => r(res ?? {})));
+      // Route fournisseur CONNU (« ollama ») + baseUrl explicite : le nom
+      // devient « Ollama » — sans quoi le nom normalisé « 127.0.0.1 »
+      // colisionnait avec les tests qui déclarent LEUR propre mock local
+      // (test-cost-flow, test-pool-flow : « est déjà dans la liste »).
+      const add = await emit("providers:add", {
+        name: "ollama",
+        kind: "llm",
+        baseUrl: `http://127.0.0.1:${E2E_MOCK_PORT}`,
+      });
+      if (!add?.provider) {
+        clearTimeout(fail);
+        return done(false);
+      }
+      const key = await emit("providers:add-key", {
+        providerId: add.provider.id,
+        label: "E2E",
+        secret: "sk-e2e-mock-0000000000",
+      });
+      clearTimeout(fail);
+      done(Boolean(key?.key?.id));
+    });
+    socket.on("connect_error", () => {
+      clearTimeout(fail);
+      done(false);
+    });
+  });
 }
 
 /** Démarre un service de fixture et attend qu'il écoute. */
@@ -214,33 +321,73 @@ async function main() {
   const results: Result[] = [];
   // Suite E2E : UN seul service partagé par tous les tests — démarré si aucune
   // instance n'écoute déjà sur 3003 (dans ce cas on la laisse vivante : c'est
-  // la pile de dev), et on stoppe le nôtre en fin de course.
+  // la pile de dev), et on stoppe le nôtre en fin de course. La sortie du
+  // service est capturée pour diagnostiquer un démarrage raté.
   const e2eSelected = selected.filter((t) => e2e.includes(t));
   let sharedProc: ReturnType<typeof spawn> | null = null;
+  let e2eRunnable = e2eSelected.length === 0; // rien à démarrer = rien à bloquer
+  let sharedLog = "";
   if (e2eSelected.length > 0) {
     const alreadyUp = await waitHttp("http://127.0.0.1:3003/socket.io/?EIO=4&transport=polling", 2);
-    if (!alreadyUp) {
-      console.log("\n• démarrage du mini-service partagé (3003/3004) pour la suite E2E…");
+    if (alreadyUp) {
+      e2eRunnable = true; // instance de dev déjà en place : on s'y branche
+    } else {
+      console.log("\n• démarrage du mini-service partagé (3003/3004, faux moteur local) pour la suite E2E…");
+      await startE2eMockLlm();
+      // Base jetable de la suite E2E : les tests écrivent conversations/
+      // artefacts sans jamais toucher la base de dev (db-test-e2e, ignoré
+      // par git via /db-test-*/).
+      rmSync(E2E_DB_DIR, { recursive: true, force: true });
+      mkdirSync(E2E_DB_DIR, { recursive: true });
       sharedProc = spawn("bun", [join(ROOT, "mini-services", "hermes-chat", "index.ts")], {
         cwd: join(ROOT, "mini-services", "hermes-chat"),
-        env: testEnv(),
-        stdio: "ignore",
+        env: { ...testEnv(), HERMES_CHAT_DB: join(E2E_DB_DIR, "hermes-chat.sqlite") },
+        stdio: ["ignore", "pipe", "pipe"],
       });
-      const up = await waitHttp("http://127.0.0.1:3003/socket.io/?EIO=4&transport=polling");
-      if (!up) {
+      for (const s of [sharedProc.stdout, sharedProc.stderr]) {
+        s?.on("data", (d: Buffer) => {
+          sharedLog += d.toString();
+          if (sharedLog.length > 4000) sharedLog = sharedLog.slice(-4000);
+        });
+      }
+      // Budget large (40 s comme les harnais des tests) : un poste froid ne
+      // doit pas faire rater toute la suite.
+      const up = await waitHttp("http://127.0.0.1:3003/socket.io/?EIO=4&transport=polling", 160);
+      if (up) {
+        // Pré-seed du faux moteur : sans clé, chaque tour répondrait
+        // noEngineError et la suite échouerait entière (Lot 4).
+        e2eRunnable = await seedE2eProvider();
+        if (!e2eRunnable) {
+          sharedProc.kill();
+          sharedProc = null;
+          console.error("pré-seed du faux moteur E2E impossible — suite E2E annulée");
+          for (const t of e2eSelected)
+            results.push({ name: t.file.split("/").pop()!, status: "SKIP", ms: 0, detail: "faux moteur non déclaré" });
+          e2eRunnable = false;
+          e2eSelected.length = 0;
+        }
+      } else {
         sharedProc.kill();
-        console.error("service E2E injoignable après démarrage — suite E2E annulée");
+        console.error(`service E2E injoignable après démarrage — suite E2E annulée\nsortie du service :\n${sharedLog.trim() || "(aucune)"}`);
+        // Ne PAS exécuter les tests E2E sans service : ils seraient comptés
+        // deux fois (échec virtuel + vraie exécution qui rate aussi). SKIP
+        // neutre (précondition absente), le diagnostic est imprimé au-dessus.
+        sharedProc = null;
         for (const t of e2eSelected)
-          results.push({ name: t.file.split("/").pop()!, status: "ÉCHEC", ms: 0, detail: "service indisponible" });
+          results.push({ name: t.file.split("/").pop()!, status: "SKIP", ms: 0, detail: "service partagé indisponible" });
+        e2eRunnable = false;
+        e2eSelected.length = 0; // marqués : la boucle ci-dessous ne les exécute plus
       }
     }
   }
   try {
     for (const t of selected) {
+      if (e2e.includes(t) && !e2eRunnable) continue; // SKIP déjà compté
       results.push(await runOne(t.file, wantQaDom && !unit.includes(t) ? 600_000 : 300_000, t.fixture));
     }
   } finally {
     sharedProc?.kill();
+    e2eMockServer?.close();
   }
 
   const failed = results.filter((r) => r.status === "ÉCHEC" || r.status === "TIMEOUT");

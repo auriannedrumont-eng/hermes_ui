@@ -39,7 +39,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { Server } from "socket.io";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+const execFile = promisify(execFileCb);
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
@@ -483,7 +485,7 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
 
   // /artifacts/zip?ids=a,b,c — archive « tout télécharger »
   if (u.pathname === "/artifacts/zip") {
-    handleArtifactZip(u, res);
+    void handleArtifactZip(u, res);
     return;
   }
 
@@ -624,7 +626,7 @@ function handleArtifactFile(
 }
 
 /** Archive zip de plusieurs artefacts (source + PDF le cas échéant). */
-function handleArtifactZip(u: URL, res: ServerResponse): void {
+async function handleArtifactZip(u: URL, res: ServerResponse): Promise<void> {
   const ids = (u.searchParams.get("ids") ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -670,16 +672,26 @@ function handleArtifactZip(u: URL, res: ServerResponse): void {
     // (binaire absent ou code non nul), repli sur bsdtar — tar.exe est
     // intégré à Windows 10+ et son option -a déduit le format zip de
     // l'extension .zip. Sous Linux/macOS, le zip du système suffit.
-    let zipRes = spawnSync("zip", ["-q", "-X", zipPath, ...fileNames], { cwd: tmp });
-    if ((zipRes.error || zipRes.status !== 0) && process.platform === "win32") {
+    // Lot 2 (audit L2-9) : spawnSync gelait l'event loop du service pendant
+    // la compression — execFile async à la place.
+    const compress = async (bin: string, args: string[]) => {
+      try {
+        await execFile(bin, args, { cwd: tmp });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    let ok = await compress("zip", ["-q", "-X", zipPath, ...fileNames]);
+    if (!ok && process.platform === "win32") {
       try {
         rmSync(zipPath, { force: true });
       } catch {
         /* rien à effacer */
       }
-      zipRes = spawnSync("tar", ["-a", "-c", "-f", zipPath, ...fileNames], { cwd: tmp });
+      ok = await compress("tar", ["-a", "-c", "-f", zipPath, ...fileNames]);
     }
-    if (zipRes.status !== 0 || !existsSync(zipPath)) {
+    if (!ok || !existsSync(zipPath)) {
       res.writeHead(500, { "Content-Type": "text/plain" });
       res.end("Échec de la création de l'archive");
       return;
@@ -1395,7 +1407,16 @@ io.on("connection", (socket) => {
       if (typeof cb === "function") cb({ error: "id requis" });
       return;
     }
-    abortRunning(id);
+    // Garde (Lot 2, audit L2-4) : refuser pendant un tour en vol — un abort
+    // suivi d'une suppression laissait le finally du tour réécrire ses lignes
+    // dans une conversation déjà supprimée (données orphelines recréées).
+    // Refus propre identique aux autres mutations (F-02) : l'utilisateur
+    // arrête le tour, puis supprime.
+    if (isRunning(id)) {
+      if (typeof cb === "function")
+        cb({ error: "Un tour est en cours dans cette conversation — arrêtez-le avant de la supprimer" });
+      return;
+    }
     // Nettoyage disque des pièces jointes et des artefacts de la conversation
     const attachments = store.conversationAttachments(id);
     const artifactRows = store.deleteConversationArtifacts(id);
@@ -3518,6 +3539,9 @@ io.on("connection", (socket) => {
         return;
       }
       deleteAttachmentFiles(result.removedAttachments);
+      // Lot 2 (audit L2-1) : la troncature (édition + messages suivants)
+      // emporte les artefacts ancrés sur les messages supprimés.
+      deleteArtifactFiles(store.deleteArtifactsOfMessages(conversationId, result.removedIds));
       if (typeof cb === "function")
         cb({ ok: true, message: result.message, removedIds: result.removedIds });
       socket.emit("message:updated", {
@@ -3576,6 +3600,9 @@ io.on("connection", (socket) => {
         if (typeof cb === "function") cb({ error: "Message introuvable" });
         return;
       }
+      // Lot 2 (audit L2-1) : les artefacts ancrés sur ce message ne doivent
+      // pas survivre à sa suppression (lignes + fichiers dérivés).
+      deleteArtifactFiles(store.deleteArtifactsOfMessages(conversationId, [messageId]));
       deleteAttachmentFiles(removed.attachments ?? []);
       if (typeof cb === "function") cb({ ok: true, messageId });
       socket.emit("message:deleted", { conversationId, messageId });
@@ -3613,15 +3640,21 @@ io.on("connection", (socket) => {
     }
   );
 
-  socket.on("chat:stop", (payload: { conversationId?: string }) => {
+  socket.on("chat:stop", (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
     const id = payload?.conversationId;
-    if (!id) return;
+    if (!id) {
+      if (typeof cb === "function") cb({ error: "id requis" });
+      return;
+    }
     // F-17 : stop coupe le tour simple ET les deux côtés d'une comparaison.
+    // Lot 3 (audit L3-5) : ack posé — le client ferme sa promesse, l'état
+    // « interrompu » reste porté par stream:status / stream:done.
     const had = isRunning(id);
     abortRunning(id);
     if (had) {
       socket.emit("stream:status", { conversationId: id, messageId: null, status: "Génération interrompue" });
     }
+    if (typeof cb === "function") cb({ ok: true, stopped: had });
   });
 
   // ── Compaction du contexte (chantier « Composer v2 ») ─────────────────

@@ -87,6 +87,22 @@ export class CdpPage {
         else p.resolve(msg.result);
       }
     });
+    // Lot 2 (audit L2-8) : après le handshake il n'y avait PLUS aucun listener
+    // « error » — un crash de Chrome levait une exception non gérée (processus
+    // tué) et les requêtes en vol attendaient leur timeout 20 s. Erreur et
+    // fermeture rejettent maintenant toutes les pending immédiatement.
+    this.ws.on("error", (err: Error) =>
+      this.rejectAllPending(`WebSocket ${label} : ${err.message}`)
+    );
+    this.ws.on("close", () =>
+      this.rejectAllPending(`WebSocket ${label} fermée (navigateur fermé ou crashé)`)
+    );
+  }
+
+  /** Rejette toutes les requêtes en vol (erreur/fermeture de la WebSocket). */
+  private rejectAllPending(reason: string): void {
+    for (const p of this.pending.values()) p.reject(new Error(reason));
+    this.pending.clear();
   }
 
   static async connect(wsUrl: string): Promise<CdpPage> {

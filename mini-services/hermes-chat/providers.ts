@@ -6,7 +6,9 @@
 // Rien ici ne touche au moteur de tours : en moteur local les clés servent à
 // préparer la configuration (test, ordre, relai) ; le branchement effectif
 // des pools sur les tours suivra la gateway (v2.3+).
-import { spawnSync } from "node:child_process";
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+const execFile = promisify(execFileCb);
 import type {
   ExtensionCommit,
   KeyStatus,
@@ -927,21 +929,32 @@ function compareTags(a: string, b: string): number {
   return b.localeCompare(a);
 }
 
-function gitLsRemoteSnapshot(
+async function gitLsRemoteSnapshot(
   ref: RepoRef,
   branch?: string | null,
-): RepoSnapshot | null {
+): Promise<RepoSnapshot | null> {
   const url = `https://github.com/${ref.owner}/${ref.repo}.git`;
-  const res = spawnSync("git", ["ls-remote", "--symref", url], {
-    timeout: 12000,
-    encoding: "utf8",
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "/bin/true" },
-  });
-  if (res.status !== 0 || !res.stdout) return null;
+  // Lot 2 (audit L2-9) : spawnSync gelait l'event loop jusqu'à 12 s par appel
+  // (×3 en débat parallèle) — execFile async à la place ; « -- » sépare les
+  // options de l'URL (durcissement gratuit, l'URL vient des refs internes).
+  let stdout: string;
+  try {
+    const res = await execFile("git", ["ls-remote", "--symref", "--", url], {
+      timeout: 12000,
+      encoding: "utf8",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "/bin/true" },
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    stdout = res.stdout;
+  } catch {
+    // binaire absent, code non nul, timeout — repli git indisponible
+    return null;
+  }
+  if (!stdout) return null;
   let head = "";
   let defaultBranch = "";
   const tags: string[] = [];
-  for (const line of res.stdout.split("\n")) {
+  for (const line of stdout.split("\n")) {
     const trimmed = line.trim();
     if (trimmed.startsWith("ref: ")) {
       const m = /^ref:\s+refs\/heads\/(\S+)\s+HEAD$/.exec(trimmed);
@@ -970,7 +983,26 @@ function gitLsRemoteSnapshot(
 /** Résout un dépôt GitHub : infos, branche par défaut, tête et derniers commits.
  *  Repli automatique sur le protocole git si l'API est injoignable ou quota-
  *  épuisée (sans description ni liste de commits). */
+// Cache TTL du snapshot (Lot 2, audit L2-9) : le registre relit le dépôt à
+// chaque ouverture/rafraîchissement — chaque relecture enchaîne 2-3 appels
+// GitHub (+ repli git). Un cache court évite de marteler l'API (limites de
+// débit) et rend la réouverture instantanée.
+const SNAPSHOT_TTL_MS = 60_000;
+const snapshotCache = new Map<string, { at: number; snap: RepoSnapshot }>();
+
 export async function fetchRepoSnapshot(
+  ref: RepoRef,
+  branch?: string | null,
+): Promise<RepoSnapshot> {
+  const key = `${ref.owner}/${ref.repo}@${branch ?? ""}`;
+  const hit = snapshotCache.get(key);
+  if (hit && Date.now() - hit.at < SNAPSHOT_TTL_MS) return hit.snap;
+  const snap = await fetchRepoSnapshotUncached(ref, branch);
+  snapshotCache.set(key, { at: Date.now(), snap });
+  return snap;
+}
+
+async function fetchRepoSnapshotUncached(
   ref: RepoRef,
   branch?: string | null,
 ): Promise<RepoSnapshot> {
@@ -1042,7 +1074,7 @@ export async function fetchRepoSnapshot(
     };
   } catch (err) {
     // Repli protocole git : au moins la branche, la tête et le dernier tag.
-    const snap = gitLsRemoteSnapshot(ref, branch);
+    const snap = await gitLsRemoteSnapshot(ref, branch);
     if (snap) return snap;
     throw err;
   }

@@ -196,11 +196,39 @@ export function touchActivity(profileDir: string): void {
  */
 export function launchWatchdog(profileDir: string, idleMin: number): void {
   if (!Number.isFinite(idleMin) || idleMin <= 0) return;
+  // PID-file (Lot 2, audit L2-7) : l'idempotence annoncée n'était pas
+  // implémentée — chaque appel du pilote spawne un veilleur détaché de plus
+  // (vies jusqu'à 2 h). Un veilleur VIVANT n'est pas relancé ; le PID périmé
+  // est nettoyé avant relance.
+  const pidFile = join(profileDir, "watchdog.pid");
+  try {
+    const pid = Number.parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+    if (Number.isInteger(pid) && pid > 0 && pidAlive(pid)) return;
+    rmSync(pidFile, { force: true });
+  } catch {
+    /* pas de PID-file : premier lancement */
+  }
   const script = join(import.meta.dir, "watchdog.ts");
   const child = spawn(
     process.execPath,
     [script, "--profile", profileDir, "--idle-min", String(idleMin)],
     { detached: true, stdio: "ignore", windowsHide: true }
   );
+  try {
+    if (child.pid) writeFileSync(pidFile, String(child.pid));
+  } catch {
+    /* sans PID-file, la prochaine relance doublonnera — non bloquant */
+  }
   child.unref();
+}
+
+/** Le processus correspond-il à un PID vivant ? (kill(pid, 0) sans effet). */
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: unknown) {
+    // EPERM = vivant mais hors de nos droits ; ESRCH = mort.
+    return (err as NodeJS.ErrnoException)?.code === "EPERM";
+  }
 }

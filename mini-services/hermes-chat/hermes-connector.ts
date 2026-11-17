@@ -217,6 +217,12 @@ export class HermesConnector {
         settled = true;
         try {
           ws.removeAllListeners();
+          // Lot 2 (famille audit L2-8) : fermer une socket ENCORE EN CONNEXION
+          // fait émettre un « error » par la lib ws — sans listener, le
+          // processus ENTIER meurt (Unhandled error), ce qui tuait le service
+          // à chaque gateway:set vers une adresse qui stalle. Un no-op absorbe.
+          ws.on("error", () => {});
+          ws.on("close", () => {});
           ws.close();
         } catch {
           /* ignore */
@@ -320,6 +326,11 @@ export class HermesConnector {
         cb.signal.removeEventListener("abort", onAbort);
         try {
           ws.removeAllListeners();
+          // Lot 2 (famille audit L2-8) : même garde que la sonde — la
+          // fermeture d'une WebSocket en connexion émet un « error » sans
+          // listener qui tuerait le service.
+          ws.on("error", () => {});
+          ws.on("close", () => {});
           ws.close();
         } catch {
           /* ignore */

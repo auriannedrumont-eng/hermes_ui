@@ -4,7 +4,8 @@
 // (pas silencieusement cassé) ; les erreurs des pilotes remontent telles
 // quelles ; ce que ces modèles ne savent PAS faire est dit dans l'interface.
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ModelOption } from "../types";
 import { trace } from "../trace";
@@ -157,10 +158,14 @@ export async function runWebchatTurn(opts: {
     const driverPath = join(import.meta.dir, "driver.ts");
     // Pas de --mode : le pilote OBSERVE ce que le site produit (texte ou
     // fichiers) et rapporte l'un ou l'autre — fusion, une entrée par site.
+    // Lot 2 (audit L2-7) : nom UNIQUE par tour + suppression après le tour —
+    // le fichier fixe webchat-prompt.tmp était partagé entre tours (dernier
+    // écrivain gagnant sur les tours concurrents) et jamais supprimé.
+    const promptFile = await writePromptTemp(opts.prompt);
     const args = [
       driverPath,
       "--site", site,
-      "--prompt-file", await writePromptTemp(opts.prompt),
+      "--prompt-file", promptFile,
       "--port", String(config.port),
       "--timeout", String(config.timeoutS),
       "--profile", config.profileDir,
@@ -176,6 +181,12 @@ export async function runWebchatTurn(opts: {
       const msg = err instanceof Error ? err.message : String(err);
       trace("error", `pilote ${site} abandonné : ${msg}`);
       throw err;
+    } finally {
+      try {
+        rmSync(promptFile, { force: true });
+      } catch {
+        /* fichier déjà parti — rien à nettoyer */
+      }
     }
     trace(
       "webchat",
@@ -246,7 +257,7 @@ async function writePromptTemp(prompt: string): Promise<string> {
   // Premier tour après un clone : db/ n'existe pas encore — le créer
   // (même classe de bug que le verrou sur un profil frais).
   mkdirSync(WEBCHAT_DATA_DIR, { recursive: true });
-  const path = join(WEBCHAT_DATA_DIR, "webchat-prompt.tmp");
+  const path = join(WEBCHAT_DATA_DIR, `webchat-prompt-${randomUUID()}.tmp`);
   writeFileSync(path, prompt, "utf-8");
   return path;
 }
