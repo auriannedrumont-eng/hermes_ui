@@ -23,6 +23,13 @@ jobs:
       - name: Installation des dépendances
         run: bun install
 
+      # Le mini-service a son propre package.json/bun.lock (socket.io, ws,
+      # z-ai-web-dev-sdk) : sans cette install, il ne démarre pas sur le
+      # runner et les 8 tests à fixture (service auto-porté) échouent tous.
+      - name: Dépendances du mini-service (fixtures des tests)
+        run: bun install
+        working-directory: mini-services/hermes-chat
+
       - name: Typecheck interface (src/)
         run: bunx tsc --noEmit
 
