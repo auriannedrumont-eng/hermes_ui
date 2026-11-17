@@ -15,6 +15,7 @@ import {
   Sun,
   Unlink,
   WifiOff,
+  Wrench,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -172,6 +173,27 @@ export function ChatHeader({
           </Tooltip>
         </TooltipProvider>
       ) : null}
+
+      {/* Dépannage (F-31) : ouvre le pont de diagnostic — visible en un clic,
+          plus besoin de toucher à l'adresse du navigateur. */}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+              aria-label="Dépannage — voir ce qui se passe"
+              onClick={() => window.dispatchEvent(new Event("hermes:debug-open"))}
+            >
+              <Wrench className="h-4.5 w-4.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Dépannage — si ça bloque, cliquez puis « Copier le diagnostic »
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* Partage public lecture seule (F-13) */}
       {activeConversation && hasMessages ? (

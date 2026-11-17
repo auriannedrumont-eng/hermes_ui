@@ -69,8 +69,14 @@ export function DebugBridge() {
   const [copied, setCopied] = useState(false);
   const eventsRef = useRef<ClientEvent[]>([]);
 
-  // Ouverture : ?debug=1 dans l'URL (mémorisé) — le panneau se referme avec
-  // « Fermer » (drapeau retiré) et ne revient qu'à la prochaine invitation.
+  // Ouverture : ?debug=1 dans l'URL (mémorisé) OU l'icône clé à molette de
+  // l'en-tête (F-31bis — une vraie entrée visible, pas une adresse à bricoler).
+  // Le panneau se referme avec « Fermer » et ne revient qu'au prochain appel.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("hermes:debug-open", onOpen);
+    return () => window.removeEventListener("hermes:debug-open", onOpen);
+  }, []);
   useEffect(() => {
     try {
       const q = new URLSearchParams(window.location.search);
