@@ -37,10 +37,11 @@ async function main() {
   const hook = read("src/hooks/use-hermes-chat.ts");
   const openIdx = hook.indexOf('"conversations:open"');
   check("l'ouverture de conversation émet conversations:open", openIdx >= 0);
-  const ackWindow = hook.slice(openIdx, openIdx + 2600);
+  const ackWindow = hook.slice(openIdx, openIdx + 3600);
   // Fenêtre large : le corps de l'ack porte aussi le re-semis des tours en
-  // vol (ré-attache « quitter puis revenir », ~1 400 car.) — l'invariant
-  // vérifié reste la POSITION relative garde → coupure du spinner.
+  // vol (ré-attache « quitter puis revenir » : contenu accumulé + déroulé
+  // multi-voix, ~2 000 car.) — l'invariant vérifié reste la POSITION
+  // relative garde → coupure du spinner.
   const guardIdx = ackWindow.indexOf("id !== activeIdRef.current");
   const spinnerIdx = ackWindow.indexOf("setLoadingHistory(false)");
   check("l'ack porte la garde activeIdRef", guardIdx >= 0);
@@ -49,6 +50,9 @@ async function main() {
   const seedIdx = ackWindow.indexOf("res.live ?? []");
   check("le re-semis des tours en vol est dans l'ack, derrière la garde (l'ack tardif d'une autre conversation ne sème rien)",
     seedIdx > guardIdx && seedIdx < spinnerIdx);
+  const flowIdx = ackWindow.indexOf("t.modeFlow?.length");
+  check("le déroulé multi-voix (modeFlow) est ré-attaché dans l'ack, derrière la garde (le bloc des voix survit à quitter/ revenir)",
+    flowIdx > guardIdx && flowIdx < spinnerIdx);
 
   console.log("[3] handlers stream:*/mode:flow/artifact:* : garde activeIdRef");
   const guarded = [

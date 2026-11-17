@@ -1081,6 +1081,7 @@ export function useHermesChat() {
             reasoning?: string;
             status?: string | null;
             toolEvents?: ToolEvent[];
+            modeFlow?: import("@/lib/chat-types").ModeFlowRow[];
           }[];
         } = {} as any) => {
           // Garde de course (Lot 1, audit L1-5) : l'ack compare à la
@@ -1115,6 +1116,14 @@ export function useHermesChat() {
                       },
                     },
               );
+              // Ré-attache du déroulé multi-voix (débat/conseil/auto, F-30) :
+              // sans re-semis, le bloc des voix disparaît au retour dans la
+              // conversation et ne revient qu'au prochain mode:flow (voix
+              // suivante) ou à la persistance en fin de tour. Les lignes sont
+              // poussées complètes à chaque émission : remplacement en bloc.
+              if (t.modeFlow?.length) {
+                setModeFlowLive({ messageId: t.messageId, rows: t.modeFlow });
+              }
             }
           }
           setLoadingHistory(false);

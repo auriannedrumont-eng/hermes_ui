@@ -982,6 +982,9 @@ interface LiveTurnWire {
   reasoning: string;
   status: string | null;
   toolEvents: ToolEvent[];
+  /** F-30 : déroulé multi-voix en vol (débat/conseil/auto) — liste complète
+   *  des lignes à chaque émission (le client remplace son état en bloc). */
+  modeFlow?: import("./types").ModeFlowRow[];
 }
 const liveTurns = new Map<string, LiveTurnWire>();
 
@@ -999,7 +1002,11 @@ function liveTurnsOf(conversationId: string): LiveTurnWire[] {
   for (const k of [conversationId, `${conversationId}:a`, `${conversationId}:b`]) {
     const t = liveTurns.get(k);
     if (!t) continue;
-    snapshot.push({ ...t, toolEvents: [...t.toolEvents] });
+    snapshot.push({
+      ...t,
+      toolEvents: [...t.toolEvents],
+      ...(t.modeFlow ? { modeFlow: [...t.modeFlow] } : {}),
+    });
     liveResync.get(k)?.();
   }
   return snapshot;
@@ -2911,7 +2918,7 @@ io.on("connection", (socket) => {
     // Ré-attache : maintient l'instantané du tour en vol (contenu/reasoning
     // accumulés + patch optionnel). No-op si un tour plus récent a déjà
     // repris la clé (même garde que running.delete dans le finally).
-    const liveSync = (patch?: Partial<Pick<LiveTurnWire, "status" | "toolEvents">>) => {
+    const liveSync = (patch?: Partial<Pick<LiveTurnWire, "status" | "toolEvents" | "modeFlow">>) => {
       const cur = liveTurns.get(turnKey);
       if (!cur || cur.messageId !== messageId) return;
       liveTurns.set(turnKey, {
@@ -3029,8 +3036,13 @@ io.on("connection", (socket) => {
         // NE CONSERVE qu'une réponse (verdict / fusion / bilan). Le déroulé
         // vit dans la conversation : chaque ligne est poussée en direct via
         // `mode:flow`, puis persistée avec la réponse (mode_flow).
-        const flowEmit = (rows: import("./types").ModeFlowRow[]) =>
+        const flowEmit = (rows: import("./types").ModeFlowRow[]) => {
+          // Ré-attache : le déroulé vivant fait partie de l'état du tour —
+          // sans lui, le bloc multi-voix disparaît au retour dans la
+          // conversation jusqu'au prochain mode:flow (ou à la clôture).
+          liveSync({ modeFlow: rows });
           socket.emit("mode:flow", { conversationId, messageId, rows });
+        };
         const outcome = await runOrchestratedTurn(
           {
             conversationId,

@@ -13,7 +13,10 @@
 //   [3] le contenu re-semé est un préfixe exact des deltas déjà reçus (pas de
 //       trou) et les deltas suivants le complètent SANS doublon :
 //       contenuAuRetour + deltasAprès === contenu final du stream:done ;
-//   [4] conversation calme : `live` vide (aucune entrée fantôme).
+//   [4] conversation calme : `live` vide (aucune entrée fantôme) ;
+//   [5] déroulé multi-voix (conseil, F-30) : le bloc des voix est ré-attaché
+//       au retour (lignes complètes) et se retrouve intégralement dans la
+//       réponse persistée — quel que soit le mode orchestré.
 import { io } from "socket.io-client";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
@@ -131,9 +134,12 @@ function startService(): Promise<ChildProcess> {
 function connectSocket(): Promise<any> {
   return new Promise((resolve, reject) => {
     const s = io(SOCK_URL, { path: "/", transports: ["websocket"], timeout: 6000, auth: { token: TOKEN } });
-    s.on("connect", () => resolve(s));
-    s.on("connect_error", (e: any) => reject(new Error(e?.message)));
-    setTimeout(() => { s.close(); reject(new Error("timeout connexion socket")); }, 7000);
+    // Le garde-fou de connexion s'annule dès la connexion : sans clear, il
+    // fermerait le socket à t+7 s EN PLEIN TOUR (le tour conseil du test
+    // dure plus de 7 s — la déconnexion « io client disconnect » observée).
+    const guard = setTimeout(() => { s.close(); reject(new Error("timeout connexion socket")); }, 7000);
+    s.on("connect", () => { clearTimeout(guard); resolve(s); });
+    s.on("connect_error", (e: any) => { clearTimeout(guard); reject(new Error(e?.message)); });
   });
 }
 
@@ -146,6 +152,12 @@ async function main() {
     mock = await startMock();
     service = await startService();
     socket = await connectSocket();
+    socket.on("disconnect", (reason: string) => {
+      console.log(`[diag] socket déconnecté : ${reason}`);
+    });
+    socket.io.on("reconnect", () => {
+      console.log("[diag] socket reconnecté");
+    });
 
     // Fournisseur pointé sur le faux serveur
     const add = await emitAck(socket, "providers:add", {
@@ -268,6 +280,105 @@ async function main() {
     check(
       "après clôture : la réponse persistée est dans le snapshot",
       (after?.messages ?? []).some((m: any) => m.id === startMessageId)
+    );
+
+    // ── [5] Déroulé multi-voix (conseil, F-30) : le bloc des voix doit ──
+    //    survivre au « quitter puis revenir » — quel que soit le mode.   ──
+    const conv3 = await emitAck(socket, "conversations:create");
+    const cid3 = conv3?.conversation?.id;
+    const setMode = await emitAck(socket, "conversations:setMode", {
+      conversationId: cid3,
+      mode: "council",
+      config: { members: 2 },
+    });
+    check("[5] mode conseil posé (2 membres)", setMode?.ok === true, JSON.stringify(setMode).slice(0, 90));
+
+    let flowRows: any[] = [];
+    let flowStartId: string | null = null;
+    let done3Message: any = null;
+    let err3: string | null = null;
+    socket.on("mode:flow", (p: any) => {
+      if (p?.conversationId !== cid3) return;
+      flowRows = Array.isArray(p.rows) ? p.rows : [];
+    });
+    socket.on("stream:start", (p: any) => {
+      if (p?.conversationId === cid3) flowStartId = p.messageId;
+    });
+    const done3 = new Promise<void>((resolve) => {
+      socket.on("stream:done", (p: any) => {
+        if (p?.conversationId !== cid3) return;
+        done3Message = p.message ?? null;
+        resolve();
+      });
+    });
+    const err3Promise = new Promise<string>((resolve) => {
+      socket.on("stream:error", (p: any) => {
+        if (p?.conversationId !== cid3) return;
+        err3 = String(p?.error ?? "");
+        resolve(err3);
+      });
+    });
+    await emitAck(socket, "chat:send", {
+      conversationId: cid3,
+      content: "Question au conseil",
+      model: MODEL_ID,
+    });
+
+    // Attend la première émission du déroulé (voix lancées)
+    const t0 = Date.now();
+    while (flowRows.length === 0 && Date.now() - t0 < 10000) await wait(100);
+    check("[5] déroulé vivant reçu (mode:flow)", flowRows.length > 0, `${flowRows.length} ligne(s)`);
+
+    // « Retour » dans la conversation pendant le tour multi-voix
+    const open3 = await new Promise<any>((resolve) => {
+      socket.emit("conversations:open", { id: cid3 }, (res: any) => resolve(res ?? {}));
+    });
+    const live3: any[] = Array.isArray(open3?.live) ? open3.live : [];
+    check("[5] open renvoie le tour en vol du conseil", live3.length === 1, `${live3.length} entrée(s)`);
+    check("[5] live.messageId = stream:start du conseil", live3[0]?.messageId === flowStartId);
+    const snapRows: any[] = Array.isArray(live3[0]?.modeFlow) ? live3[0].modeFlow : [];
+    check(
+      "[5] déroulé ré-attaché (lignes complètes au retour)",
+      snapRows.length > 0 &&
+        snapRows.every((r) => typeof r?.id === "string" && typeof r?.label === "string" && typeof r?.status === "string"),
+      `${snapRows.length} ligne(s) au retour`
+    );
+
+    const raceStart = Date.now();
+    const raceWinner = await Promise.race([
+      done3.then(() => "done"),
+      err3Promise.then(() => "error"),
+      wait(25000).then(() => "timeout"),
+    ]);
+    console.log(`  [diag] course: ${raceWinner} en ${Math.round((Date.now() - raceStart) / 1000)} s`);
+    check("[5] tour conseil achevé sans erreur", raceWinner === "done", `erreur: ${String(err3)}`);
+    const finalRows: any[] = Array.isArray(done3Message?.modeFlow) ? done3Message.modeFlow : [];
+    if (raceWinner !== "done") {
+      try {
+        const diag = await (
+          await fetch(`http://localhost:3344/diagnostics?token=${encodeURIComponent(TOKEN)}`)
+        ).json();
+        const events: any[] = diag?.trace ?? [];
+        console.log(
+          `  [diag] trace service (fin) : ${events
+            .slice(-14)
+            .map((e) => `${e.cat}: ${String(e.msg).slice(0, 90)}`)
+            .join(" | ")}`
+        );
+      } catch (e) {
+        console.log(`  [diag] diagnostics injoignables : ${String(e).slice(0, 80)}`);
+      }
+      const still = await emitAck(socket, "conversations:open", { id: cid3 });
+      const stillLive: any[] = Array.isArray(still?.live) ? still.live : [];
+      console.log(
+        `  [diag] tour encore en vol : ${stillLive.length > 0} — statut "${String(stillLive[0]?.status)}", contenu ${String(stillLive[0]?.content ?? "").length} car., modeFlow ${Array.isArray(stillLive[0]?.modeFlow) ? stillLive[0].modeFlow.length : 0} ligne(s), dernières lignes: ${JSON.stringify((stillLive[0]?.modeFlow ?? []).map((r: any) => `${r.label}:${r.status}`))}`
+      );
+    }
+    check(
+      "[5] déroulé persisté contient les lignes vues au retour (aucune perte)",
+      finalRows.length >= snapRows.length &&
+        snapRows.every((r) => finalRows.some((f) => f?.id === r?.id)),
+      `${snapRows.length} ligne(s) au retour → ${finalRows.length} à la clôture ; message: stopped=${String(done3Message?.stopped)} contenu=${String(done3Message?.content ?? "").length} car. — ${JSON.stringify(done3Message).slice(0, 200)}`
     );
   } catch (err) {
     failures++;
