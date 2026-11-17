@@ -77,6 +77,10 @@ export interface ModeConfig {
   retries?: number;
   /** Auto : débat préalable de cadrage (désactivable pour les tâches évidentes). */
   autoDebate?: boolean;
+  /** Débat : les voix d'un MÊME tour partient ensemble — chacune voit les
+   *  tours précédents mais pas les voix de son tour (elles répondent en même
+   *  temps). ~3× plus rapide ; désactivée par défaut (débat enchaîné). */
+  debateParallel?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;
   /** Modèle par mode (chat/plan/code — modes sans voix) : remplace le modèle
@@ -106,6 +110,7 @@ export function normalizeModeConfig(raw: unknown): ModeConfig {
   if (src.retries !== undefined && src.retries !== null)
     out.retries = clampInt(src.retries, AUTO_RETRIES_MIN, AUTO_RETRIES_MAX, 2);
   if (typeof src.autoDebate === "boolean") out.autoDebate = src.autoDebate;
+  if (typeof src.debateParallel === "boolean") out.debateParallel = src.debateParallel;
   if (src.voices && typeof src.voices === "object") {
     const voices: Record<string, Record<string, string | null>> = {};
     for (const [modeKey, map] of Object.entries(src.voices as Record<string, unknown>)) {

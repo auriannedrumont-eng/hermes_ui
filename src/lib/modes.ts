@@ -66,6 +66,9 @@ export interface ModeConfig {
   retries?: number;
   /** Auto : débat préalable de cadrage (désactivable pour les tâches évidentes). */
   autoDebate?: boolean;
+  /** Débat : les voix d'un MÊME tour partent ensemble (voient les tours
+   *  précédents, pas celles de leur tour) — ~3× plus rapide. */
+  debateParallel?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;
   /** Modèle par mode (chat/plan/code — modes sans voix) : remplace le modèle

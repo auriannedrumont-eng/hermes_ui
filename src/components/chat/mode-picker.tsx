@@ -368,17 +368,29 @@ export function ModePicker({
         <div className="border-t border-border px-3 py-2.5">
           {/* Bornes du mode actif — arrêtées à la saisie, comme le service */}
           {mode === "debate" ? (
-            <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
-              <span>Tours du débat</span>
-              <Stepper
-                value={current.rounds ?? DEBATE_ROUNDS_MIN}
-                min={DEBATE_ROUNDS_MIN}
-                max={DEBATE_ROUNDS_MAX}
-                maxLabel="10 max"
-                ariaLabel="tours du débat"
-                onChange={(v) => patch((c) => ({ ...c, rounds: v }))}
-              />
-            </div>
+            <>
+              <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+                <span>Tours du débat</span>
+                <Stepper
+                  value={current.rounds ?? DEBATE_ROUNDS_MIN}
+                  min={DEBATE_ROUNDS_MIN}
+                  max={DEBATE_ROUNDS_MAX}
+                  maxLabel="10 max"
+                  ariaLabel="tours du débat"
+                  onChange={(v) => patch((c) => ({ ...c, rounds: v }))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+                <span>Voix du tour en parallèle (plus rapide)</span>
+                <SwitchMini
+                  on={current.debateParallel === true}
+                  ariaLabel="Voix du tour en parallèle"
+                  onToggle={() =>
+                    patch((c) => ({ ...c, debateParallel: c.debateParallel !== true }))
+                  }
+                />
+              </div>
+            </>
           ) : null}
           {mode === "council" ? (
             <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">

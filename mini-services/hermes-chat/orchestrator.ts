@@ -223,38 +223,114 @@ async function runDebate(
   rounds: number,
 ): Promise<OrchestratorResult> {
   const transcript: string[] = [];
+  // Option « voix du tour en parallèle » : les trois voix partent ENSEMBLE et
+  // chacune ne voit que les tours PRÉCÉDENTS (les voix de son tour répondent
+  // en même temps — elles seront lisibles au suivant). Le débat enchaîné reste
+  // le défaut : c'est le seul où chaque voix répond à celles qui précèdent.
+  const parallel = ctx.config?.debateParallel === true;
   for (let r = 1; r <= rounds; r++) {
-    for (const v of conseillers) {
-      if (ctx.signal.aborted) break;
-      const rowId = `t${r}-${v.id}`;
-      flow.push({
-        id: rowId,
-        label: `Tour ${r} · ${v.name}`,
-        detail: "répond aux arguments déjà posés",
-        model: shortModel(v.model),
-        status: "running",
-      });
-      const note = `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. Chaque tour voit ce qui a été dit avant : contredisez sur des faits, jamais sur des généralités.`;
-      const outcome = await runVoiceWithRow(
-        deps,
-        ctx,
-        flow,
-        rowId,
-        `Voix « ${v.name} » (tour ${r})`,
-        {
-          modelId: v.model,
-          systemPrompt: (ctx.prompts.conseiller || "").replaceAll(
-            "{angle}",
-            v.name,
-          ).replaceAll("{tours}", String(rounds)) || null,
-          content: voicePromptContent(ctx.userContent, transcript, note),
-          history: ctx.history,
-          attachments: ctx.attachments,
-          settings: ctx.settings,
-        },
+    if (ctx.signal.aborted) break;
+    if (parallel) {
+      // Les lignes apparaissent d'abord « en attente », chaque voix s'allume
+      // à son départ — le déroulé montre qu'elles tournent de concert.
+      for (const v of conseillers) {
+        flow.push({
+          id: `t${r}-${v.id}`,
+          label: `Tour ${r} · ${v.name}`,
+          detail: "part avec les autres voix du tour — voit les tours précédents",
+          model: shortModel(v.model),
+          status: "pending",
+        });
+      }
+      const settled = await Promise.all(
+        conseillers.map(async (v) => {
+          const rowId = `t${r}-${v.id}`;
+          flow.update(rowId, {
+            status: "running",
+            detail: "répond en même temps que les autres voix du tour",
+          });
+          const note =
+            `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. ` +
+            `Vous voyez les tours précédents ; les autres voix de votre tour répondent ` +
+            `en même temps que vous : vous ne les lirez qu'au tour suivant. Contredisez ` +
+            `sur des faits, jamais sur des généralités.`;
+          try {
+            const outcome = await runVoiceWithRow(
+              deps,
+              ctx,
+              flow,
+              rowId,
+              `Voix « ${v.name} » (tour ${r})`,
+              {
+                modelId: v.model,
+                systemPrompt: (ctx.prompts.conseiller || "").replaceAll(
+                  "{angle}",
+                  v.name,
+                ).replaceAll("{tours}", String(rounds)) || null,
+                content: voicePromptContent(ctx.userContent, transcript, note),
+                history: ctx.history,
+                attachments: ctx.attachments,
+                settings: ctx.settings,
+              },
+            );
+            flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
+            return { v, outcome, error: undefined as string | undefined };
+          } catch (err) {
+            // La ligne est déjà marquée par runVoiceWithRow (« échec : … » ou
+            // « interrompu ») — on collecte sans écraser.
+            return { v, outcome: null, error: err instanceof Error ? err.message : "échec" };
+          }
+        }),
       );
-      transcript.push(`Tour ${r} · ${v.name} : ${outcome.content.trim()}`);
-      flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
+      // Transcription dans l'ordre canonique des voix (pas l'ordre d'arrivée).
+      let failures = 0;
+      let firstError = "";
+      for (const { v, outcome, error } of settled) {
+        if (outcome) {
+          transcript.push(`Tour ${r} · ${v.name} : ${outcome.content.trim()}`);
+        } else {
+          failures += 1;
+          if (!firstError) firstError = error ?? "échec";
+        }
+      }
+      // Toutes les voix du tour ont échoué (et ce n'est pas un arrêt
+      // utilisateur) : le débat meurt franchement, comme en enchaîné.
+      if (failures === conseillers.length && !ctx.signal.aborted) {
+        throw new Error(firstError);
+      }
+    } else {
+      for (const v of conseillers) {
+        if (ctx.signal.aborted) break;
+        const rowId = `t${r}-${v.id}`;
+        flow.push({
+          id: rowId,
+          label: `Tour ${r} · ${v.name}`,
+          detail: "répond aux arguments déjà posés",
+          model: shortModel(v.model),
+          status: "running",
+        });
+        const note = `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. Chaque tour voit ce qui a été dit avant : contredisez sur des faits, jamais sur des généralités.`;
+        const outcome = await runVoiceWithRow(
+          deps,
+          ctx,
+          flow,
+          rowId,
+          `Voix « ${v.name} » (tour ${r})`,
+          {
+            modelId: v.model,
+            systemPrompt: (ctx.prompts.conseiller || "").replaceAll(
+              "{angle}",
+              v.name,
+            ).replaceAll("{tours}", String(rounds)) || null,
+            content: voicePromptContent(ctx.userContent, transcript, note),
+            history: ctx.history,
+            attachments: ctx.attachments,
+            settings: ctx.settings,
+          },
+        );
+        transcript.push(`Tour ${r} · ${v.name} : ${outcome.content.trim()}`);
+        flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
+      }
     }
     // Un arrêt utilisateur ne lance pas le tour suivant : la boucle externe
     // s'arrête avec l'interne (sinon le tour suivant partait pour échouer).

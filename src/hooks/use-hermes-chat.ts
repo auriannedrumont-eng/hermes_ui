@@ -106,6 +106,10 @@ export function useHermesChat() {
   // l'écran resterait « Hermes réfléchit… » sans fin. Un filtre d'activité
   // (tout événement socket = signe de vie) rend ce silence visible.
   const lastActivityRef = useRef<number>(0);
+  // Voix en vol (F-30/F-31) : le déroulé mode:flow dit QUI travaille — la
+  // notice de silence s'en sert pour dire la vérité (« la voix tourne depuis
+  // N s ») au lieu de crier au blocage pendant une réponse lente mais vivante.
+  const runningVoiceRef = useRef<{ label: string; since: number } | null>(null);
   const [stallNotice, setStallNotice] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [models, setModels] = useState<ModelOption[]>([]);
@@ -412,17 +416,25 @@ export function useHermesChat() {
   useEffect(() => {
     if (turnState !== "streaming") {
       setStallNotice(null);
+      runningVoiceRef.current = null;
       return;
     }
     lastActivityRef.current = Date.now();
     const timer = setInterval(() => {
       const silentS = Math.round((Date.now() - lastActivityRef.current) / 1000);
+      const voice = runningVoiceRef.current;
       if (silentS >= 60) {
         setStallNotice(
-          `Aucun signe d'activité depuis ${silentS} s — soit le fournisseur est lent ` +
-            `(gardes côté service : 120 s pool, ~240 s pilote webchat), soit le service est ` +
-            `mort. Ouvrez le dépannage (icône clé à molette en haut à droite, ou ?debug=1 ` +
-            `dans l'adresse) puis « Copier le diagnostic » pour voir lequel.`,
+          voice
+            ? `${voice.label} travaille depuis ${Math.round(
+                (Date.now() - voice.since) / 1000,
+              )} s — réponse lente mais en vol (gardes côté service : 120 s pool, ` +
+              `~240 s pilote webchat). Pour voir si des octets arrivent encore : ` +
+              `icône clé à molette → « Copier le diagnostic » (section pool.streams).`
+            : `Aucun signe d'activité depuis ${silentS} s — soit le fournisseur est lent ` +
+              `(gardes côté service : 120 s pool, ~240 s pilote webchat), soit le service est ` +
+              `mort. Ouvrez le dépannage (icône clé à molette en haut à droite, ou ?debug=1 ` +
+              `dans l'adresse) puis « Copier le diagnostic » pour voir lequel.`,
         );
       }
     }, 10_000);
@@ -856,6 +868,15 @@ export function useHermesChat() {
     }) => {
       if (p.conversationId !== activeIdRef.current) return;
       setModeFlowLive({ messageId: p.messageId, rows: p.rows ?? [] });
+      // Suivi de la voix en vol pour la notice de silence (F-31).
+      const running = (p.rows ?? []).find((r) => r.status === "running");
+      if (running) {
+        if (runningVoiceRef.current?.label !== running.label) {
+          runningVoiceRef.current = { label: running.label, since: Date.now() };
+        }
+      } else {
+        runningVoiceRef.current = null;
+      }
     };
     // F-30 — mode changé (depuis cette session ou une autre) : toutes les
     // fenêtres suivent la conversation en direct.
