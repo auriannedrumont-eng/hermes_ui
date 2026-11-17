@@ -225,7 +225,7 @@ start_gateway() {
   if port_open "$port"; then die "le port $port est occupé sans servir l'interface — libérez-le."; fi
   # Caddyfile généré avec les ports choisis à l'exécution
   local cf="$RUNTIME_DIR/Caddyfile"
-  sed -e "s/^:81 {/:$port {/" -e "s#localhost:3000#localhost:$(state_get UI_PORT)#" \
+  sed -e "s|^http://127\.0\.0\.1:81 {|http://127.0.0.1:$port {|" -e "s#localhost:3000#localhost:$(state_get UI_PORT)#" \
     "$ROOT/Caddyfile" > "$cf"
   log "• démarrage de la passerelle Caddy sur :$port (→ interface :$(state_get UI_PORT))…"
   ( cd "$ROOT" && exec nohup caddy run --config "$cf" --adapter caddyfile >>"$GW_LOG" 2>&1 </dev/null ) &
@@ -324,6 +324,34 @@ supervise() {
 }
 
 # ── COMMANDES ────────────────────────────────────────────────────────────
+# Jeton de service (Lot 1, audit L1-1) : généré UNE FOIS puis persisté dans
+# desktop/runtime/service-token.env — injecté au mini-service
+# (HERMES_SERVICE_TOKEN) et à l'interface (NEXT_PUBLIC_SERVICE_TOKEN, lu par
+# Next au build/dev). Sans lui, le service reste protégé par les gardes
+# d'origine boucle locale, mais le lanceur ferme la porte à toute page tierce.
+SERVICE_TOKEN_FILE="$RUNTIME_DIR/service-token.env"
+ensure_service_token() {
+  SERVICE_TOKEN="$(grep '^HERMES_SERVICE_TOKEN=' "$SERVICE_TOKEN_FILE" 2>/dev/null | tail -1 | cut -d= -f2-)"
+  if [ -z "$SERVICE_TOKEN" ]; then
+    SERVICE_TOKEN="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+    printf 'HERMES_SERVICE_TOKEN=%s\n' "$SERVICE_TOKEN" > "$SERVICE_TOKEN_FILE"
+    log "• jeton de service généré et persisté ($SERVICE_TOKEN_FILE)"
+  fi
+  export HERMES_SERVICE_TOKEN="$SERVICE_TOKEN"
+  export NEXT_PUBLIC_SERVICE_TOKEN="$SERVICE_TOKEN"
+  # L'interface embarque le jeton à la BUILD (NEXT_PUBLIC_* inliné) : si le
+  # build existant a été fait avec un autre jeton (ou avant ce mécanisme),
+  # il doit être reconstruit — sinon l'interface présenterait un jeton refusé.
+  if [ -f "$ROOT/.next/standalone/server.js" ]; then
+    local built
+    built="$(head -1 "$ROOT/.next/service-token" 2>/dev/null || true)"
+    if [ "$built" != "$SERVICE_TOKEN" ]; then
+      log "• jeton de service changé depuis le dernier build — reconstruction de l'interface…"
+      rm -rf "$ROOT/.next"
+    fi
+  fi
+}
+
 do_status() {
   echo "── Hermes Web ─────────────────────────────────────"
   if [ ! -f "$STATE_FILE" ]; then
@@ -345,6 +373,7 @@ do_status() {
 }
 
 do_start() {
+  ensure_service_token
   check_deps
 
   # Drapeau resté posé (demande faite sans lanceur vivant) : le démarrage fait
@@ -370,7 +399,7 @@ do_start() {
             maj_log "code de l'interface modifié — reconstruction (1 à 3 minutes)…"
             rm -rf "$ROOT/.next"
             ( cd "$ROOT" && npm run build >>"$LOG_DIR/build.log" 2>&1 ) \
-              && { log "  reconstruction terminée."; maj_log "reconstruction terminée"; } \
+              && { log "  reconstruction terminée."; maj_log "reconstruction terminée"; echo "$SERVICE_TOKEN" > "$ROOT/.next/service-token"; } \
               || { log "  ATTENTION : reconstruction échouée — mode développement au démarrage (voir logs/build.log)."; maj_log "ATTENTION - reconstruction échouée — mode développement au démarrage"; }
           fi
         fi

@@ -1,10 +1,46 @@
-:81 {
-	@transform_port_query {
-		query XTransformPort=*
+# Passerelle locale Hermes Web (Lot 1, audit L1-1) :
+#   • écoute en boucle uniquement (127.0.0.1) — la pile n'est jamais exposée
+#     au réseau local ;
+#   • le client transporte le port cible dans la requête ?XTransformPort=
+#     (jamais dans le chemin — cf. src/lib/service.ts). Jusqu'ici Caddy
+#     relayait vers N'IMPORTE QUEL port : une page web pouvait pivoter vers
+#     un service local (base, panneau d'admin…) via la passerelle. Seuls les
+#     DEUX ports du service restent joignables : 3003 (socket.io) et 3004
+#     (pièces jointes/artefacts) — toute autre valeur tombe sur l'interface,
+#     comme sans paramètre.
+#
+# Les lanceurs (desktop/hermes-ui.sh, desktop/hermes-ui.ps1) génèrent une
+# copie avec http://127.0.0.1:81 remplacé par le port passerelle choisi et
+# localhost:3000 par le port interface réel — leurs motifs de réécriture
+# restent valables sur ce fichier. NB : le schéma http:// explicite est
+# OBLIGATOIRE — une adresse avec hôte sans schéma activerait l'HTTPS
+# automatique de Caddy (certificat interne, redirection), et la passerelle
+# doit rester du HTTP simple sur la boucle locale.
+http://127.0.0.1:81 {
+	# bind : l'adresse de site ne limite QUE le routage (Host) — sans cette
+	# directive, Caddy écoute sur toutes les interfaces et sert les clients
+	# du réseau local (vérifié au test Lot 1). Le bind TCP force la boucle.
+	bind 127.0.0.1
+
+	@via_service {
+		query XTransformPort=3003
 	}
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
+	handle @via_service {
+		reverse_proxy 127.0.0.1:3003 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	@via_files {
+		query XTransformPort=3004
+	}
+
+	handle @via_files {
+		reverse_proxy 127.0.0.1:3004 {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}

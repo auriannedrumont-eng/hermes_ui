@@ -302,6 +302,10 @@ export class HermesConnector {
   ): Promise<TurnOutcome> {
     return new Promise((resolve, reject) => {
       let settled = false;
+      // true = la gateway a annoncé la fin (turn_end/complete/done). Une
+      // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
+      // un contenu tronqué présenté comme complet (Lot 1, audit L1-6).
+      let endedProperly = false;
       let content = "";
       let reasoning = "";
       const ws = new WebSocket(toWsUrl(this.gatewayUrl!), {
@@ -313,6 +317,7 @@ export class HermesConnector {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        cb.signal.removeEventListener("abort", onAbort);
         try {
           ws.removeAllListeners();
           ws.close();
@@ -320,6 +325,17 @@ export class HermesConnector {
           /* ignore */
         }
         if (err) reject(err);
+        else if (cb.signal.aborted)
+          // Stop utilisateur : le partiel reçu est rendu — le tour se clôt
+          // avec le marqueur « stopped », pas une erreur (contrat index.ts).
+          resolve({
+            content,
+            reasoning,
+            model: req.model || "hermes (gateway)",
+            engine: "gateway",
+          });
+        else if (!endedProperly)
+          reject(new Error("Connexion gateway fermée avant la fin du tour"));
         else
           resolve({
             content,
@@ -328,6 +344,13 @@ export class HermesConnector {
             engine: "gateway",
           });
       };
+
+      // Stop utilisateur (Lot 1, audit L1-6) : l'abort est câblé à la
+      // WebSocket — fermeture immédiate et partiel rendu, au lieu de courir
+      // jusqu'au timeout 180 s avec un fil qui ne s'arrête jamais.
+      const onAbort = () => finish();
+      if (cb.signal.aborted) onAbort();
+      else cb.signal.addEventListener("abort", onAbort, { once: true });
 
       const timer = setTimeout(() => finish(new Error("Timeout du tour gateway")), TURN_TIMEOUT_MS);
 
@@ -424,12 +447,16 @@ export class HermesConnector {
               content = data.text;
               cb.onDelta("");
             }
+            endedProperly = true;
             finish();
           } else if (evt.includes("error")) {
             finish(new Error(String(data?.error ?? "Erreur gateway")));
           }
         }
-        if (data?.done === true) finish();
+        if (data?.done === true) {
+          endedProperly = true;
+          finish();
+        }
       });
 
       ws.on("error", (err) => finish(err));

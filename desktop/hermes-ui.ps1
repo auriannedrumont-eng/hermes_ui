@@ -800,6 +800,9 @@ function Ensure-Build([string]$nodeDir) {
         }
         Log "  OK build production pret"
         Write-MajLog "construction de l'interface terminee"
+        # Marqueur du jeton inliné dans ce build (Lot 1, L1-1) : permet au
+        # lanceur de détecter un build fait avec un autre jeton.
+        Set-Content -Path (Join-Path $Root '.next\service-token') -Value $Script:ServiceToken -Encoding ASCII
     } else {
         $revForFlag = Get-RepoRevision
         $tsForFlag  = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -976,6 +979,42 @@ function Supervise {
     }
 }
 
+# ── Jeton de service (Lot 1, audit L1-1) ────────────────────────────────
+# Généré UNE FOIS puis persiste dans desktop\runtime\service-token.env —
+# injecte au mini-service (HERMES_SERVICE_TOKEN) et a l'interface
+# (NEXT_PUBLIC_SERVICE_TOKEN, inline par Next a la build). Sans lui, le
+# service reste protege par les gardes d'origine boucle locale, mais le
+# lanceur ferme la porte a toute page tierce.
+function Ensure-ServiceToken {
+    $Script:ServiceToken = ''
+    $tokenFile = Join-Path $RuntimeDir 'service-token.env'
+    if (Test-Path $tokenFile) {
+        try {
+            foreach ($l in (Get-Content $tokenFile -ErrorAction SilentlyContinue)) {
+                if ($l -match '^HERMES_SERVICE_TOKEN=(.+)$') { $Script:ServiceToken = $Matches[1].Trim() }
+            }
+        } catch { }
+    }
+    if (-not $Script:ServiceToken) {
+        $Script:ServiceToken = [guid]::NewGuid().ToString('N')
+        Set-Content -Path $tokenFile -Value ("HERMES_SERVICE_TOKEN=" + $Script:ServiceToken) -Encoding ASCII
+        Log "• jeton de service genere et persiste ($tokenFile)"
+    }
+    $env:HERMES_SERVICE_TOKEN = $Script:ServiceToken
+    $env:NEXT_PUBLIC_SERVICE_TOKEN = $Script:ServiceToken
+    # L'interface embarque le jeton a la BUILD : si le build existant a ete
+    # fait avec un autre jeton (ou avant ce mecanisme), il doit etre
+    # reconstruit — sinon l'interface presenterait un jeton refuse.
+    if (Test-Path (Join-Path $Root '.next\standalone\server.js')) {
+        $built = ''
+        try { $built = (Get-Content (Join-Path $Root '.next\service-token') -ErrorAction SilentlyContinue | Select-Object -First 1) } catch { }
+        if ($built -ne $Script:ServiceToken) {
+            Log "• jeton de service change depuis le dernier build — reconstruction de l'interface..."
+            Remove-Item -Recurse -Force (Join-Path $Root '.next') -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # ── COMMANDES ───────────────────────────────────────────────────────────
 function Show-Status {
     Load-State
@@ -1061,6 +1100,10 @@ function Do-Start {
         Start-Sleep -Seconds 1
         $Script:State = @{}; Save-State
     }
+
+    # Jeton de service : genere/persiste AVANT tout (Update-FromGit et build
+    # dependent de NEXT_PUBLIC_SERVICE_TOKEN)
+    Ensure-ServiceToken
 
     # Installation portable automatique de tout ce qui manque (idempotente)
     Ensure-PortableSetup

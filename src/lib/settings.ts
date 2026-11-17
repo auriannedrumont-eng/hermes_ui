@@ -266,6 +266,16 @@ export const HERMES_SETTINGS: SettingDef[] = [
     scope: "client",
     category: "Agent Hermes",
   },
+  {
+    key: "hermes.modes.models",
+    type: "string",
+    default: "{}",
+    label: "Modèles par défaut des modes",
+    description:
+      "Un modèle par mode (Chat, Plan, Code) — JSON ; interne, édité dans la section Modes de chat.",
+    scope: "client",
+    category: "Agent Hermes",
+  },
 ];
 
 // ── Réglages propres au fork ───────────────────────────────────────────

@@ -279,6 +279,30 @@ function broadcastSystemPrompts(): void {
 // par l'utilisateur (DNS rebinding compris). Absent → mode dev inchangé.
 const SERVICE_TOKEN = process.env.HERMES_SERVICE_TOKEN ?? null;
 
+// Garde d'origine (Lot 1, audit L1-1) : sans jeton, le service ne doit pas
+// être joignable depuis une page web tierce (DNS rebinding compris) — seules
+// les origines boucle locale de la propre machine de l'utilisateur passent.
+// Pas d'en-tête Origin (curl, scripts QA, chargement <img>, lien de partage
+// ouvert en navigation) → laissé passer : les navigateurs n'envoient Origin
+// que sur les requêtes fetch/XHR, jamais sur les navigations et images.
+function isLoopbackOrigin(origin: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  const h = u.hostname.toLowerCase();
+  return (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h === "[::1]"
+  );
+}
+
 const PORT = Number(process.env.HERMES_CHAT_PORT ?? 3003);
 const FILES_PORT = Number(process.env.HERMES_CHAT_FILES_PORT ?? 3004); // service HTTP dédié aux pièces jointes
 const MAX_HISTORY = 30;
@@ -396,6 +420,17 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
   if (req.method !== "GET" || !req.url) {
     res.writeHead(405, { "Content-Type": "text/plain" });
     res.end("Méthode non autorisée");
+    return;
+  }
+  // Garde d'origine (Lot 1, audit L1-1) : une page web tierce ne doit pas
+  // pouvoir lire les fichiers locaux via fetch (avec ou sans jeton). Les
+  // navigations légitimes (<img>, <a download>, lien de partage ouvert dans
+  // un onglet) et les clients non navigateurs n'envoient pas d'Origin :
+  // ils restent permises.
+  const reqOrigin = req.headers.origin;
+  if (reqOrigin && !isLoopbackOrigin(reqOrigin)) {
+    res.writeHead(403, { "Content-Type": "text/plain" });
+    res.end("Origine non autorisée");
     return;
   }
   const u = new URL(req.url, "http://localhost");
@@ -792,7 +827,20 @@ const httpServer = createServer();
 const io = new Server(httpServer, {
   // DO NOT change the path, it is used by Caddy to forward the request to the correct port
   path: "/",
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  // CORS (Lot 1, audit L1-1) : plus de « origin: * » — seules les origines
+  // boucle locale obtiennent des en-têtes CORS (le client vit sur 127.0.0.1,
+  // derrière Caddy ou en dev). Une page tierce reçoit une réponse sans
+  // Access-Control-Allow-Origin : le navigateur la lui bloque.
+  cors: {
+    origin: (origin, cb) => {
+      // Pas d'Origin : client non navigateur (curl, script QA) — autorisé,
+      // les gardes io.use et 3004 ci-dessous tranchent pour les navigateurs.
+      if (!origin) return cb(null, true);
+      if (isLoopbackOrigin(origin)) return cb(null, origin);
+      return cb(null, false);
+    },
+    methods: ["GET", "POST"],
+  },
   pingTimeout: 60000,
   pingInterval: 25000,
   // Les pièces jointes montent en base64 (≈ +33 % de taille) : 25 Mo de marge
@@ -829,6 +877,19 @@ function timingSafeEqualImpl(a: Buffer, b: Buffer): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
+
+// Garde d'origine (Lot 1, audit L1-1) : une page ouverte sur une origine
+// non boucle locale ne connecte PAS de socket — avec ou sans jeton (le jeton
+// protège les données, la garde d'origine empêche la connexion tierce
+// elle-même, jeton absent comme présent).
+io.use((socket, next) => {
+  const origin = socket.handshake.headers.origin;
+  if (origin && !isLoopbackOrigin(origin)) {
+    next(new Error("Origine non autorisée (boucle locale uniquement)"));
+    return;
+  }
+  next();
+});
 
 io.use((socket, next) => {
   if (!socketAuthorized(socket as never)) {
@@ -3666,11 +3727,12 @@ connector
           `[hermes-chat] agent Hermes non detecte (defaut ${connector.gatewayUrl}) — lancer l'agent, ou ajouter une cle fournisseur`
         );
       }
-      // Audit passe 3, F-04 : sans jeton, socket.io (CORS *) et le 3004 sont
-      // ouverts à toute origine — acceptable en dev local ONLY.
+      // Audit passe 3, F-04 ; durci Lot 1 (L1-1) : sans jeton, les gardes
+      // d'origine limitent l'accès aux origines boucle locale — le jeton du
+      // lanceur reste la protection complète (données lues par une page).
       if (!SERVICE_TOKEN) {
         console.warn(
-          `[hermes-chat] ⚠ HERMES_SERVICE_TOKEN non défini : service accessible depuis TOUTE origine (mode dev). Définir ce jeton pour tout usage exposé.`
+          `[hermes-chat] ⚠ HERMES_SERVICE_TOKEN non défini : accès limité aux origines boucle locale (garde Origin). Le lanceur génère ce jeton ; le définir pour tout usage exposé.`
         );
       }
     });

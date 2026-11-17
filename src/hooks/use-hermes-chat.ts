@@ -1046,6 +1046,11 @@ export function useHermesChat() {
           messages: ChatMessage[];
           compact?: CompactInfo | null;
         } = {} as any) => {
+          // Garde de course (Lot 1, audit L1-5) : l'ack compare à la
+          // conversation ACTIVE (activeIdRef), pas à la closure — navigation
+          // A→B→C rapide, l'ack tardif de A ne doit rien écrire dans le fil
+          // de C ni couper prématurément son spinner d'historique.
+          if (id !== activeIdRef.current) return;
           if (res.conversationId === id) {
             setMessages(res.messages ?? []);
             setCompactInfo(res.compact ?? null);

@@ -555,6 +555,24 @@ export function createLlmPool(store: Store): LlmPoolApi {
         body: JSON.stringify(body),
         signal: guard.signal,
       });
+      // Les erreurs HTTP passent par ce try : lancées hors try, elles laissent
+      // l'entrée du garde à vie dans activeStreamEntries (flux fantôme éternel
+      // dans /diagnostics, timer qui fuit).
+      if (!res.ok) {
+        const detail = await readErrorBody(res);
+        if (res.status === 401 || res.status === 403)
+          throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
+        if (res.status === 429) {
+          const why = rateLimitWhy(detail);
+          throw new PoolAuthError(
+            `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
+            true,
+            why.short,
+          );
+        }
+        throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
+      }
+      if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
     } catch (err) {
       guard.done();
       throw err;
@@ -562,21 +580,6 @@ export function createLlmPool(store: Store): LlmPoolApi {
     // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
     // pour la lecture du flux.
     guard.reset();
-    if (!res.ok) {
-      const detail = await readErrorBody(res);
-      if (res.status === 401 || res.status === 403)
-        throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
-      if (res.status === 429) {
-        const why = rateLimitWhy(detail);
-        throw new PoolAuthError(
-          `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
-          true,
-          why.short,
-        );
-      }
-      throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
-    }
-    if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
 
     let content = "";
     let reasoning = "";
@@ -670,27 +673,31 @@ export function createLlmPool(store: Store): LlmPoolApi {
         body: JSON.stringify(body),
         signal: guard.signal,
       });
+      // Les erreurs HTTP passent par ce try : lancées hors try, elles laissent
+      // l'entrée du garde à vie dans activeStreamEntries (flux fantôme éternel
+      // dans /diagnostics, timer qui fuit).
+      if (!res.ok) {
+        const detail = await readErrorBody(res);
+        if (res.status === 401 || res.status === 403)
+          throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
+        if (res.status === 429) {
+          const why = rateLimitWhy(detail);
+          throw new PoolAuthError(
+            `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
+            true,
+            why.short,
+          );
+        }
+        throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
+      }
+      if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
     } catch (err) {
       guard.done();
       throw err;
     }
     // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
     // pour la lecture du flux.
-    if (!res.ok) {
-      const detail = await readErrorBody(res);
-      if (res.status === 401 || res.status === 403)
-        throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
-      if (res.status === 429) {
-        const why = rateLimitWhy(detail);
-        throw new PoolAuthError(
-          `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
-          true,
-          why.short,
-        );
-      }
-      throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
-    }
-    if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
+    guard.reset();
 
     let content = "";
     let reasoning = "";

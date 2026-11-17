@@ -5,7 +5,7 @@
 // quelles ; ce que ces modèles ne savent PAS faire est dit dans l'interface.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { ModelOption } from "../types";
 import { trace } from "../trace";
 import { FICHES, parseWebchatModelId, webchatModelId, type WebchatSiteId } from "./fiches";

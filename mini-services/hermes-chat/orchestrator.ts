@@ -216,6 +216,17 @@ function voicePromptContent(
   return parts.join("\n\n");
 }
 
+/** Garde d'abort (Lot 1, audit L1-6) : au Stop utilisateur, les étapes qui
+ *  n'ont pas encore démarré (verdict du débat, président du conseil, chaque
+ *  étape de l'auto) ne partent plus — l'erreur remonte et le service clôt
+ *  le tour en « stopped » avec le partiel déjà reçu. */
+function ensureNotAborted(ctx: OrchestratorContext): void {
+  if (!ctx.signal.aborted) return;
+  throw ctx.signal.reason instanceof Error
+    ? ctx.signal.reason
+    : new Error("arrêt utilisateur — étape suivante annulée");
+}
+
 // ── Débat : les conseillers se répondent tour après tour, le juge tranche ──
 
 async function runDebate(
@@ -350,6 +361,8 @@ async function runDebate(
     if (ctx.signal.aborted) break;
   }
   // Verdict : le juge streame la réponse conservée (une seule en base).
+  // Garde d'abort : un Stop pendant les tours ne lance pas le verdict.
+  ensureNotAborted(ctx);
   flow.push({
     id: "verdict",
     label: "Verdict",
@@ -456,6 +469,8 @@ async function runCouncil(
   );
   // Fusion : les avis partent anonymisés (A, B, C…) — on juge les arguments,
   // pas les auteurs. Le président streame la réponse conservée.
+  // Garde d'abort : un Stop pendant les membres ne lance pas le président.
+  ensureNotAborted(ctx);
   flow.update("president", {
     status: "running",
     detail: "compare les avis anonymisés, fusionne",
@@ -516,6 +531,8 @@ async function runAuto(
     prompt: string,
     content: string,
   ) => {
+    // Garde d'abort : un Stop entre deux étapes n'envoie pas la suivante.
+    ensureNotAborted(ctx);
     flow.push({ id: rowId, label, detail, model: shortModel(modelId), status: "running" });
     const outcome = await runVoiceWithRow(deps, ctx, flow, rowId, label, {
       modelId,
@@ -564,6 +581,9 @@ async function runAuto(
   // Test : la preuve fait foi — un échec prouvé déclenche une reprise qui
   // corrige LA cause racine (jamais une rustine), puis repasse le test.
   stepNo += 1;
+  // Garde d'abort : le test ne part pas si l'utilisateur a arrêté pendant
+  // le code (la boucle de reprises ci-dessous vérifie déjà le signal).
+  ensureNotAborted(ctx);
   const testLabel = `${stepNo} · Test`;
   flow.push({
     id: "test",
@@ -620,6 +640,8 @@ async function runAuto(
       detail: excerptOf(repriseOutcome.content),
       status: "done",
     });
+    // Garde d'abort : un Stop pendant la reprise ne relance pas le test.
+    ensureNotAborted(ctx);
     flow.update("test", { detail: "re-test après correction" });
     testOutcome = await runTest(voicePromptContent(ctx.userContent, transcript));
   }
