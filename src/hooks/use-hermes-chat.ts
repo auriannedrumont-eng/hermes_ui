@@ -421,7 +421,8 @@ export function useHermesChat() {
         setStallNotice(
           `Aucun signe d'activité depuis ${silentS} s — soit le fournisseur est lent ` +
             `(gardes côté service : 120 s pool, ~240 s pilote webchat), soit le service est ` +
-            `mort. Ouvrez ?debug=1 et « Copier le diagnostic » pour voir lequel.`,
+            `mort. Ouvrez le dépannage (icône clé à molette en haut à droite, ou ?debug=1 ` +
+            `dans l'adresse) puis « Copier le diagnostic » pour voir lequel.`,
         );
       }
     }, 10_000);

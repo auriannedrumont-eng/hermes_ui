@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Copy, RefreshCw, X } from "lucide-react";
 import { getSocket } from "@/lib/socket";
-import { SERVICE_PORT, serviceFetchInit, serviceUrl } from "@/lib/service";
+import { FILES_PORT, serviceFetchInit, serviceUrl } from "@/lib/service";
 
 const FLAG_KEY = "hermes.debug-bridge";
 /** Nombre d'événements clients gardés à l'écran. */
@@ -122,7 +122,10 @@ export function DebugBridge() {
       // 1) État côté service (commit, uptime, navigateur webchat, journal).
       let serverPart = "(service injoignable — il est probablement ARRÊTÉ)";
       try {
-        const res = await fetch(serviceUrl("/diagnostics", SERVICE_PORT), {
+        // /diagnostics vit sur le service HTTP fichiers (3004), PAS sur le
+        // service socket.io (3003) : celui-ci répond HTTP 400 « Bad Request »
+        // à toute requête qui n'est pas une poignée de main socket.io.
+        const res = await fetch(serviceUrl("/diagnostics", FILES_PORT), {
           ...serviceFetchInit(),
           cache: "no-store",
         });
