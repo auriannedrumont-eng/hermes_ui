@@ -30,6 +30,9 @@ function emitAck(s: any, event: string, payload?: unknown): Promise<any> {
 // Journal des requêtes fournisseur : {start, end} — le chevauchement d'au
 // moins deux fenêtres prouve le parallélisme côté réseau, sans ambiguïté.
 const calls: { start: number; end: number }[] = [];
+// F-58 — la note de longueur vue dans le dernier corps de requête (null =
+// jamais arrivée ; sinon le nombre de caractères tel que promis à la voix).
+let capSeen: string | null = null;
 const mock = createServer((req, res) => {
   const url = req.url ?? "";
   if (req.method === "GET" && /\/(v1\/)?models$/.test(url)) {
@@ -39,6 +42,18 @@ const mock = createServer((req, res) => {
   }
   if (req.method === "POST" && /\/(v1\/)?chat\/completions$/.test(url)) {
     const start = Date.now();
+    // F-58 — capture du corps : la note de longueur (« N caractères maximum »)
+    // doit arriver JUSQU'AU FOURNISSEUR, preuve que le réglage circule.
+    let body = "";
+    req.on("data", (c: Buffer) => {
+      body += c.toString();
+    });
+    req.on("end", () => {
+      if (/\d+ caractères maximum/.test(body)) {
+        const m = /(\d+) caractères maximum/.exec(body)!;
+        capSeen = m[1];
+      }
+    });
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store" });
     let i = 0;
     const timer = setInterval(() => {
@@ -100,6 +115,16 @@ async function main() {
     label: "Clé preuve",
     secret: "cle-parallele",
   });
+  // F-58 — réglage de longueur NON STANDARD (1200 au lieu du défaut 2000) :
+  // si la note du fournisseur dit « 1200 caractères », la chaîne entière
+  // (Paramètres → settings → résolveur → orchestrateur → prompt) fonctionne.
+  const setChars = await emitAck(s, "settings:set", {
+    key: "hermes.modes.voiceChars",
+    value: "1200",
+  });
+  console.log(
+    `${at()} settings:set voiceChars=1200 → ${setChars?.ok ? "accepté" : "REFUSÉ ✗"}`,
+  );
 
   let maxRunning = 0;
   let rowsSeen: any[] = [];
@@ -175,13 +200,20 @@ async function main() {
     `${at()} tour terminé : stream:done ${done ? "reçu ✓" : "ABSENT ✗"}, verdict ${finalContent.length} car.`,
   );
 
+  // Preuve C (F-58) — la longueur réglée (1200) est arrivée dans le prompt.
+  console.log(
+    `${at()} note de longueur vue par le fournisseur : ${
+      capSeen ? `« ${capSeen} caractères maximum » ${capSeen === "1200" ? "✓" : "✗ (valeur inattendue)"}` : "ABSENTE ✗"
+    }`,
+  );
+
   s.close();
   service.kill("SIGKILL");
   mock.close();
   try {
     rmSync(DB_DIR, { recursive: true, force: true });
   } catch {}
-  const ok = overlap && maxRunning === 3 && done;
+  const ok = overlap && maxRunning === 3 && done && capSeen === "1200";
   console.log(`${at()} === PREUVE DÉBAT PARALLÈLE ${ok ? "RÉUSSIE ✓" : "ÉCHOUÉE ✗"} ===`);
   process.exit(ok ? 0 : 1);
 }

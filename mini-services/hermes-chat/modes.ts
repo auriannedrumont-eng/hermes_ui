@@ -303,6 +303,26 @@ export function resolveModePrompt(
   return interpolatePrompt(text, vars);
 }
 
+// ── Longueur visée des interventions du débat (F-58) ───────────────────────
+// Réglage CÔTÉ SERVICE (hermes.modes.voiceChars de la table settings) : la
+// page Paramètres écrit la valeur, l'orchestrateur la relit À CHAQUE TOUR —
+// le changement est immédiat, même en plein débat, sans redémarrage.
+
+export const VOICE_CHARS_KEY = "hermes.modes.voiceChars";
+export const VOICE_CHARS_MIN = 500;
+export const VOICE_CHARS_MAX = 8000;
+export const VOICE_CHARS_DEFAULT = 2000;
+
+/** Lit et borne le réglage — valeur absente, non numérique ou hors bornes
+ *  = défaut (jamais de plantage, même grammaire que readPromptOverrides). */
+export function resolveVoiceChars(store: ModePromptStore): number {
+  const raw = store.getSetting(VOICE_CHARS_KEY);
+  if (!raw) return VOICE_CHARS_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return VOICE_CHARS_DEFAULT;
+  return Math.min(VOICE_CHARS_MAX, Math.max(VOICE_CHARS_MIN, Math.round(n)));
+}
+
 /** Section « mode » ajoutée au systemPrompt du tour (recomposé à chaque
  *  envoi — aucune consigne fantôme possible). */
 export function modePromptSection(label: string, text: string): string {

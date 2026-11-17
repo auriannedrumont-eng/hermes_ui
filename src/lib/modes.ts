@@ -88,6 +88,14 @@ export function normalizeWebchatModelId(id: string): string {
   return m ? `webchat:${m[1]}` : id.trim();
 }
 
+// ── Longueur visée des interventions du débat (F-58) — miroir du service :
+// réglage CÔTÉ SERVICE (table settings, relu à chaque tour par
+// resolveVoiceChars) ; la page Paramètres écrit via settings:get/set.
+export const VOICE_CHARS_KEY = "hermes.modes.voiceChars";
+export const VOICE_CHARS_MIN = 500;
+export const VOICE_CHARS_MAX = 8000;
+export const VOICE_CHARS_DEFAULT = 2000;
+
 /** Valeurs par défaut des voix (réglage hermes.modes.voices — page Paramètres). */
 export const DEFAULT_VOICES: Record<string, Record<string, string | null>> = {
   debate: {

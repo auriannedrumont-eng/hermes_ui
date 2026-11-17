@@ -70,6 +70,7 @@ import {
   normalizeModeConfig,
   resolveMode,
   resolveModePrompt,
+  resolveVoiceChars,
   modePromptSection,
   voicesFor,
   voiceModel,
@@ -485,6 +486,9 @@ async function handleDiagnostics(res: ServerResponse): Promise<void> {
       port: PORT,
       filesPort: FILES_PORT,
       authenticated: Boolean(SERVICE_TOKEN),
+      // Débat : longueur visée des interventions (F-58) — visible dans le
+      // rapport sans rien déduire du code.
+      voiceChars: resolveVoiceChars(store),
     },
     webchat: {
       port: config.port,
@@ -2870,6 +2874,7 @@ io.on("connection", (socket) => {
             mode: modeState.mode as "debate" | "council" | "auto",
             config: modeState.config,
             rounds: modeState.rounds,
+            voiceChars: resolveVoiceChars(store),
             userContent: opts.content,
             history,
             attachments,

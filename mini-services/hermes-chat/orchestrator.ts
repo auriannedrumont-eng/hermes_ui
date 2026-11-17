@@ -84,6 +84,10 @@ export interface OrchestratorContext {
   config: import("./modes").ModeConfig | null;
   /** Débat : tours (3–10). */
   rounds: number | null;
+  /** Débat : longueur visée des interventions (caractères) — réglage du
+   *  service (hermes.modes.voiceChars) relu à chaque tour, borné par
+   *  resolveVoiceChars (500–8000, défaut 2000). */
+  voiceChars: number;
   userContent: string;
   history: { role: "user" | "assistant"; content: string }[];
   attachments?: Attachment[];
@@ -256,8 +260,8 @@ async function runDebate(
             `Vous voyez les tours précédents ; les autres voix de votre tour répondent ` +
             `en même temps que vous : vous ne les lirez qu'au tour suivant. Contredisez ` +
             `sur des faits, jamais sur des généralités. Votre intervention tient en ` +
-            `2000 caractères maximum : droit au but, sans préambule ni répétition de ` +
-            `ce qui a déjà été dit.`;
+            `${ctx.voiceChars} caractères maximum : droit au but, sans préambule ni ` +
+            `répétition de ce qui a déjà été dit.`;
           try {
             const outcome = await runVoiceWithRow(
               deps,
@@ -316,9 +320,9 @@ async function runDebate(
         const note =
           `Débat en ${rounds} tours — vous êtes au tour ${r}, posture : ${v.name}. ` +
           `Chaque tour voit ce qui a été dit avant : contredisez sur des faits, ` +
-          `jamais sur des généralités. Votre intervention tient en 2000 caractères ` +
-          `maximum : droit au but, sans préambule ni répétition de ce qui a déjà ` +
-          `été dit.`;
+          `jamais sur des généralités. Votre intervention tient en ${ctx.voiceChars} ` +
+          `caractères maximum : droit au but, sans préambule ni répétition de ce qui ` +
+          `a déjà été dit.`;
         const outcome = await runVoiceWithRow(
           deps,
           ctx,

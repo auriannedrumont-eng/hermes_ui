@@ -58,6 +58,10 @@ import {
   DEFAULT_VOICES,
   MAX_MODE_PROMPT_CHARS,
   MODES,
+  VOICE_CHARS_DEFAULT,
+  VOICE_CHARS_KEY,
+  VOICE_CHARS_MAX,
+  VOICE_CHARS_MIN,
   clampInt,
   normalizeWebchatModelId,
   type ConversationMode,
@@ -106,6 +110,34 @@ function saveServerPrompts(flat: Record<string, string>): Promise<boolean> {
     getSocket().emit(
       "settings:set",
       { key: "hermes.modes.prompts", value: JSON.stringify(nested) },
+      (res: { ok?: boolean } = {}) => resolve(res.ok === true)
+    );
+  });
+}
+
+// ── Longueur des interventions (F-58) — côté service, relu à chaque tour ──
+
+function getServerVoiceChars(): Promise<number> {
+  return new Promise((resolve) => {
+    getSocket().emit(
+      "settings:get",
+      { key: VOICE_CHARS_KEY },
+      (res: { value?: unknown } = {}) => {
+        const n = Number(res.value);
+        if (!Number.isFinite(n)) return resolve(VOICE_CHARS_DEFAULT);
+        resolve(
+          Math.min(VOICE_CHARS_MAX, Math.max(VOICE_CHARS_MIN, Math.round(n)))
+        );
+      }
+    );
+  });
+}
+
+function saveServerVoiceChars(v: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    getSocket().emit(
+      "settings:set",
+      { key: VOICE_CHARS_KEY, value: String(v) },
       (res: { ok?: boolean } = {}) => resolve(res.ok === true)
     );
   });
@@ -180,6 +212,7 @@ function Stepper({
   min,
   max,
   maxLabel,
+  step = 1,
   onChange,
   ariaLabel,
 }: {
@@ -187,14 +220,18 @@ function Stepper({
   min: number;
   max: number;
   maxLabel: string;
+  /** Pas entre deux clics — 1 par défaut (bornes ramenées au multiple). */
+  step?: number;
   onChange: (v: number) => void;
   ariaLabel: string;
 }) {
+  const clampStep = (v: number) =>
+    Math.min(max, Math.max(min, Math.round(v / step) * step));
   return (
     <span className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-card">
       <button
         type="button"
-        onClick={() => onChange(Math.max(min, value - 1))}
+        onClick={() => onChange(clampStep(value - step))}
         disabled={value <= min}
         aria-label={`Moins — ${ariaLabel}`}
         className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-35"
@@ -207,7 +244,7 @@ function Stepper({
       </span>
       <button
         type="button"
-        onClick={() => onChange(Math.min(max, value + 1))}
+        onClick={() => onChange(clampStep(value + step))}
         disabled={value >= max}
         aria-label={`Plus — ${ariaLabel}`}
         className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-35"
@@ -572,6 +609,18 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
     await saveServerPrompts(next);
   };
 
+  // F-58 — longueur visée des interventions du débat : lue au montage,
+  // réécrite à chaque clic du pas ; le service relit la valeur À CHAQUE
+  // TOUR — effet immédiat, même en plein débat, sans redémarrage.
+  const [voiceChars, setVoiceChars] = useState(VOICE_CHARS_DEFAULT);
+  useEffect(() => {
+    getServerVoiceChars().then(setVoiceChars);
+  }, []);
+  const saveVoiceChars = async (v: number) => {
+    setVoiceChars(v);
+    await saveServerVoiceChars(v);
+  };
+
   const promptValue = (key: string) => overrides[key] ?? DEFAULT_PROMPTS[key] ?? "";
   const promptDirty = (key: string) => overrides[key] !== undefined;
 
@@ -774,6 +823,21 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
             maxLabel="10 max"
             ariaLabel="tours du débat"
             onChange={(v) => writeClientSetting("hermes.modes.debateRounds", v)}
+          />
+        </Row>
+        <Row
+          label="Longueur des interventions"
+          desc="500 à 8000 caractères par voix — relu à chaque tour : effet immédiat, même en plein débat. Plus court = débat plus rapide et plus lisible."
+          tip="La consigne part dans la note de chaque voix (« Votre intervention tient en N caractères maximum ») ; le juge n'est pas borné. 2000 est un bon équilibre — au-delà de 4000, les tours redeviennent très longs."
+        >
+          <Stepper
+            value={voiceChars}
+            min={VOICE_CHARS_MIN}
+            max={VOICE_CHARS_MAX}
+            step={500}
+            maxLabel="8000"
+            ariaLabel="longueur des interventions"
+            onChange={(v) => void saveVoiceChars(v)}
           />
         </Row>
         <Row
