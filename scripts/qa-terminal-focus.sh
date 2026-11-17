@@ -1,9 +1,9 @@
 #!/bin/bash
 # QA ciblée : dépliage de l'encart terminal du panneau (refs fraîches, portée console).
 set -u
-cd /home/z/my-project/hermes_ui
+cd "$(cd "$(dirname "$0")/.." && pwd)"
 DB=/tmp/hermes-qa-view-ui.sqlite
-SHOTS=/home/z/my-project/download/qa-f28
+SHOTS="${SHOTS:-$(cd "$(dirname "$0")/.." && pwd)/qa-f28-shots}"
 
 HERMES_CHAT_DB=$DB nohup bun mini-services/hermes-chat/index.ts > /tmp/qa-service.log 2>&1 &
 PID_SERVICE=$!

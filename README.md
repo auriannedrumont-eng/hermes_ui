@@ -8,9 +8,13 @@ conversations par projets et artefacts versionnés.
 
 ## Deux modes
 
-- **Gateway** : connexion à un agent Hermes réel via le protocole `api_turn_v1`
-  (variables `HERMES_GATEWAY_URL` et `HERMES_GATEWAY_TOKEN`).
-- **Démo** (par défaut) : persona Hermes servie par un LLM de repli, sans gateway.
+- **Gateway** (défaut automatique `ws://127.0.0.1:9120/api/ws`) : connexion à un
+  agent Hermes réel via le protocole `api_turn_v1` — lancer l'agent suffit,
+  rien à saisir (variables `HERMES_GATEWAY_URL` et `HERMES_GATEWAY_TOKEN`).
+- **Moteur local** : pool de clés fournisseurs (Paramètres → Fournisseurs &
+  clés) — vrais modèles, réelles réponses. Sans agent ni clé, l'erreur est
+  claire : « Agent Hermes non détecté… » (le mode Démo simulé a été retiré,
+  cf. FORK.md §40).
 
 ## Démarrage rapide
 

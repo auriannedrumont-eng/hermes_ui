@@ -2,10 +2,10 @@
 # QA navigateur « vue onglet + terminal » (F-28/F-29) — tout-en-un : la pile
 # (service + proxy XTransformPort + Next) vit le temps du script uniquement.
 set -u
-cd /home/z/my-project/hermes_ui
+cd "$(cd "$(dirname "$0")/.." && pwd)"
 
 DB=/tmp/hermes-qa-view-ui.sqlite
-SHOTS=/home/z/my-project/download/qa-f28
+SHOTS="${SHOTS:-$(cd "$(dirname "$0")/.." && pwd)/qa-f28-shots}"
 mkdir -p "$SHOTS"
 
 HERMES_CHAT_DB=$DB nohup bun mini-services/hermes-chat/index.ts > /tmp/qa-service.log 2>&1 &

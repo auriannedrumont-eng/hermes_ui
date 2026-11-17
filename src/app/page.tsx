@@ -289,6 +289,13 @@ export default function HermesWebPage() {
         e.key === "Escape" &&
         !paletteOpen
       ) {
+        // Lot 5 (audit) : un dialog/sheet/popover Radix OUVERT consomme Échap —
+        // ces overlays sont rendus en PORTAIL (le target n'est ni INPUT ni
+        // TEXTAREA) : sans cette garde, fermer une fiche arrêtait aussi la
+        // génération en cours. Un overlay vivant garde la main sur Échap.
+        if (document.querySelector('[role="dialog"][data-state="open"], [data-radix-popper-content-wrapper]')) {
+          return;
+        }
         const target = e.target as HTMLElement | null;
         const inField =
           target &&

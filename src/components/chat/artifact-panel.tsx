@@ -60,7 +60,23 @@ import { serviceFetchInit } from "@/lib/service";
 
 // ── Chargement du source (cache module partagé panneau / visionneuse) ───
 
+// Cache borné (Lot 5, audit) : une conversation longue remplissait la carte
+// sans limite ; les ÉCHECS de fetch ne sont plus mis en cache — un source
+// qui a raté peut être rechargé (redimensionnement, retour d'onglet…).
+const SOURCE_CACHE_MAX = 50;
 const sourceCache = new Map<string, string>();
+
+function cacheSource(id: string, text: string | null): void {
+  if (text === null) {
+    sourceCache.delete(id);
+    return;
+  }
+  if (sourceCache.size >= SOURCE_CACHE_MAX && !sourceCache.has(id)) {
+    const oldest = sourceCache.keys().next().value;
+    if (oldest !== undefined) sourceCache.delete(oldest);
+  }
+  sourceCache.set(id, text);
+}
 
 function useArtifactSource(artifact: Artifact | null): string | null {
   const [, forceRender] = useState(0);
@@ -75,11 +91,11 @@ function useArtifactSource(artifact: Artifact | null): string | null {
     fetch(artifactUrl(rawUrl), serviceFetchInit())
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
       .then((text) => {
-        sourceCache.set(artifactId, text);
+        cacheSource(artifactId, text);
         if (!cancelled) forceRender((n) => n + 1);
       })
       .catch(() => {
-        sourceCache.set(artifactId, "");
+        cacheSource(artifactId, null); // pas de cache d'échec : recharge possible
         if (!cancelled) forceRender((n) => n + 1);
       });
     return () => {
@@ -87,7 +103,10 @@ function useArtifactSource(artifact: Artifact | null): string | null {
     };
   }, [artifactId, rawUrl, binaryKind]);
 
-  return artifactId ? (sourceCache.get(artifactId) ?? null) : null;
+  // null = absent ou en erreur (rechargeable) ; "" = source vide lu avec succès.
+  if (!artifactId) return null;
+  const cached = sourceCache.get(artifactId);
+  return cached === undefined ? null : cached;
 }
 
 // ── Vues par type ────────────────────────────────────────────────────────

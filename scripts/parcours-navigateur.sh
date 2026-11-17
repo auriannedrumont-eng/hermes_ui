@@ -1,7 +1,7 @@
 #!/bin/bash
 # Parcours complet fournisseurs/cles dans le navigateur - version robuste
 # Chaque commande navigateur bornee a 15 s, sortie journalisee en direct.
-cd /home/z/my-project
+cd "$(cd "$(dirname "$0")/.." && pwd)"
 LOG=/tmp/parcours.log
 : > $LOG
 exec > >(tee -a $LOG) 2>&1

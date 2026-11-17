@@ -150,11 +150,13 @@ export const HERMES_SETTINGS: SettingDef[] = [
     category: "Agent Hermes",
   },
   // ── Clés internes du hook — au registre pour être réellement persistées ──
-  // Correctif v2.4 : hermes.tools.web (F-09) et hermes.compare.models (F-17)
-  // étaient écrits via writeClientSetting, qui ignore silencieusement les clés
-  // hors registre — la persistance documentée ne fonctionnait pas (réglages
-  // perdus au rechargement). Aucune ligne d'interface ne les liste (pannes
-  // du volet hardcoded, cf. InterfacePane).
+  // Correctif v2.4 : ces clés étaient écrites via writeClientSetting, qui
+  // ignore silencieusement les clés hors registre — la persistance documentée
+  // ne fonctionnait pas (réglages perdus au rechargement). Aucune ligne
+  // d'interface ne les liste (pannes du volet hardcoded, cf. InterfacePane).
+  // Lot 5 (audit) : hermes.compare.models est sorti du registre — plus
+  // aucune lecture/écriture dans src/ (la paire A/B vit désormais côté
+  // service), elle n'était plus qu'une entrée morte.
   {
     key: "hermes.tools.web",
     type: "boolean",
@@ -163,15 +165,6 @@ export const HERMES_SETTINGS: SettingDef[] = [
     description:
       "Bascule « Web » du composer — les résultats Tavily/Exa sont injectés " +
       "dans le contexte du tour (interne, F-09/F-12).",
-    scope: "client",
-    category: "Agent Hermes",
-  },
-  {
-    key: "hermes.compare.models",
-    type: "string",
-    default: "[]",
-    label: "Paire de comparaison",
-    description: "Paire [a, b] mémorisée du mode comparaison (interne, F-17).",
     scope: "client",
     category: "Agent Hermes",
   },

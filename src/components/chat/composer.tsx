@@ -232,7 +232,10 @@ export function Composer({
     () => (slashToken ? filterPromptLibrary(slashToken) : []),
     [slashToken]
   );
-  const showSlash = slashMatches.length > 0;
+  // Lot 5 (audit) : Échap FERME le menu slash sans modifier le texte —
+  // l'ancien comportement injectait un espace traînant dans la saisie.
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const showSlash = slashMatches.length > 0 && !slashDismissed;
 
   useEffect(() => {
     setSlashIndex(0);
@@ -505,7 +508,10 @@ export function Composer({
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setSlashDismissed(false);
+              setValue(e.target.value);
+            }}
             onKeyDown={(e) => {
               if (showSlash && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
                 e.preventDefault();
@@ -521,7 +527,7 @@ export function Composer({
                 return;
               }
               if (e.key === "Escape" && showSlash) {
-                setValue(`${value} `); // sort du mode slash
+                setSlashDismissed(true); // ferme le menu, le texte reste intact
                 return;
               }
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -546,7 +552,7 @@ export function Composer({
             aria-label="Message pour Hermes"
             rows={1}
             disabled={disabled}
-            className="max-h-[200px] min-h-7 flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed placeholder:text-muted-foreground focus:outline-none disabled:opacity-40"
+            className="max-h-[200px] min-h-7 flex-1 resize-none bg-transparent py-1 text-base leading-relaxed placeholder:text-muted-foreground focus:outline-none disabled:opacity-40"
           />
           {dictation.supported ? (
             <Button

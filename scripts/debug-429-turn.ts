@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 const TOKEN = "debug-jeton-429";
 const SOCK_URL = "http://localhost:3323";
-const DB_DIR = "/home/z/my-project/db-debug-429";
+const DB_DIR = new URL("../db-debug-local", import.meta.url).pathname;;
 const MOCK_PORT = 3321;
 const MOCK_API_KEY = "clefaux.quatrevingtneuf";
 
@@ -40,7 +40,7 @@ async function main() {
   await new Promise((r) => mock.listen(MOCK_PORT, "127.0.0.1", r));
   mkdirSync(DB_DIR, { recursive: true });
   const service = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project",
+    cwd: new URL("..", import.meta.url).pathname,
     env: {
       ...process.env,
       HERMES_SERVICE_TOKEN: TOKEN,

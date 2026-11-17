@@ -20,11 +20,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
+import { useToast } from "@/hooks/use-toast";
 import {
   Cpu,
   Globe,
   KeyRound,
   Layers,
+  MessagesSquare,
   Monitor,
   Settings2,
   Sparkle,
@@ -96,7 +98,9 @@ const SORT_LABELS: Record<string, string> = {
 const SECTIONS = [
   { id: "interface", icon: Monitor, label: "Interface" },
   { id: "modeles", icon: Cpu, label: "Modèles" },
-  { id: "modes", icon: Layers, label: "Modes de chat" },
+  // Lot 5 (audit) : l'icône Layers était dupliquée (Modes / Fournisseurs) —
+  // deux entrées visuellement identiques dans le sommaire du volet.
+  { id: "modes", icon: MessagesSquare, label: "Modes de chat" },
   { id: "fournisseurs", icon: Layers, label: "Fournisseurs" },
   { id: "cles", icon: KeyRound, label: "Clés de services" },
   { id: "chatsweb", icon: Globe, label: "Chats web" },
@@ -335,6 +339,7 @@ function ModelesPane({
   selectedModel: string | null;
 }) {
   const [rev, setRev] = useState(0);
+  const { toast } = useToast();
   useEffect(() => onSettingsChanged(() => setRev((r) => r + 1)), []);
 
   const effort = useMemo(() => readClientSetting<string>("hermes.reasoning.effort"), [rev]);
@@ -353,10 +358,22 @@ function ModelesPane({
   const [tarifOutput, setTarifOutput] = useState("");
 
   const savePricing = (next: PricingMap) => {
-    getSocket().emit("settings:set", {
-      key: PRICING_KEY,
-      value: JSON.stringify(next),
-    });
+    // Lot 5 (audit) : la sauvegarde des tarifs était « aveugle » — sans ack,
+    // un échec (service arrêté) passait inaperçu et l'utilisateur croyait
+    // ses prix enregistrés. Ack + retour visible comme les autres réglages.
+    getSocket().emit(
+      "settings:set",
+      { key: PRICING_KEY, value: JSON.stringify(next) },
+      (res: { ok?: boolean; error?: string } = {}) => {
+        if (res?.error) {
+          toast({
+            title: "Tarifs non enregistrés",
+            description: res.error,
+            variant: "destructive",
+          });
+        }
+      }
+    );
   };
   const parseFloatFr = (raw: string): number | null => {
     const n = Number(raw.trim().replace(",", "."));
@@ -539,6 +556,7 @@ export function SettingsPanel({
   onConnectGateway,
   webSearchAvailable = false,
 }: SettingsPanelProps) {
+  const { toast } = useToast();
   const [section, setSection] = useState<SectionId>("interface");
 
   // Fermeture : la prochaine ouverture repart de la première section.

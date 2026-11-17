@@ -1,7 +1,7 @@
 #!/bin/bash
 # Diagnostic socket via le proxy QA.
 set -u
-cd /home/z/my-project/hermes_ui
+cd "$(cd "$(dirname "$0")/.." && pwd)"
 DB=/tmp/hermes-qa-view-ui.sqlite
 
 HERMES_CHAT_DB=$DB nohup bun mini-services/hermes-chat/index.ts > /tmp/qa-service.log 2>&1 &

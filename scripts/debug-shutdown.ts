@@ -3,12 +3,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { mkdirSync, rmSync, existsSync, statSync } from "node:fs";
 
-const DB_DIR = "/home/z/my-project/db-test-shutdown";
+const DB_DIR = new URL("../db-debug-local", import.meta.url).pathname;;
 rmSync(DB_DIR, { recursive: true, force: true });
 mkdirSync(DB_DIR, { recursive: true });
 
 const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-  cwd: "/home/z/my-project",
+  cwd: new URL("..", import.meta.url).pathname,
   env: {
     ...process.env,
     HERMES_SERVICE_TOKEN: "tok-debug",

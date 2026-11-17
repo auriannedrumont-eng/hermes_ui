@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   pointerWithin,
   useDraggable,
@@ -16,6 +17,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import {
   Check,
   ChevronDown,
@@ -553,8 +555,13 @@ export function Sidebar({
     });
   }, []);
 
+  // Lot 5 (audit) : le réordonnancement des projets était à la SOURIS
+  // uniquement (PointerSensor seul) — inaccessible au clavier. Sensor
+  // clavier + coordonnées triables (Espace/Entrée = saisir, flèches =
+  // déplacer, Échap = annuler).
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const q = query.trim();

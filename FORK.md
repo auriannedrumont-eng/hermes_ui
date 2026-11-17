@@ -17,7 +17,7 @@ Deux modes de fonctionnement, basculés automatiquement :
 | Mode | Condition | Comportement |
 | --- | --- | --- |
 | **Gateway** | URL configurée et joignable (Paramètres → Système, ou `HERMES_GATEWAY_URL`) | Tours envoyés à l'agent Hermes réel (protocole `api_turn_v1`) |
-| **Local** (défaut) | Aucune URL, ou gateway injoignable | Réponses RÉELLES du moteur local (pool de clés fournisseurs, puis LLM intégré `z-ai-web-dev-sdk`, serveur seul) — sans exécution d'outils |
+| **Local** (défaut) | Gateway non joignable | Réponses RÉELLES du moteur local — pool de clés fournisseurs uniquement (le LLM intégré du SDK a été retiré au §40 ; le SDK ne sert plus qu'à l'ASR). Erreur claire « Agent Hermes non détecté… » sans moteur — sans exécution d'outils |
 
 Principe directeur de l'UI : **la conversation reste le chef d'orchestre** — un artefact est un
 objet de première classe, on ne quitte jamais le chat pour le consulter.
@@ -39,8 +39,10 @@ bun run dev        # bun --hot index.ts
 
 - Rendu des artefacts HTML : pipeline `chrome-headless-shell` (CDP sur WebSocket), voir
   `render.ts` et le README du mini-service pour l'installation et le diagnostic.
-- `.env` (racine) : `DATABASE_URL` (stockage local du fork) ; `HERMES_GATEWAY_URL` et
-  `HERMES_GATEWAY_TOKEN` (optionnels, connexion à l'agent amont).
+- `.env` (racine) : `HERMES_SERVICE_TOKEN` (jeton du mini-service — le lanceur
+  le génère), `HERMES_GATEWAY_URL` et `HERMES_GATEWAY_TOKEN` (optionnels,
+  connexion à l'agent amont). Voir `.env.example`. (`DATABASE_URL`/Prisma ont
+  été retirés du repo — cf. §8 ; la persistance est `bun:sqlite` dans `store.ts`.)
 - Scripts de test manuels dans `scripts/` : `test-artifact-flow.ts`, `test-render-pipeline.ts`,
   `diag-service.ts`, `test-hermes-chat-service.ts`.
 
