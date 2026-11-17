@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ModelOption } from "../types";
+import { trace } from "../trace";
 import { FICHES, parseWebchatModelId, webchatModelId, type WebchatSiteId } from "./fiches";
 import { isBrowserUp } from "./browser";
 import { resolveUnder } from "./paths";
@@ -148,6 +149,10 @@ export async function runWebchatTurn(opts: {
       status: "running",
       detail: `navigateur de pilotage sur le port ${config.port}`,
     });
+    trace(
+      "webchat",
+      `pilote ${site} lancé (port ${config.port}, plafond ${config.timeoutS} s, navigateur ${config.browserPath || "défaut"})`
+    );
 
     const driverPath = join(import.meta.dir, "driver.ts");
     // Pas de --mode : le pilote OBSERVE ce que le site produit (texte ou
@@ -164,7 +169,20 @@ export async function runWebchatTurn(opts: {
     ];
     if (config.browserPath) args.push("--browser", config.browserPath);
 
-    const json = await spawnDriver(args, config.timeoutS * 1000 + 60_000, opts.cb.signal);
+    let json: DriverJson;
+    try {
+      json = await spawnDriver(args, config.timeoutS * 1000 + 60_000, opts.cb.signal);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      trace("error", `pilote ${site} abandonné : ${msg}`);
+      throw err;
+    }
+    trace(
+      "webchat",
+      `pilote ${site} terminé en ${Math.round(json.elapsed_s ?? 0)} s — ok=${json.ok}` +
+        (json.ok ? "" : ` — ${json.error ?? "sans motif"}`) +
+        (json.files?.length ? `, ${json.files.length} fichier(s)` : "")
+    );
     if (!json.ok) {
       opts.cb.onToolEvent?.({
         name: `Chat web · ${fiche.label}`,

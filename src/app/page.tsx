@@ -26,6 +26,7 @@ import { ChatHeader, type ExportFormat } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { Composer } from "@/components/chat/composer";
 import { CommandPalette } from "@/components/chat/command-palette";
+import { DebugBridge } from "@/components/chat/debug-bridge";
 import { ArtifactPanel, ArtifactViewerDialog } from "@/components/chat/artifact-panel";
 import { useHermesChat } from "@/hooks/use-hermes-chat";
 import { exportJson, exportMarkdown, exportPdf } from "@/lib/export";
@@ -416,6 +417,7 @@ export default function HermesWebPage() {
             loadingHistory={chat.loadingHistory}
             isBusy={chat.isBusy}
             turnError={chat.turnError}
+            stallNotice={chat.stallNotice}
             artifacts={chat.artifacts}
             artifactStreams={chat.streamingArtifacts}
             onSuggestion={(prompt) => chat.sendMessage(prompt)}
@@ -575,6 +577,9 @@ export default function HermesWebPage() {
         onSearchMessages={chat.searchMessages}
       />
       </ResizablePanelGroup>
+      {/* Pont de dépannage (F-31) — visible quand l'URL porte ?debug=1 :
+          journal live + « Copier le diagnostic » à coller à l'agent. */}
+      <DebugBridge />
     </div>
   );
 }

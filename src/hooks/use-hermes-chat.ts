@@ -100,6 +100,13 @@ export function useHermesChat() {
   /** Erreur persistante du dernier tour (F-04) : affichée dans le fil jusqu'à
    *  réessai / changement de conversation — plus d'effacement automatique. */
   const [turnError, setTurnError] = useState<{ messageId: string; error: string } | null>(null);
+  // ── Pont de dépannage (F-31) : silence du tour ──────────────────────
+  // Le service a ses gardes (120 s pool, ~240 s pilote webchat) ; mais si le
+  // SERVICE meurt ou que la connexion tombe, plus aucun événement n'arrive et
+  // l'écran resterait « Hermes réfléchit… » sans fin. Un filtre d'activité
+  // (tout événement socket = signe de vie) rend ce silence visible.
+  const lastActivityRef = useRef<number>(0);
+  const [stallNotice, setStallNotice] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelsSource, setModelsSource] = useState<ModelsResult["source"] | null>(null);
@@ -399,6 +406,28 @@ export function useHermesChat() {
     return "idle";
   }, [streaming, turnError, messages]);
 
+  // F-31 — vigie de silence : pendant un tour, un service vivant émet des
+  // signes de vie (deltas, statuts, déroulé). Sans RIEN pendant 60 s, l'écran
+  // le dit honnêtement au lieu de rester figé sur « réfléchit… ».
+  useEffect(() => {
+    if (turnState !== "streaming") {
+      setStallNotice(null);
+      return;
+    }
+    lastActivityRef.current = Date.now();
+    const timer = setInterval(() => {
+      const silentS = Math.round((Date.now() - lastActivityRef.current) / 1000);
+      if (silentS >= 60) {
+        setStallNotice(
+          `Aucun signe d'activité depuis ${silentS} s — soit le fournisseur est lent ` +
+            `(gardes côté service : 120 s pool, ~240 s pilote webchat), soit le service est ` +
+            `mort. Ouvrez ?debug=1 et « Copier le diagnostic » pour voir lequel.`,
+        );
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [turnState]);
+
   const refreshConversations = useCallback(() => {
     const socket = getSocket();
     socket.emit("conversations:list", (res: { conversations?: ConversationMeta[] } = {}) => {
@@ -456,7 +485,22 @@ export function useHermesChat() {
     };
     const onDisconnect = () => {
       setConnected(false);
-      setStreamsRecord({});
+      // F-31 : si un tour était en vol, l'utilisateur a le droit de savoir
+      // POURQUOI l'écran retombe — avant, le flux disparaissait en silence
+      // et le déroulé restait « en cours » sans fin ni erreur.
+      setStreamsRecord((prev) => {
+        const inFlight = Object.keys(prev)[0];
+        if (inFlight) {
+          setTurnError({
+            messageId: inFlight,
+            error:
+              "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
+              "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
+              "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
+          });
+        }
+        return {};
+      });
     };
     // v2.4 : le service rediffuse le hello quand le porte-clés change —
     // la carte de statut de la sidebar suit l état réel du moteur en direct.
@@ -828,6 +872,14 @@ export function useHermesChat() {
       }
     };
 
+    // F-31 : tout événement entrant est un signe de vie du service — un seul
+    // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
+    const bumpActivity = () => {
+      lastActivityRef.current = Date.now();
+      setStallNotice(null);
+    };
+    socket.onAny(bumpActivity);
+
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("hello", onHello);
@@ -874,6 +926,7 @@ export function useHermesChat() {
     if (socket.connected) onConnect();
 
     return () => {
+      socket.offAny(bumpActivity);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("hello", onHello);
@@ -1661,6 +1714,8 @@ export function useHermesChat() {
     modeFlowLive,
     turnState,
     turnError,
+    /** F-31 — notice de silence pendant un tour (aucun événement depuis 60 s). */
+    stallNotice,
     dismissTurnError,
     retryAfterError,
     loadingHistory,

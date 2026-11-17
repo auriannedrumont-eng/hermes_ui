@@ -142,8 +142,10 @@ import {
   webchatModelOptions,
   webchatStatus,
 } from "./webchat/engine";
+import { trace, traceDump, traceMeta } from "./trace";
 import {
   ensureBrowser,
+  isBrowserUp,
   killPilotBrowser,
   launchWatchdog,
   readPilotInfo,
@@ -409,6 +411,16 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
     return;
   }
 
+  // GET /diagnostics — pont de dépannage (F-31) : état du service, navigateur
+  // de pilotage webchat, journal tournant des derniers événements. Même jeton
+  // que le reste du 3004 (Authorization: Bearer ou ?token=). Ne contient JAMAIS
+  // de message, d'identifiant ni de clé — que des compteurs, des durées et des
+  // motifs d'échec : le rapport peut circuler (collé dans une conversation d'agent).
+  if (u.pathname === "/diagnostics") {
+    void handleDiagnostics(res);
+    return;
+  }
+
   // /uploads/<id>.<ext> — pièces jointes multimédia
   const served = resolveUploadFile(u.pathname);
   if (served) {
@@ -458,6 +470,40 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Introuvable");
 });
+
+/** GET /diagnostics — rapport JSON du pont de dépannage (F-31). */
+async function handleDiagnostics(res: ServerResponse): Promise<void> {
+  const config = readWebchatConfig(store);
+  const pilot = readPilotInfo(config.profileDir);
+  const up = await isBrowserUp(config.port);
+  const body = {
+    service: {
+      name: "hermes-chat",
+      commit: traceMeta().commit,
+      bootAt: traceMeta().bootAt,
+      uptimeS: traceMeta().uptimeS,
+      port: PORT,
+      filesPort: FILES_PORT,
+      authenticated: Boolean(SERVICE_TOKEN),
+    },
+    webchat: {
+      port: config.port,
+      browserUp: up,
+      pilot: pilot ? { pid: pilot.pid, startedAt: pilot.startedAt } : null,
+      timeoutS: config.timeoutS,
+      idleMin: config.idleMin,
+      profileDir: config.profileDir,
+      browserPath: config.browserPath || null,
+    },
+    trace: traceDump(150),
+    traceMeta: traceMeta(),
+  };
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
+  res.end(JSON.stringify(body, null, 2));
+}
 
 /** Sert la source / les fichiers dérivés d'un artefact. */
 function handleArtifactFile(
@@ -1102,6 +1148,7 @@ function compactInfoWire(conversationId: string): CompactInfo | null {
 
 io.on("connection", (socket) => {
   console.log(`[hermes-chat] client connecté : ${socket.id}`);
+  trace("socket", `client connecté (${socket.id})`);
 
   socket.emit("hello", helloPayload());
 
@@ -2792,6 +2839,11 @@ io.on("connection", (socket) => {
       ? ""
       : modeSystemPromptSection(conversationId, modeState);
 
+    trace(
+      "turn",
+      `tour démarré — conv ${conversationId.slice(0, 8)}, mode ${orchestrated ? modeState.mode : "chat"}` +
+        `, modèle ${opts.modelId ?? "défaut"}${opts.variant ? `, variante ${opts.variant}` : ""}`
+    );
     try {
       let result: {
         content: string;
@@ -2853,6 +2905,7 @@ io.on("connection", (socket) => {
         );
         modeTagOut = outcome.tag;
         modeFlowOut = outcome.rows;
+        trace("turn", `tour orchestré terminé — ${outcome.tag}`);
         result = {
           content: outcome.content,
           reasoning: outcome.reasoning,
@@ -3112,6 +3165,10 @@ io.on("connection", (socket) => {
       } else {
         // Erreur réelle : le partiel persisté part avec l'événement — le client
         // l'affiche dans le fil et propose « Réessayer » (F-04).
+        trace(
+          "error",
+          `tour en échec : ${err instanceof Error ? err.message : "erreur inconnue"}`
+        );
         const conversation = contentAcc || reasoningAcc
           ? store.touchConversation(conversationId) ?? undefined
           : undefined;
@@ -3564,6 +3621,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`[hermes-chat] client déconnecté : ${socket.id}`);
+    trace("socket", "client déconnecté — un tour en vol côté client restera sans réponse jusqu'au prochain essai");
   });
 
   socket.on("error", (error) => {
@@ -3590,8 +3648,10 @@ connector
     }
     httpServer.listen(PORT, () => {
       console.log(`[hermes-chat] service démarré sur le port ${PORT} — mode : ${connector.mode}`);
+      trace("boot", `service écoutant sur ${PORT} — mode ${connector.mode}`);
       filesServer.listen(FILES_PORT, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
+        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${FILES_PORT}`);
       });
       if (connector.mode === "local") {
         console.log(
@@ -3611,8 +3671,10 @@ connector
     console.error("[hermes-chat] échec d'initialisation du connecteur :", err);
     httpServer.listen(PORT, () => {
       console.log(`[hermes-chat] service démarré sur le port ${PORT} — mode : ${connector.mode}`);
+      trace("boot", `service écoutant sur ${PORT} — mode ${connector.mode}`);
       filesServer.listen(FILES_PORT, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
+        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${FILES_PORT}`);
       });
     });
   });

@@ -14,6 +14,7 @@
 // Testabilité : runVoiceTurn est injecté (les QA passent un faux moteur —
 // aucun LLM requis pour prouver l'ordre des tours, les reprises et les rows).
 import { modelLabel } from "./models";
+import { trace } from "./trace";
 import { FICHES, parseWebchatModelId } from "./webchat/fiches";
 import {
   COUNCIL_READ_ONLY_RULE,
@@ -172,10 +173,20 @@ async function runVoiceWithRow(
   req: VoiceTurnRequest,
   cb?: { onDelta?: (delta: string) => void; onStatus?: (status: string) => void },
 ): Promise<VoiceTurnOutcome> {
+  const started = Date.now();
+  const modelTrace = req.modelId ?? "modèle de la conversation";
+  trace("orch", `voix : ${voiceLabel} — démarre (${modelTrace})`);
   try {
-    return await deps.runVoiceTurn(req, { signal: ctx.signal, ...cb });
+    const outcome = await deps.runVoiceTurn(req, { signal: ctx.signal, ...cb });
+    trace(
+      "orch",
+      `voix : ${voiceLabel} — terminée en ${Math.round((Date.now() - started) / 1000)} s ` +
+        `(${outcome.content.trim().length} caractères)`,
+    );
+    return outcome;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    trace("error", `voix : ${voiceLabel} — échec après ${Math.round((Date.now() - started) / 1000)} s : ${msg}`);
     flow.update(rowId, {
       detail: ctx.signal.aborted ? "interrompu" : `échec : ${msg}`,
       status: "error",

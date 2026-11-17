@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   ArrowDown,
   Code2,
@@ -79,6 +80,8 @@ interface MessageListProps {
   isBusy: boolean;
   /** Erreur persistante du dernier tour (F-04) — affichée sous le fil. */
   turnError: { messageId: string; error: string } | null;
+  /** F-31 — notice de silence pendant un tour (aucun événement depuis 60 s). */
+  stallNotice?: string | null;
   /** Toutes les versions d'artefacts de la conversation (état vivant). */
   artifacts: Artifact[];
   /** Contenu des artefacts en cours de génération, par clé. */
@@ -164,6 +167,7 @@ export function MessageList({
   loadingHistory,
   isBusy,
   turnError,
+  stallNotice,
   artifacts,
   artifactStreams,
   onSuggestion,
@@ -362,6 +366,21 @@ export function MessageList({
                 live
                 showModels={showFlowModels}
               />
+            ) : null}
+
+            {/* F-31 — notice de silence : le tour n'émet plus rien depuis
+                60 s. Non destructif — le tour peut encore aboutir (gardes
+                côté service), mais l'attente est expliquée, pas muette. */}
+            {stallNotice ? (
+              <div
+                role="status"
+                className="flex items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5"
+              >
+                <Activity className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <p className="min-w-0 flex-1 break-words text-[12.5px] text-amber-700 dark:text-amber-400">
+                  {stallNotice}
+                </p>
+              </div>
             ) : null}
 
             {/* Erreur persistante du dernier tour (F-04) : le partiel éventuel
