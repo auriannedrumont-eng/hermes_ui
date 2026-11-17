@@ -30,6 +30,12 @@ jobs:
         run: bun install
         working-directory: mini-services/hermes-chat
 
+      # Rendu des artefacts (test-render-pipeline) : chrome-headless-shell
+      # installé dans le cache Playwright — l'emplacement exact que
+      # render.ts scanne en 2e intention. --with-deps tire les libs système.
+      - name: chrome-headless-shell (rendu artefacts)
+        run: bunx playwright install --with-deps chromium-headless-shell
+
       - name: Typecheck interface (src/)
         run: bunx tsc --noEmit
 
