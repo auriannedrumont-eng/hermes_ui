@@ -155,5 +155,24 @@ const ALL = [...HERMES_SETTINGS, ...FORK_SETTINGS];
   );
 }
 
+// 11. Régression Lot 1 (audit L1-3, correctif 1.2) : hermes.modes.models —
+//     le choix d'un modèle par mode (Chat/Plan/Code) doit être déclaré au
+//     registre, sinon writeClientSetting l'ignore silencieusement et le
+//     réglage n'est JAMAIS persisté (bug constaté : 0 occurrence dans
+//     HERMES_SETTINGS alors que mode-picker.tsx le lit).
+{
+  const def = HERMES_SETTINGS.find((d) => d.key === "hermes.modes.models");
+  check("hermes.modes.models est déclaré au registre", Boolean(def));
+  check("hermes.modes.models : type string, défaut {}, scope client",
+    def?.type === "string" && def?.default === "{}" && def?.scope === "client",
+    def ? `type=${def.type} default=${JSON.stringify(def.default)} scope=${def.scope}` : "absent");
+  store.clear();
+  writeClientSetting("hermes.modes.models", '{"chat":"hermes-4-405b","code":"hermes-4-405b"}');
+  const round = readClientSetting<string>("hermes.modes.models");
+  check("hermes.modes.models : écriture persistée puis relue (round-trip)",
+    round === '{"chat":"hermes-4-405b","code":"hermes-4-405b"}',
+    JSON.stringify(round));
+}
+
 console.log(failures === 0 ? "\nRegistre : 0 échec — invariants validés" : `\nRegistre : ${failures} échec(s)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -1,0 +1,37 @@
+# CI minimale (Lot 4, audit L4-2) : typecheck + lint + suite de tests
+# AUTONOME (bun scripts/run-tests.ts — les tests auto-portés : fixtures
+# locales, aucun service externe requis). La suite E2E (test:e2e, service
+# 3003/3004 requis) et le QA DOM (qa:dom, pile + navigateur requis) restent
+# des étapes MANUELLES — la CI ne les lance pas.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Installation des dépendances
+        run: bun install
+
+      - name: Typecheck interface (src/)
+        run: bunx tsc --noEmit
+
+      - name: Typecheck mini-service
+        run: bunx tsc --noEmit
+        working-directory: mini-services/hermes-chat
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Tests autonomes (runner scripts/test-*.ts)
+        run: bun scripts/run-tests.ts

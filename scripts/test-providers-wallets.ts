@@ -49,7 +49,7 @@ import {
 
 const TOKEN = "test-jeton-wallets-XYZ789";
 const SOCK_URL = "http://localhost:3317";
-const DB_DIR = "/home/z/my-project/db-test-wallets";
+const DB_DIR = new URL("../db-test-wallets", import.meta.url).pathname;
 const MOCK_PORT = 3321;
 const MOCK_ORIGIN = `http://localhost:${MOCK_PORT}`;
 const MOCK_STD = `${MOCK_ORIGIN}/api/paas/v4`;
@@ -167,7 +167,7 @@ function startService(): Promise<ChildProcess> {
     HERMES_CHAT_DB: join(DB_DIR, "hermes-chat.sqlite"),
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project",
+    cwd: new URL("..", import.meta.url).pathname,
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

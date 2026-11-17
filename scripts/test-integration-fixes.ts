@@ -11,6 +11,7 @@
 // pas toucher la base de dev — via un répertoire de travail dédié.
 import { io } from "socket.io-client";
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:http";
 import { existsSync, statSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -18,7 +19,63 @@ import { once } from "node:events";
 const TOKEN = "test-jeton-service-ABC123-xyz789";
 const SOCK_URL = "http://localhost:3303";
 const FILES_URL = "http://localhost:3304";
-const DB_DIR = "/home/z/my-project/db-test-integration";
+const DB_DIR = new URL("../db-test-integration", import.meta.url).pathname;
+// Faux moteur LLM local : le test a besoin de tours qui RESTENT en vol
+// (gardes [A]/[A2]) et d'un résumé de compaction ([C]). Avant Lot 4, le test
+// dépendait d'un moteur présent SUR LA MACHINE (Ollama sur 11434 chez
+// l'autrice) — sur un poste sans moteur, le tour échouait en quelques ms, la
+// garde « 2e chat:send refusé » devenait inobservable et le test hangait sur
+// stream:done. Le faux serveur retire cette dépendance externe.
+const MOCK_PORT = 4617;
+let mockServer: ReturnType<typeof createServer> | null = null;
+
+function startMockLlm(): Promise<void> {
+  return new Promise((resolve) => {
+    mockServer = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      if (req.method === "GET" && url.pathname === "/models") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data: [{ id: "mock-integration" }] }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/chat/completions") {
+        let raw = "";
+        req.on("data", (c: Buffer) => (raw += c.toString()));
+        req.on("end", () => {
+          let stream = false;
+          try { stream = Boolean(JSON.parse(raw || "{}").stream); } catch { /* corps non JSON → non streamé */ }
+          if (!stream) {
+            // summarize() du pool : appel NON streamé → JSON sec
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+              choices: [{ message: { content: "Résumé mock — sujet : test d'intégration ; décisions : aucune ; artefacts : aucun ; prochaines étapes : finir le test." } }],
+            }));
+            return;
+          }
+          // Tour streamé rythmé : reste en vol ~1,5 s — le chat:stop coupe
+          // via l'abort (fermeture de la connexion côté pool).
+          res.writeHead(200, { "Content-Type": "text/event-stream" });
+          let i = 0;
+          const timer = setInterval(() => {
+            i++;
+            if (i <= 12) {
+              res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: ` mot${i}` } }] })}\n\n`);
+            } else {
+              clearInterval(timer);
+              res.write("data: [DONE]\n\n");
+              res.end();
+            }
+          }, 120);
+          res.on("close", () => clearInterval(timer));
+        });
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("not found");
+    });
+    mockServer.listen(MOCK_PORT, "127.0.0.1", () => resolve());
+  });
+}
 
 let failures = 0;
 function check(label: string, ok: boolean, extra = "") {
@@ -32,6 +89,10 @@ function wait(ms: number) {
 
 /** Démarrage du service avec jeton + ports de test. */
 async function startService(): Promise<ChildProcess> {
+  // Base de test jetable à chaque run : sans ce nettoyage, le fournisseur de
+  // mock ajouté par la run précédente persiste et « X est déjà dans la liste »
+  // fait échouer l'ajout (run non idempotente).
+  rmSync(DB_DIR, { recursive: true, force: true });
   mkdirSync(DB_DIR, { recursive: true });
   const env = {
     ...process.env,
@@ -43,7 +104,7 @@ async function startService(): Promise<ChildProcess> {
     HERMES_CHAT_DB: `${DB_DIR}/hermes-chat.sqlite`, // base de test isolée
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project",
+    cwd: new URL("..", import.meta.url).pathname,
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -117,6 +178,7 @@ async function main() {
   let service: ChildProcess | null = null;
   let socket: any = null;
   try {
+    await startMockLlm();
     console.log("[boot] démarrage du service (jeton + ports 3303/3304)…");
     service = await startService();
     console.log("[boot] service prêt");
@@ -163,6 +225,18 @@ async function main() {
       socket.on("conversation:compacted", (p: any) => {
         if (p?.compact) (globalThis as any).__compactedEvent = p;
       });
+
+      // Moteur de test : faux fournisseur OpenAI-compatible local — sans lui,
+      // le tour échoue en quelques ms (noEngineError sur porte-clés vide) et
+      // les gardes [A]/[A2] ne peuvent pas être observées en vol.
+      const add = await new Promise<any>((resolve) =>
+        socket.emit("providers:add", { name: `http://127.0.0.1:${MOCK_PORT}`, kind: "llm" }, (res: any) => resolve(res ?? {}))
+      );
+      check("moteur de test ajouté (faux fournisseur local)", Boolean(add?.provider), add?.error ?? "");
+      const addKey = await new Promise<any>((resolve) =>
+        socket.emit("providers:add-key", { providerId: add?.provider?.id, label: "Intégration", secret: "mock-secret-integration" }, (res: any) => resolve(res ?? {}))
+      );
+      check("clé du moteur de test ajoutée", Boolean(addKey?.key?.id), addKey?.error ?? "");
 
       // HTTP sans jeton → 401
       const up = await httpGet(`${FILES_URL}/uploads/inconnu.png`);
@@ -483,6 +557,7 @@ async function main() {
   } finally {
     try { socket?.close?.(); } catch {}
     try { service?.kill?.("SIGKILL"); } catch {}
+    try { mockServer?.close?.(); } catch {}
   }
   process.exit(failures === 0 ? 0 : 1);
 }

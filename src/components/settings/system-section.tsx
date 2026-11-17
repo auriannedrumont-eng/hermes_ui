@@ -200,10 +200,14 @@ export function SystemSection({
     if (el) el.scrollTop = el.scrollHeight;
   }, [majLog]);
 
-  // Resynchronise le champ si l'URL change côté service (hello rediffusé).
-  useEffect(() => {
+  // Resynchronise le champ si l'URL change côté service (hello rediffusé) —
+  // ajustement d'état pendant le rendu (motif React officiel) : un effet
+  // appelant setState synchronement est interdit par la règle react-hooks.
+  const [lastGatewayUrl, setLastGatewayUrl] = useState<string | null>(null);
+  if ((gatewayUrl ?? "") !== (lastGatewayUrl ?? "")) {
+    setLastGatewayUrl(gatewayUrl ?? "");
     setUrlDraft(gatewayUrl ?? "");
-  }, [gatewayUrl]);
+  }
 
   const load = useCallback(() => {
     getSocket().emit(

@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 const TOKEN = "test-jeton-429-RR";
 const SOCK_URL = "http://localhost:3323";
-const DB_DIR = "/home/z/my-project/db-test-429";
+const DB_DIR = new URL("../db-test-429", import.meta.url).pathname;
 const MOCK_PORT = 3321;
 const MOCK_API_KEY = "clefaux.quatrevingtneuf";
 const MODEL_ID = "glm-test-429";
@@ -119,7 +119,7 @@ function startService(): Promise<ChildProcess> {
     HERMES_CHAT_DB: join(DB_DIR, "hermes-chat.sqlite"),
   };
   const proc = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
-    cwd: "/home/z/my-project",
+    cwd: new URL("..", import.meta.url).pathname,
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

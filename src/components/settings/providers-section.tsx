@@ -470,12 +470,13 @@ function AddProviderPanel({
   const [preset, setPreset] = useState<string>("__pending__");
   const [endpoint, setEndpoint] = useState<string>("");
 
-  useEffect(() => {
-    if (preset === "__pending__" && entries.length > 0) {
-      setPreset(entries[0].name);
-      setEndpoint(entries[0].defaultBaseUrl ?? "");
-    }
-  }, [preset, entries]);
+  // Ajustement d'état pendant le rendu (motif React officiel) : à l'arrivée
+  // du catalogue (prop), on sème la première entrée — un effet appelant
+  // setState synchronement est interdit par la règle react-hooks.
+  if (preset === "__pending__" && entries.length > 0) {
+    setPreset(entries[0].name);
+    setEndpoint(entries[0].defaultBaseUrl ?? "");
+  }
 
   const presetValue =
     preset === "__pending__" ? (entries.length > 0 ? entries[0].name : CUSTOM_VALUE) : preset;
