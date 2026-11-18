@@ -36,11 +36,10 @@ import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AttachmentsList } from "@/components/chat/attachments";
 import { ArtifactCard } from "@/components/chat/artifact-card";
 import { ModeFlowCard, ModeTag, modeFromTag, modeFlowSummary } from "@/components/chat/mode-flow";
+import { useSpeech, useContinuousSpeech } from "@/hooks/use-speech";
+import { UsageRow } from "@/components/chat/usage-row";
 import { stripArtifactBlocks, downloadArtifactZip } from "@/lib/artifact-utils";
 import { onSettingsChanged, readClientSetting } from "@/lib/settings";
-import { estimateTokens } from "@/lib/tokens";
-import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
-import { useModelPricing } from "@/hooks/use-pricing";
 import type { Artifact, ChatMessage, ModeFlowRow, ToolEvent, WebSource } from "@/lib/chat-types";
 
 function ToolEventRow({ event }: { event: ToolEvent }) {
@@ -94,136 +93,6 @@ function ReasoningBlock({
       </CollapsibleContent>
     </Collapsible>
   );
-}
-
-/** Lecture vocale d'une réponse (synthèse vocale du navigateur). */
-function useSpeech(content: string) {
-  const [speaking, setSpeaking] = useState(false);
-  const supported =
-    typeof window !== "undefined" && "speechSynthesis" in window;
-  // F-01 : ne couper QUE si CETTE bulle parlait — l'ancien cleanup
-  // inconditionnel coupait la lecture d'une autre bulle au démontage
-  // (transition streaming→persisté, changement de version, suppression).
-  const speakingRef = useRef(false);
-  useEffect(() => {
-    speakingRef.current = speaking;
-  }, [speaking]);
-  useEffect(() => {
-    return () => {
-      if (
-        speakingRef.current &&
-        typeof window !== "undefined" &&
-        "speechSynthesis" in window
-      ) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
-  const toggle = () => {
-    if (!supported) return;
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-      return;
-    }
-    // Nettoyage léger du markdown pour la lecture
-    const plain = content
-      .replace(/```[\s\S]*?```/g, " bloc de code ")
-      .replace(/[#*_`>|~\[\]]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const utterance = new SpeechSynthesisUtterance(plain.slice(0, 4000));
-    utterance.lang = "fr-FR";
-    utterance.rate = 1.02;
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    setSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  return { supported, speaking, toggle };
-}
-
-/** F-16 — lecture continue pendant le stream : parle les phrases complètes
- *  au fil de l'eau (file native speechSynthesis), s'arrête au clic ou au
- *  démontage. Les très courtes phrases sont ignorées (bruit), les blocs de
- *  code lus comme « bloc de code », mêmes règles de nettoyage que useSpeech. */
-function useContinuousSpeech(content: string, active: boolean) {
-  const supported =
-    typeof window !== "undefined" && "speechSynthesis" in window;
-  const [speaking, setSpeaking] = useState(false);
-  const spokenCountRef = useRef(0);
-  const spokenCharsRef = useRef(0);
-  // F-01 : idem useSpeech — le cleanup au démontage ne coupe la file que si
-  // CETTE bulle était en train de parler. La bulle de streaming qui devient
-  // la bulle persistée (stream:done) démontait l'ancienne et coupait NET la
-  // lecture continue avant la fin des phrases mises en file.
-  const speakingRef = useRef(false);
-  useEffect(() => {
-    speakingRef.current = speaking;
-  }, [speaking]);
-  // Arrêt propre au démontage de la bulle
-  useEffect(() => {
-    return () => {
-      if (
-        speakingRef.current &&
-        typeof window !== "undefined" &&
-        "speechSynthesis" in window
-      ) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
-  // Alimentation au fil du stream : uniquement pendant la lecture. Les
-  // phrases déjà énoncées ne sont jamais rejouées (spokenCount avance),
-  // une coupure n'annule que la file en attente.
-  useEffect(() => {
-    if (!active || !supported || !speaking) return;
-    const synth = window.speechSynthesis;
-    // Nettoyage du markdown (idem useSpeech) — la propriété de préfixe est
-    // préservée : le texte nettoyé ne fait que croître au fil des deltas.
-    const plain = content
-      .replace(/```[\s\S]*?```/g, " bloc de code ")
-      .replace(/[#*_`>|~\[\]]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!plain) return;
-    // Phrases complètes uniquement (terminées par . ! ? …), courtes ignorées
-    const sentences = plain
-      .split(/(?<=[.!?…])\s+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length >= 20);
-    const fresh = sentences.slice(spokenCountRef.current);
-    for (const s of fresh) {
-      // Garde-fou : jamais plus de 4 000 caractères lus par réponse
-      if (spokenCharsRef.current >= 4000) break;
-      const utterance = new SpeechSynthesisUtterance(
-        s.slice(0, 4000 - spokenCharsRef.current)
-      );
-      utterance.lang = "fr-FR";
-      utterance.rate = 1.02;
-      spokenCharsRef.current += s.length;
-      synth.speak(utterance);
-    }
-    spokenCountRef.current = sentences.length;
-  }, [content, active, supported, speaking]);
-
-  const toggle = () => {
-    if (!supported) return;
-    if (speaking) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-      return;
-    }
-    // Activation : l'effet ci-dessus alimente la file au contenu courant
-    // (les phrases complètes déjà présentes partent d'un coup, puis le
-    // stream nourrit la file delta après delta).
-    setSpeaking(true);
-  };
-
-  return { supported, speaking, toggle };
 }
 
 /** Bouton d'action du fil — icône seule : le libellé vit dans title et
@@ -287,82 +156,6 @@ function SourcesRow({ sources }: { sources: WebSource[] }) {
           [{s.n}] {s.title}
         </a>
       ))}
-    </div>
-  );
-}
-
-// ── Jetons & coût (F-21) — repliable, sous chaque réponse assistant ────
-// Jetons réels quand l'API les renvoie (pool de clés), estimation de la sortie
-// sinon. Coût : facturé par le fournisseur s'il le renvoie (OpenRouter),
-// sinon estimé à partir des tarifs déclarés dans le volet Modèles — jamais
-// deviné : sans tarifs, on le dit.
-function UsageRow({ message }: { message: ChatMessage }) {
-  const pricing = useModelPricing();
-  const [open, setOpen] = useState(false);
-  const usage = message.usage;
-  const modelInfo = parseModelLabel(message.model);
-  const modelPricing = modelInfo ? pricing[modelInfo.id] : undefined;
-
-  const real = usage != null;
-  const input = usage?.input;
-  const output = usage?.output ?? estimateTokens(message.content);
-  const total = (input ?? 0) + output;
-
-  const cost = usage?.cost ?? (real ? estimateCost(usage ?? {}, modelPricing) : null);
-  const costBasis: "facturé" | "estimé" | null =
-    usage?.cost != null ? "facturé" : cost != null ? "estimé" : null;
-
-  const summary = [
-    real ? `${formatTokens(total)} jetons` : `≈ ${formatTokens(output)} jetons (estimation)`,
-    costBasis === "facturé"
-      ? `facturé ${formatUsd(cost!)}`
-      : costBasis === "estimé"
-        ? `≈ ${formatUsd(cost!)}`
-        : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <div className="pt-0.5 text-[11px] text-muted-foreground">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:text-foreground"
-      >
-        <ChevronDown
-          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
-          aria-hidden="true"
-        />
-        <span className="tabular-nums">{summary}</span>
-      </button>
-      {open ? (
-        <div className="ml-4 mt-1.5 grid max-w-[420px] gap-1 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 leading-relaxed">
-          <div className="flex justify-between gap-6">
-            <span>Jetons d&apos;entrée</span>
-            <span className="tabular-nums">{input != null ? formatTokens(input) : "— (non renvoyé)"}</span>
-          </div>
-          <div className="flex justify-between gap-6">
-            <span>Jetons de sortie</span>
-            <span className="tabular-nums">
-              {usage?.output != null
-                ? formatTokens(usage.output)
-                : `≈ ${formatTokens(output)} (estimation)`}
-            </span>
-          </div>
-          <div className="mt-0.5 flex justify-between gap-6 border-t border-border/60 pt-1">
-            <span>Coût</span>
-            <span className="tabular-nums">
-              {costBasis === "facturé"
-                ? `${formatUsd(cost!)} (facturé par le fournisseur)`
-                : costBasis === "estimé"
-                  ? `≈ ${formatUsd(cost!)} (selon vos tarifs)`
-                  : "tarifs non renseignés — Paramètres → Modèles"}
-            </span>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
