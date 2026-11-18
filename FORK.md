@@ -1023,15 +1023,31 @@ Bonus de conformité : tous les nouveaux fichiers passent `react-hooks/set-state
 (le code d'origine échappait à la règle par la taille) — les patterns setState-dans-effet
 ont été convertis en initialisation paresseuse ou en « adjust state during render ».
 
-### Reste (ordre recommandé)
+### Reste — TERMINÉ (session du 2026-11-18)
 
-- Déduplication front↔back : `src/lib/chat-types.ts` ↔ `mini-services/hermes-chat/types.ts`
-  (ServerHello divergent : `engineProviders`/`gatewayTokenSet` absents côté back),
-  `src/lib/modes.ts` ↔ `mini-services/hermes-chat/modes.ts`,
-  `src/lib/artifact-utils.ts` ↔ `mini-services/hermes-chat/artifacts.ts`.
-- Bonus performance du plan initial (« ne re-rendre que MessageList pendant le
-  streaming ») : l'état de stream vit désormais dans use-chat-stream, mais la page
-  l'appelle toujours au sommet — l'étape suivante est de descendre le hook sous
-  MessageList, ce qui touche page.tsx et message-list.tsx.
+Les deux chantiers restants ont été livrés :
+
+**1. Déduplication front↔back** — `mini-services/hermes-chat/shared/chat-protocol.ts`
+est la source unique du fil (contrainte par les deux tsconfig) : 27 types du
+protocole + bornes des modes + helpers de présentation (`artifactKindLabel`,
+`formatArtifactBytes`, `GENERIC_EFFORTS`, `resolveMode`, `CONVERSATION_MODES`).
+`types.ts` (service) et `chat-types.ts` (front) sont des façades : ré-export
+du protocole + types propres seulement (payloads internes / état d'écran).
+Divergences corrigées au passage : `ServerHello` déclare enfin
+`gatewayConfigured`/`gatewayTokenSet`/`engineProviders`/`memoryChars`
+(réellement émis par helloPayload), `ModelsResult.defaultModel` passe
+`string | null`, `ProviderCatalogEntry` complet, `ExtensionKind "repo"|"mcp"`.
+`modes.ts` reste un miroir d'affichage (icônes front, consignes service) par
+design ; les identités/bornes sont dans le protocole partagé.
+`artifact-utils` : pas de chevauchement réel (diffLines/parseCsv n'existent
+que côté front) — rien à fusionner.
+
+**2. Bonus perf « ne re-rendre que MessageList pendant le streaming »** —
+`src/lib/stream-store.ts` externalise l'état de stream via
+`useSyncExternalStore` : l'orchestrateur reste seul écrivain (setters
+stables), MessageList s'abonne au registre complet, la page ne suit que les
+signaux lents (`useStreamsCount`, `useFirstStreamId` — identité figée avec
+cache anti-boucle, `useTurnError`, `useStallNotice`). Pendant un tour, les
+deltas à ~16 ms ne re-rendent plus sidebar/composer/header — seul le fil.
 
 Scripts d'extraction rejouables/idempotents conservés : `scripts/split-turn-runner.py`, `scripts/split-handlers.py`, `scripts/split-store.py`.
