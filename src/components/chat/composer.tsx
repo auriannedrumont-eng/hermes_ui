@@ -22,6 +22,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PendingAttachmentChip } from "@/components/chat/attachments";
+import { SlashMenu } from "@/components/chat/slash-menu";
+import { useComposerAttachments, MAX_ATTACHMENTS, type PendingAttachment } from "@/hooks/use-composer-attachments";
 import { ContextGauge } from "@/components/chat/context-gauge";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { ModePicker } from "@/components/chat/mode-picker";
@@ -53,27 +55,6 @@ import type {
   PermissionsMode,
 } from "@/lib/chat-types";
 import type { ConversationMode, ModeConfig } from "@/lib/modes";
-
-const MAX_ATTACHMENTS = 6;
-const MAX_BYTES = 15 * 1024 * 1024; // aligné sur le service
-
-interface PendingAttachment {
-  localId: string;
-  file: File;
-  kind: Attachment["kind"];
-  previewUrl?: string; // objet URL local (aperçu instantané)
-  uploading: boolean;
-  error?: string;
-  uploaded?: Attachment; // pièce jointe enregistrée côté service
-}
-
-function detectKind(file: File): Attachment["kind"] {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("audio/")) return "audio";
-  if (file.type.startsWith("video/")) return "video";
-  if (file.type === "application/pdf") return "pdf";
-  return "file";
-}
 
 interface ComposerProps {
   disabled: boolean;
@@ -161,7 +142,15 @@ export function Composer({
   onTranscribe,
 }: ComposerProps) {
   const [value, setValue] = useState("");
-  const [pending, setPending] = useState<PendingAttachment[]>([]);
+  // Pièces jointes en attente : hook dédié (F-03 — purge au changement de
+  // conversation + révocation des aperçus blob).
+  const {
+    pending,
+    setPending,
+    addFiles,
+    removePending,
+    clearAll,
+  } = useComposerAttachments({ draftKey, onUploadFile });
   const [dragOver, setDragOver] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const [permDialogOpen, setPermDialogOpen] = useState(false);
@@ -169,41 +158,37 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
 
-  // Visibilité de la jauge : réglage fork.context.gauge (registre, défaut : affichée)
-  const [gaugeVisible, setGaugeVisible] = useState(true);
-  useEffect(() => {
-    setGaugeVisible(readClientSetting<boolean>("fork.context.gauge") !== false);
-    // Application immédiate depuis le sheet Paramètres (FORK.md §7.4)
-    return onSettingsChanged(({ key, value }) => {
-      if (key === "fork.context.gauge") setGaugeVisible(value !== false);
-    });
-  }, []);
+  // Visibilité de la jauge : réglage fork.context.gauge (registre, défaut :
+  // affichée) — relû paresseusement à l'initialisation ; le bus du sheet
+  // Paramètres (FORK.md §7.4) met à jour en direct (callback externe).
+  const [gaugeVisible, setGaugeVisible] = useState(
+    () => readClientSetting<boolean>("fork.context.gauge") !== false
+  );
+  useEffect(
+    () =>
+      onSettingsChanged(({ key, value }) => {
+        if (key === "fork.context.gauge") setGaugeVisible(value !== false);
+      }),
+    []
+  );
 
   // ── Brouillons persistants (localStorage, par conversation) ──────────
-  useEffect(() => {
+  // Chargé à la MONTÉE de chaque conversation : la valeur initiale vient
+  // du registre (lecture directe, pas d'état dans l'effet) ; le focus suit.
+  const [draftLoaded, setDraftLoaded] = useState<string | null>(null);
+  if (draftLoaded !== draftKey) {
+    // re-render immédiat : motif React officiel « adjust state on prop
+    // change » — l'écriture pendant le rendu est autorisée ici (React
+    // rejoue le rendu avant de committer), pas dans un effet.
+    setDraftLoaded(draftKey);
     try {
       setValue(window.localStorage.getItem(draftStorageKey(draftKey)) ?? "");
     } catch {
       setValue("");
     }
+  }
+  useEffect(() => {
     if (textareaRef.current) textareaRef.current.focus();
-  }, [draftKey]);
-  // F-03 : les pièces jointes en attente appartiennent à la conversation
-  // précédente — elles ne suivent pas le brouillon textuel dans le
-  // changement de conversation : purge ET révocation des aperçus blob.
-  const pendingRef = useRef<PendingAttachment[]>([]);
-  useEffect(() => {
-    pendingRef.current = pending;
-  }, [pending]);
-  useEffect(() => {
-    return () => {
-      for (const a of pendingRef.current) {
-        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
-      }
-    };
-  }, [draftKey]);
-  useEffect(() => {
-    setPending([]);
   }, [draftKey]);
 
   useEffect(() => {
@@ -254,9 +239,13 @@ export function Composer({
   const [slashDismissed, setSlashDismissed] = useState(false);
   const showSlash = slashMatches.length > 0 && !slashDismissed;
 
-  useEffect(() => {
+  // Reset de la sélection clavier au changement de commande saisie —
+  // ajustement pendant le rendu (motif React officiel), pas dans un effet.
+  const [lastSlashToken, setLastSlashToken] = useState<string | null>(null);
+  if (lastSlashToken !== slashToken) {
+    setLastSlashToken(slashToken);
     setSlashIndex(0);
-  }, [slashToken]);
+  }
 
   const applyPrompt = useCallback((tpl: PromptTemplate) => {
     setValue(tpl.prompt);
@@ -268,98 +257,7 @@ export function Composer({
     });
   }, []);
 
-  // ── Pièces jointes ───────────────────────────────────────────────────
-  const uploadOne = useCallback(
-    async (localId: string, file: File) => {
-      try {
-        const uploaded = await onUploadFile(file);
-        if (!uploaded) throw new Error("Pièce jointe refusée par le service");
-        setPending((prev) =>
-          prev.map((p) =>
-            p.localId === localId
-              ? { ...p, uploading: false, uploaded, error: undefined }
-              : p
-          )
-        );
-      } catch (err) {
-        setPending((prev) =>
-          prev.map((p) =>
-            p.localId === localId
-              ? {
-                  ...p,
-                  uploading: false,
-                  uploaded: undefined,
-                  error: err instanceof Error ? err.message : "Échec de l'envoi",
-                }
-              : p
-          )
-        );
-      }
-    },
-    [onUploadFile]
-  );
-
-  const addFiles = useCallback(
-    (files: FileList | File[]) => {
-      const list = Array.from(files);
-      if (!list.length) return;
-      const localId = () =>
-        `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      type NewEntry = PendingAttachment & { shouldUpload: boolean };
-      const entries: NewEntry[] = [];
-      for (const file of list) {
-        if (entries.length >= MAX_ATTACHMENTS) break;
-        if (file.type === "image/svg+xml") {
-          entries.push({
-            localId: localId(),
-            file,
-            kind: "file",
-            uploading: false,
-            error: "SVG non accepté (sécurité)",
-            shouldUpload: false,
-          });
-          continue;
-        }
-        if (file.size > MAX_BYTES) {
-          entries.push({
-            localId: localId(),
-            file,
-            kind: detectKind(file),
-            uploading: false,
-            error: "Fichier trop volumineux (max 15 Mo)",
-            shouldUpload: false,
-          });
-          continue;
-        }
-        const kind = detectKind(file);
-        entries.push({
-          localId: localId(),
-          file,
-          kind,
-          previewUrl:
-            kind === "image" && typeof URL !== "undefined"
-              ? URL.createObjectURL(file)
-              : undefined,
-          uploading: true,
-          shouldUpload: true,
-        });
-      }
-      setPending((prev) => [...prev, ...entries.map(({ shouldUpload: _s, ...rest }) => rest)]);
-      // Lance l'upload de chaque nouveau fichier valide
-      for (const entry of entries) {
-        if (entry.shouldUpload) uploadOne(entry.localId, entry.file);
-      }
-    },
-    [uploadOne]
-  );
-
-  const removePending = (localId: string) => {
-    setPending((prev) => {
-      const target = prev.find((p) => p.localId === localId);
-      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((p) => p.localId !== localId);
-    });
-  };
+  // (Pièces jointes : useComposerAttachments — découpage 2026-11, F-03 inclus.)
 
   const ready = pending.filter((p) => p.uploaded);
   const uploading = pending.some((p) => p.uploading);
@@ -403,12 +301,7 @@ export function Composer({
     } catch {
       /* stockage indisponible */
     }
-    setPending((prev) => {
-      prev.forEach((p) => {
-        if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
-      });
-      return [];
-    });
+    clearAll();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -452,32 +345,7 @@ export function Composer({
 
         {/* Suggestions de commandes slash */}
         {showSlash ? (
-          <div className="absolute bottom-full left-3 z-20 mb-2 w-[min(92%,26rem)] overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-            <ul className="max-h-60 overflow-y-auto p-1">
-              {slashMatches.map((tpl, i) => (
-                <li key={tpl.slash}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyPrompt(tpl)}
-                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
-                      i === slashIndex ? "bg-muted/70" : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className="shrink-0 rounded-md bg-hermes/10 px-1.5 py-0.5 font-mono text-[12.5px] font-medium text-hermes-text">
-                      /{tpl.slash}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[12.5px] font-medium">{tpl.title}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {tpl.description}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <SlashMenu matches={slashMatches} slashIndex={slashIndex} onPick={applyPrompt} />
         ) : null}
 
         {/* Puces des pièces jointes en attente */}
