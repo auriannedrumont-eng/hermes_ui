@@ -1,170 +1,29 @@
-// Types du protocole de chat Hermes Web (miroir de mini-services/hermes-chat/types.ts)
+// Types du protocole de chat Hermes Web — façade du référentiel partagé
+// (découpage 2026-11, FORK.md §60 « déduplication ») : les formes du fil
+// vivent dans mini-services/hermes-chat/shared/chat-protocol.ts (contraint
+// par le tsconfig du service ET celui du front) ; ce fichier ne garde que
+// les types PROPREMENT FRONT (état d'écran, vues Paramètres). Les imports
+// existants (`from "@/lib/chat-types"`) restent valides : tout est
+// ré-exporté.
+//
+// Divergences corrigées au passage (le service émettait sans déclarer) :
+// ServerHello porte désormais gatewayTokenSet / engineProviders / memoryChars
+// (réellement émis par helloPayload) ; ModelsResult.defaultModel est
+// string | null (le fallback catalogue peut ne rien fixer).
 import type { ConversationMode, ModeConfig } from "@/lib/modes";
 
 export type { ConversationMode, ModeConfig };
 
-export type Role = "user" | "assistant";
+// ── Ré-exports du protocole partagé (source unique front ↔ back) ────────
+import type { ToolEvent } from "../../mini-services/hermes-chat/shared/chat-protocol";
 
-export interface ToolEvent {
-  name: string;
-  status: "running" | "done" | "error";
-  detail?: string;
-  at: string;
-}
+export * from "../../mini-services/hermes-chat/shared/chat-protocol";
+export { resolveMode, CONVERSATION_MODES } from "../../mini-services/hermes-chat/shared/chat-protocol";
 
-/** Activité outil d'un tour — encart terminal du panneau artefacts. */
-export interface TurnTools {
-  /** Événements du tour, dans l'ordre d'arrivée. */
-  events: ToolEvent[];
-  /** Tour encore vivant (stream en cours) : l'encart s'ouvre seul. */
-  live: boolean;
-}
-
-// ── Sources citées par un tour avec recherche web (F-09/F-12) ──────────
-export interface WebSource {
-  /** Rang de citation, 1-based (le modèle cite sous la forme [n]). */
-  n: number;
-  title: string;
-  url: string;
-  snippet: string;
-}
-
-// ── Pièces jointes multimédia (le protocole Hermes les supporte) ──────
-export type AttachmentKind = "image" | "audio" | "video" | "pdf" | "file";
-
-export interface Attachment {
-  id: string;
-  name: string;
-  mime: string;
-  size: number; // octets
-  kind: AttachmentKind;
-  /** Chemin servi par le mini-service : /uploads/<id>.<ext> */
-  url: string;
-  /** Transcription automatique (fichiers audio, via ASR). */
-  transcript?: string;
-}
-
-// ── Sélection de modèle ───────────────────────────────────────────────
-export interface ModelOption {
-  id: string;
-  label: string;
-  provider: string;
-  description?: string;
-  badge?: string;
-  /** Échelle d'effort portée par le modèle (repli générique off·low·medium·high·max). */
-  efforts?: string[];
-  /** Libellé de l'échelle (ex. « Nous Portal », « OpenAI »). */
-  effortLabel?: string;
-  /** Fenêtre de contexte en tokens (absente = 128k estimé). */
-  contextWindow?: number;
-  /** Fournisseur « chats IA web » (pilotes navigateur) — pas un modèle du moteur. */
-  webchat?: boolean;
-  /** false = site non vérifié (verifie=false) : INDISPONIBLE, affiché comme tel. */
-  available?: boolean;
-}
-
-/** Échelle d'effort générique quand le fournisseur n'en expose pas. */
-export const GENERIC_EFFORTS = ["off", "low", "medium", "high", "max"];
-
-export interface ModelsResult {
-  models: ModelOption[];
-  defaultModel: string | null;
-  source: "gateway" | "catalogue" | "providers";
-}
-
-export interface ChatMessage {
-  id: string;
-  conversationId: string;
-  role: Role;
-  content: string;
-  reasoning?: string;
-  toolEvents?: ToolEvent[];
-  attachments?: Attachment[];
-  model?: string;
-  createdAt: string;
-  /** Cartes d'artefacts ancrées sur ce message (dernière version de chaque clé). */
-  artifacts?: Artifact[];
-  /** Réponse interrompue par l'utilisateur (bouton Stop) — partiel conservé. */
-  stopped?: boolean;
-  // ── Comparaison de modèles (F-17) — réponse de la variante a ou b ──
-  /** Variante du tour de comparaison (absent = message hors comparaison). */
-  variant?: "a" | "b";
-  // ── Jetons & coût (F-21) — rempli quand l'API du fournisseur le renvoie ──
-  /** Jetons consommés par le tour (réels si fournis par l'API). */
-  usage?: { input?: number; output?: number; cost?: number };
-  // ── Recherche web (F-12) — sources citées par ce tour ──
-  /** Résultats injectés dans le contexte du tour, affichés cliquables. */
-  sources?: WebSource[];
-  // ── Versions de réponse (F-14) — régénérer conserve l'ancienne ──
-  /** Présent uniquement si ce message a plusieurs versions (navigation ‹ n/m ›). */
-  versions?: { group: string; index: number; count: number };
-  // ── Modes du compositeur (F-30) — déroulé + étiquette du mode ──
-  /** Étiquette du mode sur la réponse finale (« Verdict · Débat — 3 tours »). */
-  modeTag?: string;
-  /** Déroulé du tour multi-voix, affiché dans la conversation au-dessus de la réponse. */
-  modeFlow?: ModeFlowRow[];
-}
-
-export interface ConversationMeta {
-  id: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
-  preview: string;
-  /** Conversation épinglée en haut de la liste. */
-  pinned?: boolean;
-  /** Projet de rangement (null = « Sans projet »). */
-  projectId?: string | null;
-  // ── Modes du compositeur (F-30) — le service fait foi, relu à chaque envoi ──
-  /** Mode de la conversation (chat par défaut — valeur inconnue retombe sur chat). */
-  mode?: ConversationMode;
-  /** Débat : tours (3–10), null = défaut du client. */
-  modeRounds?: number | null;
-  /** JSON des voix → modèles + membres/reprises/autoDebate (par conversation). */
-  modeConfig?: ModeConfig | null;
-}
-
-// ── Projets : rangement des conversations (fork) ────────────────────
-export interface Project {
-  id: string;
-  name: string;
-  /** Ordre d'affichage dans la sidebar (croissant). */
-  position: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Résultat de recherche plein-texte dans les messages. */
-export interface SearchHit {
-  conversationId: string;
-  conversationTitle: string;
-  messageId: string;
-  role: Role;
-  excerpt: string;
-  createdAt: string;
-}
-
-/** Mode du moteur : « gateway » (agent Hermes réel, connexion automatique) ou
- *  « local » (agent non lancé — vraies réponses via les clés fournisseurs). */
-export type GatewayMode = "gateway" | "local";
+// ── État d'écran (front uniquement) ────────────────────────────────────
 
 /** Mode d'autorisation de l'agent (reset sur « ask » à chaque session). */
 export type PermissionsMode = "ask" | "auto";
-
-// ── Modes du compositeur (F-30) — déroulé affiché dans la conversation ──
-
-export interface ModeFlowRow {
-  /** Identifiant stable de la ligne dans le déroulé. */
-  id: string;
-  /** Libellé affiché (« Tour 1 · Sceptique », « Membre A », « Plan »…). */
-  label: string;
-  /** Détail : rôle de la voix en cours, extrait de la réponse une fois terminée. */
-  detail: string;
-  /** Modèle court de la voix (absent = modèle de la conversation). */
-  model?: string;
-  status: "pending" | "running" | "done" | "error";
-}
 
 // ── Mode expert (F-22) : température, plafond de sortie, graine ────────
 
@@ -175,41 +34,6 @@ export interface ExpertSettings {
   temperature?: number;
   maxTokens?: number;
   seed?: number;
-}
-
-export interface ServerHello {
-  app: string;
-  version: string;
-  mode: GatewayMode;
-  model: string;
-  gatewayUrl: string | null;
-  /** F-02 : true = une URL de gateway est RÉGLÉE dans l'interface (le
-   *  champ et le bouton « Débrancher » s'affichent en fonction d'elle) ;
-   *  false/null = défaut automatique — rien de configuré à débrancher. */
-  gatewayConfigured?: boolean;
-  /** Fournisseurs LLM actionnables (clé active ou keyless) — la carte de
-   *  statut de la sidebar s appuie dessus pour un état honnête. v2.4. */
-  engineProviders?: string[] | null;
-  /** Taille des instructions système (estimation honnête de la jauge). */
-  systemPromptChars?: number | null;
-  /** Révision git du dépôt déployé (null = installation sans git). v2.4. */
-  appRevision?: string | null;
-  /** Binaire chrome-headless-shell présent ou absent (sonde réelle). v2.4. */
-  chromeHeadless?: "present" | "absent";
-  /** Jeton de gateway enregistré côté service (booléen, jamais la valeur). */
-  gatewayTokenSet?: boolean;
-}
-
-/** État de compaction d'une conversation (résumé conservé en tête de session). */
-export interface CompactInfo {
-  /** Date de la compaction (ISO). */
-  at: string;
-  /** Dernier message couvert par le résumé (les suivants partent en clair). */
-  untilMessageId: string;
-  /** Taille du résumé en caractères (comptage de la jauge). */
-  summaryChars: number;
-  /** Nombre de messages résumés. */
-  summarizedCount: number;
 }
 
 // Message en cours de streaming côté assistant
@@ -224,153 +48,17 @@ export interface StreamingState {
   toolEvents: ToolEvent[];
 }
 
-// ── Artefacts : fichiers générés par l'agent, objets de première classe ──
-
-export type ArtifactKind =
-  | "html"
-  | "code"
-  | "markdown"
-  | "csv"
-  | "json"
-  | "svg"
-  | "image"
-  | "pdf";
-
-export type ArtifactStatus = "generating" | "ready" | "rendering" | "error";
-
-export interface Artifact {
-  /** Identifiant de CETTE version (une ligne = une version). */
-  id: string;
-  /** Identité stable dans la conversation : nom de fichier normalisé. */
-  key: string;
-  conversationId: string;
-  /** Message qui a produit cette version. */
-  messageId: string;
-  /** Message où la carte est ancrée (première version du fichier). */
-  anchorMessageId: string;
-  version: number;
-  kind: ArtifactKind;
-  name: string;
-  language?: string;
-  mime: string;
-  size: number;
-  status: ArtifactStatus;
-  statusLabel?: string;
-  error?: string;
-  preview?: string;
-  url: string;
-  rawUrl: string;
-  /** Vue « nouvel onglet » (HTML rendu derrière un bac à sable CSP). */
-  viewUrl?: string;
-  thumbnailUrl?: string;
-  pdfUrl?: string;
-  pdfSize?: number;
-  renderedBy?: string;
-  /** F-26 — étiquette humaine (double-clic dans le journal des versions). */
-  label?: string;
-  /** F-26 — version épinglée : jamais purgée par le quota FIFO. */
-  pinned?: boolean;
-  /** F-26 — numéro de la version restaurée (marqueur ↩ dans le journal). */
-  restoredFrom?: number;
-  createdAt: string;
-}
-
-export function artifactKindLabel(kind: ArtifactKind): string {
-  switch (kind) {
-    case "html":
-      return "Page HTML";
-    case "code":
-      return "Code";
-    case "markdown":
-      return "Markdown";
-    case "csv":
-      return "CSV";
-    case "json":
-      return "JSON";
-    case "svg":
-      return "SVG";
-    case "image":
-      return "Image";
-    case "pdf":
-      return "PDF";
-  }
-}
-
-export function formatArtifactBytes(n: number): string {
-  if (n < 1024) return `${n} o`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} Ko`;
-  return `${(n / 1024 / 1024).toFixed(1)} Mo`;
-}
-
-// ── Fournisseurs & clés + Extensions (Paramètres v2.2) ────────────────
-// Miroir de mini-services/hermes-chat/types.ts — les secrets restent
-// côté service : le client ne voit que les vues masquées.
-
-export type ProviderKind = "llm" | "service";
-export type ProviderStrategy = "fill_first" | "round_robin" | "least_used";
-export type KeyStatus = "untested" | "ok" | "error" | "exhausted";
-
-export interface ProviderKeyView {
-  id: string;
-  label: string;
-  masked: string;
-  status: KeyStatus;
-  statusLabel?: string | null;
-  lastTestedAt?: string | null;
-}
-
-export interface ProviderView {
-  id: string;
-  name: string;
-  kind: ProviderKind;
-  strategy: ProviderStrategy;
-  baseUrl?: string | null;
-  keyless?: boolean;
-  keys: ProviderKeyView[];
-}
-
-/** Entrée du catalogue des fournisseurs connus (sélecteur d'ajout, v2.5).
- *  `name` est la valeur canonique à renvoyer telle quelle à providers:add. */
-export interface ProviderCatalogEntry {
-  name: string;
-  /** Libellé court du sélecteur (p. ex. « z.ai — GLM Coding Plan (abonnement) »). */
-  label: string;
-  /** Description sous le sélecteur. */
-  tagline: string;
-  kind: ProviderKind;
-  /** Adresse d'appel par défaut (null pour les services testés par requête). */
-  defaultBaseUrl: string | null;
-  /** Fournisseur local sans clé (Ollama). */
-  keyless: boolean;
-}
-
-export type ExtensionKind = "repo" | "mcp";
-
-export interface ExtensionCommit {
-  sha: string;
-  message: string;
-  author: string;
-  date: string;
-}
-
-export interface ExtensionView {
-  id: string;
-  name: string;
-  kind: ExtensionKind;
-  description?: string | null;
-  source?: string | null;
-  channel?: string | null;
-  commit?: string | null;
-  version?: string | null;
-  pinned: boolean;
-  enabled: boolean;
-  applied: boolean;
-  updateAvailable?: string | null;
-  lastCheckedAt?: string | null;
+/** Activité outil d'un tour — encart terminal du panneau artefacts. */
+export interface TurnTools {
+  /** Événements du tour, dans l'ordre d'arrivée. */
+  events: ToolEvent[];
+  /** Tour encore vivant (stream en cours) : l'encart s'ouvre seul. */
+  live: boolean;
 }
 
 // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────
-// Miroir de mini-services/hermes-chat/types.ts.
+// (vues consommées par le front : SystemPromptPreset, ConversationPrompt,
+// SystemPromptChanged ; le service a ses View/Payload équivalents.)
 
 /** Preset de prompt réutilisable (bibliothèque, section Hermes du volet). */
 export interface SystemPromptPreset {
