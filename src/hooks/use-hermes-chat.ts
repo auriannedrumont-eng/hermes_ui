@@ -7,6 +7,7 @@ import { getSocket } from "@/lib/socket";
 import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
 import { useToast } from "@/hooks/use-toast";
+import { useProjects } from "@/hooks/use-projects";
 import {
   contextWindowOf,
   estimateTokens,
@@ -65,10 +66,19 @@ export function useHermesChat() {
   const creatingRef = useRef(false);
 
   const { toast } = useToast();
+  const {
+    projects,
+    setProjects,
+    fetchProjects,
+    createProject,
+    renameProject,
+    deleteProject,
+    reorderProjects,
+  } = useProjects();
   const [connected, setConnected] = useState(false);
   const [serverInfo, setServerInfo] = useState<ServerHello | null>(null);
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  // Projets : hook dédié (découpage 2026-11, FORK.md §10).
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // F-17 — comparaison : DEUX réponses streament en parallèle (variantes
@@ -448,12 +458,7 @@ export function useHermesChat() {
     });
   }, []);
 
-  /** Charge la liste des projets (rangement des conversations). */
-  const fetchProjects = useCallback(() => {
-    getSocket().emit("projects:list", (res: { projects?: Project[] } = {}) => {
-      if (res.projects) setProjects(res.projects);
-    });
-  }, []);
+
 
   const fetchModels = useCallback(() => {
     const socket = getSocket();
@@ -1551,57 +1556,7 @@ export function useHermesChat() {
     []
   );
 
-  // ── Projets : actions ───────────────────────────────────────────
-
-  /** Crée un projet (rangement de conversations). */
-  const createProject = useCallback(
-    (name: string): Promise<Project | null> =>
-      new Promise((resolve) => {
-        getSocket().emit(
-          "projects:create",
-          { name },
-          (res: { project?: Project; error?: string } = {}) => {
-            resolve(res.project ?? null);
-          }
-        );
-      }),
-    []
-  );
-
-  /** Renomme un projet. */
-  const renameProject = useCallback((id: string, name: string) => {
-    getSocket().emit(
-      "projects:rename",
-      { id, name },
-      (res: { project?: Project } = {}) => {
-        if (res.project)
-          setProjects((prev) => prev.map((x) => (x.id === id ? res.project! : x)));
-      }
-    );
-  }, []);
-
-  /** Supprime un projet (les conversations passent dans « Sans projet »). */
-  const deleteProject = useCallback((id: string) => {
-    getSocket().emit("projects:delete", { id }, (res: { ok?: boolean } = {}) => {
-      if (res.ok) {
-        setProjects((prev) => prev.filter((x) => x.id !== id));
-        setConversations((prev) =>
-          prev.map((c) => (c.projectId === id ? { ...c, projectId: null } : c))
-        );
-      }
-    });
-  }, []);
-
-  /** Réordonne les projets (liste complète d'ids). */
-  const reorderProjects = useCallback((ids: string[]) => {
-    getSocket().emit(
-      "projects:reorder",
-      { ids },
-      (res: { projects?: Project[] } = {}) => {
-        if (res.projects) setProjects(res.projects);
-      }
-    );
-  }, []);
+  // (actions projets : vit dans use-projects.ts)
 
   /** Déplace une conversation vers un projet (null = « Sans projet »). */
   const moveConversation = useCallback((id: string, projectId: string | null) => {
