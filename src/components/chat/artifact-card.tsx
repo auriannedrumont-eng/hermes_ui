@@ -102,6 +102,10 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
       aria-label={`Artefact ${artifact.name} — ${artifactKindLabel(artifact.kind)}`}
       onClick={() => onOpen(artifact)}
       onKeyDown={(e) => {
+        // C-04 : ne réagir qu'aux touches frappées sur la carte ELLE-MÊME —
+        // les événements remontés depuis un Portal (popover de versions,
+        // Input d'étiquette) ne doivent pas ouvrir l'artefact.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onOpen(artifact);

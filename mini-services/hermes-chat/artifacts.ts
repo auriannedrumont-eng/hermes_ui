@@ -101,24 +101,40 @@ export interface FileBlock {
  *  - son info string porte un nom de fichier (file="x", filename="x", title="x"
  *    ou un jeton nu avec extension), ou
  *  - il est de type html/svg d'au moins 400 caractères (auto-détection).
+ * D-04 : la clôture doit porter le MÊME nombre de backticks que l'ouverture
+ * — un artefact Markdown contenant ses propres exemples ````ts … ```` se
+ * fermait prématurément au premier ``` interne et déversait la fin du
+ * fichier dans le chat. Les sous-blocs internes plus courts ne ferment
+ * jamais un bloc plus long.
  */
+export function fenceOf(line: string): number | null {
+  const m = /^(`{3,})(.*)$/.exec(line.trim());
+  if (!m) return null;
+  return m[1].length;
+}
+
 export function extractFileBlocks(text: string): FileBlock[] {
   const lines = text.split("\n");
   const blocks: FileBlock[] = [];
   let i = 0;
   let idx = 0;
   while (i < lines.length) {
-    const open = /^```(.*)$/.exec(lines[i].trim());
-    if (!open) {
+    const openLen = fenceOf(lines[i]);
+    if (openLen === null) {
       i++;
       continue;
     }
-    const info = (open[1] ?? "").trim();
+    const open = /^(`{3,})(.*)$/.exec(lines[i].trim())!;
+    const info = (open[2] ?? "").trim();
     const contentLines: string[] = [];
     let j = i + 1;
     let complete = false;
     while (j < lines.length) {
-      if (/^```\s*$/.test(lines[j].trim())) {
+      // Clôture VALIDE : au moins autant de backticks que l'ouverture,
+      // et rien d'autre sur la ligne. Une clôture plus courte (sous-bloc
+      // interne) reste du contenu du bloc fichier.
+      const closeLen = fenceOf(lines[j]);
+      if (closeLen !== null && closeLen >= openLen && lines[j].trim() === "`".repeat(closeLen)) {
         complete = true;
         break;
       }
@@ -296,6 +312,8 @@ export class ArtifactTracker {
       insertArtifact: (a: any) => ArtifactRow;
       updateArtifact: (id: string, patch: any) => ArtifactRow | null;
       getArtifactRow: (id: string) => ArtifactRow | null;
+      deleteArtifactRow?: (id: string) => void;
+      latestArtifactRow?: (conversationId: string, key: string) => ArtifactRow | null;
     },
     private conversationId: string,
     private messageId: string,
@@ -346,6 +364,35 @@ export class ArtifactTracker {
       if (c.complete && !existing.complete) {
         existing.complete = true;
         const isHtml = c.kind === "html";
+        // C-03/F-26 : dédoublonnage à la CLÔTURE du bloc. La v(n+1) a été
+        // créée à l'ouverture (contenu vide ≠ v(n), insertArtifact ne
+        // pouvait pas deviner) ; maintenant que le contenu FINAL est là,
+        // s'il est strictement identique à la version courante `ready`
+        // précédente, on SUPPRIME la ligne provisoire v(n+1) et on réutilise
+        // v(n) — la ré-émission identique ne crée pas de version.
+        if (
+          this.store.deleteArtifactRow &&
+          this.store.latestArtifactRow &&
+          existing.row.version > 1 &&
+          existing.row.status === "generating"
+        ) {
+          const previous = this.store.latestArtifactRow(this.conversationId, c.key);
+          if (
+            previous &&
+            previous.id !== existing.row.id &&
+            previous.status === "ready" &&
+            previous.content === c.content
+          ) {
+            this.store.deleteArtifactRow(existing.row.id);
+            const reused = this.store.getArtifactRow(previous.id);
+            if (reused) {
+              existing.row = reused;
+              existing.sentLength = c.content.length;
+              this.events.onUpdated(toWireArtifact(reused));
+              continue;
+            }
+          }
+        }
         const row = this.store.updateArtifact(existing.row.id, {
           status: isHtml ? "rendering" : "ready",
           statusLabel: isHtml ? "Rendu de l'aperçu (Chrome)…" : null,

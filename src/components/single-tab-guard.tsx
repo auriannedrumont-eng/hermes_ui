@@ -119,6 +119,11 @@ export function SingleTabGuard() {
 
     let reloadCount = 0;
     let lastReloadAt = 0;
+    // C-05 : rechargement volontaire du principal — pendant lui-même, le
+    // pagehide ne doit PAS écrire de battement mort (sinon l'onglet en
+    // attente prend le relais pendant que le principal recharge, et les
+    // deux onglets s'inversent en boucle).
+    let isReloading = false;
     try {
       reloadCount = Number(window.sessionStorage.getItem("hermes.reload.count") || 0) || 0;
       lastReloadAt = Number(window.sessionStorage.getItem("hermes.last.reload") || 0) || 0;
@@ -174,6 +179,7 @@ export function SingleTabGuard() {
       } catch {
         /* tant pis pour la mémo du compte */
       }
+      isReloading = true;
       window.location.reload();
     };
     const onChannelMessage = (event: MessageEvent) => {
@@ -185,8 +191,10 @@ export function SingleTabGuard() {
     };
     const onPageHide = () => {
       // battement mort : un onglet en attente prend le relais immédiatement
-      // au lieu d'attendre l'expiration des 7 s.
-      if (role === "primary") writeHeartbeat(ownId, 0);
+      // au lieu d'attendre l'expiration des 7 s — SAUF si le principal se
+      // recharge volontairement (C-05) : son battement reste vivant, le
+      // doublon ne doit pas usurper le rôle pendant le rechargement.
+      if (role === "primary" && !isReloading) writeHeartbeat(ownId, 0);
     };
     channel?.addEventListener("message", onChannelMessage);
     window.addEventListener("storage", onStorage);

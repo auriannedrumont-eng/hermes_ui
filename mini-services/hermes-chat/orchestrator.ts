@@ -48,6 +48,27 @@ export interface VoiceTurnOutcome {
   usage?: { input?: number; output?: number; cost?: number };
 }
 
+/** Usage cumulé d'une orchestration (C-07/F-21) : le coût réel d'un tour
+ *  multi-voix est la SOMME des 3 à 30 appels LLM intermédiaires — ne
+ *  conserver que l'usage du dernier appel sous-comptait systématiquement. */
+export function sumUsage(
+  usages: ({ input?: number; output?: number; cost?: number } | undefined | null)[],
+): { input?: number; output?: number; cost?: number } | undefined {
+  let input = 0;
+  let output = 0;
+  let cost = 0;
+  let any = false;
+  for (const u of usages) {
+    if (!u) continue;
+    any = true;
+    input += u.input ?? 0;
+    output += u.output ?? 0;
+    cost += u.cost ?? 0;
+  }
+  if (!any) return undefined;
+  return { input, output, cost };
+}
+
 export interface OrchestratorDeps {
   /** Un tour d'une voix — jamais streamé vers le chat (capture silencieuse),
    *  SAUF le tour final dont les deltas partent dans la réponse conservée. */
@@ -88,10 +109,21 @@ export interface OrchestratorContext {
    *  service (hermes.modes.voiceChars) relu à chaque tour, borné par
    *  resolveVoiceChars (500–8000, défaut 2000). */
   voiceChars: number;
+  /** C-07 : modèle sélectionné dans le compositeur (le « modèle de la
+   *  conversation »). Une voix sans modèle propre (modelId null) doit
+   *  suivre CELUI-CI, pas le premier modèle du catalogue. */
+  modelId?: string | null;
   userContent: string;
   history: { role: "user" | "assistant"; content: string }[];
   attachments?: Attachment[];
   settings?: TurnSettings;
+  /** C-07 : instructions système locales composées (base + mémoire F-18 +
+   *  instructions globales F-19 + prompt de conversation F-11) — chaque voix
+   *  les reçoit AU-DESSUS de sa consigne de rôle. */
+  localSystemPrompt?: string | null;
+  /** C-07/F-09 : recherche web — même bouton actif, mêmes sources pour les
+   *  modes orchestrés (injectées en fin de prompt système de chaque voix). */
+  webSearchSection?: string | null;
   /** Consignes des voix (résolues au tour par index.ts). */
   prompts: OrchestratorPrompts;
   signal: AbortSignal;
@@ -178,10 +210,32 @@ async function runVoiceWithRow(
   cb?: { onDelta?: (delta: string) => void; onStatus?: (status: string) => void },
 ): Promise<VoiceTurnOutcome> {
   const started = Date.now();
-  const modelTrace = req.modelId ?? "modèle de la conversation";
+  // C-07 : trois enrichissements du tour de voix, composites ici pour ne
+  // pas se répéter aux 20+ sites d'appel —
+  //  1. modelId null = « modèle de la conversation » : on résout vers le
+  //     modèle choisi dans le compositeur (pas le 1er du catalogue) ;
+  //  2. les instructions locales composées (mémoire F-18, instructions
+  //     globales F-19, prompt de conversation F-11) partent AU-DESSUS de la
+  //     consigne de rôle de la voix ;
+  //  3. les sources web du tour sont injectées en fin de prompt système.
+  const resolvedModelId = req.modelId ?? ctx.modelId ?? null;
+  const rolePrompt = req.systemPrompt ?? "";
+  const localPrompt = ctx.localSystemPrompt?.trim() ?? "";
+  const webSection = ctx.webSearchSection?.trim() ?? "";
+  const composedPrompt = [localPrompt, rolePrompt, webSection]
+    .filter(Boolean)
+    .join("\n\n") || null;
+  const modelTrace = resolvedModelId ?? "modèle de la conversation";
   trace("orch", `voix : ${voiceLabel} — démarre (${modelTrace})`);
   try {
-    const outcome = await deps.runVoiceTurn(req, { signal: ctx.signal, ...cb });
+    const outcome = await deps.runVoiceTurn(
+      {
+        ...req,
+        modelId: resolvedModelId,
+        systemPrompt: composedPrompt,
+      },
+      { signal: ctx.signal, ...cb },
+    );
     trace(
       "orch",
       `voix : ${voiceLabel} — terminée en ${Math.round((Date.now() - started) / 1000)} s ` +
@@ -238,6 +292,9 @@ async function runDebate(
   rounds: number,
 ): Promise<OrchestratorResult> {
   const transcript: string[] = [];
+  // C-07/F-21 : usage cumulé de TOUTES les voix (tours + verdict) — le coût
+  // réel du débat, pas seulement celui du dernier appel.
+  const usages: ({ input?: number; output?: number; cost?: number } | undefined)[] = [];
   // « Voix du tour en parallèle » : les trois voix partent ENSEMBLE et chacune
   // ne voit que les tours PRÉCÉDENTS (les voix de son tour répondent en même
   // temps — elles seront lisibles au suivant). PAR DÉFAUT (F-57 : 61 minutes
@@ -293,6 +350,7 @@ async function runDebate(
               },
             );
             flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
+            usages.push(outcome.usage);
             return { v, outcome, error: undefined as string | undefined };
           } catch (err) {
             // La ligne est déjà marquée par runVoiceWithRow (« échec : … » ou
@@ -353,6 +411,7 @@ async function runDebate(
           },
         );
         transcript.push(`Tour ${r} · ${v.name} : ${outcome.content.trim()}`);
+        usages.push(outcome.usage);
         flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
       }
     }
@@ -391,12 +450,13 @@ async function runDebate(
     },
     { onDelta: ctx.onFinalDelta, onStatus: ctx.onFinalStatus },
   );
+  usages.push(outcome.usage);
   flow.update("verdict", { detail: "verdict rendu", status: "done" });
   return {
     content: outcome.content,
     reasoning: outcome.reasoning,
     model: outcome.model,
-    usage: outcome.usage,
+    usage: sumUsage(usages),
     tag: `Verdict · Débat — ${rounds} tours`,
     rows: flow.rows,
   };
@@ -429,8 +489,13 @@ async function runCouncil(
     model: shortModel(president.model),
     status: "pending",
   });
+  // C-07/F-21 : usage cumulé de tous les membres + président.
+  const usages: ({ input?: number; output?: number; cost?: number } | undefined)[] = [];
   // Divergence : chaque membre répond de son côté, sans voir les autres,
   // sans rien modifier (lecture seule — règle du mode, pas un réglage).
+  // C-07 : passage par runVoiceWithRow — les membres reçoivent eux aussi le
+  // modèle de la conversation (modelId null résolu), les instructions
+  // locales composées et les sources web, comme toute voix orchestrée.
   const avis = await Promise.all(
     members.map(async (m, idx) => {
       const letter = String.fromCharCode(65 + idx); // A, B, C…
@@ -439,7 +504,12 @@ async function runCouncil(
         detail: "répond de son côté, sans voir les autres",
       });
       try {
-        const outcome = await deps.runVoiceTurn(
+        const outcome = await runVoiceWithRow(
+          deps,
+          ctx,
+          flow,
+          m.id,
+          `Membre « ${m.name} »`,
           {
             modelId: m.model,
             systemPrompt: ctx.prompts.membre
@@ -450,8 +520,8 @@ async function runCouncil(
             attachments: ctx.attachments,
             settings: ctx.settings,
           },
-          { signal: ctx.signal },
         );
+        usages.push(outcome.usage);
         flow.update(m.id, { detail: excerptOf(outcome.content), status: "done" });
         return {
           letter,
@@ -459,10 +529,6 @@ async function runCouncil(
           error: undefined as string | undefined,
         };
       } catch (err) {
-        flow.update(m.id, {
-          detail: err instanceof Error ? err.message : "échec de la voix",
-          status: "error",
-        });
         return { letter, content: "", error: err instanceof Error ? err.message : "échec" };
       }
     }),
@@ -501,12 +567,13 @@ async function runCouncil(
     },
     { onDelta: ctx.onFinalDelta, onStatus: ctx.onFinalStatus },
   );
+  usages.push(outcome.usage);
   flow.update("president", { detail: "fusion rendue", status: "done" });
   return {
     content: outcome.content,
     reasoning: outcome.reasoning,
     model: outcome.model,
-    usage: outcome.usage,
+    usage: sumUsage(usages),
     tag: `Fusion · Conseil — ${members.length} membres`,
     rows: flow.rows,
   };
@@ -523,6 +590,9 @@ async function runAuto(
   retries: number,
 ): Promise<OrchestratorResult> {
   const transcript: string[] = [];
+  // C-07/F-21 : usage cumulé de toutes les étapes (débat, plan, code, test,
+  // reprises) — le coût réel du mode Auto.
+  const usages: ({ input?: number; output?: number; cost?: number } | undefined)[] = [];
   const runStep = async (
     rowId: string,
     label: string,
@@ -542,6 +612,7 @@ async function runAuto(
       attachments: ctx.attachments,
       settings: ctx.settings,
     });
+    usages.push(outcome.usage);
     transcript.push(`${label} : ${outcome.content.trim()}`);
     flow.update(rowId, { detail: excerptOf(outcome.content), status: "done" });
     return outcome;
@@ -600,6 +671,9 @@ async function runAuto(
       history: ctx.history,
       attachments: ctx.attachments,
       settings: ctx.settings,
+    }).then((o) => {
+      usages.push(o.usage);
+      return o;
     });
   let testOutcome = await runTest(voicePromptContent(ctx.userContent, transcript));
   let reprisesUsed = 0;
@@ -636,6 +710,7 @@ async function runAuto(
       },
     );
     transcript.push(`Reprise ${reprisesUsed} : ${repriseOutcome.content.trim()}`);
+    usages.push(repriseOutcome.usage);
     flow.update(`reprise-${reprisesUsed}`, {
       detail: excerptOf(repriseOutcome.content),
       status: "done",
@@ -674,11 +749,19 @@ async function runAuto(
       ? `\n\n_Reprises : ${reprisesUsed} — la cause racine a été corrigée avant chaque re-test._`
       : "",
   ].join("\n");
+  // C-07 : le bilan est construit d'un bloc (pas streamé par une étape) —
+  // on le pousse néanmoins via onFinalDelta pour que le chat voie la
+  // réponse s'écrire comme dans tout autre mode, et que le suivi
+  // d'artefacts (blocs ``` file) s'applique aussi au mode Auto.
+  if (ctx.onFinalDelta && bilan.length > 0) {
+    // Pas de découpe : un seul delta honnête (le bilan est déjà là).
+    ctx.onFinalDelta(bilan);
+  }
   return {
     content: bilan,
     reasoning: codeOutcome.reasoning || planOutcome.reasoning,
     model: codeOutcome.model,
-    usage: codeOutcome.usage,
+    usage: sumUsage(usages),
     tag: `Bilan · Auto${reprisesUsed ? ` — ${reprisesUsed} reprise(s)` : ""}`,
     rows: flow.rows,
   };

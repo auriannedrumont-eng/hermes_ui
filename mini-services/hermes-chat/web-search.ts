@@ -111,7 +111,7 @@ export async function runWebSearch(store: Store, query: string): Promise<WebSear
   try {
     let res: Response;
     if (provider.style === "tavily") {
-      res = await fetch(`${provider.base}/search`, {
+      res = await fetch(`${provider.base}/search`, { redirect: "error",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,7 +121,7 @@ export async function runWebSearch(store: Store, query: string): Promise<WebSear
         signal: AbortSignal.timeout(9000),
       });
     } else {
-      res = await fetch(`${provider.base}/search`, {
+      res = await fetch(`${provider.base}/search`, { redirect: "error",
         method: "POST",
         headers: {
           "Content-Type": "application/json",

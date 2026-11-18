@@ -46,7 +46,9 @@ async function tick(): Promise<void> {
   const bornAt = Date.parse(info.startedAt ?? "") || 0;
   const active = Math.max(lastActivity, bornAt);
   if (Date.now() - active >= IDLE_MS) {
-    const killed = killPilotBrowser(info.pid, profileDir);
+    // S-03 : killPilotBrowser est async (vérification CIM de la ligne de
+    // commande sous Windows) — un pid non vérifiable ne peut pas être tué.
+    const killed = await killPilotBrowser(info.pid, profileDir);
     process.exit(killed ? 0 : 1);
   }
 }

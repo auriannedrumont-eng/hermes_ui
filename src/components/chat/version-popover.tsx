@@ -175,6 +175,10 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
         align="start"
         className="w-80 p-0"
         onClick={(e) => e.stopPropagation()}
+        // C-04 : sans ça, la barre d'espace tapée dans l'Input d'étiquette
+        // remonte l'arbre React jusqu'au onKeyDown de la carte parente, qui
+        // preventDefault() et ouvre l'artefact au lieu d'insérer l'espace.
+        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* En-tête : nom du fichier + règle discrète */}
         <div className="border-b border-border/60 px-3 py-2">

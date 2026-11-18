@@ -471,7 +471,7 @@ async function probeGeneration(
   okLabel: string,
 ): Promise<KeyTestResult | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetch(url, { redirect: "error",
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -542,7 +542,7 @@ async function testZaiSurface(
 ): Promise<{ result: KeyTestResult; networkFailure: boolean }> {
   const planLabel = /\/api\/coding\//.test(base) ? " (Coding Plan)" : "";
   try {
-    const res = await fetch(`${base}/models`, {
+    const res = await fetch(`${base}/models`, { redirect: "error",
       method: "GET",
       headers: secret ? { Authorization: `Bearer ${secret}` } : {},
       signal: AbortSignal.timeout(7000),
@@ -741,7 +741,7 @@ export async function testProviderKey(
     return primary.result;
   }
   try {
-    const res = await fetch(testUrl, {
+    const res = await fetch(testUrl, { redirect: "error",
       method: caps?.test.method ?? "GET",
       headers: {
         ...(caps?.test.body ? { "Content-Type": "application/json" } : {}),
@@ -1009,7 +1009,7 @@ async function fetchRepoSnapshotUncached(
   try {
     const infoRes = await fetch(
       `https://api.github.com/repos/${ref.owner}/${ref.repo}`,
-      {
+      { redirect: "error",
         headers: GH_HEADERS,
         signal: AbortSignal.timeout(9000),
       },
@@ -1048,7 +1048,7 @@ async function fetchRepoSnapshotUncached(
     try {
       const tagsRes = await fetch(
         `https://api.github.com/repos/${ref.owner}/${ref.repo}/tags?per_page=1`,
-        {
+        { redirect: "error",
           headers: GH_HEADERS,
           signal: AbortSignal.timeout(6000),
         },

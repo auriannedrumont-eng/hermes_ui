@@ -73,6 +73,19 @@ export default function HermesWebPage() {
   // maintient l'état à jour, le changement de conversation recharge (l'ack
   // repart de zéro : null tant que la réponse n'est pas arrivée).
   const [share, setShare] = useState<ShareView | null>(null);
+  const activeIdRef = useRef<string | null>(chat.activeId);
+  useEffect(() => {
+    activeIdRef.current = chat.activeId;
+  }, [chat.activeId]);
+  // F-03 : purge du lien de partage au changement de conversation, pendant
+  // le rendu (motif React « adjust state on prop change » — pas d'effet,
+  // l'ancien `if (!id) return` laissait le lien de la conversation
+  // précédente affiché quand activeId passait à null).
+  const [shareConvId, setShareConvId] = useState<string | null>(chat.activeId);
+  if (chat.activeId !== shareConvId) {
+    setShareConvId(chat.activeId);
+    setShare(null);
+  }
   useEffect(() => {
     const id = chat.activeId;
     if (!id) return;
@@ -81,7 +94,10 @@ export default function HermesWebPage() {
       "share:get",
       { conversationId: id },
       (res: { share?: ShareView | null } = {}) => {
-        if (id !== chat.activeId) return;
+        // F-03 : garde par ref (l'ancienne comparaison comparait la
+        // variable de la MÊME closure — toujours vraie si l'ack arrivait
+        // après un changement de conversation).
+        if (id !== activeIdRef.current) return;
         setShare(res.share ?? null);
       }
     );
@@ -543,6 +559,7 @@ export default function HermesWebPage() {
         appRevision={chat.serverRevision}
         chromeHeadless={chat.chromeHeadless}
         gatewayUrl={chat.gatewayUrl}
+        gatewayConfigured={chat.gatewayConfigured}
         gatewayTokenSet={chat.gatewayTokenSet}
         onConnectGateway={chat.connectGateway}
         webSearchAvailable={webSearchAvailable}

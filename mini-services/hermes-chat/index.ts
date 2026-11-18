@@ -38,7 +38,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { Server } from "socket.io";
 import { timingSafeEqual } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync } from "node:fs";
+import { createReadStream, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync } from "node:fs";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 const execFile = promisify(execFileCb);
@@ -344,6 +344,9 @@ function broadcastArtifact(conversationId: string, row: ArtifactRow): void {
 function attachArtifactCards(conversationId: string, messages: ChatMessage[]): void {
   const rows = store.listConversationArtifacts(conversationId);
   if (rows.length === 0) return;
+  // P-01 : ids des messages en UN chargement (l'ancien code rechargeait
+  // TOUTE la conversation dans artifactAnchor à chaque clé d'artefact).
+  const ids = new Set(store.getMessages(conversationId).map((m) => m.id));
   const byKey = new Map<string, ArtifactRow[]>();
   for (const r of rows) {
     if (!byKey.has(r.key)) byKey.set(r.key, []);
@@ -352,7 +355,7 @@ function attachArtifactCards(conversationId: string, messages: ChatMessage[]): v
   const anchors = new Map<string, string>();
   const cards = new Map<string, Artifact[]>();
   for (const [key, versions] of byKey) {
-    const anchor = artifactAnchor(conversationId, key, versions);
+    const anchor = (versions.find((v) => ids.has(v.message_id)) ?? versions[0]).message_id;
     anchors.set(key, anchor);
     const card = toWireArtifact(versions[versions.length - 1], anchor);
     if (!cards.has(anchor)) cards.set(anchor, []);
@@ -446,11 +449,21 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
 
   // Jeton de service (revue 2026-11-13) : les routes HTTP du 3004 servent
   // les pièces jointes et artefacts de l'utilisateur — protégées par le même
-  // jeton que la socket, via Authorization: Bearer ou ?token=. EXCEPTION :
-  // /share/<token>/(data.json|image.png) reste public (le destinataire du
-  // lien n'a pas de session — F-13).
+  // jeton que la socket, via Authorization: Bearer ou ?token=. EXCEPTIONS :
+  //   - /share/<token>/(data.json|image.png) reste public (le destinataire
+  //     du lien n'a pas de session — F-13) ;
+  //   - /artifacts/<id>/view : public (S-01) — le HTML généré par le LLM
+  //     s'exécute sandboxé AVEC scripts : un jeton dans l'URL serait lisible
+  //     par window.location.search et exfiltrable. Le jeton reste exigé sur
+  //     /raw, /download, /thumb et /pdf.
   const isShareRoute = u.pathname.startsWith("/share/");
-  if (SERVICE_TOKEN && !isShareRoute && !httpAuthorized(req, u)) {
+  const isPublicViewRoute = /^\/artifacts\/[a-zA-Z0-9-]{8,64}\/view$/.test(u.pathname);
+  if (
+    SERVICE_TOKEN &&
+    !isShareRoute &&
+    !isPublicViewRoute &&
+    !httpAuthorized(req, u)
+  ) {
     res.writeHead(401, { "Content-Type": "text/plain", "WWW-Authenticate": "Bearer" });
     res.end("Jeton de service requis");
     return;
@@ -469,19 +482,22 @@ const filesServer = createServer((req: IncomingMessage, res: ServerResponse) => 
   // /uploads/<id>.<ext> — pièces jointes multimédia
   const served = resolveUploadFile(u.pathname);
   if (served) {
+    // P-01 : lecture STREAMÉE (createReadStream + pipe) — l'ancien
+    // readFileSync chargeait tout en mémoire et FIGEAIT la boucle
+    // d'événements pendant le transfert de fichiers de plusieurs Mo.
     try {
-      const data = readFileSync(served.filePath);
+      const stat = statSync(served.filePath);
       const name = u.searchParams.get("name");
       res.writeHead(200, {
         "Content-Type": served.mime,
-        "Content-Length": data.byteLength,
+        "Content-Length": stat.size,
         "Cache-Control": "public, max-age=31536000, immutable",
         ...(name
           ? { "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(name)}` }
           : {}),
         "X-Content-Type-Options": "nosniff",
       });
-      res.end(data);
+      createReadStream(served.filePath).pipe(res);
       return;
     } catch {
       res.writeHead(500, { "Content-Type": "text/plain" });
@@ -574,11 +590,19 @@ function handleArtifactFile(
       // Vue « nouvel onglet » du HTML : servi rendu (text/html) derrière un
       // bac à sable CSP — origine opaque, ni cookies ni stockage ni jetons de
       // l'application accessibles. /raw reste texte brut (img, fetch panel).
+      // S-01 : cette page est publique (route exemptée de jeton) — le HTML
+      // généré par le LLM s'exécute AVEC scripts : un jeton dans l'URL serait
+      // lisible par window.location.search et exfiltrable. On boucle en plus
+      // toutes les sorties réseau explicites (default-src/connect-src
+      // 'none') et on coupe le Referer : un script qui tenterait d'exfiltrer
+      // quoi que ce soit (jeton, contenu) vers l'extérieur est bloqué par la
+      // CSP même s'il arrive à lire la barre d'adresse.
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Length": Buffer.byteLength(row.content, "utf-8"),
         "Content-Security-Policy":
-          "sandbox allow-scripts allow-forms allow-popups allow-modals",
+          "sandbox allow-scripts allow-forms allow-popups allow-modals; default-src 'none'; connect-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+        "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
       });
       res.end(row.content, "utf-8");
@@ -934,10 +958,15 @@ const GATEWAY_URL_KEY = "hermes.gateway.url";
 const GATEWAY_TOKEN_KEY = "hermes.gateway.token";
 {
   const savedUrl = store.getSetting(GATEWAY_URL_KEY);
+  // F-02.3 : un jeton saisi pour le DÉFAUT AUTOMATIQUE (URL vide) n'était
+  // relu qu'avec une URL surchargée — il était oublié à chaque redémarrage.
+  // On relit le jeton dans tous les cas (URL surchargée ou pas).
+  const savedToken = store.getSetting(GATEWAY_TOKEN_KEY);
   if (savedUrl !== null && savedUrl.trim()) {
     connector.gatewayUrl = savedUrl.trim();
-    const savedToken = store.getSetting(GATEWAY_TOKEN_KEY);
-    if (savedToken !== null) connector.gatewayToken = savedToken.trim() || null;
+  }
+  if (savedToken !== null && savedToken.trim()) {
+    connector.gatewayToken = savedToken.trim();
   }
 }
 
@@ -1118,7 +1147,11 @@ function resolveOrchestratorPrompts(
 
 /** Paire A/B du mode Comparer : voix de la config par conversation,
  *  repli catalogue (A = flagship, B = défaut). Le mécanisme interne
- *  (deux tours parallèles, variantes a|b) ne change pas. */
+ *  (deux tours parallèles, variantes a|b) ne change pas.
+ *  C-08 : les DEUX côtés doivent toujours être DISTINCTS — l'ancien
+ *  repli `[a ?? DEFAULT, b ?? (a ? "hermes-4-405b" : "hermes-4-70b")]`
+ *  renvoyait ["hermes-4-70b", "hermes-4-70b"] quand aucune voix n'était
+ *  configurée : « comparer » un modèle avec lui-même n'a aucun sens. */
 function comparePairFromMode(modeState: {
   config: ModeConfig | null;
 }): [string, string] {
@@ -1126,7 +1159,12 @@ function comparePairFromMode(modeState: {
   const b = voiceModel("compare", modeState.config, "b");
   if (a && b && a !== b) return [a, b];
   if (a && b === a) return [a, DEFAULT_MODEL_ID === a ? "hermes-4-405b" : DEFAULT_MODEL_ID];
-  return [a ?? DEFAULT_MODEL_ID, b ?? (a ? "hermes-4-405b" : "hermes-4-70b")];
+  // A sans B (ou rien) : B prend le flagship s'il est libre, sinon le défaut —
+  // toujours différent de A.
+  const fallbackB =
+    a === "hermes-4-405b" || !a ? "hermes-4-405b" : "hermes-4-405b" === a ? "hermes-4-70b" : "hermes-4-405b";
+  const chosenA = a ?? DEFAULT_MODEL_ID;
+  return [chosenA, chosenA === fallbackB ? "hermes-4-70b" : fallbackB];
 }
 
 /** Blocs ``` file réinjectés pour les fichiers produits par un tour webchat
@@ -1215,12 +1253,18 @@ function helloPayload() {
   // eux, l'interface affiche un état honnête « agent non détecté » — jamais
   // de moteur simulé ; avec eux, elle indique « vos clés répondent ».
   const engineProviders = pool.activeProviderNames();
+  // F-02 : l'URL RÉGLÉE dans l'interface, pas le défaut automatique — sinon
+  // le champ de Paramètres restait pré-rempli avec ws://127.0.0.1:9120/api/ws
+  // et le bouton « Débrancher » s'affichait même sans gateway configurée
+  // (il semblait débrancher quelque chose qui n'était pas branché).
+  const configuredGatewayUrl = store.getSetting(GATEWAY_URL_KEY)?.trim() || null;
   return {
     app: "hermes-web",
     version: "1.2.0",
     mode: connector.mode,
     model: connector.model,
-    gatewayUrl: connector.gatewayUrl,
+    gatewayUrl: configuredGatewayUrl ?? connector.gatewayUrl,
+    gatewayConfigured: configuredGatewayUrl !== null,
     gatewayTokenSet: Boolean(connector.gatewayToken),
     engineProviders,
     // Taille réelle des instructions système du moteur local (base + F-18 + F-19) ;
@@ -1244,6 +1288,20 @@ function helloPayload() {
 
 function compactKey(conversationId: string): string {
   return `compact:${conversationId}`;
+}
+
+/** D-02.4 : invalide le résumé de compaction si un message COUVERT par le
+ *  résumé est édité ou supprimé — sinon le tour suivant envoyait le résumé
+ *  PUIS de nouveau, en clair, les messages déjà résumés (jusqu'à
+ *  untilMessageId introuvable → untilIdx = -1 → tout le fil partait en
+ *  double contexte). L'invalidation est honnête : la conversation repart
+ *  en contexte complet, la prochaine compaction la re-résumera. */
+function invalidateCompactIfNeeded(conversationId: string, removedIds: string[]): void {
+  const compact = readCompact(conversationId);
+  if (!compact) return;
+  if (removedIds.includes(compact.untilMessageId)) {
+    store.setSetting(compactKey(conversationId), "");
+  }
 }
 
 function readCompact(conversationId: string): (CompactInfo & { summary: string }) | null {
@@ -1837,11 +1895,49 @@ io.on("connection", (socket) => {
         done({ ok: false, error: "URL invalide — attendu ws://… ou http(s)://…" });
         return;
       }
+      // S-02 (SSRF) : la gateway n'est branchable que sur le poste local ou
+      // une origine https explicite — jamais http:// vers le réseau local
+      // (metadata, box, intranet), même si l'utilisateur copie-colle une
+      // telle URL. ws:// reste permis uniquement en loopback.
+      if (url) {
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname;
+          const isLoopback =
+            host === "localhost" ||
+            host === "127.0.0.1" ||
+            host === "::1" ||
+            host === "[::1]";
+          const schemeOk =
+            parsed.protocol === "https:" ||
+            (parsed.protocol === "wss:" && host !== "localhost") ||
+            isLoopback;
+          if (!schemeOk) {
+            done({
+              ok: false,
+              error:
+                "URL refusée : la gateway distante doit être en https:// ou wss:// (http:// et ws:// ne sont permis que sur ce poste)",
+            });
+            return;
+          }
+        } catch {
+          done({ ok: false, error: "URL illisible" });
+          return;
+        }
+      }
       const token = typeof payload?.token === "string" ? payload.token : undefined;
       try {
         const mode = await connector.setGateway(url || null, token);
         store.setSetting(GATEWAY_URL_KEY, url);
+        // S-02 : si l'URL a changé sans nouveau jeton, setGateway a effacé le
+        // jeton en mémoire — la ligne persistée suit (pas de jeton fantôme
+        // qui repartirait vers la nouvelle destination au redémarrage).
+        const urlChanged = url && url !== store.getSetting(GATEWAY_URL_KEY);
         if (token !== undefined) store.setSetting(GATEWAY_TOKEN_KEY, token);
+        else if (urlChanged || !url) store.setSetting(GATEWAY_TOKEN_KEY, "");
+        // F-02.3 : un jeton saisi POUR le défaut automatique (URL vide) est
+        // désormais persisté aussi — il survit au redémarrage du service.
+        if (token !== undefined && !url) store.setSetting(GATEWAY_TOKEN_KEY, token);
         console.log(
           `[hermes-chat] gateway ${url ? `"${url}"` : "débranchée"} → mode : ${mode}`
         );
@@ -1971,7 +2067,7 @@ io.on("connection", (socket) => {
       if (typeof cb === "function") cb({ ok: true, closed: false });
       return;
     }
-    const closed = killPilotBrowser(info.pid, config.profileDir);
+    const closed = await killPilotBrowser(info.pid, config.profileDir);
     if (typeof cb === "function") cb({ ok: true, closed });
   });
 
@@ -2858,7 +2954,7 @@ io.on("connection", (socket) => {
 
     // 1. Prépare le tour assistant
     const messageId = crypto.randomUUID();
-    socket.emit("stream:start", {
+    io.emit("stream:start", {
       conversationId,
       messageId,
       model,
@@ -2986,7 +3082,7 @@ io.on("connection", (socket) => {
     }) => {
       const toolEvent: ToolEvent = { ...event, at: new Date().toISOString() };
       toolEvents.push(toolEvent);
-      socket.emit("stream:tool", {
+      io.emit("stream:tool", {
         conversationId,
         messageId,
         event: toolEvent,
@@ -2994,7 +3090,11 @@ io.on("connection", (socket) => {
       });
       liveSync({ toolEvents: [...toolEvents] });
     };
-    if (opts.webSearch && !orchestrated) {
+    // C-07 : le bouton Web n'est plus silencieusement ignoré en mode
+    // orchestré — la recherche tourne AVANT l'orchestration et ses sources
+    // partent dans le prompt système de CHAQUE voix (webSearchSection du
+    // contexte), comme pour un tour simple.
+    if (opts.webSearch) {
       if (connector.mode === "gateway") {
         emitTool({
           name: "Recherche web",
@@ -3057,7 +3157,7 @@ io.on("connection", (socket) => {
           // sans lui, le bloc multi-voix disparaît au retour dans la
           // conversation jusqu'au prochain mode:flow (ou à la clôture).
           liveSync({ modeFlow: rows });
-          socket.emit("mode:flow", { conversationId, messageId, rows });
+          io.emit("mode:flow", { conversationId, messageId, rows });
         };
         const outcome = await runOrchestratedTurn(
           {
@@ -3067,6 +3167,17 @@ io.on("connection", (socket) => {
             config: modeState.config,
             rounds: modeState.rounds,
             voiceChars: resolveVoiceChars(store),
+            // C-07 : le modèle choisi dans le compositeur devient le
+            // « modèle de la conversation » des voix sans modèle propre.
+            modelId: opts.modelId ?? null,
+            // C-07 : instructions locales composées (base + mémoire F-18 +
+            // instructions F-19 + prompt de conversation F-11) — chaque
+            // voix les reçoit au-dessus de sa consigne de rôle.
+            localSystemPrompt: connector.mode === "local"
+              ? localSystemPrompt(conversationId)
+              : (store.getConversationPrompt(conversationId)?.content ?? null),
+            // C-07/F-09 : sources web du tour (si le bouton Web est actif).
+            webSearchSection: webSources ? webSearchSection(webSources) : null,
             userContent: opts.content,
             history,
             attachments,
@@ -3084,7 +3195,7 @@ io.on("connection", (socket) => {
               const now = Date.now();
               if (now - lastEmit > 16) {
                 lastEmit = now;
-                socket.emit("stream:delta", {
+                io.emit("stream:delta", {
                   conversationId,
                   messageId,
                   delta: contentAcc.slice(lastSent),
@@ -3096,7 +3207,7 @@ io.on("connection", (socket) => {
             },
             onFinalStatus: (status) => {
               liveSync({ status });
-              socket.emit("stream:status", {
+              io.emit("stream:status", {
                 conversationId,
                 messageId,
                 status,
@@ -3132,7 +3243,7 @@ io.on("connection", (socket) => {
             signal: controller.signal,
             onStatus: (status) => {
               liveSync({ status });
-              socket.emit("stream:status", {
+              io.emit("stream:status", {
                 conversationId,
                 messageId,
                 status,
@@ -3199,7 +3310,7 @@ io.on("connection", (socket) => {
             // Coalescence légère des deltas très rapprochés
             if (now - lastEmit > 16) {
               lastEmit = now;
-              socket.emit("stream:delta", {
+              io.emit("stream:delta", {
                 conversationId,
                 messageId,
                 delta: contentAcc.slice(lastSent),
@@ -3213,7 +3324,7 @@ io.on("connection", (socket) => {
           onReasoning: (delta) => {
             reasoningAcc += delta;
             liveSync();
-            socket.emit("stream:reasoning", {
+            io.emit("stream:reasoning", {
               conversationId,
               messageId,
               delta,
@@ -3222,7 +3333,7 @@ io.on("connection", (socket) => {
           },
           onStatus: (status) => {
             liveSync({ status });
-            socket.emit("stream:status", {
+            io.emit("stream:status", {
               conversationId,
               messageId,
               status,
@@ -3245,7 +3356,7 @@ io.on("connection", (socket) => {
             : result.model;
       }
       if (lastSent < contentAcc.length) {
-        socket.emit("stream:delta", {
+        io.emit("stream:delta", {
           conversationId,
           messageId,
           delta: contentAcc.slice(lastSent),
@@ -3265,7 +3376,7 @@ io.on("connection", (socket) => {
       // Arrêt avant le premier jeton : rien à conserver, pas de bulle vide
       if (stopped && !contentAcc && !reasoningAcc && toolEvents.length === 0) {
         const conversation = store.touchConversation(conversationId) ?? undefined;
-        socket.emit("stream:done", {
+        io.emit("stream:done", {
           conversationId,
           messageId,
           conversation,
@@ -3322,7 +3433,7 @@ io.on("connection", (socket) => {
       };
       // Cartes d'artefacts ancrées sur ce message (celles créées par ce tour)
       attachArtifactCards(conversationId, [doneMessage]);
-      socket.emit("stream:done", {
+      io.emit("stream:done", {
         conversationId,
         messageId,
         conversation,
@@ -3362,7 +3473,7 @@ io.on("connection", (socket) => {
         // Abort levé en plein vol : même clôture qu'un arrêt propre
         const conversation = store.touchConversation(conversationId) ?? undefined;
         if (partial) attachArtifactCards(conversationId, [partial]);
-        socket.emit("stream:done", {
+        io.emit("stream:done", {
           conversationId,
           messageId,
           conversation,
@@ -3381,7 +3492,7 @@ io.on("connection", (socket) => {
           ? store.touchConversation(conversationId) ?? undefined
           : undefined;
         if (partial) attachArtifactCards(conversationId, [partial]);
-        socket.emit("stream:error", {
+        io.emit("stream:error", {
           conversationId,
           messageId,
           conversation,
@@ -3465,7 +3576,7 @@ io.on("connection", (socket) => {
         isFirstUserMessage ? titleFrom(content, attachments) : undefined
       );
       // Notifie le client (remplace le message optimiste par l'id réel)
-      socket.emit("message:appended", { conversationId, message: userMessage });
+      io.emit("message:appended", { conversationId, message: userMessage });
 
       // 2. Lance le tour assistant (réglages additifs du chantier Composer v2).
       //    Ack positif AVANT le lancement : le tour tourne en arrière-plan,
@@ -3570,7 +3681,7 @@ io.on("connection", (socket) => {
         return;
       }
       if (supersededIds.length) {
-        socket.emit("messages:superseded", { conversationId, messageIds: supersededIds });
+        io.emit("messages:superseded", { conversationId, messageIds: supersededIds });
       }
       if (typeof cb === "function") cb({ ok: true });
       const turnSettings = {
@@ -3578,6 +3689,36 @@ io.on("connection", (socket) => {
         permissionsMode: payload?.permissionsMode || undefined,
         ...sanitizeExpertSettings(payload),
       };
+      // C-08 : régénération en mode Comparer SANS paire explicite (le client
+      // n'envoie plus compare depuis F-30 — le service fait foi). On relit
+      // les voix A/B du mode de la conversation et les groupes de versions
+      // par VARIANTE : groups.plain vaut undefined quand les réponses
+      // précédentes portent variant a/b — le sélecteur ‹ 1/2 › n'apparaissait
+      // jamais (F-14 perdu).
+      if (!compareIds && !variant && conversationModeState(conversationId).mode === "compare") {
+        const [idA, idB] = comparePairFromMode(
+          conversationModeState(conversationId) as { config: ModeConfig | null },
+        );
+        await Promise.all([
+          runAssistantTurn(conversationId, {
+            content: lastUser.content,
+            attachments: lastUser.attachments,
+            modelId: idA,
+            settings: turnSettings,
+            variant: "a",
+            versionGroup: groups.a,
+          }),
+          runAssistantTurn(conversationId, {
+            content: lastUser.content,
+            attachments: lastUser.attachments,
+            modelId: idB,
+            settings: turnSettings,
+            variant: "b",
+            versionGroup: groups.b,
+          }),
+        ]);
+        return;
+      }
       if (compareIds) {
         await Promise.all([
           runAssistantTurn(conversationId, {
@@ -3663,9 +3804,16 @@ io.on("connection", (socket) => {
       // Lot 2 (audit L2-1) : la troncature (édition + messages suivants)
       // emporte les artefacts ancrés sur les messages supprimés.
       deleteArtifactFiles(store.deleteArtifactsOfMessages(conversationId, result.removedIds));
+      // D-02.4 : un message résumé édité → le résumé ne décrit plus le fil :
+      // invalidation (le contexte repart complet, la compaction suivante
+      // re-résumera honnêtement).
+      invalidateCompactIfNeeded(conversationId, [
+        ...result.removedIds,
+        messageId,
+      ]);
       if (typeof cb === "function")
         cb({ ok: true, message: result.message, removedIds: result.removedIds });
-      socket.emit("message:updated", {
+      io.emit("message:updated", {
         conversationId,
         message: result.message,
         removedIds: result.removedIds,
@@ -3725,8 +3873,27 @@ io.on("connection", (socket) => {
       // pas survivre à sa suppression (lignes + fichiers dérivés).
       deleteArtifactFiles(store.deleteArtifactsOfMessages(conversationId, [messageId]));
       deleteAttachmentFiles(removed.attachments ?? []);
+      // D-02.4 : le résumé de compaction ne doit pas survivre au message
+      // qui borne sa couverture (untilMessageId).
+      invalidateCompactIfNeeded(conversationId, [messageId]);
       if (typeof cb === "function") cb({ ok: true, messageId });
-      socket.emit("message:deleted", { conversationId, messageId });
+      // D-01 : si la version supprimée appartenait à un groupe F-14, la
+      // version précédente a été PROMUE en base — mais message:deleted
+      // retirait le message de l'écran au lieu de le remplacer par sa
+      // version promue : la réponse disparaissait du fil jusqu'au prochain
+      // rechargement. On rediffuse le fil complet (avec ses cartes
+      // d'artefacts re-attachées) via messages:refreshed — le même
+      // événement que message:setVersion ; message:deleted reste émis pour
+      // les clients qui nettoient un état local (tours optimistes…).
+      const refreshed = store.getMessages(conversationId);
+      attachArtifactCards(conversationId, refreshed);
+      const compact = readCompact(conversationId);
+      io.emit("messages:refreshed", {
+        conversationId,
+        messages: refreshed,
+        ...(compact ? { compact } : {}),
+      });
+      io.emit("message:deleted", { conversationId, messageId });
     }
   );
 
@@ -3773,7 +3940,7 @@ io.on("connection", (socket) => {
     const had = isRunning(id);
     abortRunning(id);
     if (had) {
-      socket.emit("stream:status", { conversationId: id, messageId: null, status: "Génération interrompue" });
+      io.emit("stream:status", { conversationId: id, messageId: null, status: "Génération interrompue" });
     }
     if (typeof cb === "function") cb({ ok: true, stopped: had });
   });
@@ -3834,7 +4001,7 @@ io.on("connection", (socket) => {
             error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,
           });
         }
-        socket.emit("stream:error", {
+        io.emit("stream:error", {
           conversationId,
           error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,
         });

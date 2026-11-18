@@ -188,6 +188,23 @@ export function Composer({
     }
     if (textareaRef.current) textareaRef.current.focus();
   }, [draftKey]);
+  // F-03 : les pièces jointes en attente appartiennent à la conversation
+  // précédente — elles ne suivent pas le brouillon textuel dans le
+  // changement de conversation : purge ET révocation des aperçus blob.
+  const pendingRef = useRef<PendingAttachment[]>([]);
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+  useEffect(() => {
+    return () => {
+      for (const a of pendingRef.current) {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      }
+    };
+  }, [draftKey]);
+  useEffect(() => {
+    setPending([]);
+  }, [draftKey]);
 
   useEffect(() => {
     const t = setTimeout(() => {

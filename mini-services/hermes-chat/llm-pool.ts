@@ -366,7 +366,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
     try {
       const key = endpoint.keyless ? null : pickKey(row);
       const routed = routeZaiCoding(endpoint, key?.secret ?? null);
-      const res = await fetch(`${routed.base}/models`, {
+      const res = await fetch(`${routed.base}/models`, { redirect: "error",
         headers: {
           ...(routed.auth === "bearer" && key
             ? { Authorization: `Bearer ${key.secret}` }
@@ -544,7 +544,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
     const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
     let res: Response;
     try {
-      res = await fetch(`${endpoint.base}/chat/completions`, {
+      res = await fetch(`${endpoint.base}/chat/completions`, { redirect: "error",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -663,7 +663,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
     const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
     let res: Response;
     try {
-      res = await fetch(`${endpoint.base}/messages`, {
+      res = await fetch(`${endpoint.base}/messages`, { redirect: "error",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -915,7 +915,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
         };
         let text = "";
         if (sumEndpoint.style === "anthropic") {
-          const res = await fetch(`${sumEndpoint.base}/messages`, {
+          const res = await fetch(`${sumEndpoint.base}/messages`, { redirect: "error",
             method: "POST",
             headers,
             body: JSON.stringify({
@@ -932,7 +932,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
             .join("\n")
             .trim();
         } else {
-          const res = await fetch(`${sumEndpoint.base}/chat/completions`, {
+          const res = await fetch(`${sumEndpoint.base}/chat/completions`, { redirect: "error",
             method: "POST",
             headers,
             body: JSON.stringify({

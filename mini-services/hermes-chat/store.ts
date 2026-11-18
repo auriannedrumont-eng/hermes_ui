@@ -203,6 +203,10 @@ export class Store {
     mkdirSync(dirname(DB_PATH), { recursive: true });
     this.db = new Database(DB_PATH, { create: true });
     this.db.exec("PRAGMA journal_mode = WAL;");
+    // D-03 : un accès concurrent très bref (script de test, second process)
+    // levait immédiatement SQLITE_BUSY ; 5 s d'attente active résorbent
+    // les collisions courtes au lieu de faire échouer l'opération.
+    this.db.exec("PRAGMA busy_timeout = 5000;");
     this.db.exec("PRAGMA wal_autocheckpoint = 0;"); // checkpoint géré ici, en zone calme
     this.db.exec(`CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
@@ -319,9 +323,13 @@ export class Store {
     this.db.exec(
       "CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at)"
     );
-    this.db.exec(
-      "CREATE INDEX IF NOT EXISTS idx_messages_content ON messages(content)"
-    );
+    // D-03 : plus d'index B-tree sur le texte INTÉGRAL des messages —
+    // searchMessages() fait un LIKE '%…%' (joker en tête) pour lequel un
+    // tel index est inutilisable : il doublait la base sur disque et
+    // ralentissait chaque INSERT sans aucun gain de lecture. (La FTS5
+    // viendrait le jour où la recherche plein-texte devient un besoin réel.)
+    // On supprime l'index hérité des bases existantes.
+    this.db.exec("DROP INDEX IF EXISTS idx_messages_content");
     // ── Artefacts : fichiers générés par l'agent, versionnés par clé ─────
     this.db.exec(`CREATE TABLE IF NOT EXISTS artifacts (
       id TEXT PRIMARY KEY,
@@ -729,8 +737,10 @@ export class Store {
     return this.getArtifactRow(id)!;
   }
 
-  /** Version courante d'une clé (la plus récente), null si nouvelle. */
-  private latestArtifactRow(conversationId: string, key: string): ArtifactRow | null {
+  /** Version courante d'une clé (la plus récente), null si nouvelle.
+   *  C-03 : public — l'ArtifactTracker consulte la version courante à la
+   *  clôture d'un bloc pour le dédoublonnage F-26. */
+  latestArtifactRow(conversationId: string, key: string): ArtifactRow | null {
     return (
       (this.db
         .query(
@@ -738,6 +748,12 @@ export class Store {
         )
         .get(conversationId, key) as ArtifactRow | undefined) ?? null
     );
+  }
+
+  /** C-03/F-26 : supprime la ligne provisoire v(n+1) d'une ré-émission
+   *  identique — appelée par l'ArtifactTracker à la clôture du bloc. */
+  deleteArtifactRow(id: string): void {
+    this.db.query("DELETE FROM artifacts WHERE id = ?").run(id);
   }
 
   /** Version suivante d'une clé dans la conversation (1 si nouvelle). */
@@ -1164,7 +1180,18 @@ export class Store {
   }
 
   deleteConversation(id: string): void {
+    // D-02 : tout ce qui vit POUR cette conversation part avec elle —
+    // messages, artefacts, mais aussi prompt système de conversation
+    // (system_prompts) et résumé de compaction (settings compact:<id>),
+    // sinon les lignes orphelines s'accumulent en base.
     this.db.query("DELETE FROM messages WHERE conversation_id = ?").run(id);
+    this.db.query("DELETE FROM artifacts WHERE conversation_id = ?").run(id);
+    this.db
+      .query("DELETE FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?")
+      .run(id);
+    this.db
+      .query("DELETE FROM settings WHERE key = ?")
+      .run(`compact:${id}`);
     this.db.query("DELETE FROM conversations WHERE id = ?").run(id);
   }
 
@@ -1517,6 +1544,43 @@ export class Store {
   }
 
   /**
+   * D-02 : purge des versions INACTIVES des groupes dont une version a été
+   * supprimée par une troncature. getMessages() ne voit que la version
+   * active : les version_active = 0 situées après le point de troncature
+   * restaient en base pour toujours (avec leurs pièces jointes et leurs
+   * artefacts) sans jamais être réaffichées. Renvoie les ids purgés —
+   * l'appelant nettoie artefacts et fichiers joints.
+   */
+  private purgeInactiveVersionsOf(
+    conversationId: string,
+    removedIds: string[],
+  ): string[] {
+    if (!removedIds.length) return [];
+    const placeholders = removedIds.map(() => "?").join(",");
+    const groups = this.db
+      .query(
+        `SELECT DISTINCT version_group AS g FROM messages
+         WHERE conversation_id = ? AND id IN (${placeholders}) AND version_group IS NOT NULL`
+      )
+      .all(conversationId, ...removedIds) as any[];
+    const purged: string[] = [];
+    for (const { g } of groups) {
+      const rows = this.db
+        .query(
+          "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? AND version_active = 0"
+        )
+        .all(conversationId, g) as any[];
+      for (const r of rows) {
+        this.db
+          .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
+          .run(conversationId, r.id);
+        purged.push(r.id);
+      }
+    }
+    return purged;
+  }
+
+  /**
    * Supprime les messages assistant en fin de fil (pour régénérer).
    * Renvoie le dernier message utilisateur et les ids supprimés.
    */
@@ -1545,6 +1609,10 @@ export class Store {
         .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
         .run(conversationId, id);
     }
+    // D-02 : les versions inactives des groupes touchés partent aussi —
+    // plus jamais réaffichées, elles n'ont pas lieu de survivre à la
+    // troncature (le régénérateur crée ses propres v(n+1)).
+    this.purgeInactiveVersionsOf(conversationId, removedIds);
     const lastUser = msgs.length > 0 ? msgs[msgs.length - 1] : null;
     if (removedIds.length) this.touchConversation(conversationId);
     return { lastUser, removedIds, removedAttachments };
@@ -1570,6 +1638,12 @@ export class Store {
         .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
         .run(conversationId, m.id);
     }
+    // D-02 : purge des versions inactives des groupes touchés (même règle
+    // que deleteTrailingAssistant — jamais de lignes fantômes conservées).
+    this.purgeInactiveVersionsOf(
+      conversationId,
+      removed.map((m) => m.id),
+    );
     this.db
       .query("UPDATE messages SET content = ? WHERE conversation_id = ? AND id = ?")
       .run(content, conversationId, messageId);
@@ -1602,6 +1676,31 @@ export class Store {
       src.modeRounds ?? null,
       src.modeConfig ?? null,
     );
+    // D-02 : le prompt système de la conversation (system_prompts,
+    // scope 'conversation') accompagne la branche — sinon la fork tournait
+    // sans ses instructions dédiées, silencieusement.
+    {
+      const originPrompt = this.db
+        .query(
+          "SELECT title, content FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?"
+        )
+        .get(conversationId) as any;
+      if (originPrompt?.content) {
+        this.db
+          .query(
+            `INSERT INTO system_prompts (id, scope, conversation_id, title, content, created_at, updated_at)
+             VALUES (?, 'conversation', ?, ?, ?, ?, ?)`
+          )
+          .run(
+            crypto.randomUUID(),
+            forked.id,
+            originPrompt.title ?? null,
+            originPrompt.content,
+            new Date().toISOString(),
+            new Date().toISOString(),
+          );
+      }
+    }
     // Transaction (Lot 2, audit L2-5) : la copie des messages ET le
     // re-ancrage des artefacts sont un seul acte — un crash au milieu laissait
     // un fork à moitié rempli (transaction imbriquée = savepoint chez

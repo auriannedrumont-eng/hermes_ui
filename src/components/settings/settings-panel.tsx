@@ -148,6 +148,8 @@ interface SettingsPanelProps {
   appRevision?: string | null;
   chromeHeadless?: "present" | "absent" | null;
   gatewayUrl?: string | null;
+  /** F-02 : gateway réellement configurée (vs défaut automatique). */
+  gatewayConfigured?: boolean;
   /** Jeton de gateway enregistré côté service (jamais la valeur). */
   gatewayTokenSet?: boolean;
   /** Branche/débranche la gateway (section Système). */
@@ -552,6 +554,7 @@ export function SettingsPanel({
   appRevision = null,
   chromeHeadless = null,
   gatewayUrl = null,
+  gatewayConfigured = false,
   gatewayTokenSet = false,
   onConnectGateway,
   webSearchAvailable = false,
@@ -632,6 +635,7 @@ export function SettingsPanel({
             appRevision={appRevision}
             chromeHeadless={chromeHeadless}
             gatewayUrl={gatewayUrl}
+            gatewayConfigured={gatewayConfigured}
             gatewayTokenSet={gatewayTokenSet}
             onConnectGateway={onConnectGateway}
           />

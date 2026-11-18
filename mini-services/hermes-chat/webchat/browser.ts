@@ -9,6 +9,7 @@
 // - Veilleur détaché : le navigateur de pilotage se ferme après quelques
 //   minutes d'inactivité ; le pilote suivant le relance.
 
+import { execFile } from "node:child_process";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -76,30 +77,74 @@ export async function isBrowserUp(port: number, timeoutMs = 900): Promise<boolea
 }
 
 /**
- * Vérifie qu'un pid est bien le navigateur DU PROFIL APPLICATIF : sur Linux,
- * lecture de /proc/<pid>/cmdline ; ailleurs, on ne tue que si le pid est
- * celui enregistré par ce module (double garde). Le navigateur personnel de
- * l'utilisatrice — même binaire, autre profil — ne peut jamais visé.
+ * Ligne de commande d'un pid sous Windows via CIM (Get-CimInstance) —
+ * synchrone côté appelant via promesse résolue en 1,5 s max. Retourne null
+ * si le processus n'existe plus ou si la requête échoue (droits, CIM
+ * absent) : ne jamais TUIRE sur un échec de vérification.
  */
-export function isAppBrowserPid(pid: number, profileDir: string): boolean {
+async function windowsCmdline(pid: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 4000);
+    execFile(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`,
+      ],
+      { windowsHide: true, timeout: 4000 },
+      (err, stdout) => {
+        clearTimeout(timer);
+        if (err || typeof stdout !== "string") return resolve(null);
+        const line = stdout.trim();
+        resolve(line || null);
+      },
+    );
+  });
+}
+
+/**
+ * Vérifie qu'un pid est bien le navigateur DU PROFIL APPLICATIF : sur Linux,
+ * lecture de /proc/<pid>/cmdline ; sur Windows (S-03), vérification RÉELLE de
+ * la ligne de commande du processus via CIM — l'ancienne comparaison
+ * `info?.pid === pid` comparait le pid à lui-même (toujours vrai) et un pid
+ * recyclé par Windows vers un processus innocent aurait été tué. Le
+ * navigateur personnel de l'utilisatrice — même binaire, autre profil — ne
+ * peut jamais être visé.
+ */
+export async function isAppBrowserPid(
+  pid: number,
+  profileDir: string
+): Promise<boolean> {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     if (existsSync(`/proc/${pid}/cmdline`)) {
       const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf-8").replace(/\0/g, " ");
       return cmdline.includes(`--user-data-dir=${profileDir}`);
     }
-    // Sans /proc (Windows) : uniquement le pid écrit par ce module, avec
-    // relecture du registre (le pid a été posé par launchPilotBrowser).
-    const info = readPilotInfo(profileDir);
-    return info?.pid === pid;
+    // Sans /proc (Windows) : la ligne de commande du processus DOIT porter
+    // le profil applicatif — un pid recyclé vers un autre processus ne
+    // porte jamais --user-data-dir=<notre profil>.
+    if (IS_WIN) {
+      const cmdline = await windowsCmdline(pid);
+      if (cmdline === null) return false; // non vérifiable = non tuable
+      return cmdline.includes(`--user-data-dir=${profileDir}`);
+    }
+    // Autres plateformes sans /proc : pas de kill sans vérification.
+    return false;
   } catch {
     return false;
   }
 }
 
-/** Tue le navigateur de pilotage s'il correspond au profil — sinon refuse. */
-export function killPilotBrowser(pid: number, profileDir: string): boolean {
-  if (!isAppBrowserPid(pid, profileDir)) return false;
+/** Tue le navigateur de pilotage s'il correspond au profil — sinon refuse.
+ *  S-03 : async (la vérification Windows lit la ligne de commande via CIM). */
+export async function killPilotBrowser(
+  pid: number,
+  profileDir: string
+): Promise<boolean> {
+  if (!(await isAppBrowserPid(pid, profileDir))) return false;
   try {
     process.kill(pid, "SIGTERM");
     rmSync(pilotInfoPath(profileDir), { force: true });

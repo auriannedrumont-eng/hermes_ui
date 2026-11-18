@@ -22,6 +22,9 @@ interface SystemSectionProps {
   appRevision: string | null;
   chromeHeadless: "present" | "absent" | null;
   gatewayUrl: string | null;
+  /** F-02 : true = URL réellement réglée dans l'interface (surcharge du
+   *  défaut automatique) — « Débrancher » ne s'affiche que dans ce cas. */
+  gatewayConfigured?: boolean;
   /** Jeton de gateway enregistré côté service (jamais la valeur). */
   gatewayTokenSet?: boolean;
   /** Branche/débranche la gateway (URL vide = débranchement). */
@@ -72,6 +75,7 @@ export function SystemSection({
   appRevision,
   chromeHeadless,
   gatewayUrl,
+  gatewayConfigured = false,
   gatewayTokenSet = false,
   onConnectGateway,
 }: SystemSectionProps) {
@@ -79,7 +83,10 @@ export function SystemSection({
   const [clearing, setClearing] = useState(false);
   const [cleared, setCleared] = useState<string | null>(null);
   // ── Formulaire de connexion de la gateway (URL + jeton facultatif) ──
-  const [urlDraft, setUrlDraft] = useState(gatewayUrl ?? "");
+  // F-02 : le brouillon d'URL est VIDE quand rien n'est configuré (défaut
+  // automatique) — le placeholder raconte le défaut au lieu de le faire
+  // semblant d'être réglé.
+  const [urlDraft, setUrlDraft] = useState(gatewayConfigured ? gatewayUrl ?? "" : "");
   const [tokenDraft, setTokenDraft] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -203,10 +210,12 @@ export function SystemSection({
   // Resynchronise le champ si l'URL change côté service (hello rediffusé) —
   // ajustement d'état pendant le rendu (motif React officiel) : un effet
   // appelant setState synchronement est interdit par la règle react-hooks.
+  // F-02 : vide (pas pré-rempli du défaut) tant que rien n'est configuré.
   const [lastGatewayUrl, setLastGatewayUrl] = useState<string | null>(null);
-  if ((gatewayUrl ?? "") !== (lastGatewayUrl ?? "")) {
-    setLastGatewayUrl(gatewayUrl ?? "");
-    setUrlDraft(gatewayUrl ?? "");
+  const effectiveUrl = gatewayConfigured ? gatewayUrl ?? "" : "";
+  if (effectiveUrl !== (lastGatewayUrl ?? "")) {
+    setLastGatewayUrl(effectiveUrl || null);
+    setUrlDraft(effectiveUrl);
   }
 
   const load = useCallback(() => {
@@ -490,7 +499,7 @@ export function SystemSection({
             >
               {connecting ? "Connexion…" : "Connecter"}
             </button>
-            {gatewayUrl ? (
+            {gatewayConfigured ? (
               <button
                 type="button"
                 onClick={() => void submitGateway("")}

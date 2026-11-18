@@ -183,6 +183,10 @@ export interface ServerHello {
   mode: GatewayMode;
   model: string;
   gatewayUrl: string | null;
+  /** F-02 : true = une URL de gateway est RÉGLÉE dans l'interface (le
+   *  champ et le bouton « Débrancher » s'affichent en fonction d'elle) ;
+   *  false/null = défaut automatique — rien de configuré à débrancher. */
+  gatewayConfigured?: boolean;
   /** Fournisseurs LLM actionnables (clé active ou keyless) — la carte de
    *  statut de la sidebar s appuie dessus pour un état honnête. v2.4. */
   engineProviders?: string[] | null;

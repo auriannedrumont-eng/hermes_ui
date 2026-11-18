@@ -387,12 +387,16 @@ export function useHermesChat() {
   );
 
   /** Retrouve l'id d'un modèle depuis le libellé d'une réponse
-   *  (« glm-4.6 · z.ai » — v2.3 : le suffixe fournisseur est retiré). */
+   *  (« glm-4.6 · z.ai » — v2.3 : le suffixe fournisseur est retiré).
+   *  C-08 : le serveur stocke `${result.model} · ${result.provider}` où
+   *  result.model est l'ID (ex. « big-pickle »), pas le label (« Big
+   *  Pickle ») — la recherche par label seul échouait et retombait sur le
+   *  modèle du compositeur au lieu de celui de la voix A/B. */
   const modelIdFromLabel = useCallback(
     (label?: string) => {
       if (!label) return null;
       const clean = label.replace(/\s*·\s*[^·]+$/, "");
-      return models.find((m) => m.label === clean)?.id ?? null;
+      return models.find((m) => m.id === clean || m.label === clean)?.id ?? null;
     },
     [models]
   );
@@ -1796,6 +1800,9 @@ export function useHermesChat() {
     serverRevision: serverInfo?.appRevision ?? null,
     chromeHeadless: serverInfo?.chromeHeadless ?? null,
     gatewayUrl: serverInfo?.gatewayUrl ?? null,
+    /** F-02 : gateway réellement CONFIGURÉE (vs défaut automatique) — le
+     *  bouton « Débrancher » ne s'affiche que pour une vraie surcharge. */
+    gatewayConfigured: serverInfo?.gatewayConfigured ?? false,
     /** Jeton de gateway enregistré côté service (booléen honnête). */
     gatewayTokenSet: serverInfo?.gatewayTokenSet ?? false,
     /** Paramètres → Système : brancher l'agent Hermes réel. */

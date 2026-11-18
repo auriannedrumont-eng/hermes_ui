@@ -101,10 +101,20 @@ function useSpeech(content: string) {
   const [speaking, setSpeaking] = useState(false);
   const supported =
     typeof window !== "undefined" && "speechSynthesis" in window;
-
+  // F-01 : ne couper QUE si CETTE bulle parlait — l'ancien cleanup
+  // inconditionnel coupait la lecture d'une autre bulle au démontage
+  // (transition streaming→persisté, changement de version, suppression).
+  const speakingRef = useRef(false);
+  useEffect(() => {
+    speakingRef.current = speaking;
+  }, [speaking]);
   useEffect(() => {
     return () => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      if (
+        speakingRef.current &&
+        typeof window !== "undefined" &&
+        "speechSynthesis" in window
+      ) {
         window.speechSynthesis.cancel();
       }
     };
@@ -145,11 +155,22 @@ function useContinuousSpeech(content: string, active: boolean) {
   const [speaking, setSpeaking] = useState(false);
   const spokenCountRef = useRef(0);
   const spokenCharsRef = useRef(0);
-
+  // F-01 : idem useSpeech — le cleanup au démontage ne coupe la file que si
+  // CETTE bulle était en train de parler. La bulle de streaming qui devient
+  // la bulle persistée (stream:done) démontait l'ancienne et coupait NET la
+  // lecture continue avant la fin des phrases mises en file.
+  const speakingRef = useRef(false);
+  useEffect(() => {
+    speakingRef.current = speaking;
+  }, [speaking]);
   // Arrêt propre au démontage de la bulle
   useEffect(() => {
     return () => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      if (
+        speakingRef.current &&
+        typeof window !== "undefined" &&
+        "speechSynthesis" in window
+      ) {
         window.speechSynthesis.cancel();
       }
     };

@@ -3,7 +3,7 @@
 // est refusé et rapporté, jamais écrit. (Critère d'acceptation §7.3.)
 
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 /** Ne garde que le dernier segment : le nom vient du paramètre `path=` de
  *  l'URL distante, jamais utilisé tel quel. */
@@ -24,27 +24,37 @@ export function safeBasename(name: string): string {
 export function resolveUnder(outDir: string, name: string): string | null {
   const base = safeBasename(name);
   if (!base) return null;
-  if (isAbsolute(name) || name.includes("..")) return null;
-  const root = resolve(outDir);
+  if (isAbsolute(name)) return null;
+  // Le dossier de sortie existe-t-il déjà ? Si oui, on le résout vers son
+  // chemin RÉEL (casse canonique du disque, jonctions et lecteurs subst
+  // résolus) : sous Windows, path.resolve() ne normalise QUE des antislashs
+  // et conserve la casse saisie, ce qui rendait les comparaisonsstartsWith
+  // fragiles ; realpathSync règle les deux problèmes d'un coup.
+  mkdirSync(outDir, { recursive: true });
+  const root = existsSync(outDir) ? realpathSync(outDir) : resolve(outDir);
   const target = resolve(join(root, base));
-  // Le chemin doit rester SOUS la racine (jamais un sibling déguisé).
-  if (!target.startsWith(root + "/" as string) && target !== root) return null;
-  // Le dossier de sortie existe-t-il vraiment ? S'il existe, on le résout
-  // (un lien symbolique sur le dossier ne doit pas servir d'échappatoire).
-  if (existsSync(root)) {
-    const realRoot = realpathSync(root);
-    if (resolve(realRoot) !== resolve(root)) {
-      // Racine elle-même un lien : on travaillera sous la cible réelle.
-      if (!resolve(target).startsWith(resolve(realRoot))) return null;
-    }
+  // Appartenance vérifiée par path.relative : insensible aux séparateurs,
+  // à la casse disque et aux préfixes frères (...\webchat-out vs
+  // ...\webchat-out-autre). rel === "" (la racine) est refusé : on n'écrit
+  // jamais un dossier lui-même.
+  const rel = relative(root, target);
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    return null;
   }
   // Si un parent intermédiaire existe déjà, vérifier qu'aucun n'est un lien
   // qui sortirait de la racine (realpath du parent résolu).
   const parent = dirname(target);
   if (existsSync(parent)) {
     const realParent = realpathSync(parent);
-    const realRoot = existsSync(root) ? realpathSync(root) : root;
-    if (!resolve(realParent).startsWith(resolve(realRoot))) return null;
+    const relParent = relative(root, resolve(realParent));
+    if (
+      !relParent ||
+      relParent === ".." ||
+      relParent.startsWith(`..${sep}`) ||
+      isAbsolute(relParent)
+    ) {
+      return null;
+    }
   }
   return target;
 }
@@ -81,9 +91,16 @@ export function writeGuarded(
       continue;
     }
     try {
-      // Dernier contrôle après création du dossier : le chemin résolu final.
+      // Dernier contrôle après création du dossier : appartenance de la
+      // cible au dossier RÉEL, via path.relative (séparateurs et casse).
       const finalRoot = realpathSync(outDir);
-      if (!resolve(target).startsWith(resolve(finalRoot))) {
+      const relFinal = relative(finalRoot, resolve(target));
+      if (
+        !relFinal ||
+        relFinal === ".." ||
+        relFinal.startsWith(`..${sep}`) ||
+        isAbsolute(relFinal)
+      ) {
         refused.push({ name: f.name, reason: "destination résolue hors du dossier" });
         continue;
       }

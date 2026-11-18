@@ -83,9 +83,23 @@ function useArtifactSource(artifact: Artifact | null): string | null {
   const artifactId = artifact?.id ?? null;
   const rawUrl = artifact?.rawUrl ?? null;
   const binaryKind = artifact?.kind === "image" || artifact?.kind === "pdf";
+  // Un artefact en génération/rendering a un contenu vide ou PARTIEL en
+  // base : le fetcher tant qu'il n'est pas "ready" reviendrait à figer le
+  // cache sur une chaîne vide/tronquée (C-02) — et purge l'éventuel cache
+  // obsolète au passage.
+  const ready = artifact?.status === "ready" || artifact?.status === "error";
+  const fetchable = Boolean(artifactId && rawUrl && !binaryKind && ready);
 
   useEffect(() => {
-    if (!artifactId || !rawUrl || binaryKind) return;
+    if (!artifactId) return;
+    if (!ready) {
+      // Règle C-02 : purge du cache tant que l'artefact n'est pas terminé —
+      // l'id reste stable entre artifact:created et artifact:updated, un
+      // cache précoce masquerait le contenu final jusqu'au rechargement.
+      cacheSource(artifactId, null);
+      return;
+    }
+    if (!rawUrl || binaryKind) return;
     if (sourceCache.has(artifactId)) return;
     let cancelled = false;
     fetch(artifactUrl(rawUrl), serviceFetchInit())
@@ -101,7 +115,7 @@ function useArtifactSource(artifact: Artifact | null): string | null {
     return () => {
       cancelled = true;
     };
-  }, [artifactId, rawUrl, binaryKind]);
+  }, [artifactId, rawUrl, binaryKind, ready, fetchable]);
 
   // null = absent ou en erreur (rechargeable) ; "" = source vide lu avec succès.
   if (!artifactId) return null;

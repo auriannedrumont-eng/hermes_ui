@@ -144,17 +144,27 @@ export class HermesConnector {
 
   /** Branche (ou débranche, url vide/null) la gateway depuis l'interface :
    *  re-sonde la nouvelle URL et bascule le mode en conséquence. URL vide =
-   *  retour au défaut automatique (l'agent lancé localement se branche seul). */
+   *  retour au défaut automatique (l'agent lancé localement se branche seul).
+   *  S-02 : changer l'URL SANS ressaisir de jeton n'envoie JAMAIS l'ancien
+   *  jeton secret à la nouvelle destination — il est effacé (l'utilisateur
+   *  le ressaisira si la nouvelle gateway en demande un). */
   async setGateway(
     url: string | null,
     token?: string | null
   ): Promise<GatewayMode> {
     const clean = typeof url === "string" ? url.trim() : "";
-    this.gatewayUrl = clean || ENV_GATEWAY_URL || DEFAULT_GATEWAY_URL;
+    const previousUrl = this.gatewayUrl;
+    const nextUrl = clean || ENV_GATEWAY_URL || DEFAULT_GATEWAY_URL;
+    const urlChanged = nextUrl !== previousUrl;
     if (token !== undefined) {
       this.gatewayToken =
         typeof token === "string" && token.trim() ? token.trim() : null;
+    } else if (urlChanged) {
+      // Jeton conservé seulement si l'URL ne change pas : vers une NOUVELLE
+      // destination, l'ancien secret ne part jamais sans accord explicite.
+      this.gatewayToken = null;
     }
+    this.gatewayUrl = nextUrl;
     await this.init();
     return this.mode;
   }
@@ -182,7 +192,7 @@ export class HermesConnector {
       const timer = setTimeout(() => controller.abort(), MODELS_TIMEOUT_MS);
       const res = await fetch(
         `${toHttpBase(this.gatewayUrl!)}/api/model/options?include_unconfigured=1`,
-        {
+        { redirect: "error",
           signal: controller.signal,
           headers: this.gatewayToken
             ? { Authorization: `Bearer ${this.gatewayToken}` }

@@ -2,7 +2,7 @@
 // téléchargements (fichier seul ou archive zip).
 "use client";
 
-import { serviceUrl } from "@/lib/service";
+import { FILES_PORT, serviceUrl } from "@/lib/service";
 import type { Artifact } from "@/lib/chat-types";
 
 /** URL complète d'une ressource d'artefact (via la gateway, port fichiers). */
@@ -17,9 +17,21 @@ export function downloadArtifact(artifact: Artifact, prefer?: "pdf" | "source"):
   window.open(artifactUrl(path), "_blank", "noopener");
 }
 
-/** Ouvre l'artefact dans un nouvel onglet (HTML rendu quand disponible). */
+/** Ouvre l'artefact dans un nouvel onglet (HTML rendu quand disponible).
+ *  S-01 : le jeton de service NE DOIT PAS rester dans l'URL de la page —
+ *  le HTML généré par le LLM (CSP sandbox, scripts actifs) lit
+ *  window.location.search. On l'ouvre SANS jeton : la route /view est
+ *  publique pour les artefacts HTML rendus (le jeton reste exigé sur
+ *  /raw, /download, /thumb, /pdf via les headers des fetch/auth de
+ *  l'application). Une fois l'onglet ouvert, le jeton n'existe nulle
+ *  part où un script de la page pourrait le lire. */
 export function openArtifactInTab(artifact: Artifact): void {
-  window.open(artifactUrl(artifact.viewUrl ?? artifact.rawUrl), "_blank", "noopener");
+  const path = artifact.viewUrl ?? artifact.rawUrl;
+  // /view est public (rendu sandboxé) ; /raw garde son jeton pour <img>/<fetch>.
+  const url = artifact.viewUrl
+    ? serviceUrl(path, FILES_PORT, { auth: false })
+    : artifactUrl(path);
+  window.open(url, "_blank", "noopener");
 }
 
 /** Archive zip de plusieurs artefacts (bouton « Tout télécharger »). */
@@ -55,6 +67,16 @@ function isArtifactFence(info: string, content: string): boolean {
   return false;
 }
 
+/** Longueur de la fence d'une ligne (null si pas une fence). D-04 : la
+ *  clôture d'un bloc doit porter AU MOINS autant de backticks que son
+ *  ouverture — un artefact Markdown contenant des exemples ```` … ````
+ *  internes ne se fermait qu'au premier ``` interne et déversait la fin
+ *  du fichier dans le chat (miroir exact du serveur). */
+function fenceLength(line: string): number | null {
+  const m = /^(`{3,})/.exec(line.trim());
+  return m ? m[1].length : null;
+}
+
 /**
  * Retire du texte affiché les blocs devenus artefacts (annotés `file=` ou
  * HTML/SVG volumineux, règles identiques au serveur) : le flux de conversation
@@ -66,18 +88,20 @@ export function stripArtifactBlocks(text: string): string {
   const out: string[] = [];
   let i = 0;
   while (i < lines.length) {
-    const open = /^```(.*)$/.exec(lines[i].trim());
-    if (!open) {
+    const openLen = fenceLength(lines[i]);
+    if (openLen === null) {
       out.push(lines[i]);
       i++;
       continue;
     }
-    const info = (open[1] ?? "").trim();
+    const open = /^(`{3,})(.*)$/.exec(lines[i].trim())!;
+    const info = (open[2] ?? "").trim();
     const contentLines: string[] = [];
     let j = i + 1;
     let complete = false;
     while (j < lines.length) {
-      if (/^```\s*$/.test(lines[j].trim())) {
+      const closeLen = fenceLength(lines[j]);
+      if (closeLen !== null && closeLen >= openLen && lines[j].trim() === "`".repeat(closeLen)) {
         complete = true;
         break;
       }
