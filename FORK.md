@@ -999,11 +999,39 @@ Application du verdict d'audit : pas de refonte globale, découpage des 3 monoli
 
 - `use-projects.ts` : état `projects` + actions (create/rename/delete/reorder) + `fetchProjects`, consommé par l'orchestrateur `use-hermes-chat.ts` qui expose les mêmes identifiants (consommateurs inchangés).
 
-### Reste à découper (ordre recommandé, un fichier par commit, `bun test` après chacun)
+### Frontend — src/hooks/ et src/components/ (complété)
 
-1. `use-hermes-chat.ts` (restant ~1500 l.) → `use-artifacts-panel.ts`, `use-chat-settings.ts`, `use-chat-stream.ts` (le bonus « ne re-rendre que MessageList pendant le streaming » demande de descendre l'état de stream sous MessageList, pas seulement un fichier).
-2. `message-bubble.tsx` → `use-speech.ts` (service singleton audio, corrige F-01) + `usage-row.tsx` (F-21).
-3. `artifact-panel.tsx` → `artifact-views.tsx` ; `sidebar.tsx` → `conversation-item.tsx` + `project-group.tsx` ; `composer.tsx` → `use-composer-attachments.ts` (F-03) + `slash-menu.tsx` ; `settings-panel.tsx` → `interface-section.tsx` + `models-section.tsx`.
-4. Déduplication front↔back : `src/lib/chat-types.ts` ↔ `mini-services/hermes-chat/types.ts` (ServerHello divergent : `engineProviders`/`gatewayTokenSet` absents côté back), `src/lib/modes.ts` ↔ `mini-services/hermes-chat/modes.ts`, `artifact-utils.ts` ↔ `artifacts.ts`.
+Le God Hook `use-hermes-chat.ts` (1 885 l.) est dissous en 5 hooks + orchestrateur :
+
+- `use-projects.ts` — état `projects` + actions (create/rename/delete/reorder) ;
+- `use-chat-settings.ts` — modèles, effort, expert F-22, permissions, recherche web F-09/F-12, bus hermes-ui:settings-changed ; états initialisés paresseusement (le pattern setState-dans-effet de l'original ne passait que parce que le fichier était trop gros pour l'analyse React Compiler — les nouveaux fichiers le respectent) ;
+- `use-artifacts-panel.ts` — artefacts, streamingArtifacts, panneau (open/close/selectVersion/retry/fetchVersions) ;
+- `use-chat-stream.ts` — registre des streams F-17, déroulé F-30, erreur F-04, handlers stream:*/mode:flow (garde activeIdRef vérifiée par test-source-guards) ; notice de silence F-31 dérivée au rendu (useMemo + tick d'intervalle uniquement pendant un tour) ;
+- `use-hermes-chat.ts` (~1460 l. restantes) — orchestrateur : conversations, messages, compaction, envoi ; re-expose les mêmes identifiants (consommateurs inchangés).
+
+Composants :
+
+| Fichier | Avant | Après | Extraits |
+| --- | --- | --- | --- |
+| `message-bubble.tsx` | 835 | 629 | `hooks/use-speech.ts` (F-01), `chat/usage-row.tsx` (F-21) |
+| `artifact-panel.tsx` | 1053 | 798 | `chat/artifact-views.tsx` (vues pures + cache borné + useArtifactSource C-02) |
+| `sidebar.tsx` | 1134 | 763 | `chat/conversation-item.tsx`, `chat/project-group.tsx` (DropZone exportée) |
+| `composer.tsx` | 818 | ~670 | `hooks/use-composer-attachments.ts` (F-03), `chat/slash-menu.tsx` |
+| `settings-panel.tsx` | 750 | 403 | `settings/interface-section.tsx` (+ SettingRow), `settings/models-section.tsx` (F-21) |
+
+Bonus de conformité : tous les nouveaux fichiers passent `react-hooks/set-state-in-effect`
+(le code d'origine échappait à la règle par la taille) — les patterns setState-dans-effet
+ont été convertis en initialisation paresseuse ou en « adjust state during render ».
+
+### Reste (ordre recommandé)
+
+- Déduplication front↔back : `src/lib/chat-types.ts` ↔ `mini-services/hermes-chat/types.ts`
+  (ServerHello divergent : `engineProviders`/`gatewayTokenSet` absents côté back),
+  `src/lib/modes.ts` ↔ `mini-services/hermes-chat/modes.ts`,
+  `src/lib/artifact-utils.ts` ↔ `mini-services/hermes-chat/artifacts.ts`.
+- Bonus performance du plan initial (« ne re-rendre que MessageList pendant le
+  streaming ») : l'état de stream vit désormais dans use-chat-stream, mais la page
+  l'appelle toujours au sommet — l'étape suivante est de descendre le hook sous
+  MessageList, ce qui touche page.tsx et message-list.tsx.
 
 Scripts d'extraction rejouables/idempotents conservés : `scripts/split-turn-runner.py`, `scripts/split-handlers.py`, `scripts/split-store.py`.
