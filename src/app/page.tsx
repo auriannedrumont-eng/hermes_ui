@@ -29,6 +29,7 @@ import { CommandPalette } from "@/components/chat/command-palette";
 import { DebugBridge } from "@/components/chat/debug-bridge";
 import { ArtifactPanel, ArtifactViewerDialog } from "@/components/chat/artifact-panel";
 import { useHermesChat } from "@/hooks/use-hermes-chat";
+import { streamStore } from "@/lib/stream-store";
 import { exportJson, exportMarkdown, exportPdf } from "@/lib/export";
 import { flashTitle, playCompletionBeep, setGeneratingTitle } from "@/lib/notify";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
@@ -250,14 +251,14 @@ export default function HermesWebPage() {
   // Le stream vivant d'abord (étapes en direct), le message persisté ensuite.
   const resolveTurnTools = useCallback(
     (messageId?: string): TurnTools => {
-      const stream = messageId ? chat.streams[messageId] : undefined;
+      const stream = messageId ? streamStore.get().streamsRecord[messageId] : undefined;
       if (stream) return { events: stream.toolEvents, live: true };
       const msg = messageId
         ? chat.messages.find((m) => m.id === messageId)
         : undefined;
       return { events: msg?.toolEvents ?? [], live: false };
     },
-    [chat.streams, chat.messages]
+    [chat.messages]
   );
 
   // ── Export de la conversation active ────────────────────────────────
@@ -436,7 +437,6 @@ export default function HermesWebPage() {
           />
           <MessageList
             messages={chat.messages}
-            streams={chat.streams}
             loadingHistory={chat.loadingHistory}
             isBusy={chat.isBusy}
             turnError={chat.turnError}

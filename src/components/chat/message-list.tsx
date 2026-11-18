@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { readClientSetting, onSettingsChanged } from "@/lib/settings";
 import type { Artifact, ChatMessage, StreamingState } from "@/lib/chat-types";
+import { useStreamsRecord } from "@/lib/stream-store";
 import type { ConversationMode } from "@/lib/modes";
 
 const SUGGESTIONS = [
@@ -74,8 +75,10 @@ function cardsForMessage(
 
 interface MessageListProps {
   messages: ChatMessage[];
-  /** F-17 : tous les streams actifs (tour simple + variantes a/b). */
-  streams: StreamingState[];
+  /** F-17 : tous les streams actifs (tour simple + variantes a/b).
+   *  (Plus passé par la page : MessageList lit le stream-store — les deltas
+   *  de 16 ms ne re-rendent plus le sommet. Kept pour compat externe.) */
+  streams?: StreamingState[];
   loadingHistory: boolean;
   isBusy: boolean;
   /** Erreur persistante du dernier tour (F-04) — affichée sous le fil. */
@@ -188,7 +191,10 @@ export function MessageList({
   const pinnedRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
   /** Tour simple (sans variante) — la bulle de stream en bas de fil. */
-  const streaming = streams.find((st) => !st.variant) ?? null;
+  // Store de stream (bonus perf) : la page ne transporte plus les deltas.
+  const storeStreams = useStreamsRecord();
+  const effectiveStreams = streams ?? Object.values(storeStreams);
+  const streaming = effectiveStreams.find((st) => !st.variant) ?? null;
   // F-30 — réglages du déroulé (hermes.modes.showFlow / showModels) : lus
   // au rendu et suivis par le bus des réglages (idiome InterfacePane).
   const [flowRev, setFlowRev] = useState(0);
@@ -205,14 +211,14 @@ export function MessageList({
   // Déroulé vivant : rendu dans la bulle du stream si elle existe déjà,
   // sinon tout seul en bas de fil (la première ligne suffit à l'ouvrir).
   const liveFlowStreaming =
-    modeFlowLive && streams.some((s) => s.messageId === modeFlowLive.messageId);
+    modeFlowLive && effectiveStreams.some((s) => s.messageId === modeFlowLive.messageId);
   const liveFlowPending = modeFlowLive && !liveFlowStreaming;
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !pinnedRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, streams]);
+  }, [messages, effectiveStreams]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -235,7 +241,7 @@ export function MessageList({
     if (m.role === "assistant") lastAssistantId = m.id;
   }
 
-  const isEmpty = !loadingHistory && messages.length === 0 && streams.length === 0;
+  const isEmpty = !loadingHistory && messages.length === 0 && effectiveStreams.length === 0;
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -292,13 +298,13 @@ export function MessageList({
                 </div>
               </div>
             ) : null}
-            {buildRows(messages, streams).map((row, i) =>
+            {buildRows(messages, effectiveStreams).map((row, i) =>
               row.kind === "single" ? (
                 <div key={row.message.id} className="group/msg">
                   <MessageBubble
                     message={row.message}
                     isBusy={isBusy}
-                    isLastAssistant={row.message.id === lastAssistantId && streams.length === 0}
+                    isLastAssistant={row.message.id === lastAssistantId && effectiveStreams.length === 0}
                     onRegenerate={onRegenerate}
                     onSetVersion={onSetVersion}
                     onEdit={onEdit}
@@ -385,7 +391,7 @@ export function MessageList({
 
             {/* Erreur persistante du dernier tour (F-04) : le partiel éventuel
                 est déjà dans le fil au-dessus — ici, la cause et la sortie. */}
-            {streams.length === 0 && turnError ? (
+            {effectiveStreams.length === 0 && turnError ? (
               <div
                 role="alert"
                 className="flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-2.5"

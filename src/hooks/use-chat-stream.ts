@@ -9,6 +9,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  streamStore,
+  useStreamsRecord,
+  useStreamsCount,
+  useFirstStreamId,
+  useModeFlowLive,
+  useTurnError,
+  useStallNotice,
+} from "@/lib/stream-store";
 import { getSocket } from "@/lib/socket";
 import type {
   ChatMessage,
@@ -28,18 +37,26 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   // F-17 — comparaison : DEUX réponses streament en parallèle (variantes
   // a/b). L'état vit dans une map par messageId ; `streaming` (première
   // entrée active) reste l'indicateur d'occupation pour tout le hook.
-  const [streamsRecord, setStreamsRecord] = useState<Record<string, StreamingState>>({});
-  const streams = useMemo(() => Object.values(streamsRecord), [streamsRecord]);
-  const streaming = streams[0] ?? null;
+  // ── Store externe (bonus perf 2026-11) : les deltas à ~16 ms ne
+  // re-rendent plus la PAGE — seuls les consommateurs ciblés (MessageList)
+  // s'abonnent via useSyncExternalStore. Ce hook reste le SEUL écrivain.
+  const setStreamsRecord = streamStore.setStreamsRecord;
+  const setModeFlowLive = streamStore.setModeFlowLive;
+  const setTurnError = streamStore.setTurnError;
+  const setStallNotice = streamStore.setStallNotice;
+  // Attention : useStreamsRecord() re-rend à CHAQUE delta — ce hook est
+  // appelé par l'orchestrateur (page) : il ne doit suivre que les signaux
+  // LENTS. Le registre complet vit dans le store, lu par MessageList.
+  const streamsCount = useStreamsCount();
+  // `streaming` = identité figée du tour en vol (booléen d'occupation pour
+  // l'orchestrateur : !== null quand un tour court, sans suivre les deltas).
+  const streaming = useFirstStreamId();
   /** Déroulé vivant du tour multi-voix (modes débat / conseil / auto).
    *  La réponse finale le porte en persistance — ce live n'est que le chemin. */
-  const [modeFlowLive, setModeFlowLive] = useState<{
-    messageId: string;
-    rows: ModeFlowRow[];
-  } | null>(null);
+  const modeFlowLive = useModeFlowLive();
   /** Erreur persistante du dernier tour (F-04) : affichée dans le fil jusqu'à
    *  réessai / changement de conversation — plus d'effacement automatique. */
-  const [turnError, setTurnError] = useState<{ messageId: string; error: string } | null>(null);
+  const turnError = useTurnError();
   // ── Pont de dépannage (F-31) : silence du tour ──────────────────────
   // Le service a ses gardes (120 s pool, ~240 s pilote webchat) ; mais si le
   // SERVICE meurt ou que la connexion tombe, plus aucun événement n'arrive et
@@ -50,6 +67,7 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   // notice de silence s'en sert pour dire la vérité (« la voix tourne depuis
   // N s ») au lieu de crier au blocage pendant une réponse lente mais vivante.
   const runningVoiceRef = useRef<{ label: string; since: number } | null>(null);
+  const stallNotice = useStallNotice();
 
   /** Machine à états du tour (F-01) : idle → streaming → done | stopped | error.
    *  L'état « stopped » est affiné par l'orchestrateur (dernier message du fil). */
@@ -67,7 +85,7 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   // sont les seuls états ; l'écran se raffraîchit par un intervalle de
   // re-rendu léger uniquement PENDANT un tour (1 tick / 10 s).
   const [tick, setTick] = useState(0);
-  const stallNotice: string | null = useMemo(() => {
+  const derivedStallNotice: string | null = useMemo(() => {
     if (turnState !== "streaming") return null;
     const silentS = Math.round((Date.now() - lastActivityRef.current) / 1000);
     if (silentS < 60) return null;
@@ -91,6 +109,12 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
     const timer = setInterval(() => setTick((t) => t + 1), 10_000);
     return () => clearInterval(timer);
   }, [turnState]);
+
+  // La notice dérivée rejoint le store : les consommateurs LENTS (page,
+  // MessageList) s'y abonnent sans suivre les ticks de ce hook.
+  useEffect(() => {
+    streamStore.setStallNotice(derivedStallNotice);
+  }, [derivedStallNotice]);
 
   /** Signe de vie (callback socket — système externe, setState autorisé). */
   const bumpActivity = useCallback(() => {
@@ -289,20 +313,27 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   };
 
   return {
-    streamsRecord,
+    // ── Écritures (stables — l'orchestrateur reste le seul écrivain) ──
     setStreamsRecord,
-    streams,
+    setModeFlowLive,
+    setTurnError,
+    // ── Signaux LENTS (ne changent pas à chaque delta) ──
+    /** Nombre de streams en vol (0/1/2) — booléen d'occupation pour la page. */
+    streamsCount,
+    /** Premier stream en vol (référence stable entre deltas de CE stream :
+     *  mise à jour seulement aux transitions de tour — la page suit le
+     *  début/fin, pas les 16 ms). */
     streaming,
     modeFlowLive,
-    setModeFlowLive,
     turnError,
-    setTurnError,
     dismissTurnError,
     stallNotice,
+    // ── Références et dérivés internes ──
     bumpActivity,
     lastActivityRef,
     runningVoiceRef,
     turnState,
+    // ── Handlers socket (l'orchestrateur les attache) ──
     onStreamStart,
     onStreamDelta,
     onStreamReasoning,

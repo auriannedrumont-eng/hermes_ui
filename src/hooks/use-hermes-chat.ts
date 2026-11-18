@@ -293,9 +293,8 @@ export function useHermesChat() {
   // Streams en vol : hook dédié (découpage 2026-11, FORK.md §10). Câblé ici —
   // les handlers stream:*/mode:flow ont besoin de setMessages et du refresh.
   const {
-    streamsRecord,
     setStreamsRecord,
-    streams,
+    streamsCount: _streamsCount,
     streaming,
     modeFlowLive,
     setModeFlowLive,
@@ -1389,8 +1388,7 @@ export function useHermesChat() {
     activeId,
     messages,
     streaming,
-    /** F-17 : TOUS les streams actifs (tour simple + variantes a/b). */
-    streams,
+    // (streams complet : vit dans stream-store, lu par MessageList)
     isBusy,
     // F-30 — modes du compositeur (le service fait foi)
     conversationMode,
