@@ -49,7 +49,7 @@ function Option({
       role="option"
       aria-selected={selected}
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11.5px] hover:bg-muted/60"
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] hover:bg-muted/60"
     >
       <Dot on={selected} />
       {children}
@@ -84,7 +84,7 @@ export function ModelChoiceList({
       ))}
       {webs.length ? (
         <>
-          <div className="px-2 pb-0.5 pt-1.5 text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground">
+          <div className="px-2 pb-0.5 pt-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Chats IA web — pilotage navigateur
           </div>
           {webs.map((m) => (
@@ -92,7 +92,7 @@ export function ModelChoiceList({
               <span className="font-semibold">{m.label}</span>
             </Option>
           ))}
-          <p className="px-2 pb-1 pt-1 text-[10px] leading-snug text-muted-foreground">
+          <p className="px-2 pb-1 pt-1 text-[11px] leading-snug text-muted-foreground">
             Hermes ouvre le site dans son navigateur de pilotage et y pose le
             message — texte ou fichiers, le site répond selon la demande et
             Hermes ramène le résultat d&apos;un bloc, les tours s&apos;enchaînent

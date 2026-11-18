@@ -41,6 +41,7 @@ import { UsageRow } from "@/components/chat/usage-row";
 import { stripArtifactBlocks, downloadArtifactZip } from "@/lib/artifact-utils";
 import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import type { Artifact, ChatMessage, ModeFlowRow, ToolEvent, WebSource } from "@/lib/chat-types";
+import type { ConversationMode } from "@/lib/modes";
 
 function ToolEventRow({ event }: { event: ToolEvent }) {
   return (
@@ -187,6 +188,12 @@ interface MessageBubbleProps {
   modeFlow?: ModeFlowRow[];
   /** F-30 — les modèles dans le déroulé (hermes.modes.showModels). */
   showFlowModels?: boolean;
+  /** F-30 — afficher le déroulé des messages PERSISTÉS
+   *  (hermes.modes.showFlow « Déroulé dans la conversation »). */
+  showFlow?: boolean;
+  /** F-30 — mode de la conversation : fallback de modeFromTag pendant le
+   *  streaming du verdict (message.modeTag n'existe pas encore). */
+  fallbackMode?: ConversationMode;
 }
 
 export function MessageBubble({
@@ -210,6 +217,8 @@ export function MessageBubble({
   modeTag,
   modeFlow,
   showFlowModels = true,
+  showFlow = true,
+  fallbackMode,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -414,10 +423,14 @@ export function MessageBubble({
         {/* F-30 — l'étiquette du mode et le déroulé vivent au-dessus de la
             réponse conservée : on voit le débat/conseil/auto se dérouler. */}
         {flowTag ? <ModeTag tag={flowTag} /> : null}
-        {flowRows?.length ? (
+        {/* F-30 (showFlow) : le réglage « Déroulé dans la conversation »
+            masque aussi le déroulé des messages PERSISTÉS, pas seulement le
+            vivant. fallbackMode : badge correct pendant le streaming du
+            verdict (modeTag absent). */}
+        {showFlow && flowRows?.length ? (
           <ModeFlowCard
-            mode={modeFromTag(flowTag)}
-            summary={modeFlowSummary(modeFromTag(flowTag), flowRows)}
+            mode={modeFromTag(flowTag, fallbackMode)}
+            summary={modeFlowSummary(modeFromTag(flowTag, fallbackMode), flowRows)}
             rows={flowRows}
             showModels={showFlowModels}
           />

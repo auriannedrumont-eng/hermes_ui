@@ -349,6 +349,13 @@ export class ArtifactTracker {
         this.events.onCreated(toWireArtifact(row));
         this.events.onDelta({ key: c.key, delta: c.content });
         this.tracked.get(c.key)!.sentLength = c.content.length;
+        // F-29 (fin de stream immédiate) : un bloc déjà FERMÉ dès la première
+        // passe (fichiers Webchat, bilan Auto, bloc court généré < 16 ms)
+        // remplissait streamingArtifacts côté client sans qu'onUpdated ne
+        // vienne jamais le purger pour les non-HTML (statut « ready » né
+        // directement, pas de clôture ultérieure). On émet la mise à jour
+        // terminée dans la foulée ; le HTML suit via onHtmlReady → rendu.
+        if (c.complete && c.kind !== "html") this.events.onUpdated(toWireArtifact(row));
         if (c.complete && c.kind === "html") this.events.onHtmlReady(row);
         continue;
       }

@@ -191,14 +191,14 @@ function Row({
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-7 gap-y-2 border-b border-border/70 py-3 last:border-b-0">
       <div className="min-w-0 max-w-[420px] flex-1">
-        <div className="flex items-center gap-1.5 text-[13px] font-medium">
+        <div className="flex items-center gap-1.5 text-[12.5px] font-medium">
           {label}
           {tip ? <InfoTip>{tip}</InfoTip> : null}
         </div>
-        <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">{desc}</div>
+        <div className="mt-px text-[11px] leading-snug text-muted-foreground">{desc}</div>
       </div>
       <div className="flex-none">{fixed ? (
-        <span className="text-[12px] font-semibold text-hermes-text">{fixed}</span>
+        <span className="text-[12.5px] font-semibold text-hermes-text">{fixed}</span>
       ) : (
         children
       )}</div>
@@ -238,9 +238,9 @@ function Stepper({
       >
         −
       </button>
-      <span className="flex h-7 min-w-[68px] items-center justify-center gap-1 border-x border-border text-[12px] font-bold tabular-nums">
+      <span className="flex h-7 min-w-[68px] items-center justify-center gap-1 border-x border-border text-[12.5px] font-bold tabular-nums">
         {value}
-        <small className="text-[9.5px] font-medium text-muted-foreground">/ {maxLabel}</small>
+        <small className="text-[11px] font-medium text-muted-foreground">/ {maxLabel}</small>
       </span>
       <button
         type="button"
@@ -275,14 +275,14 @@ function VoiceRow({
   return (
     <div className="border-t border-border/70 first:border-t-0">
       <div className="flex items-center gap-2 py-2">
-        <span className="flex-none text-[12px] font-bold">{name}</span>
-        <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted-foreground">{role}</span>
+        <span className="flex-none text-[12.5px] font-bold">{name}</span>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{role}</span>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           className={cn(
-            "inline-flex max-w-[190px] flex-none items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold transition-colors",
+            "inline-flex max-w-[190px] flex-none items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors",
             model
               ? "border-hermes/35 bg-hermes/10 text-hermes-text"
               : "border-border bg-card text-foreground hover:bg-muted"
@@ -427,26 +427,26 @@ function PromptCard({
                 ta.selectionStart = ta.selectionEnd = pos + c.key.length;
               });
             }}
-            className="rounded-md border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground hover:bg-muted"
+            className="rounded-md border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:bg-muted"
           >
             {c.key}
           </button>
         ))}
-        <span className="ml-auto text-[10.5px] tabular-nums text-muted-foreground">
+        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
           {value.length.toLocaleString("fr-FR")} / {MAX_MODE_PROMPT_CHARS.toLocaleString("fr-FR")}
         </span>
         {dirty ? (
           <button
             type="button"
             onClick={onReset}
-            className="rounded-full border border-border bg-card px-2.5 py-0.5 text-[10px] font-semibold text-foreground hover:bg-muted"
+            className="rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground hover:bg-muted"
           >
             Réinitialiser
           </button>
         ) : null}
       </div>
       {hint ? (
-        <p className="mt-1.5 text-[10.5px] leading-snug text-muted-foreground">{hint}</p>
+        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{hint}</p>
       ) : null}
     </div>
   );
@@ -591,21 +591,46 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
     writeClientSetting("hermes.modes.models", JSON.stringify(next));
   };
 
-  /** Édite une consigne : clamp 4 000, ajout/retrait de la surcharge,
-   *  enregistrement immédiat côté service (effet au prochain message). */
-  const editPrompt = async (key: string, text: string) => {
+  /** Débounce de la sauvegarde des consignes (300 ms) : chaque frappe dans
+   *  un textarea posait une écriture SQLite + un broadcast settings:changed
+   *  sur la socket (200 frappes = 200 écritures). */
+  const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedSavePrompts = useCallback((next: Record<string, string>) => {
+    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => {
+      saveDebounceRef.current = null;
+      void saveServerPrompts(next);
+    }, 300);
+  }, []);
+  useEffect(
+    () => () => {
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    },
+    []
+  );
+
+  /** Édite une consigne : clamp 4 000, ajout/retrait de la surcharge —
+   *  l'état suit à la frappe, la sauvegarde serveur est débouncée
+   *  (effet au prochain message). */
+  const editPrompt = (key: string, text: string) => {
     const clean = text.slice(0, MAX_MODE_PROMPT_CHARS);
     const next = { ...overridesRef.current };
     if (clean === DEFAULT_PROMPTS[key]) delete next[key];
     else next[key] = clean;
     setOverrides(next);
-    await saveServerPrompts(next);
+    debouncedSavePrompts(next);
   };
 
   const resetPrompt = async (key: string) => {
     const next = { ...overridesRef.current };
     delete next[key];
     setOverrides(next);
+    // Reset : clic unique, pas une frappe — sauvegarde immédiate (et toute
+    // sauvegarde débouncée en attente est remplacée par cet état plus frais).
+    if (saveDebounceRef.current) {
+      clearTimeout(saveDebounceRef.current);
+      saveDebounceRef.current = null;
+    }
     await saveServerPrompts(next);
   };
 
@@ -677,7 +702,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           >
             <SelectTrigger
               aria-label="Mode des nouvelles conversations"
-              className="h-8 w-[190px] rounded-lg bg-card px-3 text-[12px] font-medium hover:border-hermes"
+              className="h-8 w-[190px] rounded-lg bg-card px-3 text-[12.5px] font-medium hover:border-hermes"
             >
               <SelectValue />
             </SelectTrigger>
@@ -797,7 +822,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
             />
           ))}
         </div>
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           Consigne
         </div>
         <PromptCard
@@ -862,7 +887,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
             />
           ))}
         </div>
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           Consignes — une par voix
         </div>
         <PromptCard
@@ -918,7 +943,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
             />
           ))}
         </div>
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           Consignes — une par rôle
         </div>
         <PromptCard
@@ -978,7 +1003,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
             />
           ))}
         </div>
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           Consignes — une par étape
         </div>
         {PROMPTS_BY_MODE.auto.map((key) => (

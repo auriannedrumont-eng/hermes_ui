@@ -67,12 +67,17 @@ export interface StoreMessagesMethods {
     group: string,
     index: number
   ): ChatMessage[] | null;
+  /** F-14 : réactive la version la plus récente d'un groupe si (et
+   *  seulement si) aucune n'est active — tour régénéré stoppé ou échoué
+   *  avant le premier jeton : l'ancienne réponse revient au lieu de
+   *  disparaître définitivement du fil. */
+  restoreLatestVersion(conversationId: string, group: string): void;
   getMessage(conversationId: string, messageId: string): ChatMessage | null;
   deleteMessage(conversationId: string, messageId: string): ChatMessage | null;
   purgeInactiveVersionsOf(
     conversationId: string,
     removedIds: string[],
-  ): string[];
+  ): { purgedIds: string[]; purgedAttachments: Attachment[] };
   deleteTrailingAssistant(
     conversationId: string,
     variant?: "a" | "b"
@@ -170,9 +175,9 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
         .query(
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.pinned, c.project_id, c.mode, c.mode_rounds, c.mode_config,
                   COUNT(m.id) AS message_count,
-                  (SELECT content FROM messages m2 WHERE m2.conversation_id = c.id AND m2.role = 'user' ORDER BY m2.created_at DESC LIMIT 1) AS preview
+                  (SELECT content FROM messages m2 WHERE m2.conversation_id = c.id AND m2.role = 'user' AND (m2.version_active IS NULL OR m2.version_active = 1) ORDER BY m2.created_at DESC LIMIT 1) AS preview
            FROM conversations c
-           LEFT JOIN messages m ON m.conversation_id = c.id
+           LEFT JOIN messages m ON m.conversation_id = c.id AND (m.version_active IS NULL OR m.version_active = 1)
            GROUP BY c.id
            ORDER BY c.pinned DESC, c.updated_at DESC`
         )
@@ -263,18 +268,31 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
         )
         .get(id) as any;
       if (!r) return null;
+      // F-14 : seules les versions ACTIVES comptent (l'ancien comptage
+      // comptait les version_active = 0 : le badge de la sidebar gonflait
+      // à chaque régénération).
       const count = (
         this.db
-          .query("SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?")
+          .query(
+            "SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND (version_active IS NULL OR version_active = 1)"
+          )
           .get(id) as any
       ).n;
+      // F-14 : le VRAI aperçu du dernier message utilisateur (l'ancien
+      // `preview: ""` écrasait l'aperçu de la sidebar au renommage, au
+      // déplacement, au changement de mode et en fin de tour).
+      const prevRow = this.db
+        .query(
+          "SELECT content FROM messages WHERE conversation_id = ? AND role = 'user' AND (version_active IS NULL OR version_active = 1) ORDER BY created_at DESC LIMIT 1"
+        )
+        .get(id) as { content?: string } | null;
       return {
         id: r.id,
         title: r.title,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
         messageCount: count,
-        preview: "",
+        preview: (prevRow?.content ?? "").slice(0, 90),
         pinned: !!(r as any).pinned,
         projectId: (r as any).project_id ?? null,
         mode: (r.mode as ConversationMeta["mode"]) ?? "chat",
@@ -505,6 +523,16 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
     ): ChatMessage[] | null {
       const count = this.countVersions(group);
       if (count < 1 || index < 1 || index > count) return null;
+      // F-14 : la ligne cible doit exister AVANT de tout désactiver — avec
+      // des version_index désynchronisés, l'ancien code passait le groupe
+      // entier à version_active = 0 sans jamais en réactiver une : le
+      // message disparaissait du fil.
+      const target = this.db
+        .query(
+          "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? AND version_index = ?"
+        )
+        .get(conversationId, group, index) as { id?: string } | null;
+      if (!target?.id) return null;
       // Transaction (Lot 2, audit L2-5) : un crash entre les deux UPDATE
       // laisserait le groupe SANS version active.
       this.db.transaction(() => {
@@ -520,6 +548,30 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
           .run(conversationId, group, index);
       })();
       return this.getMessages(conversationId);
+    },
+
+    /** F-14 — réactive la version la plus récente d'un groupe si aucune
+     *  n'est active (tour régénéré stoppé/échoué avant le premier jeton :
+     *  l'ancienne réponse revient au lieu de disparaître du fil). */
+    restoreLatestVersion(conversationId: string, group: string): void {
+      const active = this.db
+        .query(
+          "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? AND version_active = 1 LIMIT 1"
+        )
+        .get(conversationId, group);
+      if (active) return;
+      const latest = this.db
+        .query(
+          "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? ORDER BY version_index DESC, created_at DESC LIMIT 1"
+        )
+        .get(conversationId, group) as { id?: string } | null;
+      if (latest?.id) {
+        this.db
+          .query(
+            "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND id = ?"
+          )
+          .run(conversationId, latest.id);
+      }
     },
 
     /** Message individuel (ou null). */
@@ -568,27 +620,58 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
     deleteMessage(conversationId: string, messageId: string): ChatMessage | null {
       const msg = this.getMessage(conversationId, messageId);
       if (!msg) return null;
-      this.db
-        .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
-        .run(conversationId, messageId);
-      // F-14 : si la version supprimée était celle affichée et que le groupe
-      // compte encore des versions, promouvoir la plus récente — le message
-      // ne disparaît pas du fil tant que des versions existent.
-      if (msg.versions?.group) {
-        const g = msg.versions.group;
-        const remaining = this.db
-          .query(
-            "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? ORDER BY version_index DESC LIMIT 1"
-          )
-          .get(conversationId, g) as any;
-        if (remaining) {
-          this.db
+      // F-14 : suppression, promotion et renumérotation forment UN acte
+      // (transaction) — un crash au milieu ne doit laisser ni groupe sans
+      // version active, ni version_index en dents de scie (affichage
+      // « 3/2 », clic ‹ vers un index absent, collision à la régénération).
+      this.db.transaction(() => {
+        this.db
+          .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
+          .run(conversationId, messageId);
+        if (msg.versions?.group) {
+          const g = msg.versions.group;
+          // Si la version supprimée était celle affichée et que le groupe
+          // compte encore des versions, promouvoir la plus récente — le
+          // message ne disparaît pas du fil tant que des versions existent.
+          const remaining = this.db
             .query(
-              "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND id = ?"
+              "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? ORDER BY version_index DESC LIMIT 1"
             )
-            .run(conversationId, remaining.id);
+            .get(conversationId, g) as any;
+          if (remaining) {
+            this.db
+              .query(
+                "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND id = ?"
+              )
+              .run(conversationId, remaining.id);
+          }
+          // Renumérotation 1..k des lignes restantes du groupe : l'ancien
+          // code laissait {2,3} après suppression de la 1 (compteur « 3/2 »,
+          // flèche ‹ vers un index sans ligne, countVersions+1 en collision).
+          const rest = this.db
+            .query(
+              "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? ORDER BY version_index ASC, created_at ASC, rowid ASC"
+            )
+            .all(conversationId, g) as any[];
+          if (rest.length > 1) {
+            rest.forEach((row, i) => {
+              this.db
+                .query(
+                  "UPDATE messages SET version_index = ? WHERE conversation_id = ? AND id = ?"
+                )
+                .run(i + 1, conversationId, row.id);
+            });
+          } else if (rest.length === 1) {
+            // Une seule version restante : le message redevient un message
+            // normal à version unique (plus de sélecteur ‹ 1/1 › fantôme).
+            this.db
+              .query(
+                "UPDATE messages SET version_group = NULL, version_index = NULL, version_active = NULL WHERE conversation_id = ? AND id = ?"
+              )
+              .run(conversationId, rest[0].id);
+          }
         }
-      }
+      })();
       this.touchConversation(conversationId);
       return msg;
     },
@@ -598,14 +681,16 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
      * supprimée par une troncature. getMessages() ne voit que la version
      * active : les version_active = 0 situées après le point de troncature
      * restaient en base pour toujours (avec leurs pièces jointes et leurs
-     * artefacts) sans jamais être réaffichées. Renvoie les ids purgés —
-     * l'appelant nettoie artefacts et fichiers joints.
+     * artefacts) sans jamais être réaffichées. Renvoie ids et pièces jointes
+     * purgés — l'appelant nettoie artefacts et fichiers joints (F-14 : ces
+     * lignes avaient elles aussi des artefacts et des attachments, sinon
+     * orphelins).
      */
     purgeInactiveVersionsOf(
       conversationId: string,
       removedIds: string[],
-    ): string[] {
-      if (!removedIds.length) return [];
+    ): { purgedIds: string[]; purgedAttachments: Attachment[] } {
+      if (!removedIds.length) return { purgedIds: [], purgedAttachments: [] };
       const placeholders = removedIds.map(() => "?").join(",");
       const groups = this.db
         .query(
@@ -614,20 +699,24 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
         )
         .all(conversationId, ...removedIds) as any[];
       const purged: string[] = [];
+      const purgedAttachments: Attachment[] = [];
       for (const { g } of groups) {
         const rows = this.db
           .query(
-            "SELECT id FROM messages WHERE conversation_id = ? AND version_group = ? AND version_active = 0"
+            "SELECT id, attachments FROM messages WHERE conversation_id = ? AND version_group = ? AND version_active = 0"
           )
           .all(conversationId, g) as any[];
         for (const r of rows) {
+          purgedAttachments.push(
+            ...(parseJsonWire<Attachment[] | undefined>(r.attachments, undefined) ?? [])
+          );
           this.db
             .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
             .run(conversationId, r.id);
           purged.push(r.id);
         }
       }
-      return purged;
+      return { purgedIds: purged, purgedAttachments };
     },
 
     /**
@@ -661,8 +750,15 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       }
       // D-02 : les versions inactives des groupes touchés partent aussi —
       // plus jamais réaffichées, elles n'ont pas lieu de survivre à la
-      // troncature (le régénérateur crée ses propres v(n+1)).
-      this.purgeInactiveVersionsOf(conversationId, removedIds);
+      // troncature (le régénérateur crée ses propres v(n+1)). F-14 : leurs
+      // ids et pièces jointes rejoignent removedIds/removedAttachments pour
+      // que l'appelant nettoie leurs artefacts et fichiers.
+      const { purgedIds, purgedAttachments } = this.purgeInactiveVersionsOf(
+        conversationId,
+        removedIds,
+      );
+      removedIds.push(...purgedIds);
+      removedAttachments.push(...purgedAttachments);
       const lastUser = msgs.length > 0 ? msgs[msgs.length - 1] : null;
       if (removedIds.length) this.touchConversation(conversationId);
       return { lastUser, removedIds, removedAttachments };
@@ -690,7 +786,9 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       }
       // D-02 : purge des versions inactives des groupes touchés (même règle
       // que deleteTrailingAssistant — jamais de lignes fantômes conservées).
-      this.purgeInactiveVersionsOf(
+      // F-14 : ids et pièces jointes purgés rejoignent la réponse — leurs
+      // artefacts et fichiers doivent être nettoyés eux aussi.
+      const { purgedIds, purgedAttachments } = this.purgeInactiveVersionsOf(
         conversationId,
         removed.map((m) => m.id),
       );
@@ -700,8 +798,11 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       this.touchConversation(conversationId);
       return {
         message: { ...msg, content },
-        removedIds: removed.map((m) => m.id),
-        removedAttachments: removed.flatMap((m) => m.attachments ?? []),
+        removedIds: [...removed.map((m) => m.id), ...purgedIds],
+        removedAttachments: [
+          ...removed.flatMap((m) => m.attachments ?? []),
+          ...purgedAttachments,
+        ],
       };
     },
 
@@ -790,7 +891,7 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
           `SELECT m.id, m.conversation_id, m.role, m.content, m.created_at,
                   c.title AS conversation_title
            FROM messages m JOIN conversations c ON c.id = m.conversation_id
-           WHERE m.content LIKE ? ESCAPE '\\'
+           WHERE m.content LIKE ? ESCAPE '\\' AND (m.version_active IS NULL OR m.version_active = 1)
            ORDER BY m.created_at DESC
            LIMIT ?`
         )

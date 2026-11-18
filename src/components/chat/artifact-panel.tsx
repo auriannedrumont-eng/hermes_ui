@@ -61,6 +61,27 @@ import {
 } from "@/components/chat/artifact-views";
 import { ArtifactTerminal } from "@/components/chat/artifact-terminal";
 import { serviceFetchInit } from "@/lib/service";
+import { useStreamTurnTools } from "@/lib/stream-store";
+
+// ── Encart terminal du tour porteur (F-29, régression §60) ───────────────
+
+/** Terminal des outils du tour qui porte l'artefact : abonné au store de
+ *  stream — il suit chaque stream:tool EN DIRECT pendant le tour, sans
+ *  faire re-rendre page.tsx (qui ne s'abonne plus au registre depuis le
+ *  bonus perf §60 : resolveTurnTools y lisait le store sans abonnement,
+ *  le terminal restait figé). Repli sur la résolution synchrone pour les
+ *  messages persistés d'un tour terminé. */
+function ArtifactTurnTerminal({
+  messageId,
+  resolveTurnTools,
+}: {
+  messageId?: string;
+  resolveTurnTools: (messageId?: string) => TurnTools;
+}) {
+  const live = useStreamTurnTools(messageId);
+  const tools = live ?? resolveTurnTools(messageId);
+  return <ArtifactTerminal key={messageId} {...tools} />;
+}
 
 // ── Chargement du source (cache module partagé panneau / visionneuse) ───
 
@@ -629,9 +650,9 @@ export function ArtifactPanel({
         onRetry={onRetry}
         fetchVersions={fetchVersions}
       />
-      <ArtifactTerminal
-        key={selected.messageId}
-        {...resolveTurnTools(selected.messageId)}
+      <ArtifactTurnTerminal
+        messageId={selected.messageId}
+        resolveTurnTools={resolveTurnTools}
       />
       <ArtifactMetaLine artifact={selected} />
     </div>
@@ -787,9 +808,9 @@ export function ArtifactViewerDialog({
           )}
         </div>
         {selected ? (
-          <ArtifactTerminal
-            key={selected.messageId}
-            {...resolveTurnTools(selected.messageId)}
+          <ArtifactTurnTerminal
+            messageId={selected.messageId}
+            resolveTurnTools={resolveTurnTools}
           />
         ) : null}
       </DialogContent>

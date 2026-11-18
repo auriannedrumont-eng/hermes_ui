@@ -113,8 +113,10 @@ async function unitTests() {
 
   // ── Filtre de processus (spec §2.2/§7.6 : jamais le navigateur personnel) ──
   const fakeProfile = mkdtempSync(join(tmpdir(), "webchat-prof-"));
-  check("filtre : pid inexistant refusé", isAppBrowserPid(2_000_000_001, fakeProfile) === false);
-  check("filtre : pid 0/négatif refusé", isAppBrowserPid(0, fakeProfile) === false && isAppBrowserPid(-1, fakeProfile) === false);
+  // isAppBrowserPid est désormais async (Promise<boolean>) : sans await,
+  // la comparaison à false testait une Promise toujours truthy.
+  check("filtre : pid inexistant refusé", (await isAppBrowserPid(2_000_000_001, fakeProfile)) === false);
+  check("filtre : pid 0/négatif refusé", (await isAppBrowserPid(0, fakeProfile)) === false && (await isAppBrowserPid(-1, fakeProfile)) === false);
   rmSync(fakeProfile, { recursive: true, force: true });
 
   // ── Contrat JSON du pilote (site non vérifié — sans navigateur) ───────

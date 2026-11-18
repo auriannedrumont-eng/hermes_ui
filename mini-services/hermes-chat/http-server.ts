@@ -32,8 +32,8 @@ import { traceDump, traceMeta } from "./trace";
 
 export interface HttpDeps {
   store: Store;
-  /** Diagnostic : tours LLM en vol (F-31ter). */
-  activeStreams: () => number;
+  /** Diagnostic : tours LLM en vol (F-31ter) — snapshots vivants du pool. */
+  activeStreams: () => unknown[];
   /** Diagnostic : longueur visée des interventions du débat (F-58). */
   resolveVoiceChars: () => number;
 }
@@ -216,11 +216,14 @@ function handleArtifactFile(
       // 'none') et on coupe le Referer : un script qui tenterait d'exfiltrer
       // quoi que ce soit (jeton, contenu) vers l'extérieur est bloqué par la
       // CSP même s'il arrive à lire la barre d'adresse.
+      // S-03 : plus de allow-forms / allow-popups — sans form-action 'none'
+      // ni restriction de navigation, une soumission de formulaire ou un
+      // window.open() permettait d'exfiltrer vers une origine tierce.
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Length": Buffer.byteLength(row.content, "utf-8"),
         "Content-Security-Policy":
-          "sandbox allow-scripts allow-forms allow-popups allow-modals; default-src 'none'; connect-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+          "sandbox allow-scripts allow-modals; default-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
       });
@@ -257,17 +260,20 @@ function handleArtifactFile(
       res.end("Fichier non encore généré");
       return;
     }
-    const data = readFileSync(filePath);
+    // P-01 : lecture STREAMÉE (statSync + createReadStream + pipe), comme
+    // /uploads/ — l'ancien readFileSync chargeait le PNG/PDF entier en
+    // mémoire et gelait la boucle d'événements sur les gros rendus.
+    const stat = statSync(filePath);
     res.writeHead(200, {
       "Content-Type": action === "thumb" ? "image/png" : "application/pdf",
-      "Content-Length": data.byteLength,
+      "Content-Length": stat.size,
       "Cache-Control": "private, max-age=60",
       "X-Content-Type-Options": "nosniff",
       ...(action === "pdf"
         ? { "Content-Disposition": `attachment; filename*=UTF-8''${name.replace(/\.html?$/, "")}.pdf` }
         : {}),
     });
-    res.end(data);
+    createReadStream(filePath).pipe(res);
     return;
   } catch {
     res.writeHead(500, { "Content-Type": "text/plain" });

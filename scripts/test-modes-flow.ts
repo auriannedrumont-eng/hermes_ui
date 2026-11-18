@@ -10,7 +10,7 @@
 //      taille des consignes (4 000 car. revalidés).
 // Le service doit être lancé avant avec :
 //   HERMES_CHAT_DB=/tmp/qa-f30/hermes.sqlite HERMES_CHAT_PORT=3013 HERMES_CHAT_FILES_PORT=3014 bun index.ts
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { io } from "socket.io-client";
@@ -31,6 +31,12 @@ function check(name: string, cond: boolean, detail?: string) {
 
 async function unitTests() {
   console.log("[qa] A — unitaires (modes.ts, orchestrator.ts, store)");
+  // Isolation de la base : HERMES_CHAT_DB AVANT l'import du Store — sinon
+  // les conversations et réglages de test atterrissaient dans la base de
+  // DÉVELOPPEMENT db/hermes-chat.sqlite (le constructeur lit la variable
+  // d'environnement au chargement du module).
+  const tmpDir = mkdtempSync(join(tmpdir(), "qa-f30-unit-"));
+  process.env.HERMES_CHAT_DB = join(tmpDir, "t.sqlite");
   const { Store } = await import("../mini-services/hermes-chat/store");
   const modes = await import("../mini-services/hermes-chat/modes");
   const orch = await import("../mini-services/hermes-chat/orchestrator");
@@ -87,9 +93,7 @@ async function unitTests() {
 
   // A4. Les 13 consignes par défaut + résolution surcharge/défaut
   check("13 consignes par défaut", Object.keys(modes.DEFAULT_PROMPTS).length === 13, String(Object.keys(modes.DEFAULT_PROMPTS).length));
-  const tmpDb = join(mkdtempSync(join(tmpdir(), "qa-f30-unit-")), "t.sqlite");
   const store = new Store();
-  void tmpDb;
   check("resolveModePrompt défaut (plan.main)", (modes.resolveModePrompt(store, "plan.main") ?? "").includes("chef de projet"));
   check("resolveModePrompt vide (chat.main) → null", modes.resolveModePrompt(store, "chat.main") === null);
   store.setSetting(
@@ -144,6 +148,9 @@ async function unitTests() {
   };
 
   // A6.a Débat — 3 conseillers qui se répondent, verdict à la fin
+  // (debateParallel: false → branche ENCHAÎNÉE : le test vérifie que le
+  // tour 2 lit le tour 1 ; la branche parallèle par défaut a son propre
+  // check de durée ci-dessous.)
   seen.length = 0;
   const signal = new AbortController().signal;
   let debateRows: any[] = [];
@@ -152,8 +159,9 @@ async function unitTests() {
       conversationId: "c1",
       messageId: "m1",
       mode: "debate",
-      config: { voices: { debate: { sceptique: "hermes-4-405b", pragmatique: "hermes-4-70b", innovateur: "hermes-3-405b", juge: null } } },
+      config: { debateParallel: false, voices: { debate: { sceptique: "hermes-4-405b", pragmatique: "hermes-4-70b", innovateur: "hermes-3-405b", juge: null } } },
       rounds: 3,
+      voiceChars: 2000,
       userContent: "Faut-il migrer ?",
       history: [{ role: "user", content: "message antérieur" }],
       prompts: { conseiller: "Tu es conseiller ({angle}) — débat de {tours} tours.", juge: "Verdict après {tours} tours." },
@@ -183,6 +191,43 @@ async function unitTests() {
   check("une seule réponse conservée — le verdict", debateResult.tag.startsWith("Verdict · Débat — 3 tours"), debateResult.tag);
   check("le déroulé du débat est complet (10 lignes, toutes done)", debateRows.length === 10 && debateRows.every((r) => r.status === "done"), `${debateRows.length}`);
 
+  // A6.a.bis Débat PARALLÈLE par défaut (F-57) : les 3 voix d'un même tour
+  // partent ensemble — un faux moteur de 15 ms par voix donne ~60 ms en
+  // parallèle, ~150 ms si les 9 tours de voix s'enchaînaient.
+  {
+    const tPar = Date.now();
+    const slowDeps: orch.OrchestratorDeps = {
+      runVoiceTurn: async () => {
+        await new Promise((r) => setTimeout(r, 15));
+        return { content: "avis", reasoning: "", model: "fake" };
+      },
+    };
+    await orch.runOrchestratedTurn(
+      {
+        conversationId: "c1p",
+        messageId: "m1p",
+        mode: "debate",
+        config: { voices: { debate: { sceptique: null, pragmatique: null, innovateur: null, juge: null } } },
+        rounds: 3,
+        voiceChars: 2000,
+        userContent: "Faut-il migrer ?",
+        history: [],
+        prompts: { conseiller: "c", juge: "j" },
+        signal,
+        onFlow: () => {},
+        onFinalDelta: () => {},
+        onFinalStatus: () => {},
+      },
+      slowDeps
+    );
+    const parMs = Date.now() - tPar;
+    check(
+      "débat parallèle par défaut (3 tours de voix concurrents, pas 9 enchaînés)",
+      parMs < 100,
+      `${parMs} ms`
+    );
+  }
+
   // A6.b Conseil — membres en parallèle, anonymisés, président fusionne
   seen.length = 0;
   let councilRows: any[] = [];
@@ -194,6 +239,7 @@ async function unitTests() {
       mode: "council",
       config: { members: 3, voices: { council: { "membre-a": "hermes-4-405b", president: null } } },
       rounds: null,
+      voiceChars: 2000,
       userContent: "Quel cap ?",
       history: [],
       prompts: { membre: "Tu es membre en lecture seule.", president: "{membres} avis anonymisés — fusionne." },
@@ -237,6 +283,7 @@ async function unitTests() {
       mode: "auto",
       config: { autoDebate: true, retries: 2 },
       rounds: null,
+      voiceChars: 2000,
       userContent: "Corrige le bug.",
       history: [],
       prompts: { debat: "Cadrage.", plan: "Plan.", code: "Applique.", test: "Prouve que ça tient.", reprise: "Cause racine — {reprises} restantes." },
@@ -290,6 +337,7 @@ async function unitTests() {
       mode: "debate",
       config: { voices: { debate: { sceptique: "webchat:aistudio:answer", pragmatique: null, innovateur: null, juge: null } } },
       rounds: 3,
+      voiceChars: 2000,
       userContent: "Question.",
       history: [],
       prompts: { conseiller: "c", juge: "j" },
@@ -349,6 +397,12 @@ async function unitTests() {
   // A10. shortModel — étiquette courte du déroulé
   check("shortModel Hermes 4 405B → H4 405B", orch.shortModel("hermes-4-405b") === "H4 405B", orch.shortModel("hermes-4-405b") ?? "");
   check("shortModel null → undefined", orch.shortModel(null) === undefined);
+
+  // Nettoyage : la base de test est jetable (fermeture propre + dossier
+  // temporaire retiré — le checkpoint WAL final évite les fichiers -wal
+  // orphelins).
+  store.close();
+  rmSync(tmpDir, { recursive: true, force: true });
 }
 
 // ── B. Service réel ─────────────────────────────────────────────────────

@@ -28,9 +28,12 @@ const TURN_TIMEOUT_MS = 180_000;
 const MODELS_TIMEOUT_MS = 4000;
 
 function toWsUrl(url: string): string {
-  if (url.startsWith("ws://") || url.startsWith("wss://")) return url;
-  if (url.endsWith("/api/ws")) return `ws://${url.replace(/^http/, "ws")}`;
-  return `ws://${url.replace(/^http/, "ws").replace(/\/$/, "")}/api/ws`;
+  // `replace(/^http/i, "ws")` convertit déjà http→ws et https→wss :
+  // re-préfixer par `ws://` produisait `ws://ws://…` / `ws://wss://…`
+  // (URL invalide). Une URL déjà en ws:// ou wss:// (sans /api/ws) est
+  // désormais complétée elle aussi.
+  const clean = url.trim().replace(/^http/i, "ws").replace(/\/+$/, "");
+  return clean.endsWith("/api/ws") ? clean : `${clean}/api/ws`;
 }
 
 function toHttpBase(url: string): string {

@@ -39,8 +39,12 @@ socket.on(
       rounds,
       Object.keys(modeConfig).length ? modeConfig : null,
     );
-    if (typeof cb === "function") cb({ conversation });
-    else socket.emit("conversations:created", { conversation });
+    if (typeof cb === "function") {
+      cb({ conversation });
+      // Autres onglets/sessions : le créateur a son ack — les fenêtres
+      // restées ouvertes suivent (socket.emit n'atteignait que l'émetteur).
+      socket.broadcast.emit("conversations:created", { conversation });
+    } else ctx.io.emit("conversations:created", { conversation });
   }
 );
 
@@ -98,7 +102,9 @@ socket.on("conversations:rename", (payload: { id?: string; title?: string }, cb?
   }
   const conversation = ctx.store.renameConversation(id, title.slice(0, 120));
   if (typeof cb === "function") cb({ conversation });
-  if (conversation) socket.emit("conversations:renamed", { conversation });
+  // F-14 (broadcast) : io.emit — le renommage doit atteindre les autres
+  // onglets/sessions, pas seulement la socket qui l'a demandé.
+  if (conversation) ctx.io.emit("conversations:renamed", { conversation });
 });
 
 socket.on("conversations:delete", (payload: { id?: string }, cb?: (data: unknown) => void) => {
@@ -126,7 +132,8 @@ socket.on("conversations:delete", (payload: { id?: string }, cb?: (data: unknown
   ctx.store.revokeSharesOfConversation(id);
   ctx.store.deleteConversation(id);
   if (typeof cb === "function") cb({ ok: true, id });
-  socket.emit("conversations:deleted", { id });
+  // F-14 (broadcast) : la suppression doit atteindre toutes les sessions.
+  ctx.io.emit("conversations:deleted", { id });
 });
 
 socket.on("conversations:open", (payload: { id?: string }, cb?: (data: unknown) => void) => {
@@ -176,7 +183,8 @@ socket.on(
       return;
     }
     if (typeof cb === "function") cb({ conversation });
-    socket.emit("conversations:pinned", { conversation });
+    // F-14 (broadcast) : l'épingle doit atteindre toutes les sessions.
+    ctx.io.emit("conversations:pinned", { conversation });
   }
 );
 
@@ -199,7 +207,9 @@ socket.on(
       return;
     }
     if (typeof cb === "function") cb({ conversation: forked });
-    socket.emit("conversations:created", { conversation: forked });
+    // F-14 (broadcast) : l'émetteur a son ack et ouvre la branche via
+    // conversations:open — les autres onglets suivent via broadcast.
+    socket.broadcast.emit("conversations:created", { conversation: forked });
   }
 );
 
@@ -607,6 +617,13 @@ socket.on(
       ...result.removedIds,
       messageId,
     ]);
+    // D-02.4 (broadcast) : quand le résumé vient d'être invalidé, les autres
+    // sessions (et la jauge locale) ne l'apprenaient pas — on diffuse l'état
+    // de compaction à jour (null = contexte repart complet).
+    ctx.io.emit("conversation:compacted", {
+      conversationId,
+      compact: ctx.compactInfoWire(conversationId),
+    });
     if (typeof cb === "function")
       cb({ ok: true, message: result.message, removedIds: result.removedIds });
     ctx.io.emit("message:updated", {
@@ -661,6 +678,14 @@ socket.on(
       if (typeof cb === "function") cb({ error: "Paramètres manquants" });
       return;
     }
+    // F-14 (garde) : même refus propre que les autres mutations — la
+    // suppression sous un tour en vol laissait le finally du tour
+    // réinscrire sa réponse dans un fil amputé.
+    if (ctx.isRunning(conversationId)) {
+      if (typeof cb === "function")
+        cb({ error: "Un tour est déjà en cours dans cette conversation" });
+      return;
+    }
     const removed = ctx.store.deleteMessage(conversationId, messageId);
     if (!removed) {
       if (typeof cb === "function") cb({ error: "Message introuvable" });
@@ -684,11 +709,14 @@ socket.on(
     // les clients qui nettoient un état local (tours optimistes…).
     const refreshed = ctx.store.getMessages(conversationId);
     ctx.attachArtifactCards(conversationId, refreshed);
-    const compact = ctx.readCompact(conversationId);
+    // F-14 (compaction) : compactInfoWire (vue wire, pas le résumé brut de
+    // readCompact) et TOUJOURS présent — même null quand le résumé vient
+    // d'être invalidé, sinon le client garde sa jauge périmée.
+    const compact = ctx.compactInfoWire(conversationId);
     ctx.io.emit("messages:refreshed", {
       conversationId,
       messages: refreshed,
-      ...(compact ? { compact } : {}),
+      compact: compact ?? null,
     });
     ctx.io.emit("message:deleted", { conversationId, messageId });
   }
@@ -722,6 +750,10 @@ socket.on(
       return;
     }
     if (typeof cb === "function") cb({ ok: true });
+    // F-14 : les cartes d'artefacts doivent suivre le fil rediffusé — sans
+    // l'attachement, TOUTES les cartes de la conversation disparaissaient
+    // de l'écran dès qu'on naviguait entre ‹ 1/2 ›.
+    ctx.attachArtifactCards(conversationId, messages);
     ctx.io.emit("messages:refreshed", { conversationId, messages });
   }
 );
@@ -794,16 +826,16 @@ socket.on(
         "[hermes-chat] compaction impossible :",
         err instanceof Error ? err.message : err
       );
+      // L'ack négatif suffit — le client l'affiche déjà proprement. Pas de
+      // stream:error ici : cette alerte persistante propose « Réessayer »
+      // qui RÉGÉNÈRE la dernière réponse assistant (comportement absurde
+      // pour un échec de compaction).
       if (typeof cb === "function") {
         cb({
           ok: false,
           error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,
         });
       }
-      ctx.io.emit("stream:error", {
-        conversationId,
-        error: `Compaction impossible : ${err instanceof Error ? err.message : "erreur inconnue"}`,
-      });
     }
   }
 );

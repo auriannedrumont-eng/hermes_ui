@@ -99,17 +99,21 @@ socket.on(
     }
     const token = typeof payload?.token === "string" ? payload.token : undefined;
     try {
+      // S-02 : lire l'ancienne URL AVANT d'écrire la nouvelle — l'ancien code
+      // comparait à la ligne fraîchement écrite, donc urlChanged valait
+      // toujours false et le jeton persisté n'était jamais effacé quand
+      // l'URL changeait sans nouveau jeton.
+      const previousSavedUrl = (ctx.store.getSetting(ctx.GATEWAY_URL_KEY) ?? "").trim();
+      const urlChanged = Boolean(url && url !== previousSavedUrl);
       const mode = await ctx.connector.setGateway(url || null, token);
       ctx.store.setSetting(ctx.GATEWAY_URL_KEY, url);
       // S-02 : si l'URL a changé sans nouveau jeton, setGateway a effacé le
       // jeton en mémoire — la ligne persistée suit (pas de jeton fantôme
       // qui repartirait vers la nouvelle destination au redémarrage).
-      const urlChanged = url && url !== ctx.store.getSetting(ctx.GATEWAY_URL_KEY);
-      if (token !== undefined) ctx.store.setSetting(ctx.GATEWAY_TOKEN_KEY, token);
-      else if (urlChanged || !url) ctx.store.setSetting(ctx.GATEWAY_TOKEN_KEY, "");
       // F-02.3 : un jeton saisi POUR le défaut automatique (URL vide) est
-      // désormais persisté aussi — il survit au redémarrage du service.
-      if (token !== undefined && !url) ctx.store.setSetting(ctx.GATEWAY_TOKEN_KEY, token);
+      // persisté aussi — il survit au redémarrage du service.
+      if (token !== undefined) ctx.store.setSetting(ctx.GATEWAY_TOKEN_KEY, token.trim());
+      else if (urlChanged || !url) ctx.store.setSetting(ctx.GATEWAY_TOKEN_KEY, "");
       console.log(
         `[hermes-chat] gateway ${url ? `"${url}"` : "débranchée"} → mode : ${mode}`
       );

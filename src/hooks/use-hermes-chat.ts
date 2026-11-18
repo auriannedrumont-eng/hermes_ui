@@ -549,6 +549,16 @@ export function useHermesChat() {
       );
     };
 
+    // Renommage (broadcast d'une autre session) : le titre de la liste
+    // suivait uniquement dans la fenêtre qui avait renommé.
+    const onConversationsRenamed = (p: { conversation?: ConversationMeta }) => {
+      if (!p.conversation) return;
+      const conv = p.conversation;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, title: conv.title } : c))
+      );
+    };
+
     // ── Projets : synchronisation multi-sessions ───────────────────
     const onProjectCreated = (p: { project?: Project }) => {
       if (!p.project) return;
@@ -633,15 +643,24 @@ export function useHermesChat() {
       const ids = new Set(p.messageIds);
       setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
     };
-    const onMessagesRefreshed = (p: { conversationId: string; messages: ChatMessage[] }) => {
+    const onMessagesRefreshed = (p: {
+      conversationId: string;
+      messages: ChatMessage[];
+      compact?: CompactInfo | null;
+    }) => {
       if (p.conversationId !== activeIdRef.current) return;
       setMessages(p.messages ?? []);
+      // F-14 (compaction) : le fil rediffusé emporte l'état de compaction
+      // quand le service le fournit (y compris null = résumé invalidé —
+      // la jauge repart honnêtement à zéro).
+      if ("compact" in p) setCompactInfo(p.compact ?? null);
     };
     socket.on("messages:superseded", onMessagesSuperseded);
     socket.on("messages:refreshed", onMessagesRefreshed);
     socket.on("message:updated", onMessageUpdated);
     socket.on("conversations:pinned", onConversationsPinned);
     socket.on("conversations:created", onConversationsCreated);
+    socket.on("conversations:renamed", onConversationsRenamed);
     socket.on("projects:created", onProjectCreated);
     socket.on("projects:renamed", onProjectRenamed);
     socket.on("projects:deleted", onProjectDeleted);
@@ -678,6 +697,7 @@ export function useHermesChat() {
       socket.off("message:updated", onMessageUpdated);
       socket.off("conversations:pinned", onConversationsPinned);
       socket.off("conversations:created", onConversationsCreated);
+      socket.off("conversations:renamed", onConversationsRenamed);
       socket.off("projects:created", onProjectCreated);
       socket.off("projects:renamed", onProjectRenamed);
       socket.off("projects:deleted", onProjectDeleted);
@@ -896,10 +916,10 @@ export function useHermesChat() {
           error?: string;
         } = {}) => {
           if (res?.done) {
-            toast({
-              title: "Résumé automatique créé",
-              description: "La conversation continue, allégée en tête de session.",
-            });
+            // Pas de toast ici : le service diffuse déjà conversation:compacted,
+            // dont onConversationCompacted affiche le toast avec le nombre
+            // EXACT de messages résumés — l'ancien double toast racontait
+            // deux fois la même histoire à l'utilisateur.
             finish();
           } else if (res && (res.ok === false || res.error)) {
             toast({
@@ -1026,15 +1046,21 @@ export function useHermesChat() {
         // retrouve le modèle de ce côté depuis le libellé de sa réponse.
         const last = [...messages].reverse().find((m) => m.variant === variant);
         const id = modelIdFromLabel(last?.model) ?? selectedModelRef.current ?? undefined;
+        // F-17/F-14 : retirer la réponse assistant de CETTE variante située
+        // APRÈS le dernier message utilisateur — l'ancienne boucle par la fin
+        // butait sur la réponse de l'autre variante (b en fin de fil : la
+        // réponse a restait affichée en doublon du tour relancé).
         setMessages((prev) => {
-          const next = [...prev];
-          while (
-            next.length > 0 &&
-            next[next.length - 1].role === "assistant" &&
-            next[next.length - 1].variant === variant
-          )
-            next.pop();
-          return next;
+          let lastUserIdx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].role === "user") {
+              lastUserIdx = i;
+              break;
+            }
+          }
+          return prev.filter(
+            (m, idx) => !(idx > lastUserIdx && m.role === "assistant" && m.variant === variant)
+          );
         });
         getSocket().emit("chat:regenerate", { conversationId, variant, model: id, ...base }, resync);
         return;

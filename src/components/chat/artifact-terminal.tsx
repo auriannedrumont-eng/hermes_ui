@@ -27,7 +27,7 @@ function heure(iso: string): string {
 
 function LigneOutil({ event }: { event: ToolEvent }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-1 font-mono text-[11.5px] leading-relaxed">
+    <div className="flex items-start gap-2 px-3 py-1 font-mono text-[11px] leading-relaxed">
       {event.status === "running" ? (
         <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-zinc-400" />
       ) : event.status === "error" ? (
@@ -82,7 +82,7 @@ export function ArtifactTerminal({
           setRepliManuel(true);
           setOpen((o) => !o);
         }}
-        className="flex h-8 w-full items-center gap-2 bg-muted/30 px-3 text-[12px] text-muted-foreground transition-colors hover:bg-muted/50"
+        className="flex h-8 w-full items-center gap-2 bg-muted/30 px-3 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted/50"
         aria-expanded={open}
         title={open ? "Replier le terminal" : "Déplier le terminal"}
       >
@@ -107,7 +107,7 @@ export function ArtifactTerminal({
       {open ? (
         <div ref={scrollRef} className="max-h-44 overflow-y-auto bg-[#0d1117]">
           {events.length === 0 ? (
-            <p className="px-3 py-2 font-mono text-[11.5px] text-zinc-500">
+            <p className="px-3 py-2 font-mono text-[11px] text-zinc-500">
               Hermes travaille…
             </p>
           ) : (

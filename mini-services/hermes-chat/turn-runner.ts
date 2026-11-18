@@ -868,6 +868,16 @@ const runAssistantTurn = async (
 
     // Arrêt avant le premier jeton : rien à conserver, pas de bulle vide
     if (stopped && !contentAcc && !reasoningAcc && toolEvents.length === 0) {
+      // F-14 : régénération stoppée avant le premier jeton — l'ancienne
+      // réponse, passée à version_active = 0 par supersedeTrailingAssistant
+      // AVANT le tour, est réactivée au lieu de disparaître définitivement
+      // du fil (aucune nouvelle version n'a été insérée).
+      if (opts.versionGroup) {
+        store.restoreLatestVersion(conversationId, opts.versionGroup);
+        const refreshed = store.getMessages(conversationId);
+        attachArtifactCards(conversationId, refreshed);
+        io.emit("messages:refreshed", { conversationId, messages: refreshed });
+      }
       const conversation = store.touchConversation(conversationId) ?? undefined;
       io.emit("stream:done", {
         conversationId,
@@ -975,6 +985,16 @@ const runAssistantTurn = async (
         ...(variant ? { variant } : {}),
       });
     } else {
+      // F-14 : tour régénéré en échec avant le premier jeton — même
+      // restauration que l'arrêt à vide : sans elle, toutes les versions
+      // du groupe restaient à version_active = 0 et la réponse disparaissait
+      // définitivement du fil.
+      if (!partial && opts.versionGroup) {
+        store.restoreLatestVersion(conversationId, opts.versionGroup);
+        const refreshed = store.getMessages(conversationId);
+        attachArtifactCards(conversationId, refreshed);
+        io.emit("messages:refreshed", { conversationId, messages: refreshed });
+      }
       // Erreur réelle : le partiel persisté part avec l'événement — le client
       // l'affiche dans le fil et propose « Réessayer » (F-04).
       trace(

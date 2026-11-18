@@ -234,7 +234,7 @@ export function DebugBridge() {
           Copier le diagnostic
         </button>
         {copied ? (
-          <span className="text-[12px] text-emerald-600">copié ✓ collez-le à l&apos;agent</span>
+          <span className="text-[12.5px] text-emerald-600">copié ✓ collez-le à l&apos;agent</span>
         ) : null}
       </div>
       {report && !copied ? (
@@ -243,7 +243,7 @@ export function DebugBridge() {
             readOnly
             value={report}
             onFocus={(e) => e.currentTarget.select()}
-            className="h-28 w-full resize-y rounded-md border bg-muted/50 p-2 font-mono text-[10.5px]"
+            className="h-28 w-full resize-y rounded-md border bg-muted/50 p-2 font-mono text-[11px]"
           />
         </div>
       ) : null}

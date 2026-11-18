@@ -169,7 +169,9 @@ export function shortModel(modelId: string | null | undefined): string | undefin
   if (wc) return FICHES[wc.site].label;
   const label = modelLabel(modelId);
   const m = /^(Hermes|GLM|GPT|Claude)\s+(.+)$/.exec(label);
-  if (!m) return label.length <= 14 ? label : undefined;
+  // F-30b : un modèle tiers au nom long reste affiché (tronqué) — l'ancien
+  // `undefined` masquait la puce du modèle dans le déroulé.
+  if (!m) return label.length <= 14 ? label : `${label.slice(0, 13).trimEnd()}…`;
   const sigle = m[1] === "Hermes" ? "H" : m[1] === "Claude" ? "CL" : m[1];
   return `${sigle}${m[2]}`;
 }
@@ -220,7 +222,12 @@ async function runVoiceWithRow(
   //  3. les sources web du tour sont injectées en fin de prompt système.
   const resolvedModelId = req.modelId ?? ctx.modelId ?? null;
   const rolePrompt = req.systemPrompt ?? "";
-  const localPrompt = ctx.localSystemPrompt?.trim() ?? "";
+  // F-30b : les instructions locales composées (mémoire F-18, instructions
+  // globales F-19, prompt de conversation F-11 — ~2 100 caractères) ne
+  // partent PAS vers un chat IA web : turn-runner les prépenderait au
+  // message TAPÉ dans le navigateur du site piloté.
+  const isWebchat = Boolean(resolvedModelId && resolvedModelId.startsWith("webchat:"));
+  const localPrompt = isWebchat ? "" : (ctx.localSystemPrompt?.trim() ?? "");
   const webSection = ctx.webSearchSection?.trim() ?? "";
   const composedPrompt = [localPrompt, rolePrompt, webSection]
     .filter(Boolean)

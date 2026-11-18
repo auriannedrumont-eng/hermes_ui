@@ -712,6 +712,23 @@ export function createLlmPool(store: Store): LlmPoolApi {
       if (!data) return;
       if (typeof data.model === "string" && data.model) model = data.model;
       switch (data.type) {
+        // message_start porte usage.input_tokens (jetons du prompt) et le
+        // modèle réellement servi — l'ignorer laissait l'usage Anthropic
+        // sans entrée « input » jusqu'au message_delta final (F-21).
+        case "message_start": {
+          if (typeof data.message?.model === "string" && data.message.model) {
+            model = data.message.model;
+          }
+          const u = data.message?.usage;
+          if (u && typeof u === "object") {
+            usage = {
+              input: typeof u.input_tokens === "number" ? u.input_tokens : usage?.input,
+              output: typeof u.output_tokens === "number" ? u.output_tokens : usage?.output,
+              cost: usage?.cost,
+            };
+          }
+          break;
+        }
         case "content_block_delta": {
           const d = data.delta ?? {};
           if (typeof d.thinking === "string" && d.thinking) {

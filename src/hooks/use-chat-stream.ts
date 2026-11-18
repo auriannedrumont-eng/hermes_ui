@@ -101,7 +101,6 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
         `mort. Ouvrez le dépannage (icône clé à molette en haut à droite, ou ?debug=1 ` +
         `dans l'adresse) puis « Copier le diagnostic » pour voir lequel.`;
     // tick : relance la dérivation quand l'horloge avance pendant un tour
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turnState, tick]);
 
   useEffect(() => {

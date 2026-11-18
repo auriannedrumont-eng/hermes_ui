@@ -12,7 +12,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { ModeFlowRow, StreamingState } from "@/lib/chat-types";
+import type { ModeFlowRow, StreamingState, ToolEvent } from "@/lib/chat-types";
 
 // ── L'état du store (une seule source de vérité, hors React) ───────────
 
@@ -36,6 +36,14 @@ const EMPTY: StreamSnapshot = {
 
 let snapshot: StreamSnapshot = EMPTY;
 const listeners = new Set<() => void>();
+
+// Cache de référence du hook useStreamTurnTools (F-29) : getSnapshot doit
+// retourner une référence STABLE tant que toolEvents ne change pas, sinon
+// re-render en boucle du consommateur.
+const turnToolsCache = new Map<
+  string,
+  { ref: ToolEvent[]; result: { events: ToolEvent[]; live: boolean } }
+>();
 
 function emit() {
   for (const l of Array.from(listeners)) l();
@@ -78,6 +86,7 @@ export const streamStore = {
   },
   /** Vidage complet (changement de conversation, déconnexion persistante). */
   reset() {
+    turnToolsCache.clear();
     if (snapshot !== EMPTY) {
       snapshot = EMPTY;
       emit();
@@ -152,6 +161,32 @@ export function useModeFlowLive() {
     streamStore.subscribe,
     () => snapshot.modeFlowLive,
     () => EMPTY.modeFlowLive
+  );
+}
+
+/** Outils du tour d'un message donné (F-29, régression §60) — consommé par
+ *  ArtifactPanel : le terminal des outils suit chaque stream:tool SANS
+ *  re-rendre page.tsx (resolveTurnTools y lisait le store SANS abonnement :
+ *  le terminal restait figé pendant le tour). */
+export function useStreamTurnTools(
+  messageId?: string
+): { events: ToolEvent[]; live: boolean } | null {
+  return useSyncExternalStore(
+    streamStore.subscribe,
+    () => {
+      if (!messageId) return null;
+      const s = snapshot.streamsRecord[messageId];
+      if (!s) {
+        turnToolsCache.delete(messageId);
+        return null;
+      }
+      const cached = turnToolsCache.get(messageId);
+      if (cached && cached.ref === s.toolEvents) return cached.result;
+      const result = { events: s.toolEvents, live: true };
+      turnToolsCache.set(messageId, { ref: s.toolEvents, result });
+      return result;
+    },
+    () => null
   );
 }
 

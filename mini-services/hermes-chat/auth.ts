@@ -62,16 +62,19 @@ export function socketAuthorized(socket: {
   return timingSafeEqualStr(presented, SERVICE_TOKEN);
 }
 
-/** Comparaison en temps constant de deux chaînes (anti-chronométrage). */
+/** Comparaison en temps constant de deux chaînes (anti-chronométrage).
+ *  Travailler sur les buffers UTF-8 : deux chaînes de même longueur UTF-16
+ *  peuvent avoir des longueurs d'octets différentes (et réciproquement), et
+ *  timingSafeEqual rejette de toute façon des tailles inégales — l'ancien
+ *  « amortissement » via timingSafeEqualImpl court-circuitait sans jamais
+ *  appeler timingSafeEqual, révélant la différence de longueur. */
 export function timingSafeEqualStr(a: string, b: string): boolean {
-  if (a.length !== b.length) {
+  const bufA = Buffer.from(a, "utf-8");
+  const bufB = Buffer.from(b, "utf-8");
+  if (bufA.length !== bufB.length) {
     // Compare quand même pour uniformiser le temps, puis rejette
-    timingSafeEqualImpl(Buffer.from(a), Buffer.from(b));
+    timingSafeEqual(bufA, bufA);
     return false;
   }
-  return timingSafeEqualImpl(Buffer.from(a), Buffer.from(b));
-}
-function timingSafeEqualImpl(a: Buffer, b: Buffer): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return timingSafeEqual(bufA, bufB);
 }

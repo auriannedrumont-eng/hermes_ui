@@ -96,26 +96,16 @@ export const VOICE_CHARS_MIN = 500;
 export const VOICE_CHARS_MAX = 8000;
 export const VOICE_CHARS_DEFAULT = 2000;
 
-/** Valeurs par défaut des voix (réglage hermes.modes.voices — page Paramètres). */
+/** Valeurs par défaut des voix (réglage hermes.modes.voices — page Paramètres).
+ *  F-30b : null partout = « Modèle de la conversation » — les défauts ne
+ *  forcent PLUS des ids du catalogue Hermes (sinon Débat/Conseil/Auto
+ *  ignoraient le modèle choisi, et échouaient chez un utilisateur de
+ *  Webchat sans clé API ni gateway). Seul Comparer garde sa paire par
+ *  défaut (deux modèles distincts sont requis pour comparer). */
 export const DEFAULT_VOICES: Record<string, Record<string, string | null>> = {
-  debate: {
-    sceptique: "hermes-4-405b",
-    pragmatique: "hermes-4-70b",
-    innovateur: "hermes-3-405b",
-    juge: null,
-  },
-  council: {
-    "membre-a": "hermes-4-405b",
-    "membre-b": "hermes-4-70b",
-    "membre-c": null,
-    president: null,
-  },
-  auto: {
-    debat: "hermes-3-405b",
-    plan: "hermes-4-70b",
-    code: "hermes-4-405b",
-    test: "hermes-4-14b",
-  },
+  debate: { sceptique: null, pragmatique: null, innovateur: null, juge: null },
+  council: { "membre-a": null, "membre-b": null, "membre-c": null, president: null },
+  auto: { debat: null, plan: null, code: null, test: null },
   compare: { a: "hermes-4-405b", b: "hermes-4-70b" },
 };
 

@@ -314,7 +314,9 @@ export function MessageList({
                     artifactStreams={artifactStreams}
                     onOpenArtifact={onOpenArtifact}
                     onRetryArtifact={onRetryArtifact}
+                    showFlow={showFlow}
                     showFlowModels={showFlowModels}
+                    fallbackMode={conversationMode}
                   />
                 </div>
               ) : (
@@ -357,7 +359,9 @@ export function MessageList({
                   modeFlow={
                     liveFlowStreaming && showFlow ? (modeFlowLive?.rows ?? undefined) : undefined
                   }
+                  showFlow={showFlow}
                   showFlowModels={showFlowModels}
+                  fallbackMode={conversationMode}
                 />
               </div>
             ) : null}
@@ -380,10 +384,10 @@ export function MessageList({
             {stallNotice ? (
               <div
                 role="status"
-                className="flex items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5"
+                className="flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning/10 px-3.5 py-2.5"
               >
-                <Activity className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                <p className="min-w-0 flex-1 break-words text-[12.5px] text-amber-700 dark:text-amber-400">
+                <Activity className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <p className="min-w-0 flex-1 break-words text-[12.5px] text-warning">
                   {stallNotice}
                 </p>
               </div>
@@ -484,7 +488,7 @@ function ComparePair({
   return (
     <div className="min-w-0">
       {showChip ? (
-        <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-hermes/10 px-2.5 py-0.5 text-[10px] font-bold text-hermes-text">
+        <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-hermes/10 px-2.5 py-0.5 text-[11px] font-bold text-hermes-text">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 2l2.9 6.26L21.5 9.3l-4.75 4.87L17.8 21 12 17.77 6.2 21l1.05-6.83L2.5 9.3l6.6-1.04z" />
           </svg>

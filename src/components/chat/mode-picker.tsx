@@ -77,9 +77,9 @@ function Stepper({
       >
         <Minus className="h-3 w-3" />
       </button>
-      <span className="flex h-6.5 min-w-[64px] items-center justify-center gap-1 border-x border-border text-[11.5px] font-bold tabular-nums">
+      <span className="flex h-6.5 min-w-[64px] items-center justify-center gap-1 border-x border-border text-[11px] font-bold tabular-nums">
         {value}
-        <small className="font-medium text-[9.5px] text-muted-foreground">/ {maxLabel}</small>
+        <small className="font-medium text-[11px] text-muted-foreground">/ {maxLabel}</small>
       </span>
       <button
         type="button"
@@ -324,7 +324,7 @@ export function ModePicker({
         sideOffset={8}
         className="w-[430px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border-border p-0"
       >
-        <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-3 text-[11.5px] font-semibold text-muted-foreground">
+        <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-3 text-[11px] font-semibold text-muted-foreground">
           <def.icon className="h-3.5 w-3.5 text-hermes-text" />
           Mode du prochain message — propre à cette conversation
         </div>
@@ -359,10 +359,10 @@ export function ModePicker({
                   )}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13.5px] font-semibold leading-tight">
+                  <span className="block text-[14px] font-semibold leading-tight">
                     {m.label}
                   </span>
-                  <span className="mt-px block text-[11.5px] leading-snug text-muted-foreground">
+                  <span className="mt-px block text-[11px] leading-snug text-muted-foreground">
                     {m.desc}
                   </span>
                 </span>
@@ -375,7 +375,7 @@ export function ModePicker({
           {/* Bornes du mode actif — arrêtées à la saisie, comme le service */}
           {mode === "debate" ? (
             <>
-              <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 <span>Tours du débat</span>
                 <Stepper
                   value={current.rounds ?? DEBATE_ROUNDS_MIN}
@@ -386,7 +386,7 @@ export function ModePicker({
                   onChange={(v) => patch((c) => ({ ...c, rounds: v }))}
                 />
               </div>
-              <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 <span>Voix du tour en parallèle (par défaut, rapide)</span>
                 <SwitchMini
                   on={current.debateParallel !== false}
@@ -399,7 +399,7 @@ export function ModePicker({
             </>
           ) : null}
           {mode === "council" ? (
-            <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+            <div className="flex items-center justify-between gap-3 py-1 text-[11px] font-semibold text-muted-foreground">
               <span>Membres du conseil</span>
               <Stepper
                 value={current.members ?? COUNCIL_MEMBERS_MIN}
@@ -413,7 +413,7 @@ export function ModePicker({
           ) : null}
           {mode === "auto" ? (
             <>
-              <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 <span>Reprises après échec</span>
                 <Stepper
                   value={current.retries ?? 2}
@@ -424,7 +424,7 @@ export function ModePicker({
                   onChange={(v) => patch((c) => ({ ...c, retries: v }))}
                 />
               </div>
-              <div className="flex items-center justify-between gap-3 py-1 text-[11.5px] font-semibold text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 <span>Débat préalable (cadrage avant d&apos;agir)</span>
                 <SwitchMini
                   on={current.autoDebate !== false}
@@ -440,7 +440,7 @@ export function ModePicker({
               modèles voix par voix plus bas. */}
           {!def.hasVoices ? (
             <div className="mt-1.5">
-              <div className="flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11.5px] text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11px] text-muted-foreground">
                 <Cpu className="h-3.5 w-3.5 flex-none text-hermes-text" />
                 <span className="min-w-0 flex-1 truncate">
                   {modeModelId ? (
@@ -458,7 +458,7 @@ export function ModePicker({
                   type="button"
                   onClick={() => setModelOpen((v) => !v)}
                   aria-expanded={modelOpen}
-                  className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[10.5px] font-semibold text-foreground transition-colors hover:bg-muted"
+                  className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
                 >
                   {modelOpen ? "Fermer" : "Choisir"}
                 </button>
@@ -480,7 +480,7 @@ export function ModePicker({
 
           {/* « Qui travaille » — une voix par acteur du mode, son modèle à part */}
           {def.hasVoices ? (
-            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11.5px] text-muted-foreground">
+            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11px] text-muted-foreground">
               <Users className="h-3.5 w-3.5 flex-none text-hermes-text" />
               <span className="min-w-0 truncate">{whoTextFor(voices, modelByVoice)}</span>
               <button
@@ -490,7 +490,7 @@ export function ModePicker({
                   setOpenVoice(null);
                 }}
                 aria-expanded={voicesOpen}
-                className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[10.5px] font-semibold text-foreground transition-colors hover:bg-muted"
+                className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 {voicesOpen ? "Fermer" : "Voir"}
               </button>
@@ -504,15 +504,15 @@ export function ModePicker({
                 return (
                   <div key={v.id} className="border-t border-border first:border-t-0">
                     <div className="flex items-center gap-2 px-2.5 py-1.5">
-                      <span className="flex-none text-[12px] font-bold">{v.name}</span>
-                      <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted-foreground">
+                      <span className="flex-none text-[12.5px] font-bold">{v.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
                         {v.role}
                       </span>
                       <button
                         type="button"
                         onClick={() => setOpenVoice(expanded ? null : v.id)}
                         className={cn(
-                          "inline-flex max-w-[175px] flex-none items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold transition-colors",
+                          "inline-flex max-w-[175px] flex-none items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors",
                           mid
                             ? "border-hermes/35 bg-hermes/10 text-hermes-text"
                             : "border-border bg-card text-foreground hover:bg-muted"

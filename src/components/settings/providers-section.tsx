@@ -34,6 +34,7 @@ import {
 import type { ProviderKind, ProviderStrategy, ProviderView } from "@/lib/chat-types";
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { AddAnything } from "@/components/settings/add-anything";
+import { Segmented } from "@/components/shared/segmented";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -97,11 +98,15 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   const hasDefault = api.catalog.some((c) => c.name === provider.name);
 
   // Les champs endpoint suivent le fournisseur (bascule automatique z.ai
-  // au test, édition depuis un autre champ) : resynchronisation continue.
-  useEffect(() => {
+  // au test, édition depuis un autre champ) : ajustement d'état pendant le
+  // rendu (motif React officiel) — un effet appelant setState synchronement
+  // est interdit par la règle react-hooks/set-state-in-effect.
+  const [prevEndpoint, setPrevEndpoint] = useState(endpoint);
+  if (endpoint !== prevEndpoint) {
+    setPrevEndpoint(endpoint);
     setKeyEndpoint(endpoint);
     setAdvEndpoint(endpoint);
-  }, [endpoint]);
+  }
 
   const handleAddKey = async () => {
     if (!keySecret.trim() || addingKey) return;
@@ -337,7 +342,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="flex-none text-[11px] font-semibold text-muted-foreground">
-                  Endpoint
+                  Adresse
                 </span>
                 <input
                   value={keyEndpoint}
@@ -422,29 +427,17 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   comment choisir la prochaine clé quand il faut changer
                 </span>
               </span>
-              <div
-                role="radiogroup"
-                aria-label="Ordre d'utilisation des clés"
-                className="flex flex-none gap-0.5 rounded-md bg-background p-[2.5px]"
-              >
-                {(Object.keys(STRATEGY_LABELS) as ProviderStrategy[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    role="radio"
-                    aria-checked={provider.strategy === s}
-                    title={STRATEGY_LABELS[s].sub}
-                    onClick={() => handleStrategy(s)}
-                    className={cn(
-                      "cursor-pointer rounded-sm px-[9px] py-[5px] text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground",
-                      "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
-                      provider.strategy === s && "bg-card font-semibold text-hermes-text shadow-sm"
-                    )}
-                  >
-                    {STRATEGY_LABELS[s].label}
-                  </button>
-                ))}
-              </div>
+              {/* Le segmenté partagé du repo (audit C1.3) : radiogroup
+                  accessible — flèches pour naviguer, tabindex roving. */}
+              <Segmented
+                ariaLabel="Ordre d'utilisation des clés"
+                options={(Object.keys(STRATEGY_LABELS) as ProviderStrategy[]).map((s) => ({
+                  value: s,
+                  label: STRATEGY_LABELS[s].label,
+                }))}
+                value={provider.strategy}
+                onChange={(v) => void handleStrategy(v as ProviderStrategy)}
+              />
             </div>
           ) : null}
         </div>

@@ -1063,9 +1063,23 @@ function Do-Start {
     if ($lproc -and ($lproc.CommandLine -match 'hermes-ui\.ps1')) {
         $lanceurPerime = $false
         try {
-            if ($lproc.CreationDate -and (Test-Path $LauncherScript)) {
-                $ageScript = ((Get-Item $LauncherScript).LastWriteTime) - $lproc.CreationDate
-                if ($ageScript.TotalSeconds -gt 5) { $lanceurPerime = $true }
+            if (Test-Path $LauncherScript) {
+                # Reference : les ticks du script ENREGISTRES au demarrage du
+                # lanceur courant (LAUNCHER_SCRIPT_TICKS). Ensure-PortableSetup
+                # met a jour hermes-ui.ps1 PENDANT le demarrage initial
+                # (Update-FromGit) : le LastWriteTime du script devient alors
+                # plus recent que CreationDate du processus SANS que le
+                # lanceur soit perime — un second double-clic tuait toute la
+                # pile en croyant remplacer un lanceur obsolote. CreationDate
+                # ne reste qu'en repli (lanceur ancien sans ticks connus).
+                $scriptTicks = (Get-Item $LauncherScript).LastWriteTimeUtc.Ticks
+                $knownTicks = 0L; [long]::TryParse((State-Get 'LAUNCHER_SCRIPT_TICKS'), [ref]$knownTicks) | Out-Null
+                if ($knownTicks -gt 0) {
+                    if ($scriptTicks -gt $knownTicks) { $lanceurPerime = $true }
+                } elseif ($lproc.CreationDate) {
+                    $ageScript = ((Get-Item $LauncherScript).LastWriteTime) - $lproc.CreationDate
+                    if ($ageScript.TotalSeconds -gt 5) { $lanceurPerime = $true }
+                }
             }
         } catch { }
         if ($lanceurPerime) {
@@ -1108,6 +1122,14 @@ function Do-Start {
     # Installation portable automatique de tout ce qui manque (idempotente)
     Ensure-PortableSetup
     Initialize-JobObject
+
+    # Ticks du script APRES l'installation portable : Update-FromGit peut y
+    # avoir mis a jour hermes-ui.ps1 lui-meme — c'est CETTE reference qui
+    # jugera de la peremption au prochain double-clic (cf. commentaire du
+    # test de peremption ci-dessus), pas le LastWriteTime brut du disque.
+    try {
+        State-Set 'LAUNCHER_SCRIPT_TICKS' (Get-Item $LauncherScript).LastWriteTimeUtc.Ticks
+    } catch { }
 
     # Choix des ports AVANT le moindre demarrage (tout ou rien)
     $gw = Pick-Port $GwPorts

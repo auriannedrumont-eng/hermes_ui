@@ -12,12 +12,23 @@ param([switch]$Remove)
 $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Split-Path -Parent $ScriptDir
 $Desktop   = [Environment]::GetFolderPath('Desktop')
 $StartMenu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Hermes Web'
 
+# Hermes-Web.bat vit a la RACINE du projet (installation automatique dans
+# tools\ au premier lancement) — pas dans desktop\. Le raccourci d'arret
+# appelle hermes-ui.ps1 stop directement via powershell.exe (meme arret
+# propre que Hermes-Web-Arret.bat, sans fenetre .bat intermediaire).
 $links = @(
-    @{ Name = 'Hermes Web.lnk';         Target = 'Hermes-Web.bat' },
-    @{ Name = 'Hermes Web - Arret.lnk'; Target = 'Hermes-Web-Arret.bat' }
+    @{ Name = 'Hermes Web.lnk';
+       Target = (Join-Path $ProjectRoot 'Hermes-Web.bat');
+       Arguments = $null;
+       WorkDir = $ProjectRoot },
+    @{ Name = 'Hermes Web - Arret.lnk';
+       Target = 'powershell.exe';
+       Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $ScriptDir 'hermes-ui.ps1')`" stop";
+       WorkDir = $ProjectRoot }
 )
 
 if ($Remove) {
@@ -66,8 +77,9 @@ foreach ($dir in @($Desktop, $StartMenu)) {
     foreach ($l in $links) {
         $lnkPath = Join-Path $dir $l.Name
         $s = $ws.CreateShortcut($lnkPath)
-        $s.TargetPath       = Join-Path $ScriptDir $l.Target
-        $s.WorkingDirectory = $ScriptDir
+        $s.TargetPath       = $l.Target
+        if ($l.Arguments) { $s.Arguments = $l.Arguments }
+        $s.WorkingDirectory = $l.WorkDir
         $s.IconLocation     = "$icon,0"
         if ($l.Name -like '*Arret*') { $s.Description = 'Arret propre de la pile Hermes Web' }
         else { $s.Description = 'Demarre Hermes Web et ouvre le navigateur' }

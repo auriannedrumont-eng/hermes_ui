@@ -3,15 +3,14 @@
 // n'hérite plus des artefacts du futur et COPIE les fichiers dérivés, et la
 // recherche plein-texte échappe bien % _ \ (le correctif précédent produisait
 // le littéral « ${c} » et laissait % comme joker).
-// Le store est monté EN PROCESSUS sur une base jetable (base de dev mise de
-// côté pendant le test puis restituée, comme test-pool-ghost-streams).
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+// Le store est monté EN PROCESSUS sur une base jetable : HERMES_CHAT_DB
+// pointe vers un dossier temporaire AVANT l'import dynamique du Store — plus
+// de déplacement physique de la base de développement (fragile : un crash au
+// milieu laissait la base renommée en .test-lot2-backup).
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ARTIFACTS_DIR, artifactThumbPath } from "../mini-services/hermes-chat/artifacts";
-import { Store } from "../mini-services/hermes-chat/store";
-
-const DB_DIR = join(import.meta.dir, "..", "db");
-const DB_BASE = join(DB_DIR, "hermes-chat.sqlite");
 
 let failures = 0;
 function check(label: string, ok: boolean, extra = "") {
@@ -19,33 +18,22 @@ function check(label: string, ok: boolean, extra = "") {
   if (!ok) failures++;
 }
 
-// ── mise de côté de la base de dev (le store écrit à un chemin fixe) ─────
-const backups: string[] = [];
-for (const suffix of ["", "-wal", "-shm"]) {
-  const src = DB_BASE + suffix;
-  if (existsSync(src)) {
-    renameSync(src, src + ".test-lot2-backup");
-    backups.push(src);
+// ── base jetable isolée : HERMES_CHAT_DB AVANT l'import du Store ─────────
+const tmpDir = mkdtempSync(join(tmpdir(), "hermes-lot2-"));
+process.env.HERMES_CHAT_DB = join(tmpDir, "hermes-chat.sqlite");
+function cleanupDb() {
+  // Garde anti double-appel (finally + catch) : rmSync force ne râle pas.
+  try {
+    rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    /* déjà retiré */
   }
-}
-function restoreDb() {
-  // Ne supprimer QUE les fichiers de base créés par le test (jamais le
-  // dossier entier — les backups vivent dedans, cf. leçon pool-ghosts).
-  for (const suffix of ["", "-wal", "-shm"]) {
-    const f = DB_BASE + suffix;
-    if (existsSync(f)) rmSync(f, { force: true });
-  }
-  for (const src of backups) {
-    const b = src + ".test-lot2-backup";
-    if (existsSync(b)) renameSync(b, src);
-  }
-  backups.length = 0; // garde anti double-appel (finally + catch)
 }
 
 async function main() {
-  let store: Store | null = null;
+  const { Store } = await import("../mini-services/hermes-chat/store");
+  let store: InstanceType<typeof Store> | null = null;
   try {
-    mkdirSync(DB_DIR, { recursive: true });
     store = new Store();
 
     console.log("[1] purge des artefacts à la suppression d'un message (L2-1)");
@@ -60,7 +48,7 @@ async function main() {
       name: "rapport.html",
       mime: "text/html",
       content: "<h1>bonjour</h1>",
-      status: "done",
+      status: "ready",
     });
     check("artefact ancré sur le message 2 présent", store.listConversationArtifacts(conv1.id).length === 1);
     store.deleteMessage(conv1.id, m2.id);
@@ -82,7 +70,7 @@ async function main() {
       name: "schema.html",
       mime: "text/html",
       content: "<svg></svg>",
-      status: "done",
+      status: "ready",
     });
     const edit = store.editUserMessageAndTruncate(conv2.id, e1.id, "question reformulée");
     check("troncature renvoie les ids supprimés", (edit?.removedIds.length ?? 0) === 2,
@@ -99,11 +87,11 @@ async function main() {
     const f4 = store.appendMessage({ conversationId: conv3.id, role: "assistant", content: "r2" });
     const inBranch = store.insertArtifact({
       conversationId: conv3.id, messageId: f2.id, key: "branche.html", kind: "html",
-      name: "branche.html", mime: "text/html", content: "<p>branche</p>", status: "done",
+      name: "branche.html", mime: "text/html", content: "<p>branche</p>", status: "ready",
     });
     const future = store.insertArtifact({
       conversationId: conv3.id, messageId: f4.id, key: "futur.html", kind: "html",
-      name: "futur.html", mime: "text/html", content: "<p>futur</p>", status: "done",
+      name: "futur.html", mime: "text/html", content: "<p>futur</p>", status: "ready",
     });
     // Fichier dérivé « déjà rendu » sur l'artefact DANS la branche : le fork
     // doit en recevoir une copie sous SON id.
@@ -146,7 +134,7 @@ async function main() {
       `${hitsComma.length} hit(s)`);
   } finally {
     store?.close();
-    restoreDb();
+    cleanupDb();
   }
 
   console.log(failures === 0 ? "\nIntégrité Lot 2 : 0 échec" : `\nIntégrité Lot 2 : ${failures} échec(s)`);
@@ -155,6 +143,6 @@ async function main() {
 
 main().catch((e) => {
   console.error("Erreur du test :", e);
-  restoreDb();
+  cleanupDb();
   process.exit(1);
 });

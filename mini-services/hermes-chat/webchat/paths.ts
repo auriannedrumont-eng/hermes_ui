@@ -24,7 +24,13 @@ export function safeBasename(name: string): string {
 export function resolveUnder(outDir: string, name: string): string | null {
   const base = safeBasename(name);
   if (!base) return null;
-  if (isAbsolute(name)) return null;
+  // Défense en profondeur : un nom qui CONTIENT une traversée (« .. »,
+  // séparateur Windows déguisé compris) est refusé TEL QUEL — jamais réduit
+  // à son dernier segment puis écrit. Ce contrôle existait avant la
+  // réécriture C-01 (garde Windows) et avait été perdu en route :
+  // « ../victim.txt » atterrissait en « victim.txt » DANS le dossier au
+  // lieu d'être refusé (critère d'acceptation §7.3).
+  if (isAbsolute(name) || name.includes("..")) return null;
   // Le dossier de sortie existe-t-il déjà ? Si oui, on le résout vers son
   // chemin RÉEL (casse canonique du disque, jonctions et lecteurs subst
   // résolus) : sous Windows, path.resolve() ne normalise QUE des antislashs
@@ -42,13 +48,16 @@ export function resolveUnder(outDir: string, name: string): string | null {
     return null;
   }
   // Si un parent intermédiaire existe déjà, vérifier qu'aucun n'est un lien
-  // qui sortirait de la racine (realpath du parent résolu).
+  // qui sortirait de la racine (realpath du parent résolu). relParent === ""
+  // est LÉGITIME (parent = la racine elle-même, cas d'un fichier écrit
+  // directement dans le dossier de sortie) — l'ancien `!relParent` refusait
+  // donc TOUT fichier de premier niveau (bugs QA « contenu du dossier » et
+  // téléchargements Webchat muets).
   const parent = dirname(target);
   if (existsSync(parent)) {
     const realParent = realpathSync(parent);
     const relParent = relative(root, resolve(realParent));
     if (
-      !relParent ||
       relParent === ".." ||
       relParent.startsWith(`..${sep}`) ||
       isAbsolute(relParent)
