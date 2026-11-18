@@ -8,6 +8,8 @@ import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientS
 import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
 import { useToast } from "@/hooks/use-toast";
 import { useProjects } from "@/hooks/use-projects";
+import { useChatSettings } from "@/hooks/use-chat-settings";
+import { useArtifactsPanel } from "@/hooks/use-artifacts-panel";
 import {
   contextWindowOf,
   estimateTokens,
@@ -118,23 +120,7 @@ export function useHermesChat() {
   const runningVoiceRef = useRef<{ label: string; since: number } | null>(null);
   const [stallNotice, setStallNotice] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const [modelsSource, setModelsSource] = useState<ModelsResult["source"] | null>(null);
-  const [selectedModel, setSelectedModelState] = useState<string | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
-  // ── Chantier « Composer v2 » : effort, permissions, compaction ──────
-  /** Effort de raisonnement (valeur brute du fournisseur, persisté). */
-  const [effort, setEffortState] = useState<string | null>(null);
-  // ── Mode expert (F-22) : température, plafond de sortie, graine ─────
-  /** Réglages expert persistés (champs absents = valeur par défaut). */
-  const [expert, setExpertState] = useState<ExpertSettings>({});
-  /** Autorisations : reset sur « ask » à chaque session — jamais restauré. */
-  const [permissionsMode, setPermissionsMode] = useState<PermissionsMode>("ask");
-  /** F-09/F-12 — recherche web du tour (Tavily/Exa), persistée (hermes.tools.web). */
-  const [webSearch, setWebSearchState] = useState<boolean>(
-    () => readClientSetting<boolean>("hermes.tools.web") === true
-  );
-  const webSearchRef = useRef(webSearch);
   /** État de compaction de la conversation active. */
   const [compactInfo, setCompactInfo] = useState<CompactInfo | null>(null);
   /** Compaction en cours (synthèse LLM côté service). */
@@ -153,44 +139,57 @@ export function useHermesChat() {
    *  `system-prompt:changed` du service ; la page lit/écrit via le hook dédié. */
   const [promptInfo, setPromptInfo] = useState<ChatPromptInfo | null>(null);
   const promptInfoRef = useRef<ChatPromptInfo | null>(null);
-  // ── Artefacts de la conversation active + panneau dédié ──────────
-  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
-  /** Contenu source en cours de stream, par clé d'artefact (aperçu vivant). */
-  const [streamingArtifacts, setStreamingArtifacts] = useState<Record<string, string>>({});
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [panelArtifactId, setPanelArtifactId] = useState<string | null>(null);
   const activeIdRef = useRef<string | null>(null);
-  const selectedModelRef = useRef<string | null>(null);
-  /** Clé de l'artefact affiché dans le panneau (survit aux changements de version). */
-  const panelKeyRef = useRef<string | null>(null);
-  const effortRef = useRef<string | null>(null);
-  const expertRef = useRef<ExpertSettings>({});
-  const permissionsRef = useRef<PermissionsMode>("ask");
 
-  // Synchronise les refs (lecture seule côté handlers d'événements)
+  // Synchronise la ref activeId (lecture seule côté handlers d'événements)
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  useEffect(() => {
-    selectedModelRef.current = selectedModel;
-  }, [selectedModel]);
+  // Réglages du compositeur : hook dédié (découpage 2026-11, FORK.md §10) —
+  // modèles, effort, expert F-22, permissions, recherche web F-09/F-12.
+  const {
+    models,
+    setModels,
+    modelsSource,
+    setModelsSource,
+    selectedModel,
+    selectedModelRef,
+    setSelectedModelState,
+    effort,
+    effortRef,
+    expert,
+    expertRef,
+    permissionsMode,
+    permissionsRef,
+    webSearch,
+    webSearchRef,
+    setSelectedModel,
+    setEffort,
+    setExpert,
+    changePermissions,
+    toggleWebSearch,
+  } = useChatSettings();
 
-  useEffect(() => {
-    effortRef.current = effort;
-  }, [effort]);
-
-  useEffect(() => {
-    expertRef.current = expert;
-  }, [expert]);
-
-  useEffect(() => {
-    permissionsRef.current = permissionsMode;
-  }, [permissionsMode]);
-
-  useEffect(() => {
-    webSearchRef.current = webSearch;
-  }, [webSearch]);
+  // Artefacts + panneau : hook dédié (découpage 2026-11, FORK.md §10) —
+  // états, fetch des versions, ouverture du panneau, retry.
+  const {
+    artifacts,
+    setArtifacts,
+    streamingArtifacts,
+    setStreamingArtifacts,
+    panelOpen,
+    setPanelOpen,
+    panelArtifactId,
+    setPanelArtifactId,
+    panelKeyRef,
+    fetchArtifacts,
+    openArtifact,
+    closePanel,
+    selectArtifactVersion,
+    retryArtifact,
+    fetchArtifactVersions,
+  } = useArtifactsPanel({ activeIdRef });
 
   // ── Prompt système de la conversation active (F-11) ───────────────────
   // Suit le bus du service ; le changement de conversation recharge l'état.
@@ -236,115 +235,9 @@ export function useHermesChat() {
     };
   }, [activeId]);
 
-  // Sélection persistée (registre des réglages, cf. FORK.md §6)
-  useEffect(() => {
-    const saved = readClientSetting<string | null>(MODEL_SETTING_KEY);
-    if (saved) setSelectedModelState(saved);
-    const savedEffort = readClientSetting<string>(EFFORT_SETTING_KEY);
-    if (savedEffort) setEffortState(savedEffort);
-    // Mode expert (F-22) : champs individuels, absents = défaut du fournisseur
-    const savedTemperature = readClientSetting<number | null>(EXPERT_TEMPERATURE_KEY);
-    const savedMaxTokens = readClientSetting<number | null>(EXPERT_MAX_TOKENS_KEY);
-    const savedSeed = readClientSetting<number | null>(EXPERT_SEED_KEY);
-    setExpertState({
-      ...(savedTemperature !== null ? { temperature: savedTemperature } : {}),
-      ...(savedMaxTokens !== null ? { maxTokens: savedMaxTokens } : {}),
-      ...(savedSeed !== null ? { seed: savedSeed } : {}),
-    });
-  }, []);
-
-  // Autorisations : reset explicite sur « ask » à chaque session (spec) —
-  // la persistance viendra plus tard de la page de paramètres.
-  useEffect(() => {
-    writeClientSetting(PERMISSIONS_SETTING_KEY, "ask");
-  }, []);
-
-  // ── Application immédiate : réglages modifiés depuis le sheet Paramètres ─
-  // (modèle, effort, permissions — le bus hermes-ui:settings-changed, FORK.md §7.4)
-  useEffect(() => {
-    return onSettingsChanged(({ key, value }) => {
-      if (key === MODEL_SETTING_KEY && typeof value === "string") {
-        setSelectedModelState(value);
-      } else if (key === EFFORT_SETTING_KEY && typeof value === "string") {
-        setEffortState(value);
-      } else if (key === PERMISSIONS_SETTING_KEY) {
-        setPermissionsMode(value === "auto" ? "auto" : "ask");
-      } else if (
-        key === EXPERT_TEMPERATURE_KEY ||
-        key === EXPERT_MAX_TOKENS_KEY ||
-        key === EXPERT_SEED_KEY
-      ) {
-        // Mode expert (F-22) : chaque champ vit sa clé (null = retiré)
-        setExpertState((prev) => {
-          const next = { ...prev };
-          if (key === EXPERT_TEMPERATURE_KEY)
-            next.temperature = typeof value === "number" ? value : undefined;
-          if (key === EXPERT_MAX_TOKENS_KEY)
-            next.maxTokens = typeof value === "number" ? value : undefined;
-          if (key === EXPERT_SEED_KEY)
-            next.seed = typeof value === "number" ? value : undefined;
-          return next;
-        });
-      } else if (key === "hermes.tools.web") {
-        // v2.4 : appliqué par un profil — la bascule du composer suit en direct.
-        setWebSearchState(value === true);
-      }
-    });
-  }, []);
-
-  const setSelectedModel = useCallback((id: string) => {
-    setSelectedModelState(id);
-    writeClientSetting(MODEL_SETTING_KEY, id);
-  }, []);
-
-  /** Effort de raisonnement : valeur brute du fournisseur, persistée. */
-  const setEffort = useCallback((e: string) => {
-    setEffortState(e);
-    writeClientSetting(EFFORT_SETTING_KEY, e);
-  }, []);
-
-  /** Mode expert (F-22) : fusionne et persiste champ par champ (undefined
-   *  = retiré : la clé localStorage est EFFACÉE — pas écrite à null, sinon
-   *  Number(null) persisterait 0 et la valeur « reviendrait » au rechargement). */
-  const setExpert = useCallback((patch: Partial<ExpertSettings>) => {
-    setExpertState((prev) => {
-      const next = { ...prev, ...patch };
-      // Champ présent → écrit ; champ retiré → suppression de la clé
-      // (retour au défaut du fournisseur à la relecture).
-      const persist = (key: string, v: number | undefined) => {
-        if (v === undefined) deleteClientSetting(key);
-        else writeClientSetting(key, v);
-      };
-      persist(EXPERT_TEMPERATURE_KEY, next.temperature);
-      persist(EXPERT_MAX_TOKENS_KEY, next.maxTokens);
-      persist(EXPERT_SEED_KEY, next.seed);
-      return next;
-    });
-  }, []);
-
-  /** Autorisations : armement explicite — jamais silencieux. */
-  const changePermissions = useCallback((mode: PermissionsMode) => {
-    setPermissionsMode(mode);
-    writeClientSetting(PERMISSIONS_SETTING_KEY, mode);
-  }, []);
-
-  // L'échelle d'effort est portée par le modèle : quand le modèle change et
-  // que l'effort courant n'existe pas dans la nouvelle échelle, on retombe
-  // sur le cran équivalent le plus proche (standard > medium > milieu).
-  useEffect(() => {
-    if (!models.length || !selectedModel) return;
-    const model = models.find((m) => m.id === selectedModel);
-    if (!model) return;
-    const scale = model.efforts?.length ? model.efforts : ["off", "low", "medium", "high", "max"];
-    const current = effortRef.current;
-    if (current && scale.includes(current)) return;
-    const fallback =
-      scale.find((e) => e === "standard") ??
-      scale.find((e) => e === "medium") ??
-      scale[Math.floor((scale.length - 1) / 2)];
-    setEffortState(fallback);
-    writeClientSetting(EFFORT_SETTING_KEY, fallback);
-  }, [models, selectedModel]);
+  // (Sélection persistée, bus hermes-ui:settings-changed, actions réglages
+  // et échelle d'effort : tout vit dans use-chat-settings.ts — découpage
+  // 2026-11, FORK.md §10.)
 
   const isBusy = streaming !== null || uploadingCount > 0;
 
@@ -477,18 +370,9 @@ export function useHermesChat() {
     });
   }, []);
 
-  /** Charge les artefacts d'une conversation (toutes versions, métadonnées). */
-  const fetchArtifacts = useCallback((conversationId: string) => {
-    getSocket().emit(
-      "artifacts:list",
-      { conversationId },
-      (res: { artifacts?: Artifact[] } = {}) => {
-        if (conversationId === activeIdRef.current) {
-          setArtifacts(res.artifacts ?? []);
-        }
-      }
-    );
-  }, []);
+  /** Ré-attache les tours LLM en vol (réponse en cours de génération) — le
+   *  registre vit dans le service, l'écran re-sème son état de stream. */
+  // (fetchArtifacts vit dans use-artifacts-panel.ts — découpage 2026-11.)
 
   // --- Connexion socket + écoute des événements de stream ---
   useEffect(() => {
@@ -1399,15 +1283,6 @@ export function useHermesChat() {
     [openConversation, streaming]
   );
 
-  /** F-09/F-12 — bascule la recherche web du tour (persistée hermes.tools.web). */
-  const toggleWebSearch = useCallback(() => {
-    setWebSearchState((v) => {
-      const next = !v;
-      writeClientSetting("hermes.tools.web", next);
-      return next;
-    });
-  }, []);
-
   /** Réessai après erreur (F-04) : relance le tour depuis le dernier message utilisateur. */
   const retryAfterError = useCallback(() => {
     setTurnError(null);
@@ -1677,53 +1552,8 @@ export function useHermesChat() {
   /** Peut-on compacter : conversation ouverte, ≥ 2 messages, tour au repos. */
   const canCompact = Boolean(activeId) && messages.length >= 2 && !streaming;
 
-  // ── Artefacts : panneau, retry, versions ──────────────────────────────
-
-  /** Ouvre le panneau sur un artefact précis (clic carte, carte « Ouvrir »). */
-  const openArtifact = useCallback((artifact: Artifact) => {
-    panelKeyRef.current = artifact.key;
-    setPanelArtifactId(artifact.id);
-    setPanelOpen(true);
-  }, []);
-
-  /** Referme le panneau (l'utilisateur reprend le fil de la conversation). */
-  const closePanel = useCallback(() => setPanelOpen(false), []);
-
-  /** Sélectionne une version précise dans le panneau (sans l'ouvrir). */
-  const selectArtifactVersion = useCallback((artifact: Artifact) => {
-    panelKeyRef.current = artifact.key;
-    setPanelArtifactId(artifact.id);
-  }, []);
-
-  /** Relance le rendu d'un artefact en erreur. */
-  const retryArtifact = useCallback((artifactId: string) => {
-    const conversationId = activeIdRef.current;
-    if (!conversationId) return;
-    getSocket().emit(
-      "artifact:retry",
-      { conversationId, artifactId },
-      (res: { ok?: boolean; error?: string }) => {
-        if (!res?.ok && res?.error) {
-          console.warn("[hermes] retry artefact :", res.error);
-        }
-      }
-    );
-  }, []);
-
-  /** Toutes les versions d'une clé d'artefact (sélecteur + diff du panneau). */
-  const fetchArtifactVersions = useCallback(
-    (key: string): Promise<Artifact[]> =>
-      new Promise((resolve) => {
-        const conversationId = activeIdRef.current;
-        if (!conversationId) return resolve([]);
-        getSocket().emit(
-          "artifact:versions",
-          { conversationId, key },
-          (res: { versions?: Artifact[] } = {}) => resolve(res.versions ?? [])
-        );
-      }),
-    []
-  );
+  // (Actions artefacts : openArtifact, closePanel, selectArtifactVersion,
+  // retryArtifact, fetchArtifactVersions — vit dans use-artifacts-panel.ts.)
 
   /** Branche (ou débranche, url vide) la gateway Hermes — Paramètres →
    *  Système. Le hello rediffusé par le service met mode, statut et modèles
