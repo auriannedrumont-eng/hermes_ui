@@ -55,19 +55,36 @@ async function main() {
     flowIdx > guardIdx && flowIdx < spinnerIdx);
 
   console.log("[3] handlers stream:*/mode:flow/artifact:* : garde activeIdRef");
-  const guarded = [
-    "onStreamStart", "onStreamDelta", "onStreamReasoning", "onStreamStatus",
-    "onStreamTool", "onStreamDone", "onStreamError", "onModeFlow",
-    "onArtifactDelta", "onArtifactCreated", "onArtifactUpdated",
-    "onMessageAppended", "onMessagesRemoved", "onMessagesSuperseded", "onMessagesRefreshed",
+  // Découpage 2026-11 (FORK.md §10) : les handlers stream:*/mode:flow vivent
+  // dans use-chat-stream.ts, les handlers conversationnels restent dans
+  // l'orchestrateur — la garde activeIdRef est vérifiée là où le handler EST.
+  const streamHook = read("src/hooks/use-chat-stream.ts");
+  const guarded: { name: string; file: string }[] = [
+    { name: "onStreamStart", file: "stream" },
+    { name: "onStreamDelta", file: "stream" },
+    { name: "onStreamReasoning", file: "stream" },
+    { name: "onStreamStatus", file: "stream" },
+    { name: "onStreamTool", file: "stream" },
+    { name: "onStreamDone", file: "stream" },
+    { name: "onStreamError", file: "stream" },
+    { name: "onModeFlow", file: "stream" },
+    { name: "onArtifactDelta", file: "hook" },
+    { name: "onArtifactCreated", file: "hook" },
+    { name: "onArtifactUpdated", file: "hook" },
+    { name: "onMessageAppended", file: "hook" },
+    { name: "onMessagesRemoved", file: "hook" },
+    { name: "onMessagesSuperseded", file: "hook" },
+    { name: "onMessagesRefreshed", file: "hook" },
   ];
-  for (const h of guarded) {
-    const m = new RegExp(`const ${h} = \\((?:[^{]|\\{[^}]*\\})*\\)\\s*=>\\s*\\{`).exec(hook);
+  for (const { name: h, file } of guarded) {
+    const target = file === "stream" ? streamHook : hook;
+    const m = new RegExp(`const ${h} = \\((?:[^{]|\\{[^}]*\\})*\\)\\s*=>\\s*\\{`).exec(target);
     if (!m) {
       check(`handler ${h} présent`, false, "introuvable — signature changée ?");
       continue;
     }
-    const body = hook.slice(m.index, hook.indexOf("\n    };", m.index));
+    const end = target.indexOf("\n    };", m.index);
+    const body = target.slice(m.index, end > 0 ? end : m.index + 2000);
     check(`handler ${h} filtre par activeIdRef`, body.includes("activeIdRef.current"));
   }
 

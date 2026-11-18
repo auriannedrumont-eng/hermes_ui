@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProjects } from "@/hooks/use-projects";
 import { useChatSettings } from "@/hooks/use-chat-settings";
 import { useArtifactsPanel } from "@/hooks/use-artifacts-panel";
+import { useChatStream } from "@/hooks/use-chat-stream";
 import {
   contextWindowOf,
   estimateTokens,
@@ -83,12 +84,9 @@ export function useHermesChat() {
   // Projets : hook dédié (découpage 2026-11, FORK.md §10).
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // F-17 — comparaison : DEUX réponses streament en parallèle (variantes
-  // a/b). L'état vit dans une map par messageId ; `streaming` (première
-  // entrée active) reste l'indicateur d'occupation pour tout le hook.
-  const [streamsRecord, setStreamsRecord] = useState<Record<string, StreamingState>>({});
-  const streams = useMemo(() => Object.values(streamsRecord), [streamsRecord]);
-  const streaming = streams[0] ?? null;
+  // Streams en vol : hook dédié (découpage 2026-11, FORK.md §10) — registre
+  // F-17, déroulé F-30, erreur F-04, notice de silence F-31. Câblé après
+  // refreshConversations (les handlers ont besoin de setMessages).
 
   // ── F-30 — mode de la conversation : le service fait foi ──────────
   /** Mode/config choisis avant qu'une conversation n'existe (état « nouveau »).
@@ -97,28 +95,8 @@ export function useHermesChat() {
     mode: ConversationMode;
     config: ModeConfig;
   } | null>(null);
-  /** Déroulé vivant du tour multi-voix (modes débat / conseil / auto).
-   *  La réponse finale le porte en persistance — ce live n'est que le chemin. */
-  const [modeFlowLive, setModeFlowLive] = useState<{
-    messageId: string;
-    rows: import("@/lib/chat-types").ModeFlowRow[];
-  } | null>(null);
   const pendingModeRef = useRef(pendingMode);
   pendingModeRef.current = pendingMode;
-  /** Erreur persistante du dernier tour (F-04) : affichée dans le fil jusqu'à
-   *  réessai / changement de conversation — plus d'effacement automatique. */
-  const [turnError, setTurnError] = useState<{ messageId: string; error: string } | null>(null);
-  // ── Pont de dépannage (F-31) : silence du tour ──────────────────────
-  // Le service a ses gardes (120 s pool, ~240 s pilote webchat) ; mais si le
-  // SERVICE meurt ou que la connexion tombe, plus aucun événement n'arrive et
-  // l'écran resterait « Hermes réfléchit… » sans fin. Un filtre d'activité
-  // (tout événement socket = signe de vie) rend ce silence visible.
-  const lastActivityRef = useRef<number>(0);
-  // Voix en vol (F-30/F-31) : le déroulé mode:flow dit QUI travaille — la
-  // notice de silence s'en sert pour dire la vérité (« la voix tourne depuis
-  // N s ») au lieu de crier au blocage pendant une réponse lente mais vivante.
-  const runningVoiceRef = useRef<{ label: string; since: number } | null>(null);
-  const [stallNotice, setStallNotice] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [uploadingCount, setUploadingCount] = useState(0);
   /** État de compaction de la conversation active. */
@@ -239,8 +217,6 @@ export function useHermesChat() {
   // et échelle d'effort : tout vit dans use-chat-settings.ts — découpage
   // 2026-11, FORK.md §10.)
 
-  const isBusy = streaming !== null || uploadingCount > 0;
-
   // ── F-30 — mode effectif de la conversation ouverte ───────────────────
   // La liste des conversations fait foi (meta du service) ; sans
   // conversation, le choix « nouveau » (pastille avant la première
@@ -304,45 +280,8 @@ export function useHermesChat() {
     [models]
   );
 
-  /** Machine à états du tour (F-01) : idle → streaming → done | stopped | error. */
-  const turnState: "idle" | "streaming" | "stopped" | "error" = useMemo(() => {
-    if (streaming) return "streaming";
-    if (turnError) return "error";
-    const last = messages[messages.length - 1];
-    if (last?.role === "assistant" && last.stopped) return "stopped";
-    return "idle";
-  }, [streaming, turnError, messages]);
 
-  // F-31 — vigie de silence : pendant un tour, un service vivant émet des
-  // signes de vie (deltas, statuts, déroulé). Sans RIEN pendant 60 s, l'écran
-  // le dit honnêtement au lieu de rester figé sur « réfléchit… ».
-  useEffect(() => {
-    if (turnState !== "streaming") {
-      setStallNotice(null);
-      runningVoiceRef.current = null;
-      return;
-    }
-    lastActivityRef.current = Date.now();
-    const timer = setInterval(() => {
-      const silentS = Math.round((Date.now() - lastActivityRef.current) / 1000);
-      const voice = runningVoiceRef.current;
-      if (silentS >= 60) {
-        setStallNotice(
-          voice
-            ? `${voice.label} travaille depuis ${Math.round(
-                (Date.now() - voice.since) / 1000,
-              )} s — réponse lente mais en vol (gardes côté service : 120 s pool, ` +
-              `~240 s pilote webchat). Pour voir si des octets arrivent encore : ` +
-              `icône clé à molette → « Copier le diagnostic » (section pool.streams).`
-            : `Aucun signe d'activité depuis ${silentS} s — soit le fournisseur est lent ` +
-              `(gardes côté service : 120 s pool, ~240 s pilote webchat), soit le service est ` +
-              `mort. Ouvrez le dépannage (icône clé à molette en haut à droite, ou ?debug=1 ` +
-              `dans l'adresse) puis « Copier le diagnostic » pour voir lequel.`,
-        );
-      }
-    }, 10_000);
-    return () => clearInterval(timer);
-  }, [turnState]);
+  // (Vigie de silence F-31 : vit dans use-chat-stream.ts.)
 
   const refreshConversations = useCallback(() => {
     const socket = getSocket();
@@ -350,6 +289,46 @@ export function useHermesChat() {
       if (res.conversations) setConversations(res.conversations);
     });
   }, []);
+
+  // Streams en vol : hook dédié (découpage 2026-11, FORK.md §10). Câblé ici —
+  // les handlers stream:*/mode:flow ont besoin de setMessages et du refresh.
+  const {
+    streamsRecord,
+    setStreamsRecord,
+    streams,
+    streaming,
+    modeFlowLive,
+    setModeFlowLive,
+    turnError,
+    setTurnError,
+    dismissTurnError,
+    stallNotice,
+    bumpActivity,
+    lastActivityRef,
+    runningVoiceRef,
+    turnState: baseTurnState,
+    onStreamStart,
+    onStreamDelta,
+    onStreamReasoning,
+    onStreamStatus,
+    onStreamTool,
+    onStreamDone,
+    onStreamError,
+    onModeFlow,
+  } = useChatStream({ activeIdRef, setMessages, refreshConversations });
+
+  const isBusy = streaming !== null || uploadingCount > 0;
+
+  /** État du tour complet (F-01) : le hook de stream fournit la base
+   *  (idle/streaming/error) ; le « stopped » se déduit du fil ici (le hook
+   *  ne connaît pas les messages). */
+  const turnState: "idle" | "streaming" | "stopped" | "error" = useMemo(() => {
+    if (baseTurnState === "streaming") return "streaming";
+    if (baseTurnState === "error") return "error";
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant" && last.stopped) return "stopped";
+    return "idle";
+  }, [baseTurnState, messages]);
 
 
 
@@ -424,169 +403,6 @@ export function useHermesChat() {
     // v2.4 : le service rediffuse le hello quand le porte-clés change —
     // la carte de statut de la sidebar suit l état réel du moteur en direct.
     const onHello = (info: ServerHello) => setServerInfo(info);
-
-    const onStreamStart = (p: {
-      conversationId: string;
-      messageId: string;
-      variant?: "a" | "b";
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setTurnError(null); // un nouveau tour efface l'erreur précédente
-      setStreamsRecord((prev) => ({
-        ...prev,
-        [p.messageId]: {
-          messageId: p.messageId,
-          conversationId: p.conversationId,
-          variant: p.variant,
-          content: "",
-          reasoning: "",
-          status: "Hermes réfléchit…",
-          toolEvents: [],
-        },
-      }));
-    };
-
-    const onStreamDelta = (p: {
-      conversationId: string;
-      messageId: string;
-      delta: string;
-      variant?: "a" | "b";
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setStreamsRecord((prev) => {
-        const s = prev[p.messageId];
-        if (!s) return prev;
-        return {
-          ...prev,
-          [p.messageId]: { ...s, content: s.content + p.delta, status: null },
-        };
-      });
-    };
-
-    const onStreamReasoning = (p: {
-      conversationId: string;
-      messageId: string;
-      delta: string;
-      variant?: "a" | "b";
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setStreamsRecord((prev) => {
-        const s = prev[p.messageId];
-        if (!s) return prev;
-        return { ...prev, [p.messageId]: { ...s, reasoning: s.reasoning + p.delta } };
-      });
-    };
-
-    const onStreamStatus = (p: {
-      conversationId: string;
-      messageId: string | null;
-      status: string;
-      variant?: "a" | "b";
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setStreamsRecord((prev) => {
-        const next: Record<string, StreamingState> = {};
-        for (const [id, s] of Object.entries(prev)) {
-          // Statut global (messageId null, ex. arrêt) → tous les côtés.
-          next[id] = !p.messageId || p.messageId === id ? { ...s, status: p.status } : s;
-        }
-        return next;
-      });
-    };
-
-    const onStreamTool = (p: {
-      conversationId: string;
-      messageId: string;
-      event: ToolEvent;
-      variant?: "a" | "b";
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setStreamsRecord((prev) => {
-        const s = prev[p.messageId];
-        if (!s) return prev;
-        return {
-          ...prev,
-          [p.messageId]: { ...s, toolEvents: [...s.toolEvents, p.event], status: null },
-        };
-      });
-    };
-
-    const onStreamDone = (p: {
-      conversationId: string;
-      messageId: string;
-      conversation?: ConversationMeta;
-      message?: ChatMessage;
-      stopped?: boolean;
-    }) => {
-      if (p.conversationId !== activeIdRef.current) {
-        refreshConversations();
-        setStreamsRecord((prev) => {
-          if (!(p.messageId in prev)) return prev;
-          const next = { ...prev };
-          delete next[p.messageId];
-          return next;
-        });
-        return;
-      }
-      if (p.message) {
-        // Lot 3 (audit L3-5) : dédoublonnage — un stream:done reçu deux fois
-        // (rediffusion après reconnexion) dupliquait la réponse dans le fil.
-        const done = p.message;
-        setMessages((prev) =>
-          prev.some((m) => m.id === done.id) ? prev : [...prev, done as ChatMessage]
-        );
-      }
-      // F-30 : le déroulé vivant a fini de courir — la réponse persistée le
-      // porte désormais (messages.mode_flow) ; le live ne sert qu'en vol.
-      setModeFlowLive((cur) => (cur?.messageId === p.messageId ? null : cur));
-      // F-17 : ne retirer que CE tour — l'autre variante peut couler encore.
-      setStreamsRecord((prev) => {
-        if (!(p.messageId in prev)) return prev;
-        const next = { ...prev };
-        delete next[p.messageId];
-        return next;
-      });
-      setTurnError(null); // arrêt (stopped) ou succès : ce tour est clos
-      refreshConversations();
-    };
-
-    const onStreamError = (p: {
-      conversationId: string;
-      messageId?: string;
-      conversation?: ConversationMeta;
-      message?: ChatMessage;
-      error: string;
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      // Le partiel persisté (s'il existe) rejoint le fil immédiatement —
-      // plus besoin de recharger la conversation pour le voir.
-      if (p.message) {
-        const partial = p.message;
-        setMessages((prev) =>
-          prev.some((m) => m.id === partial.id) ? prev : [...prev, partial]
-        );
-      }
-      setTurnError({ messageId: p.messageId ?? p.message?.id ?? "", error: p.error });
-      // F-30 : un déroulé vivant s'arrête avec son tour (la réponse partielle
-      // ne porte pas de déroulé — rien ne reste « en cours » à l'écran).
-      setModeFlowLive((cur) =>
-        !p.messageId || cur?.messageId === p.messageId ? null : cur
-      );
-      // F-17 : un côté peut échouer pendant que l'autre termine — on ne
-      // retire que le tour concerné.
-      setStreamsRecord((prev) => {
-        // Lot 3 (audit L3-5) : l'ancien code renvoyait {} dès que la cible
-        // était absente — une erreur service sans messageId (ou visant un
-        // tour déjà clos) VIDAIT tous les streams en vol, y compris l'autre
-        // côté d'une comparaison qui, lui, continue normalement.
-        const key = p.messageId ?? p.message?.id;
-        if (!key || !(key in prev)) return prev;
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      refreshConversations();
-    };
 
     const onConversationsDeleted = (p: { id: string }) => {
       setConversations((prev) => prev.filter((c) => c.id !== p.id));
@@ -773,26 +589,6 @@ export function useHermesChat() {
     // — les listes vivantes sont rechargées, la sélection s'aligne dessus.
     const onModelsChanged = () => fetchModels();
 
-    // F-30 — déroulé vivant du tour multi-voix (débat, conseil, auto) :
-    // chaque étape est poussée par le service, la réponse finale portera
-    // le déroulé en persistance.
-    const onModeFlow = (p: {
-      conversationId: string;
-      messageId: string;
-      rows: import("@/lib/chat-types").ModeFlowRow[];
-    }) => {
-      if (p.conversationId !== activeIdRef.current) return;
-      setModeFlowLive({ messageId: p.messageId, rows: p.rows ?? [] });
-      // Suivi de la voix en vol pour la notice de silence (F-31).
-      const running = (p.rows ?? []).find((r) => r.status === "running");
-      if (running) {
-        if (runningVoiceRef.current?.label !== running.label) {
-          runningVoiceRef.current = { label: running.label, since: Date.now() };
-        }
-      } else {
-        runningVoiceRef.current = null;
-      }
-    };
     // F-30 — mode changé (depuis cette session ou une autre) : toutes les
     // fenêtres suivent la conversation en direct.
     const onConversationMode = (p: {
@@ -808,14 +604,13 @@ export function useHermesChat() {
         );
       }
     };
-
     // F-31 : tout événement entrant est un signe de vie du service — un seul
     // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
-    const bumpActivity = () => {
-      lastActivityRef.current = Date.now();
-      setStallNotice(null);
-    };
-    socket.onAny(bumpActivity);
+    // F-31 : tout événement entrant est un signe de vie du service — un seul
+    // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
+    // (bumpActivity vit dans use-chat-stream.ts : notice dérivée au rendu.)
+    const onAnyActivity = () => bumpActivity();
+    socket.onAny(onAnyActivity);
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -863,7 +658,7 @@ export function useHermesChat() {
     if (socket.connected) onConnect();
 
     return () => {
-      socket.offAny(bumpActivity);
+      socket.offAny(onAnyActivity);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("hello", onHello);
@@ -1261,9 +1056,6 @@ export function useHermesChat() {
     },
     [openConversation, streaming, messages, modelIdFromLabel]
   );
-
-  /** Masque l'erreur du dernier tour (le partiel éventuel reste dans le fil). */
-  const dismissTurnError = useCallback(() => setTurnError(null), []);
 
   /** F-14 — affiche la version `index` d'une réponse multi-versions. La
    *  version choisie devient aussi celle envoyée au modèle au tour suivant ;
