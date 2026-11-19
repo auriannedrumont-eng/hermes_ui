@@ -40,6 +40,13 @@
     "node_modules",
     "scripts",
     "mini-services",
-    "examples"
+    "examples",
+    // tools/ : cache du bun portable installé par le lanceur (gitignoré).
+    // Il contient les types bun « ts7.1 » pour le compilateur natif —
+    // syntaxe que le TypeScript du projet ne parse pas : next build
+    // échouait chez l'utilisateur (TS1005 en rafale) tant que ce dossier
+    // n'était pas exclu du type-check. Absent du dépôt, le défaut ne se
+    // voyait qu'à la première reconstruction locale.
+    "tools"
   ]
 }

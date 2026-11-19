@@ -44,7 +44,10 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  // tools/ : cache du bun portable du lanceur (types « ts7.1 » non
+  // parsables par le TypeScript du projet — cf. tsconfig.json exclude) ;
+  // desktop/runtime, db, upload/download : données locales hors dépôt.
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "tools/**", "desktop/runtime/**", "db/**"]
 }];
 
 export default eslintConfig;
