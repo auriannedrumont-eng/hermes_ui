@@ -1,12 +1,16 @@
-// Rendu Markdown façon ChatGPT : blocs de code colorés avec copie, tableaux, liens
+// Rendu Markdown façon ChatGPT : blocs de code colorés avec copie, tableaux, liens.
+// Perf 2026-11-19 : blocs de code migrés de react-syntax-highlighter (Prism
+// complet, re-tokenisé à chaque re-rendu) vers shiki (src/lib/highlight.ts) ;
+// MarkdownContent mémoïsé — pendant un tour, seules les bulles dont le
+// contenu change re-rendent, et un bloc de code n'est JAMAIS re-tokenisé
+// (cache LRU par contenu, cf. useHighlightedCode).
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Check, Copy } from "lucide-react";
+import { useHighlightedCode, CODE_CONTAINER_STYLE, CODE_FONT_FAMILY } from "@/lib/highlight";
 
 function CodeBlock({ lang, code }: { lang?: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -36,28 +40,48 @@ function CodeBlock({ lang, code }: { lang?: string; code: string }) {
           {copied ? "Copié" : "Copier"}
         </button>
       </div>
-      <SyntaxHighlighter
-        language={lang ?? "text"}
-        style={vscDarkPlus}
-        customStyle={{
-          margin: 0,
-          padding: "0.85rem 1rem",
-          background: "transparent",
-          fontSize: "13px",
-          lineHeight: 1.6,
-        }}
-        codeTagProps={{
-          style: { fontFamily: "var(--font-geist-mono), ui-monospace, monospace" },
-        }}
-        wrapLongLines={false}
-      >
-        {code.replace(/\n$/, "")}
-      </SyntaxHighlighter>
+      {/* shiki rend un <pre><code> colorié ; le temps du premier rendu
+          (highlighter en initialisation), le texte brut sur le même fond
+          sombre — flash invisible en pratique. */}
+      <HighlightedCode code={code} lang={lang} />
     </div>
   );
 }
 
-export function MarkdownContent({ content }: { content: string }) {
+/** Bloc colorisé shiki avec repli texte brut. Mémoïsé : un bloc affiché
+ *  deux fois (versions d'une réponse, partage) ne re-colorise jamais. */
+const HighlightedCode = memo(function HighlightedCode({
+  code,
+  lang,
+}: {
+  code: string;
+  lang?: string;
+}) {
+  const html = useHighlightedCode(code, lang);
+  if (!html) {
+    return (
+      <pre
+        style={{ ...CODE_CONTAINER_STYLE, fontFamily: CODE_FONT_FAMILY }}
+        className="overflow-x-auto p-[0.85rem_1rem]"
+      >
+        <code>{code}</code>
+      </pre>
+    );
+  }
+  return (
+    <div
+      className="shiki-host overflow-x-auto [&_pre]:!my-0 [&_pre]:!py-[0.85rem] [&_pre]:px-[1rem] [&_pre]:!bg-transparent [&_code]:!font-[var(--font-geist-mono),ui-monospace,monospace]"
+      style={CODE_CONTAINER_STYLE}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+});
+
+export const MarkdownContent = memo(function MarkdownContent({
+  content,
+}: {
+  content: string;
+}) {
   return (
     <div className="text-[15px] leading-relaxed">
       <ReactMarkdown
@@ -131,4 +155,4 @@ export function MarkdownContent({ content }: { content: string }) {
       </ReactMarkdown>
     </div>
   );
-}
+});

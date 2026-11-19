@@ -179,8 +179,12 @@ export function DebugBridge() {
       <div className="flex items-center gap-2 border-b px-3 py-2">
         <span
           className={
+            // Perf 2026-11-19 : plus d'animate-pulse — l'ancienne animation
+            // tournait à l'infini tant que le service était coupé (le badge
+            // est précisément affiché dans cet état) ; un point fixe rouge
+            // dit la même chose, à coût nul.
             "h-2 w-2 shrink-0 rounded-full " +
-            (connected ? "bg-emerald-500" : "bg-destructive animate-pulse")
+            (connected ? "bg-emerald-500" : "bg-destructive")
           }
           aria-hidden
         />

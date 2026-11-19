@@ -56,16 +56,53 @@ function setSnapshot(patch: Partial<StreamSnapshot>) {
 
 // ── API d'écriture (réservée à l'orchestrateur use-hermes-chat) ─────────
 
+// Perf 2026-11-19 — coalescence des deltas : les deltas socket arrivent à
+// ~16 ms ; émettre un snapshot par delta re-rendait MessageList ~60 fois/s
+// (re-parse Markdown du texte en croissance = coût quadratique). Les
+// écritures d'accumulation sont fusionnées : au plus un émis par fenêtre de
+// 200 ms, le dernier état partant toujours (flush au repos et à la clôture
+// du tour par stream:done/error — les writers y passent flush=true).
+const COALESCE_MS = 200;
+let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingRecord: Record<string, StreamingState> | null = null;
+
+function flushRecord(): void {
+  if (coalesceTimer) {
+    clearTimeout(coalesceTimer);
+    coalesceTimer = null;
+  }
+  if (pendingRecord !== null && pendingRecord !== snapshot.streamsRecord) {
+    const next = pendingRecord;
+    pendingRecord = null;
+    setSnapshot({ streamsRecord: next });
+    return;
+  }
+  pendingRecord = null;
+}
+
 export const streamStore = {
-  /** Remplace/accumule le registre (setStreamsRecord de l'orchestrateur). */
+  /** Remplace/accumule le registre (setStreamsRecord de l'orchestrateur).
+   *  `flush: true` (transitions de tour : start/done/error/stop, vidage au
+   *  changement de conversation) publie immédiatement — le comportement
+   *  critique (appartition/disparition d'une bulle) reste instantané. */
   setStreamsRecord(
     next:
       | Record<string, StreamingState>
-      | ((prev: Record<string, StreamingState>) => Record<string, StreamingState>)
+      | ((prev: Record<string, StreamingState>) => Record<string, StreamingState>),
+    options?: { flush?: boolean }
   ) {
-    const value =
-      typeof next === "function" ? next(snapshot.streamsRecord) : next;
-    if (value !== snapshot.streamsRecord) setSnapshot({ streamsRecord: value });
+    const base = pendingRecord ?? snapshot.streamsRecord;
+    const value = typeof next === "function" ? next(base) : next;
+    if (value === base) return;
+    if (options?.flush) {
+      pendingRecord = value;
+      flushRecord();
+      return;
+    }
+    pendingRecord = value;
+    if (coalesceTimer === null) {
+      coalesceTimer = setTimeout(flushRecord, COALESCE_MS);
+    }
   },
   setModeFlowLive(
     next:
@@ -87,6 +124,7 @@ export const streamStore = {
   /** Vidage complet (changement de conversation, déconnexion persistante). */
   reset() {
     turnToolsCache.clear();
+    flushRecord(); // perf : rien de pendsu ne doit fuiter dans le prochain tour
     if (snapshot !== EMPTY) {
       snapshot = EMPTY;
       emit();

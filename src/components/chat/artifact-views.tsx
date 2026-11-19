@@ -5,14 +5,13 @@
 // le panneau et la visionneuse plein écran partagent le même module.
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Loader2, Maximize2, Minimize2 } from "lucide-react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 import { type Artifact } from "@/lib/chat-types";
 import { artifactUrl, diffLines, parseCsv } from "@/lib/artifact-utils";
 import { serviceFetchInit } from "@/lib/service";
+import { useHighlightedCode, CODE_CONTAINER_STYLE, CODE_FONT_FAMILY } from "@/lib/highlight";
 
 // ── Chargement du source (cache module partagé panneau / visionneuse) ───
 
@@ -81,7 +80,11 @@ export function useArtifactSource(artifact: Artifact | null): string | null {
 
 // ── Vues par type ────────────────────────────────────────────────────────
 
-export function CodeView({
+// Perf 2026-11-19 : CodeView migré de react-syntax-highlighter (Prism) vers
+// shiki (src/lib/highlight.ts). Numéros de ligne en colonne CSS côté
+// conteneur (plus de <span> par ligne générés par la lib). Mémoïsé : changer
+// d'onglet ou re-rendre le panneau ne re-colorise jamais un source inchangé.
+export const CodeView = memo(function CodeView({
   source,
   language,
   showLineNumbers = true,
@@ -94,29 +97,50 @@ export function CodeView({
   wrap?: boolean;
   maxHeight?: string;
 }) {
-  return (
-    <SyntaxHighlighter
-      language={language ?? "text"}
-      style={vscDarkPlus}
-      showLineNumbers={showLineNumbers}
-      wrapLongLines={wrap}
-      customStyle={{
-        margin: 0,
-        borderRadius: 0,
-        background: "#0d1117",
-        fontSize: "12.5px",
-        lineHeight: 1.65,
-        minHeight: "100%",
-        ...(maxHeight ? { maxHeight } : {}),
-      }}
-      codeTagProps={{
-        style: { fontFamily: "var(--font-geist-mono), ui-monospace, monospace" },
-      }}
+  const code = source.replace(/\n$/, "");
+  const html = useHighlightedCode(code, language);
+  const lineCount = useMemo(() => code.split("\n").length, [code]);
+
+  // Repli texte brut (premier rendu, grammaire absente) : mêmes couleurs,
+  // mêmes numéros — la colonne CSS ci-dessous est partagée par les deux états.
+  const gutter = showLineNumbers ? (
+    <div
+      aria-hidden="true"
+      className="shrink-0 select-none border-r border-zinc-800 bg-[#161b22] px-2 py-[0.85rem] text-right text-zinc-600"
+      style={{ fontFamily: CODE_FONT_FAMILY, fontSize: "12.5px", lineHeight: "1.65" }}
     >
-      {source.replace(/\n$/, "")}
-    </SyntaxHighlighter>
+      {Array.from({ length: lineCount }, (_, i) => (
+        <div key={i}>{i + 1}</div>
+      ))}
+    </div>
+  ) : null;
+
+  return (
+    <div
+      className="flex min-h-full"
+      style={{ ...CODE_CONTAINER_STYLE, ...(maxHeight ? { maxHeight } : {}) }}
+    >
+      {gutter}
+      {html ? (
+        <div
+          className={`min-w-0 flex-1 overflow-x-auto [&_pre]:!my-0 [&_pre]:!py-[0.85rem] [&_pre]:px-[1rem] [&_pre]:!bg-transparent [&_code]:!font-[var(--font-geist-mono),ui-monospace,monospace] ${
+            wrap ? "[&_pre]:!whitespace-pre-wrap [&_pre]:!break-words" : ""
+          }`}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      ) : (
+        <pre
+          className={`min-w-0 flex-1 overflow-x-auto py-[0.85rem] pl-[1rem] ${
+            wrap ? "whitespace-pre-wrap break-words" : ""
+          }`}
+          style={{ fontFamily: CODE_FONT_FAMILY }}
+        >
+          <code>{code}</code>
+        </pre>
+      )}
+    </div>
   );
-}
+});
 
 export function DiffView({ oldSource, newSource }: { oldSource: string; newSource: string }) {
   const rows = useMemo(() => diffLines(oldSource, newSource), [oldSource, newSource]);
@@ -228,6 +252,33 @@ export function JsonView({ source }: { source: string }) {
   }, [source]);
   return <CodeView source={pretty} language="json" />;
 }
+
+/** Source en cours de génération : TEXTE BRUT volontaire (perf 2026-11-19).
+ *  L'ancien rendu colorisé re-tokenisait tout le fichier à chaque delta
+ *  (~60 Hz, coût quadratique sur les gros artefacts) ; la colorisation
+ *  n'arrive qu'à l'état « ready » via CodeView. Mémoïsé sur le contenu :
+ *  les re-rendus du panneau (statut, barre) ne re-rendent pas le texte. */
+export const LiveSourceView = memo(function LiveSourceView({
+  source,
+}: {
+  source: string;
+}) {
+  return (
+    <pre
+      className="whitespace-pre-wrap break-words p-[0.85rem_1rem] text-zinc-300"
+      style={{
+        margin: 0,
+        background: "#0d1117",
+        fontSize: "12.5px",
+        lineHeight: 1.65,
+        minHeight: "100%",
+        fontFamily: CODE_FONT_FAMILY,
+      }}
+    >
+      <code>{source}</code>
+    </pre>
+  );
+});
 
 /** Image / aperçu PNG avec zoom (ajuster ↔ 100 %) et déplacement au scroll. */
 export function ImageView({

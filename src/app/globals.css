@@ -217,6 +217,16 @@
   animation: message-in 0.24s ease-out;
 }
 
+/* Perf 2026-11-19 — bulles hors écran : le navigateur saute le rendu
+   (layout + paint) des messages non visibles du fil. contain-intrinsic-size
+   donne une hauteur d'estimation au conteneur pour éviter les sauts de
+   barre de défilement ; l'ancrage de défilement natif compense le reste.
+   Les 4 dernières bulles restent toujours rendues (marge). */
+.group\/msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 132px;
+}
+
 /* Mouvement réduit : les 3 animations maison sont coupées, les éléments
    restent visibles à l'état final (constat passe 3 P5 : aucun garde). */
 @media (prefers-reduced-motion: reduce) {

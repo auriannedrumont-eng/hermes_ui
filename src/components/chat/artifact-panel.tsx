@@ -58,6 +58,7 @@ import {
   CsvTableView,
   JsonView,
   ImageView,
+  LiveSourceView,
 } from "@/components/chat/artifact-views";
 import { ArtifactTerminal } from "@/components/chat/artifact-terminal";
 import { serviceFetchInit } from "@/lib/service";
@@ -165,13 +166,11 @@ function ArtifactBody({
               : "Rendu de l'aperçu (Chrome)…")}
         </div>
         {streamingContent && streamingContent.length > 0 ? (
+          // Perf 2026-11-19 : texte brut pendant la génération — l'ancien
+          // CodeView (Prism) re-tokenisait TOUT le fichier à chaque delta
+          // (~60 Hz). La colorisation n'arrive qu'à l'état « ready ».
           <div className="min-h-0 flex-1 overflow-auto">
-            <CodeView
-              source={streamingContent}
-              language={artifact.language ?? artifact.kind}
-              showLineNumbers={false}
-              wrap
-            />
+            <LiveSourceView source={streamingContent} />
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8">

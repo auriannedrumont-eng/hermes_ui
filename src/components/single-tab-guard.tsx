@@ -161,7 +161,45 @@ export function SingleTabGuard() {
     if (otherIsPrimary(readHeartbeat(), ownId)) standBy();
     else claim();
 
+    // Perf 2026-11-19 — Web Locks en primaire : le verrou `navigator.locks`
+    // est réputé « tenu » tant que l'onglet vit, sans écrire sur disque.
+    // Quand le principal disparaît (fermeture, crash), la promesse se
+    // résout chez le doublon, qui prend le relais immédiatement. Le
+    // battement localStorage (2 s) reste actif en REPLI : les navigateurs
+    // sans Web Locks gardent le comportement d'origine, et l'horloge du
+    // battement reste lue par les VIEUX onglets déjà ouverts.
+    const locksApi = (navigator as { locks?: { request: (name: string, cb: () => Promise<void>) => Promise<void> } }).locks;
+    let releaseWebLock: (() => void) | null = null;
+    if (locksApi) {
+      let notifyRelease: () => void = () => {};
+      const released = new Promise<void>((resolve) => {
+        notifyRelease = resolve;
+      });
+      releaseWebLock = notifyRelease;
+      locksApi
+        .request(CHANNEL_NAME, async () => {
+          // Verrou acquis : cet onglet EST le principal (le premier arrivé).
+          await released;
+          // Le return libère le verrou — seulement au démontage de l'onglet.
+        })
+        .then(() => {
+          // Verrou perdu (principal parti, on était doublon) : relais.
+          if (isStandalone()) return;
+          claim();
+        })
+        .catch(() => {
+          /* API indisponible : le repli heartbeat prend le relais */
+        });
+    }
+
     const beat = window.setInterval(() => {
+      if (locksApi) {
+        // Mode Web Locks : le verrou porte la primeauté, le battement ne
+        // sert que de signal de présence pour les VIEUX onglets (pas de
+        // claim/standBy ici — pas d'inversion de rôles).
+        if (role === "primary") writeHeartbeat(ownId, Date.now());
+        return;
+      }
       if (role === "primary") {
         writeHeartbeat(ownId, Date.now());
         return;
@@ -202,6 +240,7 @@ export function SingleTabGuard() {
 
     return () => {
       window.clearInterval(beat);
+      releaseWebLock?.(); // libère le verrou Web Locks : le relais est immédiat
       try {
         channel?.removeEventListener("message", onChannelMessage);
         channel?.close();

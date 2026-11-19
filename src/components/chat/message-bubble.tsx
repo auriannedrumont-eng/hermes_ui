@@ -4,7 +4,7 @@
 // affiché à côté de l'icône (rangée compacte, idiome unique du repo).
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   Brain,
   Check,
@@ -196,7 +196,12 @@ interface MessageBubbleProps {
   fallbackMode?: ConversationMode;
 }
 
-export function MessageBubble({
+// Perf 2026-11-19 : mémoïsée — pendant un tour, un delta ne re-rend que la
+// bulle en vol (contenu changé) ; les N-1 bulles stables du fil sautent la
+// réconciliation. Les callbacks passés par message-list/page sont des
+// références stables (useCallback de l'orchestrateur), la comparaison
+// superficielle de memo est donc efficace.
+export const MessageBubble = memo(function MessageBubble({
   message,
   isStreaming = false,
   streamingContent,
@@ -638,4 +643,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});

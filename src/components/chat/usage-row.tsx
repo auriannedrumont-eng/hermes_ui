@@ -6,14 +6,17 @@
 // deviné : sans tarifs, on le dit.
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { estimateTokens } from "@/lib/tokens";
 import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
 import { useModelPricing } from "@/hooks/use-pricing";
 import type { ChatMessage } from "@/lib/chat-types";
 
-export function UsageRow({ message }: { message: ChatMessage }) {
+// Perf 2026-11-19 : mémoïsée — estimateTokens (boucle caractère par
+// caractère) ne recalculait que à chaque re-rendu du fil ; un message
+// persisté ne change plus jamais, la ligne saute la réconciliation.
+export const UsageRow = memo(function UsageRow({ message }: { message: ChatMessage }) {
   const pricing = useModelPricing();
   const [open, setOpen] = useState(false);
   const usage = message.usage;
@@ -82,4 +85,4 @@ export function UsageRow({ message }: { message: ChatMessage }) {
       ) : null}
     </div>
   );
-}
+});

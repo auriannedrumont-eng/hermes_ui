@@ -134,18 +134,23 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   }) => {
     if (p.conversationId !== activeIdRef.current) return;
     setTurnError(null); // un nouveau tour efface l'erreur précédente
-    setStreamsRecord((prev) => ({
-      ...prev,
-      [p.messageId]: {
-        messageId: p.messageId,
-        conversationId: p.conversationId,
-        variant: p.variant,
-        content: "",
-        reasoning: "",
-        status: "Hermes réfléchit…",
-        toolEvents: [],
-      },
-    }));
+    // flush : la bulle doit apparaître immédiatement (perf 2026-11-19 —
+    // seuls les deltas d'accumulation sont coalescés, cf. stream-store).
+    setStreamsRecord(
+      (prev) => ({
+        ...prev,
+        [p.messageId]: {
+          messageId: p.messageId,
+          conversationId: p.conversationId,
+          variant: p.variant,
+          content: "",
+          reasoning: "",
+          status: "Hermes réfléchit…",
+          toolEvents: [],
+        },
+      }),
+      { flush: true }
+    );
   };
 
   const onStreamDelta = (p: {
@@ -222,12 +227,15 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   }) => {
     if (p.conversationId !== activeIdRef.current) {
       refreshConversations();
-      setStreamsRecord((prev) => {
-        if (!(p.messageId in prev)) return prev;
-        const next = { ...prev };
-        delete next[p.messageId];
-        return next;
-      });
+      setStreamsRecord(
+        (prev) => {
+          if (!(p.messageId in prev)) return prev;
+          const next = { ...prev };
+          delete next[p.messageId];
+          return next;
+        },
+        { flush: true }
+      );
       return;
     }
     if (p.message) {
@@ -242,12 +250,17 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
     // porte désormais (messages.mode_flow) ; le live ne sert qu'en vol.
     setModeFlowLive((cur) => (cur?.messageId === p.messageId ? null : cur));
     // F-17 : ne retirer que CE tour — l'autre variante peut couler encore.
-    setStreamsRecord((prev) => {
-      if (!(p.messageId in prev)) return prev;
-      const next = { ...prev };
-      delete next[p.messageId];
-      return next;
-    });
+    // flush : la bulle en vol doit céder la place au message persisté
+    // immédiatement, sinon le contenu coalescé reste affiché ~200 ms.
+    setStreamsRecord(
+      (prev) => {
+        if (!(p.messageId in prev)) return prev;
+        const next = { ...prev };
+        delete next[p.messageId];
+        return next;
+      },
+      { flush: true }
+    );
     setTurnError(null); // arrêt (stopped) ou succès : ce tour est clos
     refreshConversations();
   };
@@ -275,18 +288,22 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
       !p.messageId || cur?.messageId === p.messageId ? null : cur
     );
     // F-17 : un côté peut échouer pendant que l'autre termine — on ne
-    // retire que le tour concerné.
-    setStreamsRecord((prev) => {
-      // Lot 3 (audit L3-5) : l'ancien code renvoyait {} dès que la cible
-      // était absente — une erreur service sans messageId (ou visant un
-      // tour déjà clos) VIDAIT tous les streams en vol, y compris l'autre
-      // côté d'une comparaison qui, lui, continue normalement.
-      const key = p.messageId ?? p.message?.id;
-      if (!key || !(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    // retire que le tour concerné. flush : l'erreur doit s'afficher sans
+    // attendre la fenêtre de coalescence.
+    setStreamsRecord(
+      (prev) => {
+        // Lot 3 (audit L3-5) : l'ancien code renvoyait {} dès que la cible
+        // était absente — une erreur service sans messageId (ou visant un
+        // tour déjà clos) VIDAIT tous les streams en vol, y compris l'autre
+        // côté d'une comparaison qui, lui, continue normalement.
+        const key = p.messageId ?? p.message?.id;
+        if (!key || !(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      },
+      { flush: true }
+    );
     refreshConversations();
   };
 

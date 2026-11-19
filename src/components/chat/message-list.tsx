@@ -52,11 +52,26 @@ const SUGGESTIONS = [
 ];
 
 /** Cartes d'artefacts ancrées sur un message (dernière version par clé). */
+// Perf 2026-11-19 — cache d'identité : la fonction reconstruisait un tableau
+// à chaque rendu, ce qui donnait une prop `artifactCards` NOUVELLE aux bulles
+// mémoïsées à chaque delta (memo cassé). Le résultat est référentiellement
+// stable tant que la liste d'artefacts vivante et le fallback du message ne
+// changent pas (WeakMap : la liste remplacée libère l'entrée).
+const NO_CARDS: Artifact[] = [];
+const cardsCache = new WeakMap<Artifact[], Map<string, { fallback: Artifact[] | undefined; result: Artifact[] }>>();
+
 function cardsForMessage(
   messageId: string,
   artifacts: Artifact[],
   fallback?: Artifact[]
 ): Artifact[] {
+  let byMessage = cardsCache.get(artifacts);
+  if (!byMessage) {
+    byMessage = new Map();
+    cardsCache.set(artifacts, byMessage);
+  }
+  const cached = byMessage.get(messageId);
+  if (cached && cached.fallback === fallback) return cached.result;
   const byKey = new Map<string, Artifact>();
   for (const a of artifacts) {
     if (a.anchorMessageId !== messageId) continue;
@@ -69,8 +84,10 @@ function cardsForMessage(
       byKey.set(a.key, a);
     }
   }
-  if (byKey.size > 0) return [...byKey.values()];
-  return fallback ?? [];
+  const result: Artifact[] =
+    byKey.size > 0 ? [...byKey.values()] : (fallback ?? NO_CARDS);
+  byMessage.set(messageId, { fallback, result });
+  return result;
 }
 
 interface MessageListProps {
@@ -214,11 +231,38 @@ export function MessageList({
     modeFlowLive && effectiveStreams.some((s) => s.messageId === modeFlowLive.messageId);
   const liveFlowPending = modeFlowLive && !liveFlowStreaming;
 
+  // Perf 2026-11-19 — suivi du bas throttlé : l'ancien effet posait
+  // scrollTop = scrollHeight à CHAQUE delta (~60 Hz), forçant un layout
+  // complet du fil à chaque fois. Pendant un tour, le suivi passe par un
+  // rAF au plus (une écriture par frame) ; l'arrivée d'un message persisté
+  // (envoi, clôture du tour) reste un saut direct.
+  const scrollFrameRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+    },
+    []
+  );
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !pinnedRef.current) return;
+    // Message persisté (envoi utilisateur, clôture du tour) : saut direct.
     el.scrollTop = el.scrollHeight;
-  }, [messages, effectiveStreams]);
+  }, [messages.length, loadingHistory]);
+
+  // Deltas en vol : une écriture par frame au plus, jamais par delta.
+  useEffect(() => {
+    if (effectiveStreams.length === 0) return;
+    if (!pinnedRef.current) return;
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const el = scrollRef.current;
+      if (!el || !pinnedRef.current) return;
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [effectiveStreams]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
