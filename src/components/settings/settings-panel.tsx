@@ -18,7 +18,7 @@
 // jamais simulés ; le moteur reste verrouillé « gateway »).
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -222,9 +222,26 @@ export function SettingsPanel({
   };
 
   // À l'ouverture : rafraîchit fournisseurs & extensions (données serveur).
+  // Correctif 2026-11-19 (6), suite M-1 : la dépendance `api` re-déclenchait
+  // l'effet à CHAQUE changement d'identité de l'objet — or les réponses du
+  // service recréent les tableaux (nouvelles références, contenu identique)
+  // à chaque refresh, donc `api` changeait à chaque réponse et le cycle
+  // se réarmait seul : refresh → réponse → nouvel `api` → refresh… en boucle
+  // infinie tant que le volet était ouvert (3 requêtes socket par cycle,
+  // ~10 % CPU en continu, constat « ça monte dès qu'on touche un onglet »).
+  // Seule la TRANSITION fermé→ouvert doit rafraîchir : `api` est une
+  // référence stable (useMemo du hook, actions useCallback) et le volet lit
+  // l'état courant par abonnement — il n'a pas besoin d'être re-déclenché.
+  // (Le ref s'aligne dans un effet, jamais pendant le rendu — règle
+  // react-hooks/refs.)
+  const apiRef = useRef(api);
   useEffect(() => {
-    if (open) api.refresh();
-  }, [open, api]);
+    apiRef.current = api;
+  }, [api]);
+  useEffect(() => {
+    if (open) apiRef.current.refresh();
+    // (deps volontairement sans `api` : cf. commentaire ci-dessus)
+  }, [open]);
 
   const isLocal = connected && mode !== "gateway";
   // « local » : réponses réelles (clés fournisseurs) si au moins une clé est

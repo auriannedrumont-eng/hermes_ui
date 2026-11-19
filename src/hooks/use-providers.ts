@@ -43,28 +43,58 @@ export function useProviders() {
   const [extensions, setExtensions] = useState<ExtensionView[]>([]);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
 
+  // Correctif 2026-11-19 (6), suite M-1 : le service reconstruit ses vues à
+  // CHAQUE réponse (nouvelles références, contenu identique — la désérialisation
+  // JSON côté client ne peut pas faire autrement). Un `setProviders(res…)`
+  // systématique re-rendait donc la page à chaque réponse, changée ou non,
+  // et changeait l'identité de l'objet `api` (le useMemo du retour dépend de
+  // ces tableaux) — carburant de la boucle d'ouverture du volet Paramètres.
+  // Garde-fou : les setters n'engagent l'état QUE si le contenu a réellement
+  // changé, comparé par signature (les vues sont des objets sérialisables
+  // produits par providersWire/extensionsWire — l'ordre des listes est
+  // déterministe côté service, ORDER BY stable).
+  const lastSigRef = useRef({ providers: "", catalog: "", extensions: "" });
+  const setProvidersIfChanged = useCallback((next: ProviderView[]) => {
+    const sig = JSON.stringify(next);
+    if (sig === lastSigRef.current.providers) return;
+    lastSigRef.current.providers = sig;
+    setProviders(next);
+  }, []);
+  const setCatalogIfChanged = useCallback((next: ProviderCatalogEntry[]) => {
+    const sig = JSON.stringify(next);
+    if (sig === lastSigRef.current.catalog) return;
+    lastSigRef.current.catalog = sig;
+    setCatalog(next);
+  }, []);
+  const setExtensionsIfChanged = useCallback((next: ExtensionView[]) => {
+    const sig = JSON.stringify(next);
+    if (sig === lastSigRef.current.extensions) return;
+    lastSigRef.current.extensions = sig;
+    setExtensions(next);
+  }, []);
+
   useEffect(() => {
     const socket = getSocket();
     socketRef.current = socket;
 
     const refresh = () => {
       socket.emit("providers:list", (res: { providers?: ProviderView[] } = {}) => {
-        if (Array.isArray(res.providers)) setProviders(res.providers);
+        if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
       });
       socket.emit("providers:catalog", (res: { catalog?: ProviderCatalogEntry[] } = {}) => {
-        if (Array.isArray(res.catalog)) setCatalog(res.catalog);
+        if (Array.isArray(res.catalog)) setCatalogIfChanged(res.catalog);
       });
       socket.emit("extensions:list", (res: { extensions?: ExtensionView[] } = {}) => {
-        if (Array.isArray(res.extensions)) setExtensions(res.extensions);
+        if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
       });
     };
     if (socket.connected) refresh();
     socket.on("connect", refresh);
     const onProviders = (res: { providers?: ProviderView[] } = {}) => {
-      if (Array.isArray(res.providers)) setProviders(res.providers);
+      if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
     };
     const onExtensions = (res: { extensions?: ExtensionView[] } = {}) => {
-      if (Array.isArray(res.extensions)) setExtensions(res.extensions);
+      if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
     };
     socket.on("providers:changed", onProviders);
     socket.on("extensions:changed", onExtensions);
@@ -89,13 +119,13 @@ export function useProviders() {
   const refresh = useCallback(() => {
     const socket = socketRef.current ?? getSocket();
     socket.emit("providers:list", (res: { providers?: ProviderView[] } = {}) => {
-      if (Array.isArray(res.providers)) setProviders(res.providers);
+      if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
     });
     socket.emit("providers:catalog", (res: { catalog?: ProviderCatalogEntry[] } = {}) => {
-      if (Array.isArray(res.catalog)) setCatalog(res.catalog);
+      if (Array.isArray(res.catalog)) setCatalogIfChanged(res.catalog);
     });
     socket.emit("extensions:list", (res: { extensions?: ExtensionView[] } = {}) => {
-      if (Array.isArray(res.extensions)) setExtensions(res.extensions);
+      if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
     });
   }, []);
 
