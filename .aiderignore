@@ -1,0 +1,27 @@
+# .aiderignore — fichiers qu'aider ne doit ni lire ni ajouter au chat
+# (mêmes exclusions que .repomixignore ; résumé des raisons dans AGENTS.md)
+
+node_modules/
+bun.lock
+package-lock.json
+desktop/runtime/
+tools/
+db/
+download/
+upload/
+tool-results/
+next-env.d.ts
+design/
+scripts/test-*.ts
+scripts/qa-*.ts
+scripts/qa-*.sh
+scripts/probe-*.ts
+scripts/debug-*.ts
+scripts/diag-*.ts
+scripts/diag-*.sh
+scripts/run-tests.ts
+scripts/fake-*.ts
+examples/
+.next/
+out/
+*.lock

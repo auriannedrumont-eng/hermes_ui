@@ -1,0 +1,53 @@
+# ETAT.md — Synthèse de l'état du projet (2026-11-19)
+
+> Une page, à jour. Sources : `docs/ROADMAP_FRONT.md` (F-xx), `docs/ROADMAP-LOTS.md`
+> (chantiers), `docs/AUDIT-CONSOLIDE.md` (constats), FORK.md §9 (journal). Remplace
+> la lecture des trois documents pour démarrer une session ; les ouvrir seulement
+> si le détail d'un point est nécessaire.
+
+## Fonctionnalités livrées (F-xx)
+
+| Domaine | État |
+| --- | --- |
+| Chat cœur | Streaming + Stop propre, régénération, erreurs persistantes (F-01/F-04) ✓ · Markdown + shiki (F-02) ✓ · Actions message (F-03) ✓ · Historique, recherche, épingle (F-05) ✓ · Composer v2 avec jauge de contexte (F-06) ✓ · Uploads + dictée/TTS (F-07/F-16) ✓ · Sélecteur de modèles cmdk (F-08) ✓ · Slash commands (F-10) ✓ · Raccourcis clavier (F-23) ✓ |
+| Artefacts | Panneau split view multi-rendus (F-15) ✓ · Cartes inline + versioning + diff ✓ · Journal de versions restaurable (F-26) ✓ · Onglet dédié `/view` bac à sable CSP (F-28) ✓ · Terminal du tour dans le panneau (F-29) ✓ |
+| Organisation | Projets/dossiers (F-20) ✓ · Édition avec branchement (F-14) ✓ · Partage public lecture seule + export image (F-13) ✓ |
+| Paramètres | Volet 860 px à rail, 10 sections réelles — phase 3 / v2.4 livrée (F-25) ✓ : Interface, Modèles, Fournisseurs (porte-clés multi-clés, test réel), Clés de services, Extensions (imports GitHub), Outils, Skills, Modes, Hermes (mémoire F-18 + instructions F-19 + prompts F-11), Profils, Système |
+| Modèles & coûts | Comparaison 2 modèles (F-17) ✓ · Compteur tokens/coût (F-21) ✓ · Mode expert (F-22) ✓ |
+| Modes (F-30/F-30b) | 7 modes livrés : chat · plan · code · comparer · débat · conseil · auto — orchestrateur, consignes éditables, « qui travaille », modèle ou **chat IA web** par voix (F-27 : pilotage navigateur z.ai / AI Studio / gemini-app) ✓ |
+| Retiré | Feedback 👍/👎 (F-24) — retiré le 2026-11-16 à la demande de l'utilisatrice |
+
+## Chantiers récents (FORK.md §9, novembre)
+
+- **Perf (11-19)** : shiki + cache LRU, coalescence des deltas 200 ms, mémoïsation du fil, auto-scroll rAF, `content-visibility`, Web Locks — CPU divisé pendant les tours.
+- **Reconnexion (11-19)** : resynchronisation automatique de la conversation active + `tryAllTransports` — plus de bannière bloquée après une coupure.
+- **Build cassé (11-19)** : `tools/` (cache bun du lanceur) exclu du type-check — le fallback dev permanent est réparé.
+- **Revue de code (11-19)** : 0 bloquant / 12 majeurs / 30 moyens / ~80 mineurs ; lots 1-2 corrigés (9 constats).
+- **Modes F-30/F-30b, versions F-26, webchat F-27, re-attache des tours en vol** (11-15 → 11-17) : livrés et QA verts.
+
+## Reste à faire (docs/ROADMAP-LOTS.md, ordre 1 → 4 → 2 → 3 → 5 → 6)
+
+| Lot | Contenu | Effort |
+| --- | --- | --- |
+| **1 — Critique** | CORS loopback + jeton lanceur, Caddy figé, fuite streams fantômes (`llm-pool`), garde abort orchestrateur, race `conversations:open` | ~1-2 j |
+| **4 — CI** | Scripts `test`/`qa:dom`, GitHub Actions typecheck+lint, tests de régression du Lot 1 | ~1 j |
+| **2 — Intégrité SQLite** | Purge artefacts orphelins, échappement `LIKE`, transactions, `JSON.parse` protégé, watchdog webchat | ~2-3 j |
+| **3 — État frontend** | `ModePicker` écrase `debateParallel`/`model`, brouillons figés, flux streams (dédoublonnage, ack stop) | ~2 j |
+| **5 — UI / a11y** | Échap sous dialog Radix, `KeyboardSensor` dnd, ARIA, typo aux 7 crans | ~2 j |
+| **6 — Hygiène** | ~25 dépendances mortes, chemins en dur, docs alignées, FTS5, découpage `index.ts` | ~1-2 j |
+
+**Revue 11-19 — constats encore ouverts** : M-3 (brouillon du compositeur au refus),
+M-4 (liens pièces jointes 401), M-5 (barrière markdown page publique), M-8
+(`emitWithAck` sans timeout), M-10 (type expert), 4.2 (toast `connect_error`),
+4.8 (garde `res.artifact`).
+
+**Rythme recommandé** : alternance un lot de correctifs / une fonctionnalité ; le
+Lot 1 passe avant toute nouvelle fonctionnalité, le Lot 4 avant tout refactoring.
+
+## Dettes et pièges connus (FORK.md §8)
+
+- `.env` et bases SQLite committés dans le repo : pratique solo, à revoir avant ouverture publique.
+- Pas de tests frontend automatisés ; scripts de test manuels dans `scripts/`.
+- Piège socket.io : un emit-ack n'accepte qu'UN ack — ne jamais « acker deux fois ».
+- Piège QA : le z-ai du bac à sable renvoie parfois 429 — espacer les scripts à tours réels.
+- Pièges artefacts : jamais d'artefact plein format dans le flux ; rendu asynchrone jamais bloquant.

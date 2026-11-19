@@ -2,6 +2,7 @@
 
 Base : `docs/AUDIT-CONSOLIDE.md` (4 audits croisés, constats vérifiés au commit `4eab0cf`).
 Chaque lot = objectif, tâches chiffrées, jalon de validation. Aucun lot ne touche au code sans son jalon.
+Synthèse vivante : `docs/ETAT.md` (une page). Doc d'entrée : `DEMARRAGE.md`.
 
 Ordre : **1 → 4 → 2 → 3 → 5 → 6** (sécurité d'abord, CI avant les refactorings, hygiène en dernier).
 

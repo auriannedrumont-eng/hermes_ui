@@ -3,8 +3,11 @@
 Interface web de chat pour l'agent Hermes (Nous Research), avec rangement des
 conversations par projets et artefacts versionnés.
 
-> Fork maintenu par auriannedrumont-eng — documentation technique complète :
-> **[FORK.md](FORK.md)** (architecture, conventions, feuille de route, passation).
+> Fork maintenu par auriannedrumont-eng.
+> **[DEMARRAGE.md](DEMARRAGE.md)** : doc d'entrée pour toute session (carte,
+> conventions, règles de contexte LLM). Synthèse de l'état : **[docs/ETAT.md](docs/ETAT.md)**.
+> Documentation technique complète : **[FORK.md](FORK.md)** (à consulter par
+> section — architecture, conventions, feuille de route, passation).
 
 ## Deux modes
 

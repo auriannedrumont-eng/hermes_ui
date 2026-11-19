@@ -1,0 +1,36 @@
+# Exclusions de contexte pour les outils d'empaquetage LLM (repomix, gitingest, etc.)
+# Objectif : ne jamais empaqueter ce qui ne sert pas au raisonnement (~800k -> ~400k tokens).
+
+# Dépendances et runtime (jamais utiles au modèle)
+node_modules/
+bun.lock
+package-lock.json
+desktop/runtime/
+tools/
+db/
+download/
+upload/
+tool-results/
+next-env.d.ts
+
+# Maquettes HTML lourdes — la v5 seule fait foi, les autres sont archivées dans git
+design/maquette-composer.html
+
+# Tests et QA manuels (à inclure seulement si la tâche les concerne)
+scripts/test-*.ts
+scripts/qa-*.ts
+scripts/qa-*.sh
+scripts/probe-*.ts
+scripts/debug-*.ts
+scripts/diag-*.ts
+scripts/diag-*.sh
+scripts/run-tests.ts
+scripts/fake-*.ts
+
+# Lanceur et exemples
+desktop/
+examples/
+
+# Artefacts de build
+.next/
+out/
