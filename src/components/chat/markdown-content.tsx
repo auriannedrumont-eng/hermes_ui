@@ -4,15 +4,33 @@
 // MarkdownContent mémoïsé — pendant un tour, seules les bulles dont le
 // contenu change re-rendent, et un bloc de code n'est JAMAIS re-tokenisé
 // (cache LRU par contenu, cf. useHighlightedCode).
+// Revue 2026-11-19, M-2 (P) : prop `plain` — pendant le STREAMING, les blocs
+// de code sont rendus en texte brut (même motif que LiveSourceView du panneau
+// d'artefacts). Avant, chaque rafraîchissement coalescé (200 ms) re-tokenisait
+// TOUT le bloc en croissance via shiki (coût quadratique sur le tour) et
+// polluait le cache LRU de préfixes morts. La colorisation arrive à la
+// clôture du tour, quand le contenu devient immuable.
 "use client";
 
 import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
-import { useHighlightedCode, CODE_CONTAINER_STYLE, CODE_FONT_FAMILY } from "@/lib/highlight";
+import {
+  useHighlightedCode,
+  CODE_CONTAINER_STYLE,
+  CODE_FONT_FAMILY,
+} from "@/lib/highlight";
 
-function CodeBlock({ lang, code }: { lang?: string; code: string }) {
+function CodeBlock({
+  lang,
+  code,
+  plain,
+}: {
+  lang?: string;
+  code: string;
+  plain?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -40,10 +58,22 @@ function CodeBlock({ lang, code }: { lang?: string; code: string }) {
           {copied ? "Copié" : "Copier"}
         </button>
       </div>
-      {/* shiki rend un <pre><code> colorié ; le temps du premier rendu
-          (highlighter en initialisation), le texte brut sur le même fond
-          sombre — flash invisible en pratique. */}
-      <HighlightedCode code={code} lang={lang} />
+      {/* `plain` (streaming) : texte brut, jamais shiki — le bloc croît à
+          chaque rafraîchissement, le coloriser coûterait quadratiquement.
+          Même visuel que le repli de première initialisation. */}
+      {plain ? (
+        <pre
+          style={{ ...CODE_CONTAINER_STYLE, fontFamily: CODE_FONT_FAMILY }}
+          className="overflow-x-auto p-[0.85rem_1rem]"
+        >
+          <code>{code}</code>
+        </pre>
+      ) : (
+        // shiki rend un <pre><code> colorié ; le temps du premier rendu
+        // (highlighter en initialisation), le texte brut sur le même fond
+        // sombre — flash invisible en pratique.
+        <HighlightedCode code={code} lang={lang} />
+      )}
     </div>
   );
 }
@@ -79,8 +109,11 @@ const HighlightedCode = memo(function HighlightedCode({
 
 export const MarkdownContent = memo(function MarkdownContent({
   content,
+  plain = false,
 }: {
   content: string;
+  /** M-2 : blocs de code en texte brut (streaming) — pas de shiki. */
+  plain?: boolean;
 }) {
   return (
     <div className="text-[15px] leading-relaxed">
@@ -102,7 +135,7 @@ export const MarkdownContent = memo(function MarkdownContent({
                 </code>
               );
             }
-            return <CodeBlock lang={match?.[1]} code={text} />;
+            return <CodeBlock lang={match?.[1]} code={text} plain={plain} />;
           },
           a: ({ children, href }) => (
             <a

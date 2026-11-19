@@ -21,6 +21,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 const HEARTBEAT_KEY = "hermes.single.tab";
@@ -88,6 +89,15 @@ export function SingleTabGuard() {
   const [duplicate, setDuplicate] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [closeRefused, setCloseRefused] = useState(false);
+  const pathname = usePathname();
+
+  // Revue 2026-11-19, M-6 (F) : la page de partage publique /shared/<token>
+  // ne participe pas à l'exclusivité d'onglet. Elle est sans session ni état :
+  // ouvrir son propre lien de partage (vérification avant envoi, parcours
+  // normal) faisait de l'onglet de partage un « doublon » — bandeau plein
+  // écran, tentative de fermeture, et surtout reloadPrimary() qui relançait
+  // l'onglet APPLICATION. La garde s'installe donc seulement hors /shared.
+  const guardActive = pathname === null || !pathname.startsWith("/shared");
 
   // Tentative de fermeture automatique du doublon : si la page est encore
   // là 1,5 s après l'appel, le navigateur a refusé (page ouverte par le
@@ -107,6 +117,7 @@ export function SingleTabGuard() {
 
   useEffect(() => {
     if (isStandalone()) return; // fenêtre PWA : pas un onglet, garde éteinte
+    if (!guardActive) return; // /shared : page publique, hors dispositif (M-6)
 
     const ownId = tabId();
     let role: "primary" | "duplicate" = "primary";
@@ -251,7 +262,7 @@ export function SingleTabGuard() {
       window.removeEventListener("pagehide", onPageHide);
       onPageHide();
     };
-  }, []);
+  }, [guardActive]);
 
   if (!duplicate || dismissed) return null;
 

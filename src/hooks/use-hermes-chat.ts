@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
+import { streamStore } from "@/lib/stream-store";
 import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
 import { useToast } from "@/hooks/use-toast";
@@ -294,6 +295,7 @@ export function useHermesChat() {
   // les handlers stream:*/mode:flow ont besoin de setMessages et du refresh.
   const {
     setStreamsRecord,
+    resetStreams,
     streamsCount: _streamsCount,
     streaming,
     modeFlowLive,
@@ -409,19 +411,20 @@ export function useHermesChat() {
         // F-31 : si un tour était en vol, l'utilisateur a le droit de savoir
         // POURQUOI l'écran retombe — avant, le flux disparaissait en silence
         // et le déroulé restait « en cours » sans fin ni erreur.
-        setStreamsRecord((prev) => {
-          const inFlight = Object.keys(prev)[0];
-          if (inFlight) {
-            setTurnError({
-              messageId: inFlight,
-              error:
-                "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
-                "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
-                "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
-            });
-          }
-          return {};
-        });
+        // M-11 (revue) : plus de setState dans l'updater — lecture directe
+        // du store (get()), erreur affichée PUIS vidage scellé : les deltas
+        // d'un tour mort ne peuvent plus s'y raccrober après la coupure.
+        const inFlight = Object.keys(streamStore.get().streamsRecord)[0];
+        if (inFlight) {
+          setTurnError({
+            messageId: inFlight,
+            error:
+              "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
+              "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
+              "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
+          });
+        }
+        resetStreams();
       }, 4000);
     };
     // v2.4 : le service rediffuse le hello quand le porte-clés change —
@@ -787,7 +790,12 @@ export function useHermesChat() {
       setLoadingHistory(true);
       activeIdRef.current = id;
       setActiveId(id);
-      setStreamsRecord({});
+      // M-11 (revue 2026-11-19) : frontière étanche — resetStreams vide le
+      // store ET le scelle : les deltas d'un ancien tour arrivant après le
+      // changement de conversation ne peuvent plus reconstruire d'accumulation
+      // orpheline. La ré-attache ci-dessous (tours en vol) et le prochain
+      // stream:start rouvrent explicitement.
+      resetStreams();
       setTurnError(null);
       setCompactInfo(null);
       setModeFlowLive(null);
@@ -832,21 +840,26 @@ export function useHermesChat() {
             // les deltas suivants s'y raccordent sans trou ni doublon.
             for (const t of res.live ?? []) {
               if (!t?.messageId) continue;
-              setStreamsRecord((prev) =>
-                prev[t.messageId]
-                  ? prev
-                  : {
-                      ...prev,
-                      [t.messageId]: {
-                        messageId: t.messageId,
-                        conversationId: id,
-                        variant: t.variant,
-                        content: t.content ?? "",
-                        reasoning: t.reasoning ?? "",
-                        status: t.status ?? null,
-                        toolEvents: t.toolEvents ?? [],
+              // reopen (M-11) : la ré-attache est une réouverture EXPPLICITE
+              // du store scellé par resetStreams() au changement — ce sont
+              // des tours vivants de CETTE conversation, pas des orphelins.
+              setStreamsRecord(
+                (prev) =>
+                  prev[t.messageId]
+                    ? prev
+                    : {
+                        ...prev,
+                        [t.messageId]: {
+                          messageId: t.messageId,
+                          conversationId: id,
+                          variant: t.variant,
+                          content: t.content ?? "",
+                          reasoning: t.reasoning ?? "",
+                          status: t.status ?? null,
+                          toolEvents: t.toolEvents ?? [],
+                        },
                       },
-                    },
+                { reopen: true }
               );
               // Ré-attache du déroulé multi-voix (débat/conseil/auto, F-30) :
               // sans re-semis, le bloc des voix disparaît au retour dans la

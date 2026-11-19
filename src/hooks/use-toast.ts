@@ -9,7 +9,14 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+
+// Revue 2026-11-19, M-9 (D) : 1 000 000 ms (~17 min) hérités de shadcn — le
+// toast fermé (visuellement parti après `duration` Radix) restait un zombie
+// dans memoryState.toasts, re-rendu à chaque dispatch. La queue ci-dessous ne
+// fait que le NETTOYAGE D'ÉTAT après la fermeture (tous les chemins passent
+// par DISMISS : expiration `duration`, clic croix, swipe, dismiss programmé) :
+// 1 s laisse l'animation de sortie Radix se jouer puis purge l'entrée.
+const TOAST_REMOVE_DELAY = 1000
 
 type ToasterToast = ToastProps & {
   id: string

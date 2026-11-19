@@ -378,6 +378,7 @@ function PromptCard({
   onReset,
   dirty,
   hint,
+  ready = true,
 }: {
   promptKey: string;
   value: string;
@@ -385,6 +386,10 @@ function PromptCard({
   onReset: () => void;
   dirty: boolean;
   hint?: React.ReactNode;
+  /** M-7 : false tant que les surcharges serveur ne sont pas chargées —
+   *  une sauvegarde partie avant le chargement aurait écrasé les surcharges
+   *  des autres modes encore inconnues de l'écran. */
+  ready?: boolean;
 }) {
   const meta = MODE_PROMPT_META[promptKey] ?? { title: promptKey, used: "" };
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -400,6 +405,7 @@ function PromptCard({
         value={value}
         rows={3}
         maxLength={MAX_MODE_PROMPT_CHARS}
+        disabled={!ready}
         onChange={(e) => onChange(e.target.value.slice(0, MAX_MODE_PROMPT_CHARS))}
         placeholder={
           promptKey === "chat.main" || promptKey === "compare.main"
@@ -498,13 +504,22 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
   /** Surcharges des consignes côté service (chargées à l'ouverture). */
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [promptsLoaded, setPromptsLoaded] = useState(false);
+  // M-7 (revue 2026-11-19) : true dès la première édition locale — le
+  // chargement serveur tardif ne doit pas écraser une saisie en cours.
+  const promptsTouchedRef = useRef(false);
   const overridesRef = useRef(overrides);
   overridesRef.current = overrides;
 
   useEffect(
     () => {
       void getServerPrompts().then((ov) => {
-        setOverrides(ov);
+        // M-7 (revue 2026-11-19) : une saisie commencée AVANT l'arrivée du
+        // chargement ne doit pas être écrasée par l'état serveur (la frappe
+        // disparaissait). Le chargement n'installe ses valeurs que si aucune
+        // édition locale n'a eu lieu entre-temps ; l'utilisateur repart
+        // sinon de sa saisie, la sauvegarde débouncée fera converger le
+        // service.
+        if (!promptsTouchedRef.current) setOverrides(ov);
         setPromptsLoaded(true);
       });
       return undefined;
@@ -613,6 +628,9 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
    *  l'état suit à la frappe, la sauvegarde serveur est débouncée
    *  (effet au prochain message). */
   const editPrompt = (key: string, text: string) => {
+    // M-7 : toute édition marque la saisie locale — le chargement serveur
+    // encore en vol ne devra pas écraser ces valeurs à son arrivée.
+    promptsTouchedRef.current = true;
     const clean = text.slice(0, MAX_MODE_PROMPT_CHARS);
     const next = { ...overridesRef.current };
     if (clean === DEFAULT_PROMPTS[key]) delete next[key];
@@ -750,7 +768,8 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           />
         </Row>
         <PromptCard
-          promptKey="chat.main"
+          ready={promptsLoaded}
+promptKey="chat.main"
           value={promptValue("chat.main")}
           dirty={promptDirty("chat.main")}
           onChange={(t) => void editPrompt("chat.main", t)}
@@ -771,7 +790,8 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           />
         </Row>
         <PromptCard
-          promptKey="plan.main"
+          ready={promptsLoaded}
+promptKey="plan.main"
           value={promptValue("plan.main")}
           dirty={promptDirty("plan.main")}
           onChange={(t) => void editPrompt("plan.main", t)}
@@ -793,7 +813,8 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           />
         </Row>
         <PromptCard
-          promptKey="code.main"
+          ready={promptsLoaded}
+promptKey="code.main"
           value={promptValue("code.main")}
           dirty={promptDirty("code.main")}
           onChange={(t) => void editPrompt("code.main", t)}
@@ -826,7 +847,8 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           Consigne
         </div>
         <PromptCard
-          promptKey="compare.main"
+          ready={promptsLoaded}
+promptKey="compare.main"
           value={promptValue("compare.main")}
           dirty={promptDirty("compare.main")}
           onChange={(t) => void editPrompt("compare.main", t)}
@@ -891,14 +913,16 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           Consignes — une par voix
         </div>
         <PromptCard
-          promptKey="debate.conseiller"
+          ready={promptsLoaded}
+promptKey="debate.conseiller"
           value={promptValue("debate.conseiller")}
           dirty={promptDirty("debate.conseiller")}
           onChange={(t) => void editPrompt("debate.conseiller", t)}
           onReset={() => void resetPrompt("debate.conseiller")}
         />
         <PromptCard
-          promptKey="debate.juge"
+          ready={promptsLoaded}
+promptKey="debate.juge"
           value={promptValue("debate.juge")}
           dirty={promptDirty("debate.juge")}
           onChange={(t) => void editPrompt("debate.juge", t)}
@@ -947,14 +971,16 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
           Consignes — une par rôle
         </div>
         <PromptCard
-          promptKey="council.membre"
+          ready={promptsLoaded}
+promptKey="council.membre"
           value={promptValue("council.membre")}
           dirty={promptDirty("council.membre")}
           onChange={(t) => void editPrompt("council.membre", t)}
           onReset={() => void resetPrompt("council.membre")}
         />
         <PromptCard
-          promptKey="council.president"
+          ready={promptsLoaded}
+promptKey="council.president"
           value={promptValue("council.president")}
           dirty={promptDirty("council.president")}
           onChange={(t) => void editPrompt("council.president", t)}
@@ -1009,6 +1035,7 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
         {PROMPTS_BY_MODE.auto.map((key) => (
           <PromptCard
             key={key}
+            ready={promptsLoaded}
             promptKey={key}
             value={promptValue(key)}
             dirty={promptDirty(key)}

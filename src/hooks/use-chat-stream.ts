@@ -136,6 +136,9 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
     setTurnError(null); // un nouveau tour efface l'erreur précédente
     // flush : la bulle doit apparaître immédiatement (perf 2026-11-19 —
     // seuls les deltas d'accumulation sont coalescés, cf. stream-store).
+    // reopen (M-11) : un stream:start rouvre le store après un reset
+    // (changement de conversation) — la frontière étanche ne bloque
+    // que les accumulations orphelines, jamais un vrai nouveau tour.
     setStreamsRecord(
       (prev) => ({
         ...prev,
@@ -149,7 +152,7 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
           toolEvents: [],
         },
       }),
-      { flush: true }
+      { flush: true, reopen: true }
     );
   };
 
@@ -333,6 +336,11 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
     setStreamsRecord,
     setModeFlowLive,
     setTurnError,
+    /** Frontière étanche (M-11) : vidage COMPLET du store + scellement —
+     *  les écritures d'accumulation postérieures sont ignorées jusqu'au
+     *  prochain stream:start / ré-attache (reopen). À utiliser au changement
+     *  de conversation (openConversation). */
+    resetStreams: streamStore.reset,
     // ── Signaux LENTS (ne changent pas à chaque delta) ──
     /** Nombre de streams en vol (0/1/2) — booléen d'occupation pour la page. */
     streamsCount,

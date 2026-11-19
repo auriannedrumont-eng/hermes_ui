@@ -28,7 +28,12 @@ export const UsageRow = memo(function UsageRow({ message }: { message: ChatMessa
   const output = usage?.output ?? estimateTokens(message.content);
   const total = (input ?? 0) + output;
 
-  const cost = usage?.cost ?? (real ? estimateCost(usage ?? {}, modelPricing) : null);
+  // Revue 2026-11-19, M-12 (C) : le coût estimé doit partir des valeurs
+  // RÉCONCILIÉES. Avant, `estimateCost` recevait l'usage brut : un
+  // fournisseur qui renvoie `usage` sans `output` affichait des jetons
+  // de sortie estimés (repli ci-dessus) mais un coût calculé sur les
+  // seuls jetons d'entrée — voire 0 $ — information financière fausse.
+  const cost = usage?.cost ?? (real ? estimateCost({ input: input ?? 0, output }, modelPricing) : null);
   const costBasis: "facturé" | "estimé" | null =
     usage?.cost != null ? "facturé" : cost != null ? "estimé" : null;
 

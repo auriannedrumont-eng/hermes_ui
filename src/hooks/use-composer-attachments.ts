@@ -98,8 +98,14 @@ export function useComposerAttachments(deps: {
         `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       type NewEntry = PendingAttachment & { shouldUpload: boolean };
       const entries: NewEntry[] = [];
+      // Revue 2026-11-19, 4.9 (F) : la capacité se compare au TOTAL (pièces
+      // déjà en attente + nouvelles), pas aux seules nouvelles entrées. Le
+      // bouton d'ajout est désactivé à la limite, mais glisser-déposer et
+      // collage bypassent ce disabled : 5 en attente + drop de 4 = 9 pièces.
+      const room = MAX_ATTACHMENTS - pendingRef.current.length;
+      const limit = Math.max(0, room);
       for (const file of list) {
-        if (entries.length >= MAX_ATTACHMENTS) break;
+        if (entries.length >= limit) break;
         if (file.type === "image/svg+xml") {
           entries.push({
             localId: localId(),

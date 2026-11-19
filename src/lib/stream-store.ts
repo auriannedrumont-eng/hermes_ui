@@ -80,19 +80,34 @@ function flushRecord(): void {
   pendingRecord = null;
 }
 
+// M-11 (revue 2026-11-19) : scellement du reset. L'ancien reset() publiait
+// l'état vide puis rendait la main — un delta socket arrivé dans la fenêtre
+// synchrone de la publication reconstruisait une accumulation sur le
+// registre DÉJÀ vidé, et rien ne raccrochait jamais ce contenu orphelin.
+// Les gardes conversationId de l'orchestrateur filtrent ce cas en pratique,
+// mais l'invariant « reset = frontière étanche » ne tenait que par la
+// politesse des appelants. Il vit maintenant DANS le store : après reset,
+// les écritures d'accumulation (deltas, reasoning, toolEvents…) sont
+// ignorées jusqu'au prochain stream:start, qui rouvre explicitement.
+let sealed = false;
+
 export const streamStore = {
   /** Remplace/accumule le registre (setStreamsRecord de l'orchestrateur).
    *  `flush: true` (transitions de tour : start/done/error/stop, vidage au
    *  changement de conversation) publie immédiatement — le comportement
-   *  critique (appartition/disparition d'une bulle) reste instantané. */
+   *  critique (appartition/disparition d'une bulle) reste instantané.
+   *  Écritures ignorées tant que le store est scellé (M-11) : seules les
+   *  réouvertes explicites (`{ reopen: true }` — stream:start) passent. */
   setStreamsRecord(
     next:
       | Record<string, StreamingState>
       | ((prev: Record<string, StreamingState>) => Record<string, StreamingState>),
-    options?: { flush?: boolean }
+    options?: { flush?: boolean; reopen?: boolean }
   ) {
+    if (sealed && !options?.reopen) return;
     const base = pendingRecord ?? snapshot.streamsRecord;
     const value = typeof next === "function" ? next(base) : next;
+    if (options?.reopen) sealed = false;
     if (value === base) return;
     if (options?.flush) {
       pendingRecord = value;
@@ -121,10 +136,14 @@ export const streamStore = {
   setStallNotice(next: string | null) {
     if (next !== snapshot.stallNotice) setSnapshot({ stallNotice: next });
   },
-  /** Vidage complet (changement de conversation, déconnexion persistante). */
+  /** Vidage complet (changement de conversation, déconnexion persistante).
+   *  M-11 : le vidage SCELLE le store — les deltas d'un ancien tour qui
+   *  arriveraient après ne peuvent plus reconstruire d'accumulation
+   *  orpheline. Seul un stream:start ({ reopen: true }) rouvre. */
   reset() {
     turnToolsCache.clear();
     flushRecord(); // perf : rien de pendsu ne doit fuiter dans le prochain tour
+    sealed = true;
     if (snapshot !== EMPTY) {
       snapshot = EMPTY;
       emit();

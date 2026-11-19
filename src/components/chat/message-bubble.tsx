@@ -465,7 +465,10 @@ export const MessageBubble = memo(function MessageBubble({
         ) : content ? (
           isStreaming ? (
             <div className="text-[15px] leading-relaxed">
-              <MarkdownContent content={content} />
+              {/* M-2 (revue 2026-11-19) : `plain` pendant le stream — les
+                  blocs de code croissants ne passent PAS par shiki (re-
+                  tokenisation quadratique sinon). Colorisation à la clôture. */}
+              <MarkdownContent content={content} plain />
               <span className="streaming-cursor" aria-hidden="true" />
             </div>
           ) : (

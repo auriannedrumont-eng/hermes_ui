@@ -21,6 +21,10 @@ export function useDictation({ onTranscript, transcribe }: UseDictationOptions) 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  // Revue 2026-11-19, 4.7 (C) : drapeau SYNCHRONE — `streamRef` n'est
+  // affecté qu'après l'await getUserMedia ; sans lui, deux clics rapprochés
+  // passaient tous deux la garde pendant la fenêtre asynchrone.
+  const startingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   const transcribeRef = useRef(transcribe);
@@ -48,6 +52,7 @@ export function useDictation({ onTranscript, transcribe }: UseDictationOptions) 
     streamRef.current = null;
     recorderRef.current = null;
     chunksRef.current = [];
+    startingRef.current = false; // 4.7 : prêt pour un nouvel enregistrement
   }, []);
 
   useEffect(() => cleanup, [cleanup]);
@@ -58,6 +63,12 @@ export function useDictation({ onTranscript, transcribe }: UseDictationOptions) 
   }, []);
 
   const start = useCallback(async () => {
+    // Revue 2026-11-19, 4.7 (C) : garde réentrante — un double-clic avant le
+    // re-rendu du bouton appelait getUserMedia deux fois ; le second flux
+    // écrasait streamRef sans arrêter les pistes du premier (indicateur micro
+    // du navigateur coincé, flux fantôme jusqu'à la fin du second tour).
+    if (startingRef.current || recorderRef.current || streamRef.current) return;
+    startingRef.current = true;
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -115,7 +126,7 @@ export function useDictation({ onTranscript, transcribe }: UseDictationOptions) 
     } catch {
       setError("Micro indisponible ou refusé");
       setTimeout(() => setError(null), 4000);
-      cleanup();
+      cleanup(); // relâche aussi startingRef (4.7)
       setRecording(false);
     }
   }, [cleanup, stop]);

@@ -213,27 +213,58 @@ export function useProviders() {
     [extensions]
   );
 
-  return {
-    providers,
-    catalog,
-    extensions,
-    pendingEngineCount,
-    refresh,
-    addProvider,
-    removeProvider,
-    setStrategy,
-    setProviderBase,
-    addKey,
-    removeKey,
-    testKey,
-    addExtension,
-    installAnything,
-    toggleExtension,
-    removeExtension,
-    pinExtension,
-    checkExtension,
-    updateExtension,
-  };
+  // Revue 2026-11-19, M-1 (P) : l'objet API doit être stable — le volet
+  // Paramètres le met dans les dépendances de son effet d'ouverture
+  // (`if (open) api.refresh()`), et un littéral recréé à chaque rendu
+  // refermait la boucle : refresh → setState → re-render → nouvel objet
+  // `api` → effet re-déclenché → refresh… (3 requêtes socket par cycle,
+  // tant que le volet est ouvert). Tous les membres sont déjà des
+  // références stables (useCallback sur `emit` lui-même stable) ou des
+  // valeurs d'état : le memo ne change que quand l'état change réellement.
+  return useMemo(
+    () => ({
+      providers,
+      catalog,
+      extensions,
+      pendingEngineCount,
+      refresh,
+      addProvider,
+      removeProvider,
+      setStrategy,
+      setProviderBase,
+      addKey,
+      removeKey,
+      testKey,
+      addExtension,
+      installAnything,
+      toggleExtension,
+      removeExtension,
+      pinExtension,
+      checkExtension,
+      updateExtension,
+    }),
+    [
+      providers,
+      catalog,
+      extensions,
+      pendingEngineCount,
+      refresh,
+      addProvider,
+      removeProvider,
+      setStrategy,
+      setProviderBase,
+      addKey,
+      removeKey,
+      testKey,
+      addExtension,
+      installAnything,
+      toggleExtension,
+      removeExtension,
+      pinExtension,
+      checkExtension,
+      updateExtension,
+    ]
+  );
 }
 
 export type ProvidersApi = ReturnType<typeof useProviders>;
