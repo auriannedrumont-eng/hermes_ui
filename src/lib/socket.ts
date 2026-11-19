@@ -12,6 +12,15 @@ export function getSocket() {
     // DO NOT change the path, it is used by Caddy to forward the request to the correct port
     socket = io("/?XTransformPort=3003", {
       transports: ["websocket", "polling"],
+      // Résilience de reconnexion : si la poignée de main websocket échoue
+      // (intermédiaire qui casse les upgrades — proxy redémarré, réseau
+      // corporate), engine.io essaie le transport SUIVANT de la liste dans
+      // la MÊME tentative. Sans cette option, il réessayait websocket à
+      // l'infini et ne se reconnectait jamais, même là où le polling passe.
+      // Chaque tentative repart de la première entrée (tableau copié par
+      // connexion) : les environnements où le polling est bloqué (CORS,
+      // origine non boucle locale) ne changent pas de comportement.
+      tryAllTransports: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

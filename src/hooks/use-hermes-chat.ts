@@ -353,6 +353,17 @@ export function useHermesChat() {
   // (fetchArtifacts vit dans use-artifacts-panel.ts — découpage 2026-11.)
 
   // --- Connexion socket + écoute des événements de stream ---
+  // Reprise après coupure (sonde E2E reconnexion, 2026-11-19) : une
+  // REconnexion doit resynchroniser la conversation ACTIVE — le tour
+  // interrompu a pu se terminer (ou persister en partiel) côté service
+  // pendant la coupure ; sans ça, la bannière « connexion perdue » qui
+  // promet une reprise automatique restait bloquée à jamais (F5 requis).
+  // openConversation vit plus bas dans le hook : un ref l'expose au
+  // handler sans erreur de temporelle morte (TDZ) ni ré-abonnement des
+  // listeners socket à chaque rendu.
+  const wasDisconnectedRef = useRef(false);
+  const resyncConversationRef = useRef<(id: string) => void>(() => {});
+
   useEffect(() => {
     const socket = getSocket();
 
@@ -368,6 +379,17 @@ export function useHermesChat() {
       refreshConversations();
       fetchProjects();
       fetchModels();
+      // Reprise après coupure : la PREMIÈRE connexion n'a rien à
+      // resynchroniser (aucune conversation ouverte), une RECONNEXION
+      // recharge la conversation active — messages persistés, état de
+      // compaction, tours en vol (re-semis serveur, contenu accumulé sans
+      // trou) et cartes d'artefacts. La bannière « connexion perdue »
+      // part avec (openConversation fait setTurnError(null)).
+      if (wasDisconnectedRef.current) {
+        wasDisconnectedRef.current = false;
+        const active = activeIdRef.current;
+        if (active) resyncConversationRef.current(active);
+      }
     };
     // Lot 3 (audit L3-5) : une déconnexion BRÈVE (réseau qui tremble) se
     // rétablit seule — le tour continue côté service et les événements
@@ -378,6 +400,9 @@ export function useHermesChat() {
     let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
     const onDisconnect = () => {
       setConnected(false);
+      // Reprise après coupure : la prochaine connexion est une
+      // REconnexion — elle resynchronisera la conversation active.
+      wasDisconnectedRef.current = true;
       if (disconnectTimer) clearTimeout(disconnectTimer);
       disconnectTimer = setTimeout(() => {
         disconnectTimer = null;
@@ -840,6 +865,12 @@ export function useHermesChat() {
     },
     [fetchArtifacts]
   );
+
+  // Reprise après coupure (voir onConnect) : le handler de reconnexion
+  // appelle la dernière identité du chargeur de conversation via le ref.
+  useEffect(() => {
+    resyncConversationRef.current = openConversation;
+  }, [openConversation]);
 
   const deleteConversation = useCallback((id: string) => {
     getSocket().emit("conversations:delete", { id });
