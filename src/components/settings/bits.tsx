@@ -6,7 +6,7 @@
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type PastilleTone = "ok" | "warn" | "err" | "off";
+export type PastilleTone = "ok" | "warn" | "err" | "off" | "busy";
 
 export function Pastille({
   tone,
@@ -24,12 +24,15 @@ export function Pastille({
     warn: "bg-warning",
     err: "bg-destructive",
     off: "bg-border",
+    // « busy » (maquette Système — « Vérification… ») : point animé.
+    busy: "bg-hermes animate-pulse",
   }[tone];
   const text = {
     ok: "text-muted-foreground",
     warn: "text-warning",
     err: "text-destructive",
     off: "text-muted-foreground",
+    busy: "text-muted-foreground",
   }[tone];
   return (
     <span

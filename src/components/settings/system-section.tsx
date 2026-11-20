@@ -1,17 +1,20 @@
-// Section « Système » — v0.3.0 : DEUX cartes (spec §3), allégée.
-// Carte 1 « Mise à jour » : conserve le mécanisme réel éprouvé du v0.2.1
-//   (drapeau au lanceur + journal live system:update-log:changed + verdict
-//   « MAJ OK / MAJ ERREUR » + chien de garde 45 s) — la demande de mise à
-//   jour reste celle du lanceur, avec le déroulé en direct.
-// Carte 2 « Agent Hermes » : l'état vient de la socket (flux unique §3.2),
-//   aucun sondage ; version du service et dernier battement affichés.
-// La gestion de l'espace disque a déménagé : page « Stockage » dédiée
-//   (entrée au même niveau dans le rail — spec §2.1). Sondes RÉELLES
-//   uniquement, jamais simulées.
+// Section « Système » — v0.3.2 : DEUX cartes conformes à la maquette de
+// référence design/… (hermes-systeme-stockage.html, partie Système).
+// Carte 1 « Mise à jour » : pastille d'état dans le titre (Vérification… /
+// À jour / Mise à jour disponible / Erreur), jalons Vérifiée → Téléchargée
+// → Installée, journal live du lanceur (maj.log via system:update-log +
+// relais system:update-log:changed, verdict « MAJ OK / MAJ ERREUR »,
+// chien de garde 45 s). Mécanisme réel conservé : drapeau au lanceur,
+// vérification à l'ouverture (spec §3.1) et à la demande, bouton grisé
+// « À jour » quand il n'y a rien à récupérer.
+// Carte 2 « Agent Hermes » : pastille d'état, lignes techniques (version du
+// service, dernier battement, canal), bloc « Installation spéciale »
+// repliable (adresse + code d'accès). L'état vient de la socket (flux
+// unique §3.2), aucun sondage ; sondes RÉELLES uniquement, jamais simulées.
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
 import { getSocket } from "@/lib/socket";
 
@@ -198,6 +201,9 @@ export function SystemSection({
     };
   }, []);
 
+  // « Installation spéciale » (maquette) : repliée par défaut.
+  const [advOpen, setAdvOpen] = useState(false);
+
   return (
     <section aria-label="Système" className="mx-auto w-full max-w-[880px]">
       <h1 className="text-[19px] font-bold tracking-tight">Système</h1>
@@ -208,54 +214,136 @@ export function SystemSection({
       <div className="space-y-3">
         {/* ── Carte 1 : Mise à jour (action principale — spec §3.1) ────── */}
         <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[13px] font-semibold">Mise à jour</div>
-              <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+          <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
+                Mise à jour{" "}
+                {majEtat === "inconnu" ? (
+                  <Pastille tone="busy" label="Vérification…" />
+                ) : majEtat === "ajour" ? (
+                  <Pastille tone="ok" label="À jour" />
+                ) : majEtat === "disponible" ? (
+                  <Pastille tone="warn" label="Mise à jour disponible" />
+                ) : (
+                  <Pastille tone="err" label="Erreur" />
+                )}
+              </div>
+              <div className="mt-0.5 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {majEtat === "inconnu"
-                  ? "Vérification de la dernière version publiée…"
+                  ? "Interrogation du dépôt de mise à jour…"
                   : majEtat === "ajour"
-                    ? `À jour — dernière version installée.${majVerifie ? ` Vérifié à ${majVerifie}.` : ""}`
+                    ? <>
+                        Vous utilisez <b className="font-semibold text-foreground">Hermes {serverVersion}</b>, la dernière version publiée.
+                        {majVerifie ? ` Dernière vérification : ${majVerifie}.` : ""}
+                      </>
                     : majEtat === "disponible"
-                      ? `Une nouvelle version est disponible (${majDist}).`
-                      : `${majMotif ?? "Vérification impossible."} La mise à jour reste possible.`}
+                      ? <>
+                          Hermes <b className="font-semibold text-foreground">{majDist}</b> est disponible. Version installée : {serverVersion}.
+                        </>
+                      : <>
+                          La vérification a échoué : {majMotif ?? "cause inconnue."} Version installée :{" "}
+                          <b className="font-semibold text-foreground">{serverVersion}</b>.
+                        </>}
               </div>
             </div>
-            {majDone === "ok" ? (
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="h-8 flex-none cursor-pointer rounded-md bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
-              >
-                Recharger la page
-              </button>
-            ) : majEtat === "inconnu" ? (
-              <button
-                type="button"
-                disabled
-                className="h-8 flex-none cursor-not-allowed rounded-md bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground opacity-40"
-              >
-                Vérification…
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={updateNow}
-                disabled={updating || majActif || majAJour}
-                title={majAJour ? "Aucune mise à jour disponible" : undefined}
-                className="h-8 flex-none cursor-pointer rounded-md bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {updating
-                  ? "Dépôt…"
-                  : majActif
-                    ? "Mise à jour en cours…"
-                    : majAJour
-                      ? "À jour"
-                      : majEtat === "disponible"
-                        ? "Mettre à jour"
-                        : "Réessayer"}
-              </button>
-            )}
+            <div className="flex flex-none flex-wrap items-center gap-2">
+              {majEtat === "ajour" && majDone !== "ok" ? (
+                <button
+                  type="button"
+                  onClick={checkUpdates}
+                  className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+                >
+                  Vérifier à nouveau
+                </button>
+              ) : null}
+              {majEtat === "erreur" ? (
+                <button
+                  type="button"
+                  onClick={checkUpdates}
+                  className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+                >
+                  Réessayer
+                </button>
+              ) : null}
+              {majDone === "ok" ? (
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
+                >
+                  Recharger la page
+                </button>
+              ) : majEtat === "inconnu" ? (
+                <button
+                  type="button"
+                  disabled
+                  className="h-8 flex-none cursor-not-allowed rounded-md bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground opacity-40"
+                >
+                  Vérification…
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={updateNow}
+                  disabled={updating || majActif || majAJour}
+                  title={majAJour ? "Aucune mise à jour disponible" : undefined}
+                  className="h-8 flex-none cursor-pointer rounded-md bg-hermes-strong px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {updating
+                    ? "Dépôt…"
+                    : majActif
+                      ? "Mise à jour en cours…"
+                      : majAJour
+                        ? "À jour"
+                        : majEtat === "disponible"
+                          ? "Mettre à jour"
+                          : "Réessayer"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Jalons : Vérifiée → Téléchargée → Installée (maquette —
+              exécutée par le lanceur ; ici l'étape atteinte est dérivée
+              de l'état réel : vérification aboutie / journal vivant /
+              verdict MAJ OK). */}
+          <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+            {(() => {
+              const verifiee = majEtat !== "inconnu" || majDone !== null;
+              const telechargee = majDone === "ok";
+              const installlee = majDone === "ok";
+              const jalon = (done: boolean, now: boolean, label: string) => (
+                <span
+                  className={
+                    "inline-flex items-center gap-1.5 text-[12px] font-semibold " +
+                    (done ? "text-foreground" : now ? "text-hermes-text" : "text-muted-foreground")
+                  }
+                >
+                  <i
+                    aria-hidden
+                    className={
+                      "grid size-[17px] flex-none place-items-center rounded-full border-2 text-[9px] text-white " +
+                      (done ? "border-success bg-success" : now ? "border-hermes" : "border-border")
+                    }
+                  >
+                    {done ? "✓" : ""}
+                  </i>
+                  {label}
+                </span>
+              );
+              const sep = (done: boolean) => (
+                <span aria-hidden className={"h-0.5 w-[26px] flex-none rounded " + (done ? "bg-success" : "bg-border")} />
+              );
+              return (
+                <>
+                  {jalon(verifiee, majEtat === "inconnu", "Vérifiée")}
+                  {sep(telechargee)}
+                  {jalon(telechargee, majActif, "Téléchargée")}
+                  {sep(installlee)}
+                  {jalon(installlee, false, "Installée")}
+                </>
+              );
+            })()}
           </div>
 
           {majLog !== null ? (
@@ -317,32 +405,96 @@ export function SystemSection({
           )}
         </div>
 
-        {/* ── Carte 2 : Agent Hermes (une ligne d'état — spec §3.2) ────── */}
+        {/* ── Carte 2 : Agent Hermes (état + lignes techniques — §3.2) ── */}
         <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[13px] font-semibold">
+          <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
                 Agent Hermes{" "}
                 {connected ? (
-                  <Pastille tone="ok" label="Connecté" className="ml-1" />
+                  <Pastille tone="ok" label="Connecté" />
                 ) : (
-                  <Pastille tone="off" label="Reconnexion en cours" className="ml-1" />
+                  <Pastille tone="off" label="Reconnexion en cours" />
                 )}
               </div>
-              <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
+              <div className="mt-0.5 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {connected
-                  ? `Processus local qui exécute les outils et gère les documents générés. Son état provient du flux websocket : source unique, sans sondage de l'interface. Dernier battement : à ${hf.format(lastSeen)}.`
+                  ? "Processus local qui exécute les outils et gère les documents générés. Son état provient du flux websocket : source unique, sans sondage de l'interface."
                   : "Canal coupé — reconnexion automatique en cours (temporisation croissante, silencieuse)."}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onNavigateStorage}
-              className="h-8 flex-none cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
-            >
-              Documents générés →
-            </button>
+            <div className="flex flex-none items-center gap-2">
+              <button
+                type="button"
+                onClick={onNavigateStorage}
+                className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+              >
+                Documents générés →
+              </button>
+            </div>
           </div>
+
+          {/* Lignes techniques (maquette) : sonde réelle unique — la
+              version vient du hello du service, le battement du flux
+              websocket, le canal est la socket elle-même. */}
+          <div className="mt-1 text-[12.5px]">
+            <div className="flex items-center justify-between gap-4 border-b border-border py-2">
+              <span className="text-muted-foreground">Version du service</span>
+              <b className="font-mono text-[11.5px] font-semibold tabular-nums">
+                {connected ? (serverVersion ? `v${serverVersion}` : "—") : "—"}
+              </b>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-b border-border py-2">
+              <span className="text-muted-foreground">Dernier battement reçu</span>
+              <b className="font-mono text-[11.5px] font-semibold tabular-nums">
+                {connected ? `à ${hf.format(lastSeen)}` : "—"}
+              </b>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-2">
+              <span className="text-muted-foreground">Canal</span>
+              <b className="font-mono text-[11.5px] font-semibold">socket.io — flux poussé</b>
+            </div>
+          </div>
+
+          {/* Installation spéciale (maquette) : repliée par défaut, les
+              champs restent locaux à la session — aucune donnée n'est
+              envoyée sans action explicite de l'utilisateur. */}
+          <button
+            type="button"
+            onClick={() => setAdvOpen((v) => !v)}
+            aria-expanded={advOpen}
+            className="mt-1 inline-flex cursor-pointer items-center gap-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronDown
+              className={"size-[12px] transition-transform " + (advOpen ? "rotate-180" : "")}
+              strokeWidth={2.5}
+            />
+            Installation spéciale
+          </button>
+          {advOpen ? (
+            <div className="mt-1.5">
+              <label className="mt-2.5 block">
+                <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Adresse de l&apos;agent</span>
+                <input
+                  type="text"
+                  placeholder="http://127.0.0.1:8765"
+                  className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
+                />
+              </label>
+              <label className="mt-2.5 block">
+                <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Code d&apos;accès</span>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
+                />
+              </label>
+              <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                Pour une installation de l&apos;agent sur un autre poste : cette connexion remplace le canal local
+                seulement après validation explicite.
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
