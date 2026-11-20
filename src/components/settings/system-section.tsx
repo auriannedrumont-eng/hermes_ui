@@ -48,6 +48,43 @@ export function SystemSection({
   // ── Carte Mise à jour : demande + journal live du lanceur ──────────
   // (mécanisme v0.2.1 conservé : le lanceur ramasse le drapeau, raconte
   // chaque étape dans maj.log, le service relaie en direct.)
+  // v0.3.1 : vérification à l'OUVERTURE (spec §3.1 — deux déclencheurs
+  // seulement : l'ouverture et le bouton) : le service compare la révision
+  // installée à la pointe GitHub. Bouton grisé « À jour » quand il n'y a
+  // rien à récupérer.
+  const [majEtat, setMajEtat] = useState<"inconnu" | "ajour" | "disponible" | "erreur">("inconnu");
+  const [majVerifie, setMajVerifie] = useState<string | null>(null);
+  const [majDist, setMajDist] = useState<string | null>(null);
+  const [majMotif, setMajMotif] = useState<string | null>(null);
+  const majAJour = majEtat === "ajour";
+
+  const checkUpdates = useCallback(() => {
+    setMajEtat("inconnu");
+    setMajMotif(null);
+    getSocket().emit(
+      "system:update-check",
+      (res: { installed?: string | null; available?: string | null; error?: string } = {}) => {
+        if (res?.error) {
+          setMajEtat("erreur");
+          setMajMotif(res.error);
+          return;
+        }
+        setMajVerifie(new Date().toLocaleTimeString("fr-FR"));
+        if (res.available && res.available !== (res.installed ?? undefined)) {
+          setMajEtat("disponible");
+          setMajDist(res.available);
+        } else {
+          setMajEtat("ajour");
+        }
+      }
+    );
+  }, []);
+
+  // Vérification à l'ouverture de la page (spec §3.1) + à la demande.
+  useEffect(() => {
+    checkUpdates();
+  }, [checkUpdates]);
+
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   /** Journal connu (null = pas de mise à jour en cours). */
@@ -165,16 +202,7 @@ export function SystemSection({
     <section aria-label="Système" className="mx-auto w-full max-w-[880px]">
       <h1 className="text-[19px] font-bold tracking-tight">Système</h1>
       <p className="mt-1 mb-4 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-        Mise à jour du service et état de l&apos;agent local. La gestion de l&apos;espace disque
-        a déménagé :{" "}
-        <button
-          type="button"
-          onClick={onNavigateStorage}
-          className="font-semibold text-hermes-text hover:underline"
-        >
-          elle dispose de sa propre page « Stockage »
-        </button>
-        .
+        Mise à jour du service et état de l&apos;agent local.
       </p>
 
       <div className="space-y-3">
@@ -184,9 +212,13 @@ export function SystemSection({
             <div className="min-w-0">
               <div className="text-[13px] font-semibold">Mise à jour</div>
               <div className="mt-px text-[11.5px] leading-snug text-muted-foreground">
-                Récupère la dernière version depuis GitHub, reconstruit si besoin et
-                relance la pile — sans fermer fenêtres ni onglet.
-                {serverVersion ? ` Version installée : ${serverVersion}.` : ""}
+                {majEtat === "inconnu"
+                  ? "Vérification de la dernière version publiée…"
+                  : majEtat === "ajour"
+                    ? `À jour — dernière version installée.${majVerifie ? ` Vérifié à ${majVerifie}.` : ""}`
+                    : majEtat === "disponible"
+                      ? `Une nouvelle version est disponible (${majDist}).`
+                      : `${majMotif ?? "Vérification impossible."} La mise à jour reste possible.`}
               </div>
             </div>
             {majDone === "ok" ? (
@@ -197,14 +229,31 @@ export function SystemSection({
               >
                 Recharger la page
               </button>
+            ) : majEtat === "inconnu" ? (
+              <button
+                type="button"
+                disabled
+                className="h-8 flex-none cursor-not-allowed rounded-md bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground opacity-40"
+              >
+                Vérification…
+              </button>
             ) : (
               <button
                 type="button"
                 onClick={updateNow}
-                disabled={updating || majActif}
+                disabled={updating || majActif || majAJour}
+                title={majAJour ? "Aucune mise à jour disponible" : undefined}
                 className="h-8 flex-none cursor-pointer rounded-md bg-hermes px-3 text-[12px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {updating ? "Dépôt…" : majActif ? "Mise à jour en cours…" : "Mettre à jour"}
+                {updating
+                  ? "Dépôt…"
+                  : majActif
+                    ? "Mise à jour en cours…"
+                    : majAJour
+                      ? "À jour"
+                      : majEtat === "disponible"
+                        ? "Mettre à jour"
+                        : "Réessayer"}
               </button>
             )}
           </div>

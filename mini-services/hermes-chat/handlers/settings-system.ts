@@ -4,8 +4,77 @@
 // partagé handlers/context.ts — câblé une fois par index.ts.
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+// ── Vérification de mise à jour (carte Système — v0.3.0) ─────────────────
+// La révision installée est lue DIRECTEMENT dans .git (HEAD, puis la ref
+// résolue — même logique que readAppRevision d'index.ts, sans dépendre du
+// binaire git : le service doit répondre même sur une installation sans
+// git au PATH). La pointe de la branche principale vient de l'API publique
+// GitHub (aucune authentification : le dépôt est le canal de dépôt).
+const GITHUB_REPO = "auriannedrumont-eng/hermes_ui";
+
+/** Révision git installée (7 caractères) — null si .git illisible. */
+function readInstalledRevision(): string | null {
+  try {
+    let gitDir = join(import.meta.dir, "..", "..", "..", ".git");
+    // Worktree git : .git est un fichier « gitdir: … » — le suivre.
+    try {
+      const link = readFileSync(gitDir, "utf8").trim();
+      const m = link.match(/^gitdir:\s*(\S+)/);
+      if (m) gitDir = m[1];
+    } catch {
+      /* .git standard (dossier) — rien à suivre */
+    }
+    let head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    if (!/^ref:\s*(\S+)/.test(head)) {
+      return /^[0-9a-f]{40}$/i.test(head) ? head.slice(0, 7) : null;
+    }
+    const ref = head.match(/^ref:\s*(\S+)/)![1];
+    try {
+      return readFileSync(join(gitDir, ref), "utf8").trim().slice(0, 7) || null;
+    } catch {
+      // Référence compactée (packed-refs).
+      const packed = readFileSync(join(gitDir, "packed-refs"), "utf8");
+      const line = packed.split("\n").find((l) => l.endsWith(" " + ref));
+      const sha = line?.split(" ")[0] ?? "";
+      return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Pointe de main sur GitHub (7 caractères) — null si injoignable. */
+async function fetchRemoteRevision(): Promise<string | null> {
+  const url = `https://api.github.com/repos/${GITHUB_REPO}/commits/main`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/vnd.github+json" },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) return null;
+  const sha = ((await res.json()) as { sha?: string }).sha ?? "";
+  return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : null;
+}
+
+/** Verdict de la carte Mise à jour : à jour / disponible / erreur. */
+async function checkUpdate(cb?: (data: unknown) => void): Promise<void> {
+  const installed = readInstalledRevision();
+  try {
+    const remote = await fetchRemoteRevision();
+    if (typeof cb === "function")
+      cb({
+        installed,
+        available: remote !== null && remote !== installed ? remote : null,
+        checkedAt: new Date().toISOString(),
+      });
+  } catch {
+    // Hors ligne / dépôt injoignable : erreur honnête, jamais un état figé.
+    if (typeof cb === "function")
+      cb({ installed, available: null, error: "Dépôt GitHub injoignable." });
+  }
+}
 
 export function registerSettingsSystemHandlers(socket: Socket) {
 
@@ -454,12 +523,12 @@ socket.on(
 
 
 // ── Carte Mise à jour du volet Système (v0.3.0, spec §3.1) ──────────
-// Version installée + disponible. Le lanceur écrit le verdict ; ici on
-// répond honnêtement : pas de canal de dépôt connu du service → à jour
-// (jamais de « Vérification… » éternel côté interface).
+// Vraie vérification : la révision installée (HEAD lu dans .git, sans
+// dépendre du binaire git) est comparée à la pointe de main sur GitHub
+// (HTTP public). Réponse asynchrone honnête : à jour / disponible /
+// erreur — jamais de « Vérification… » éternel côté interface.
 socket.on("system:update-check", (cb?: (data: unknown) => void) => {
-  if (typeof cb === "function")
-    cb({ installed: ctx.helloPayload().version ?? null, available: null });
+  void checkUpdate(cb);
 });
 
 socket.on(
