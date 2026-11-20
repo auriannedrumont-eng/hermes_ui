@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
+import { AgentMotorCard } from "@/components/settings/agent-motor-card";
 import { getSocket } from "@/lib/socket";
 
 interface SystemSectionProps {
@@ -513,6 +514,10 @@ export function SystemSection({
             </div>
           ) : null}
         </div>
+
+        {/* ── v0.4.0 : Moteur Hermes — mise à jour, contrôle, retour
+            arrière, carnet de bord (maquette maquette-systeme-rollback) ── */}
+        <AgentMotorCard />
       </div>
     </section>
   );

@@ -19,6 +19,7 @@
 
 ## Chantiers récents (FORK.md §9, novembre)
 
+- **Moteur Hermes v0.4.0 (11-20)** : surcouche complète du cycle de vie du moteur — version (`hermes --version`) + dernière release GitHub avec **changelog et marqueur « touche l'interface »**, mise à jour par la **commande officielle** `hermes update --backup` (journal en direct), **contrôle automatique** après maj (liaison gateway + modèles + version, aucun tour lancé), **filet de sécurité** : version précédente retenue + **retour arrière assisté** (procédure officielle : arrêt gateway → checkout du tag → re-sondage 2 min, confirmation en 3 promesses) et **carnet de bord** (chaque étape datée, message à transmettre copiable). Événements `agent:*`, réglage serveur `fork.agent.update.autoCheck`. QA : test E2E 34/34 + parcours navigateur complet sur pile réelle stubbée (24 vérifications, captures `download/v0.4.0-*.png`).
 - **Perf (11-19)** : shiki + cache LRU, coalescence des deltas 200 ms, mémoïsation du fil, auto-scroll rAF, `content-visibility`, Web Locks — CPU divisé pendant les tours.
 - **Reconnexion (11-19)** : resynchronisation automatique de la conversation active + `tryAllTransports` — plus de bannière bloquée après une coupure.
 - **Build cassé (11-19)** : `tools/` (cache bun du lanceur) exclu du type-check — le fallback dev permanent est réparé.

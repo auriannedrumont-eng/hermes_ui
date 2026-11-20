@@ -324,6 +324,18 @@ export const FORK_SETTINGS: SettingDef[] = [
     scope: "client",
     category: "Interface",
   },
+  {
+    key: "fork.agent.update.autoCheck",
+    type: "boolean",
+    default: true,
+    label: "Vérifier les mises à jour du moteur Hermes",
+    description:
+      "Sonde la version du moteur Hermes (hermes --version) et la dernière " +
+      "release publiée au démarrage puis toutes les 6 h — l'onglet Système " +
+      "informe sans qu'on l'ouvre.",
+    scope: "server",
+    category: "Système",
+  },
 ];
 
 const PREFIX = "hermes-ui:";

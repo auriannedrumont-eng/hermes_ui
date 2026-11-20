@@ -77,6 +77,10 @@ const ALL = [...HERMES_SETTINGS, ...FORK_SETTINGS];
   let ok = true;
   const details: string[] = [];
   for (const d of ALL) {
+    // scope serveur : lu par le mini-service (store SQLite), jamais côté
+    // client — le défaut client est undefined par construction (v0.4.0,
+    // fork.agent.update.autoCheck est le premier réglage serveur).
+    if (d.scope === "server") continue;
     store.clear();
     const v = readClientSetting(d.key);
     if (JSON.stringify(v) !== JSON.stringify(d.default)) {
@@ -84,7 +88,7 @@ const ALL = [...HERMES_SETTINGS, ...FORK_SETTINGS];
       details.push(`${d.key}: ${JSON.stringify(v)} ≠ défaut ${JSON.stringify(d.default)}`);
     }
   }
-  check("absent → défaut du registre (tous types)", ok, details.slice(0, 3).join(" ; "));
+  check("absent → défaut du registre (tous types client)", ok, details.slice(0, 3).join(" ; "));
 }
 
 // 7. Parse par type au retour de lecture

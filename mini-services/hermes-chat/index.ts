@@ -48,6 +48,8 @@ import { registerConversationsHandlers } from "./handlers/conversations";
 import { registerArtifactsSharesHandlers } from "./handlers/artifacts-shares";
 import { registerProvidersExtensionsHandlers } from "./handlers/providers-extensions";
 import { registerSettingsSystemHandlers, startUpdateWatchdog, currentUpdateState } from "./handlers/settings-system";
+import { registerAgentMotorHandlers } from "./handlers/agent-motor";
+import { startAgentMotorWatchdog } from "./agent-motor";
 import { registerStorageHandlers } from "./handlers/storage";
 import { HermesConnector } from "./hermes-connector";
 import { createLlmPool } from "./llm-pool";
@@ -664,6 +666,7 @@ io.on("connection", (socket) => {
   registerArtifactsSharesHandlers(socket);
   registerProvidersExtensionsHandlers(socket);
   registerSettingsSystemHandlers(socket);
+  registerAgentMotorHandlers(socket);
   registerStorageHandlers(socket);
 
   socket.on("disconnect", () => {
@@ -699,6 +702,14 @@ connector
       // v0.3.3 : vérification de mise à jour au démarrage puis toutes
       // les 6 h — l'utilisateur est informé sans ouvrir la page Système.
       startUpdateWatchdog();
+      // v0.4.0 : sonde du moteur Hermes (version installée + dernière
+      // release) au démarrage puis toutes les 6 h — même idiome que la
+      // carte Mise à jour de l'application.
+      startAgentMotorWatchdog({
+        store,
+        connector,
+        emit: (event, payload) => io.emit(event, payload),
+      });
       filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
         trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
@@ -726,6 +737,14 @@ connector
       // v0.3.3 : vérification de mise à jour au démarrage puis toutes
       // les 6 h — l'utilisateur est informé sans ouvrir la page Système.
       startUpdateWatchdog();
+      // v0.4.0 : sonde du moteur Hermes (version installée + dernière
+      // release) au démarrage puis toutes les 6 h — même idiome que la
+      // carte Mise à jour de l'application.
+      startAgentMotorWatchdog({
+        store,
+        connector,
+        emit: (event, payload) => io.emit(event, payload),
+      });
       filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
         trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
