@@ -48,6 +48,7 @@ import { registerConversationsHandlers } from "./handlers/conversations";
 import { registerArtifactsSharesHandlers } from "./handlers/artifacts-shares";
 import { registerProvidersExtensionsHandlers } from "./handlers/providers-extensions";
 import { registerSettingsSystemHandlers } from "./handlers/settings-system";
+import { registerStorageHandlers } from "./handlers/storage";
 import { HermesConnector } from "./hermes-connector";
 import { createLlmPool } from "./llm-pool";
 import {
@@ -624,7 +625,7 @@ function helloPayload() {
   const configuredGatewayUrl = store.getSetting(GATEWAY_URL_KEY)?.trim() || null;
   return {
     app: "hermes-web",
-    version: "1.2.0",
+    version: "1.3.0",
     mode: connector.mode,
     model: connector.model,
     gatewayUrl: configuredGatewayUrl ?? connector.gatewayUrl,
@@ -657,6 +658,7 @@ io.on("connection", (socket) => {
   registerArtifactsSharesHandlers(socket);
   registerProvidersExtensionsHandlers(socket);
   registerSettingsSystemHandlers(socket);
+  registerStorageHandlers(socket);
 
   socket.on("disconnect", () => {
     console.log(`[hermes-chat] client déconnecté : ${socket.id}`);

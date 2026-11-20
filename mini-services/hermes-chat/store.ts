@@ -13,6 +13,7 @@ import { applySchema } from "./schema";
 import { buildSettings, type StoreSettingsMethods } from "./store-settings";
 import { buildArtifacts, type StoreArtifactsMethods } from "./store-artifacts";
 import { buildMessages, type StoreMessagesMethods } from "./store-messages";
+import { buildStorage, type StoreStorageMethods } from "./store-storage";
 import type {
   Artifact,
   ArtifactKind,
@@ -206,7 +207,8 @@ export function rowToProject(r: ProjectRow): Project {
 export interface Store
   extends StoreSettingsMethods,
     StoreArtifactsMethods,
-    StoreMessagesMethods {}
+    StoreMessagesMethods,
+    StoreStorageMethods {}
 
 export class Store {
   db: Database;
@@ -275,6 +277,7 @@ export class Store {
 Object.assign(Store.prototype, buildSettings());
 Object.assign(Store.prototype, buildArtifacts());
 Object.assign(Store.prototype, buildMessages());
+Object.assign(Store.prototype, buildStorage());
 
 /** Intervalle du checkpoint périodique (5 min en zone calme par défaut,
  *  tunable par HERMES_WAL_CHECKPOINT_MS pour les tests). */

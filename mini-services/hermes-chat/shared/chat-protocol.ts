@@ -460,3 +460,74 @@ export function formatArtifactBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} Ko`;
   return `${(n / 1024 / 1024).toFixed(1)} Mo`;
 }
+
+// ── Stockage (v0.3.0) : page Stockage, inventaire et mutations ──────────
+
+/** Fenêtre d'annulation des suppressions (spec §4.5). */
+export const STORAGE_UNDO_MS = 7_000;
+
+/** Canonicité du « nettoyable » (spec §5.2) : dépassée ET non épinglée.
+ *  Même formule côté front (libellés) et côté back (nettoyage).
+ *  `pinned` tolère la forme SQL (0/1) ET la forme protocole (booléen). */
+export function isStorageCleanable(
+  e: { pinned: number | boolean; version: number },
+  maxVersion: number
+): boolean {
+  return !e.pinned && e.version < maxVersion;
+}
+
+/** Entrée d'inventaire de la page Stockage (une version d'un document). */
+export interface StorageEntry {
+  /** Identifiant de la ligne d'artefact (une version précise). */
+  id: string;
+  conversationId: string;
+  conversationTitle: string;
+  projectId: string | null;
+  projectName: string;
+  key: string;
+  kind: string;
+  name: string;
+  version: number;
+  size: number;
+  pinned: boolean;
+  createdAt: string;
+}
+
+/** Réponse de storage:list. */
+export interface StorageListResult {
+  entries: StorageEntry[];
+}
+
+/** Réponse OK d'une mutation (deleteVersion / cleanProject). */
+export interface StorageMutationResult {
+  ok: true;
+  /** Nombre de lignes réellement supprimées. */
+  removed: number;
+  /** Octets réellement libérés — MESURE, jamais estimation (§5.3). */
+  bytesFreed: number;
+  /** Jeton d'annulation valable STORAGE_UNDO_MS (annulé au retour). */
+  undoToken: string;
+}
+
+/** Réponse OK de storage:undo. */
+export interface StorageUndoResult {
+  ok: true;
+  /** Nombre de lignes restaurées. */
+  restored: number;
+}
+
+/** Refus d'une mutation : code machine + message humain. */
+export interface StorageMutationError {
+  ok: false;
+  /** 409 épinglée · 404 absente · 410 fenêtre expirée. */
+  code: "pinned" | "notfound" | "gone";
+  error: string;
+}
+
+// ── Système (v0.3.0) : carte Mise à jour du volet Système ────────────────
+
+/** Réponse de system:update-check. */
+export interface UpdateCheckResult {
+  installed: string;
+  available: string | null;
+}

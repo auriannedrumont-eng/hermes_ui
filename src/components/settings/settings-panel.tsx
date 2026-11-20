@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Archive,
   Cpu,
   Globe,
   KeyRound,
@@ -75,6 +76,7 @@ import { HermesSection } from "@/components/settings/hermes-section";
 import { ToolsExtensionsSection } from "@/components/settings/outils-extensions-section";
 import { ProfilesSection } from "@/components/settings/profiles-section";
 import { SystemSection } from "@/components/settings/system-section";
+import { StorageSection } from "@/components/settings/storage-section";
 import { InterfacePane } from "@/components/settings/interface-section";
 import { ModelesPane } from "@/components/settings/models-section";
 import { cn } from "@/lib/utils";
@@ -104,6 +106,10 @@ const SECTIONS = [
   { id: "hermes", icon: Sparkle, label: "Hermes" },
   { id: "profils", icon: UserRound, label: "Profils" },
   { id: "systeme", icon: Settings2, label: "Système" },
+  // v0.3.0 : la gestion de l'espace disque déménage des Paramètres vers
+  // une page dédiée « Stockage » — entrée au MÊME niveau que Système
+  // (spec §2.1 : une page dédiée appelle une entrée dédiée, pas un sous-onglet).
+  { id: "stockage", icon: Archive, label: "Stockage" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -299,17 +305,15 @@ export function SettingsPanel({
       case "systeme":
         return (
           <SystemSection
-            mode={mode}
-            engineProviders={engineProviders}
+            connected={connected}
             serverVersion={serverVersion ?? null}
-            appRevision={appRevision}
-            chromeHeadless={chromeHeadless}
-            gatewayUrl={gatewayUrl}
-            gatewayConfigured={gatewayConfigured}
-            gatewayTokenSet={gatewayTokenSet}
-            onConnectGateway={onConnectGateway}
+            onNavigateStorage={() => goto("stockage")}
           />
         );
+      // v0.3.0 : page Stockage — explorateur des documents générés
+      // (liste intégrale, groupement client, undo 7 s — spec §4).
+      case "stockage":
+        return <StorageSection />;
     }
   };
 

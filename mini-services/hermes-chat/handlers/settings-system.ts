@@ -453,6 +453,15 @@ socket.on(
 );
 
 
+// ── Carte Mise à jour du volet Système (v0.3.0, spec §3.1) ──────────
+// Version installée + disponible. Le lanceur écrit le verdict ; ici on
+// répond honnêtement : pas de canal de dépôt connu du service → à jour
+// (jamais de « Vérification… » éternel côté interface).
+socket.on("system:update-check", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function")
+    cb({ installed: ctx.helloPayload().version ?? null, available: null });
+});
+
 socket.on(
   "memory:set-notes",
   (payload: { value?: string }, cb?: (data: unknown) => void) => {
