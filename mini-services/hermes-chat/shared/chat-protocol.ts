@@ -262,6 +262,23 @@ export type GatewayMode = "gateway" | "local";
 /** Hello du service : la carte de statut ne simule rien — chaque champ
  *  reflète une sonde réelle (v2.4). Champ optionnel = le service peut ne
  *  pas l'envoyer : l'écran affiche alors « inconnu », jamais « ok » faux. */
+// ── Système (v0.3.0) : carte Mise à jour du volet Système ────────────────
+
+/** Réponse de system:update-check — même forme que l'état `update` du
+ *  hello et de l'événement system:update-state (v0.3.3 : le service
+ *  vérifie de lui-même au démarrage puis toutes les 6 h). */
+export interface UpdateCheckResult {
+  /** Révision git installée (7 caractères, null sans .git). */
+  installed: string | null;
+  /** Révision distante QUAND une version plus récente existe (null =
+ *  à jour ou inconnu — voir error). */
+  available: string | null;
+  /** Date de la dernière vérification aboutie (ISO). */
+  checkedAt?: string | null;
+  /** Cause d'échec honnête (dépôt injoignable…) — null sinon. */
+  error?: string | null;
+}
+
 export interface ServerHello {
   app: string;
   version: string;
@@ -285,6 +302,10 @@ export interface ServerHello {
   chromeHeadless?: "present" | "absent";
   /** Mémoire active en caractères (0 = désactivée) — F-18. */
   memoryChars?: number | null;
+  /** v0.3.3 : état de mise à jour vérifié par le service (démarrage + 6 h).
+   *  update.available non null → une nouvelle version existe sur GitHub :
+   *  le front badge l'onglet Système et l'engrenage, même volet fermé. */
+  update?: UpdateCheckResult | null;
 }
 
 // ── Modèles ─────────────────────────────────────────────────────────────
@@ -524,10 +545,3 @@ export interface StorageMutationError {
   error: string;
 }
 
-// ── Système (v0.3.0) : carte Mise à jour du volet Système ────────────────
-
-/** Réponse de system:update-check. */
-export interface UpdateCheckResult {
-  installed: string;
-  available: string | null;
-}

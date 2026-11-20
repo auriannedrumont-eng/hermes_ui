@@ -76,6 +76,9 @@ interface SidebarProps {
   serverModel: string | null;
   /** Fournisseurs LLM actionnables (v2.4) — carte de statut honnête. */
   engineProviders: string[] | null;
+  /** v0.3.3 — révision disponible sur GitHub (null = à jour) : point
+   *  orange sur l'engrenage, l'info vit sans ouvrir la page Système. */
+  updateAvailable?: string | null;
   connected: boolean;
   isBusy: boolean;
   onNew: (projectId?: string | null) => void;
@@ -115,6 +118,7 @@ export function Sidebar({
   mode,
   serverModel,
   engineProviders,
+  updateAvailable = null,
   connected,
   isBusy,
   onNew,
@@ -689,15 +693,27 @@ export function Sidebar({
                     ? "Moteur local · vos clés répondent"
                     : "Agent Hermes non détecté"}
             </p>
-            {/* Entrée unique des paramètres (décision v1 confirmée v3) */}
+            {/* Entrée unique des paramètres (décision v1 confirmée v3).
+                v0.3.3 : point orange tant qu'une mise à jour est
+                disponible — l'info arrive sans ouvrir la page Système. */}
             <button
               type="button"
               onClick={onOpenSettings}
-              title="Paramètres"
-              aria-label="Ouvrir les paramètres"
-              className="ml-auto flex size-[27px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm focus-visible:outline-2 focus-visible:outline-hermes"
+              title={updateAvailable ? "Mise à jour disponible — ouvrir Paramètres → Système" : "Paramètres"}
+              aria-label={
+                updateAvailable
+                  ? "Ouvrir les paramètres — mise à jour disponible"
+                  : "Ouvrir les paramètres"
+              }
+              className="relative ml-auto flex size-[27px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm focus-visible:outline-2 focus-visible:outline-hermes"
             >
               <Settings className="size-[14px]" />
+              {updateAvailable ? (
+                <i
+                  className="absolute -top-0.5 -right-0.5 size-[8px] rounded-full border-2 border-background bg-warning"
+                  aria-hidden="true"
+                />
+              ) : null}
             </button>
           </div>
           <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">

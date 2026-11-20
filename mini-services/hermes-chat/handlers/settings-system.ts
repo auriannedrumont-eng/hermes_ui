@@ -46,34 +46,110 @@ function readInstalledRevision(): string | null {
   }
 }
 
-/** Pointe de main sur GitHub (7 caractères) — null si injoignable. */
+/** Pointe de main sur GitHub (7 caractères) — null si injoignable.
+ *  Sonde via le point info/refs du protocole git (github.com, SANS l'API
+ *  api.github.com) : l'API publique est largement rate-limitée (60 req/h
+ *  par IP, épuisées dès qu'une même IP partage plusieurs utilisateurs —
+ *  constaté en bac à sable : « available » retournait null par erreur) ;
+ *  info/refs sert le même SHA sans quota et sans authentification. */
+/** Base de l'URL de sonde — github.com en production ; variable réservée
+ *  aux tests (HERMES_UPDATE_TEST_URL) : stub local qui sert le même format
+ *  pkt-line, pour prouver la détection « version future » sans réseau. */
+function updateProbeBase(): string {
+  return process.env.HERMES_UPDATE_TEST_URL ?? "https://github.com";
+}
+
 async function fetchRemoteRevision(): Promise<string | null> {
-  const url = `https://api.github.com/repos/${GITHUB_REPO}/commits/main`;
-  const res = await fetch(url, {
-    headers: { Accept: "application/vnd.github+json" },
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!res.ok) return null;
-  const sha = ((await res.json()) as { sha?: string }).sha ?? "";
-  return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : null;
+  const base = updateProbeBase();
+  const urls = [
+    `${base}/${GITHUB_REPO}.git/info/refs?service=git-upload-pack`,
+    `https://api.github.com/repos/${GITHUB_REPO}/commits/main`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      // info/refs : pkt-lines « 001e# service=git-upload-pack… » puis
+      // « 003f<sha> HEAD\x00caps… » — commence par un en-tête hexa (jamais
+      // par '{') ; API JSON : { "sha": "…" }.
+      let sha = "";
+      if (!text.trimStart().startsWith("{")) {
+        const m = text.match(/([0-9a-f]{40})\s+HEAD/m);
+        sha = m?.[1] ?? "";
+      } else {
+        try {
+          sha = ((await JSON.parse(text)) as { sha?: string }).sha ?? "";
+        } catch {
+          sha = "";
+        }
+      }
+      if (/^[0-9a-f]{7,40}$/i.test(sha)) return sha.slice(0, 7);
+    } catch {
+      /* essai suivant */
+    }
+  }
+  return null;
+}
+
+/** État de mise à jour connu du service — LA source unique diffusée aux
+ *  clients (hello + system:update-state) et lue par la carte Système.
+ *  Le service ne dépend plus de l'ouverture de la page pour vérifier :
+ *  vérification au démarrage puis toutes les 6 h (v0.3.3, demande
+ *  utilisatrice : « je ne suis informé d'aucune mise à jour disponible »). */
+interface UpdateState {
+  installed: string | null;
+  available: string | null;
+  checkedAt: string | null;
+  error: string | null;
+}
+let updateState: UpdateState = {
+  installed: null,
+  available: null,
+  checkedAt: null,
+  error: null,
+};
+
+/** Exécute la vérification, met à jour l'état partagé et le diffuse. */
+async function refreshUpdateState(): Promise<void> {
+  const installed = readInstalledRevision();
+  try {
+    const remote = await fetchRemoteRevision();
+    updateState = {
+      installed,
+      available: remote !== null && remote !== installed ? remote : null,
+      checkedAt: new Date().toISOString(),
+      error: null,
+    };
+  } catch {
+    // Hors ligne / dépôt injoignable : erreur honnête, jamais un état figé.
+    updateState = { installed, available: null, checkedAt: null, error: "Dépôt GitHub injoignable." };
+  }
+  try {
+    ctx.io.emit("system:update-state", { ...updateState });
+  } catch {
+    /* io pas encore prêt au tout premier appel (démarrage) */
+  }
 }
 
 /** Verdict de la carte Mise à jour : à jour / disponible / erreur. */
 async function checkUpdate(cb?: (data: unknown) => void): Promise<void> {
-  const installed = readInstalledRevision();
-  try {
-    const remote = await fetchRemoteRevision();
-    if (typeof cb === "function")
-      cb({
-        installed,
-        available: remote !== null && remote !== installed ? remote : null,
-        checkedAt: new Date().toISOString(),
-      });
-  } catch {
-    // Hors ligne / dépôt injoignable : erreur honnête, jamais un état figé.
-    if (typeof cb === "function")
-      cb({ installed, available: null, error: "Dépôt GitHub injoignable." });
-  }
+  await refreshUpdateState();
+  if (typeof cb === "function") cb({ ...updateState });
+}
+
+/** Lance la vérification périodique (démarrage + 6 h). Appelé par index.ts. */
+export function startUpdateWatchdog(): void {
+  void refreshUpdateState();
+  setInterval(() => void refreshUpdateState(), 6 * 60 * 60 * 1000).unref?.();
+}
+
+/** État courant — lu par helloPayload (index.ts). */
+export function currentUpdateState(): UpdateState {
+  return updateState;
 }
 
 export function registerSettingsSystemHandlers(socket: Socket) {
@@ -524,8 +600,11 @@ socket.on(
 
 // ── Carte Mise à jour du volet Système (v0.3.0, spec §3.1) ──────────
 // Vraie vérification : la révision installée (HEAD lu dans .git, sans
-// dépendre du binaire git) est comparée à la pointe de main sur GitHub
-// (HTTP public). Réponse asynchrone honnête : à jour / disponible /
+// dépendre du binaire git) est comparée à la pointe de main sur GitHub.
+// v0.3.3 : l'état est partagé (refreshUpdateState) — le service vérifie
+// de lui-même (démarrage + 6 h) et diffuse system:update-state ; le
+// client sans page Système ouverte est informé (point sur l'engrenage,
+// toast une fois par session). Réponse honnête : à jour / disponible /
 // erreur — jamais de « Vérification… » éternel côté interface.
 socket.on("system:update-check", (cb?: (data: unknown) => void) => {
   void checkUpdate(cb);

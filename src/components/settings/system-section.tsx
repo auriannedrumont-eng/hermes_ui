@@ -1,16 +1,17 @@
-// Section « Système » — v0.3.2 : DEUX cartes conformes à la maquette de
-// référence design/… (hermes-systeme-stockage.html, partie Système).
-// Carte 1 « Mise à jour » : pastille d'état dans le titre (Vérification… /
-// À jour / Mise à jour disponible / Erreur), jalons Vérifiée → Téléchargée
-// → Installée, journal live du lanceur (maj.log via system:update-log +
-// relais system:update-log:changed, verdict « MAJ OK / MAJ ERREUR »,
-// chien de garde 45 s). Mécanisme réel conservé : drapeau au lanceur,
-// vérification à l'ouverture (spec §3.1) et à la demande, bouton grisé
-// « À jour » quand il n'y a rien à récupérer.
-// Carte 2 « Agent Hermes » : pastille d'état, lignes techniques (version du
-// service, dernier battement, canal), bloc « Installation spéciale »
-// repliable (adresse + code d'accès). L'état vient de la socket (flux
-// unique §3.2), aucun sondage ; sondes RÉELLES uniquement, jamais simulées.
+// Section « Système » — v0.3.3 : DEUX cartes (maquette de référence
+// hermes-systeme-stockage.html, partie Système).
+// Carte 1 « Mise à jour » : pastille d'état (Vérification… / À jour /
+// Mise à jour disponible / Erreur), jalons Vérifiée → Téléchargée →
+// Installée, journal live du lanceur (system:update-log + relais
+// system:update-log:changed, verdict « MAJ OK / MAJ ERREUR », chien de
+// garde 45 s). v0.3.3 : l'état vient du SERVICE (hello.update +
+// system:update-state — vérification au démarrage puis toutes les 6 h),
+// la page n'est plus le seul déclencheur ; bouton « Mettre à jour »
+// (drapeau au lanceur) grisé « À jour » quand il n'y a rien à faire.
+// Carte 2 « Agent Hermes » : textes en français courant (comprendre sans
+// être technicien — v0.3.3, demande utilisatrice), pastille d'état,
+// lignes techniques (version, dernier contact, liaison), bloc « Agent sur
+// un autre poste » repliable. Sondes RÉELLES uniquement, jamais simulées.
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +24,9 @@ interface SystemSectionProps {
    *  la carte Agent suit ce flux (§3.2 : un seul flux, aucune requête). */
   connected?: boolean;
   serverVersion: string | null;
+  /** v0.3.3 — révision disponible (null = à jour) : prop du panneau,
+   *  même valeur que le point orange sur l'engrenage. */
+  updateAvailable?: string | null;
   /** Navigation vers la page Stockage (lien « documents générés »). */
   onNavigateStorage?: () => void;
 }
@@ -46,6 +50,7 @@ function majDerniereLigne(text: string): string {
 export function SystemSection({
   connected = true,
   serverVersion,
+  updateAvailable = null,
   onNavigateStorage,
 }: SystemSectionProps) {
   // ── Carte Mise à jour : demande + journal live du lanceur ──────────
@@ -57,7 +62,6 @@ export function SystemSection({
   // rien à récupérer.
   const [majEtat, setMajEtat] = useState<"inconnu" | "ajour" | "disponible" | "erreur">("inconnu");
   const [majVerifie, setMajVerifie] = useState<string | null>(null);
-  const [majDist, setMajDist] = useState<string | null>(null);
   const [majMotif, setMajMotif] = useState<string | null>(null);
   const majAJour = majEtat === "ajour";
 
@@ -66,16 +70,19 @@ export function SystemSection({
     setMajMotif(null);
     getSocket().emit(
       "system:update-check",
-      (res: { installed?: string | null; available?: string | null; error?: string } = {}) => {
+      (res: { installed?: string | null; available?: string | null; checkedAt?: string | null; error?: string } = {}) => {
         if (res?.error) {
           setMajEtat("erreur");
           setMajMotif(res.error);
           return;
         }
-        setMajVerifie(new Date().toLocaleTimeString("fr-FR"));
+        setMajVerifie(
+          res.checkedAt
+            ? new Date(res.checkedAt).toLocaleTimeString("fr-FR")
+            : new Date().toLocaleTimeString("fr-FR")
+        );
         if (res.available && res.available !== (res.installed ?? undefined)) {
           setMajEtat("disponible");
-          setMajDist(res.available);
         } else {
           setMajEtat("ajour");
         }
@@ -84,9 +91,15 @@ export function SystemSection({
   }, []);
 
   // Vérification à l'ouverture de la page (spec §3.1) + à la demande.
+  // v0.3.3 : l'état vivant du service (hello.update / system:update-state,
+  // vérifié au démarrage + 6 h) précède la réponse — si le service vient
+  // d'annoncer « disponible », la carte l'affiche immédiatement.
   useEffect(() => {
-    checkUpdates();
-  }, [checkUpdates]);
+    if (updateAvailable) {
+      setMajEtat("disponible");
+      setMajVerifie(new Date().toLocaleTimeString("fr-FR"));
+    }
+  }, [updateAvailable]);
 
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -208,7 +221,7 @@ export function SystemSection({
     <section aria-label="Système" className="mx-auto w-full max-w-[880px]">
       <h1 className="text-[19px] font-bold tracking-tight">Système</h1>
       <p className="mt-1 mb-4 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-        Mise à jour du service et état de l&apos;agent local.
+        Mise à jour de Hermes et état du programme qui le fait tourner.
       </p>
 
       <div className="space-y-3">
@@ -230,19 +243,21 @@ export function SystemSection({
               </div>
               <div className="mt-0.5 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {majEtat === "inconnu"
-                  ? "Interrogation du dépôt de mise à jour…"
+                  ? "Vérification de la disponibilité d'une nouvelle version…"
                   : majEtat === "ajour"
                     ? <>
-                        Vous utilisez <b className="font-semibold text-foreground">Hermes {serverVersion}</b>, la dernière version publiée.
-                        {majVerifie ? ` Dernière vérification : ${majVerifie}.` : ""}
+                        Votre version de Hermes est la plus récente — rien à installer.
+                        {majVerifie ? ` Vérifié à ${majVerifie}.` : ""}
                       </>
                     : majEtat === "disponible"
                       ? <>
-                          Hermes <b className="font-semibold text-foreground">{majDist}</b> est disponible. Version installée : {serverVersion}.
+                          Une nouvelle version de Hermes est prête à être installée. Le bouton
+                          «&nbsp;Mettre à jour&nbsp;» télécharge et installe tout&nbsp;: l&apos;application
+                          redémarre ensuite toute seule (1&nbsp;à&nbsp;2&nbsp;minutes).
                         </>
                       : <>
-                          La vérification a échoué : {majMotif ?? "cause inconnue."} Version installée :{" "}
-                          <b className="font-semibold text-foreground">{serverVersion}</b>.
+                          Impossible de vérifier les mises à jour ({majMotif ?? "cause inconnue"}).
+                          Vérifiez votre connexion internet, puis réessayez.
                         </>}
               </div>
             </div>
@@ -399,8 +414,9 @@ export function SystemSection({
             </p>
           ) : (
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              Fonctionne quand la pile est lancée par le lanceur bureau (Hermes-Web.bat ou
-              hermes-ui.sh) : la demande est ramassée au cycle de surveillance suivant (15&nbsp;s).
+              La mise à jour est installée par le petit programme qui a lancé Hermes
+              (icône « Hermes Web ») : il prendra la demande dans les 15&nbsp;secondes,
+              mettra tout à jour, puis relancera Hermes tout seul.
             </p>
           )}
         </div>
@@ -419,8 +435,8 @@ export function SystemSection({
               </div>
               <div className="mt-0.5 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {connected
-                  ? "Processus local qui exécute les outils et gère les documents générés. Son état provient du flux websocket : source unique, sans sondage de l'interface."
-                  : "Canal coupé — reconnexion automatique en cours (temporisation croissante, silencieuse)."}
+                  ? "Le programme qui tourne sur votre machine et fait tourner Hermes : il répond à vos questions, exécute les outils et enregistre les documents que vous générez."
+                  : "Le programme qui fait tourner Hermes n'est plus joignable. Rien n'est perdu — Hermes tente de le retrouver automatiquement ; la reprise est silencieuse."}
               </div>
             </div>
             <div className="flex flex-none items-center gap-2">
@@ -436,29 +452,30 @@ export function SystemSection({
 
           {/* Lignes techniques (maquette) : sonde réelle unique — la
               version vient du hello du service, le battement du flux
-              websocket, le canal est la socket elle-même. */}
+              websocket, le canal est la socket elle-même. Libellés v0.3.3 :
+              français courant (comprendre sans être technicien). */}
           <div className="mt-1 text-[12.5px]">
             <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-              <span className="text-muted-foreground">Version du service</span>
+              <span className="text-muted-foreground">Version de Hermes</span>
               <b className="font-mono text-[11.5px] font-semibold tabular-nums">
                 {connected ? (serverVersion ? `v${serverVersion}` : "—") : "—"}
               </b>
             </div>
             <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-              <span className="text-muted-foreground">Dernier battement reçu</span>
+              <span className="text-muted-foreground">Dernier contact</span>
               <b className="font-mono text-[11.5px] font-semibold tabular-nums">
                 {connected ? `à ${hf.format(lastSeen)}` : "—"}
               </b>
             </div>
             <div className="flex items-center justify-between gap-4 py-2">
-              <span className="text-muted-foreground">Canal</span>
-              <b className="font-mono text-[11.5px] font-semibold">socket.io — flux poussé</b>
+              <span className="text-muted-foreground">Liaison</span>
+              <b className="font-mono text-[11.5px] font-semibold">locale, en continu</b>
             </div>
           </div>
 
-          {/* Installation spéciale (maquette) : repliée par défaut, les
-              champs restent locaux à la session — aucune donnée n'est
-              envoyée sans action explicite de l'utilisateur. */}
+          {/* « Agent sur un autre poste » (ex « Installation spéciale ») :
+              replié par défaut, les champs restent locaux à la session —
+              aucune donnée n'est envoyée sans action explicite. */}
           <button
             type="button"
             onClick={() => setAdvOpen((v) => !v)}
@@ -469,7 +486,7 @@ export function SystemSection({
               className={"size-[12px] transition-transform " + (advOpen ? "rotate-180" : "")}
               strokeWidth={2.5}
             />
-            Installation spéciale
+            Agent sur un autre poste
           </button>
           {advOpen ? (
             <div className="mt-1.5">
@@ -490,8 +507,8 @@ export function SystemSection({
                 />
               </label>
               <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                Pour une installation de l&apos;agent sur un autre poste : cette connexion remplace le canal local
-                seulement après validation explicite.
+                Si Hermes est installé sur un autre ordinateur que celui-ci : indiquez ici son
+                adresse et son code d&apos;accès. Rien ne change avant que vous validiez.
               </p>
             </div>
           ) : null}

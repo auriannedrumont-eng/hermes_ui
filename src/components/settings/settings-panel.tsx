@@ -146,6 +146,9 @@ interface SettingsPanelProps {
   };
   /** Version du service (hello) — pied du rail. */
   serverVersion?: string | null;
+  /** v0.3.3 — révision disponible sur GitHub : badge orange sur
+   *  l'onglet Système (l'utilisateur voit SANS ouvrir la section). */
+  updateAvailable?: string | null;
   /** v2.4 (section Système) — sondes réelles du hello. */
   appRevision?: string | null;
   chromeHeadless?: "present" | "absent" | null;
@@ -210,6 +213,7 @@ export function SettingsPanel({
   promptsApi,
   memoryApi,
   serverVersion,
+  updateAvailable = null,
   appRevision = null,
   chromeHeadless = null,
   gatewayUrl = null,
@@ -302,14 +306,15 @@ export function SettingsPanel({
         );
       case "profils":
         return <ProfilesSection />;
-      case "systeme":
-        return (
-          <SystemSection
-            connected={connected}
-            serverVersion={serverVersion ?? null}
-            onNavigateStorage={() => goto("stockage")}
-          />
-        );
+        case "systeme":
+          return (
+            <SystemSection
+              connected={connected}
+              serverVersion={serverVersion ?? null}
+              updateAvailable={updateAvailable}
+              onNavigateStorage={() => goto("stockage")}
+            />
+          );
       // v0.3.0 : page Stockage — explorateur des documents générés
       // (liste intégrale, groupement client, undo 7 s — spec §4).
       case "stockage":
@@ -354,12 +359,21 @@ export function SettingsPanel({
                   >
                     <Icon className="size-[14px] flex-none" strokeWidth={2} />
                     <span className="whitespace-nowrap">{label}</span>
-                    {id === "outils" && extUpdate ? (
-                      <i
-                        className="ml-auto size-[7px] flex-none rounded-full bg-warning max-[1100px]:ml-1"
-                        aria-label="Mise à jour disponible"
-                      />
-                    ) : null}
+                {id === "outils" && extUpdate ? (
+                  <i
+                    className="ml-auto size-[7px] flex-none rounded-full bg-warning max-[1100px]:ml-1"
+                    aria-label="Mise à jour disponible"
+                  />
+                ) : null}
+                {/* v0.3.3 : une mise à jour de l'application elle-même est
+                    disponible (vérifiée par le service, même volet fermé)
+                    — badge orange sur « Système ». */}
+                {id === "systeme" && updateAvailable ? (
+                  <i
+                    className="ml-auto size-[7px] flex-none rounded-full bg-warning max-[1100px]:ml-1"
+                    aria-label="Mise à jour de l'application disponible"
+                  />
+                ) : null}
                   </button>
                 );
               })}

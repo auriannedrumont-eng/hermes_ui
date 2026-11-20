@@ -373,6 +373,7 @@ export default function HermesWebPage() {
       mode={chat.mode}
       serverModel={chat.serverModel}
       engineProviders={chat.engineProviders}
+      updateAvailable={chat.updateAvailable}
       connected={chat.connected}
       isBusy={chat.isBusy}
       onNew={handleNew}
@@ -556,6 +557,7 @@ export default function HermesWebPage() {
         promptsApi={promptsApi}
         memoryApi={memoryApi}
         serverVersion={chat.serverVersion}
+        updateAvailable={chat.updateAvailable}
         appRevision={chat.serverRevision}
         chromeHeadless={chat.chromeHeadless}
         gatewayUrl={chat.gatewayUrl}

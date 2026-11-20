@@ -30,6 +30,7 @@ import type {
   ModelOption,
   ModelsResult,
   PermissionsMode,
+  UpdateCheckResult,
   Project,
   SearchHit,
   ServerHello,
@@ -81,6 +82,13 @@ export function useHermesChat() {
   } = useProjects();
   const [connected, setConnected] = useState(false);
   const [serverInfo, setServerInfo] = useState<ServerHello | null>(null);
+  // v0.3.3 — état de mise à jour poussé par le service (vérifié au
+  // démarrage puis toutes les 6 h, sans ouvrir la page Système) :
+  // source unique du point orange sur l'engrenage/onglet Système.
+  const [updateState, setUpdateState] = useState<UpdateCheckResult | null>(null);
+  // Toast de mise à jour : UNE fois par session de navigateur — un
+  // rediffusion hello/update-state ne doit pas ressusciter le toast.
+  const updateToastShownRef = useRef(false);
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   // Projets : hook dédié (découpage 2026-11, FORK.md §10).
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -381,6 +389,12 @@ export function useHermesChat() {
       refreshConversations();
       fetchProjects();
       fetchModels();
+      // v0.3.3 : réveil — le service vérifie de lui-même (démarrage + 6 h),
+      // mais une coupure peut avoir manqué une diffusion : demander l'état
+      // au retour, pour que le point orange apparaisse sans délai.
+      socket.emit("system:update-check", (state?: unknown) => {
+        if (state && typeof state === "object") setUpdateState(state as UpdateCheckResult);
+      });
       // Reprise après coupure : la PREMIÈRE connexion n'a rien à
       // resynchroniser (aucune conversation ouverte), une RECONNEXION
       // recharge la conversation active — messages persistés, état de
@@ -429,7 +443,32 @@ export function useHermesChat() {
     };
     // v2.4 : le service rediffuse le hello quand le porte-clés change —
     // la carte de statut de la sidebar suit l état réel du moteur en direct.
-    const onHello = (info: ServerHello) => setServerInfo(info);
+    // v0.3.3 : le hello porte aussi update (état de mise à jour vérifié
+    // par le service lui-même) — fusion ici, source unique côté front.
+    const onHello = (info: ServerHello) => {
+      setServerInfo(info);
+      if (info && typeof info.update === "object" && info.update !== null) {
+        setUpdateState(info.update);
+      }
+    };
+
+    // v0.3.3 : état de mise à jour poussé par le service (6 h) — le point
+    // orange suit sans ouvrir la page Système. Toast UNE fois par session
+    // (au PREMIER passage à « disponible » uniquement).
+    const onUpdateState = (state?: unknown) => {
+      if (!state || typeof state !== "object") return;
+      const u = state as UpdateCheckResult;
+      setUpdateState(u);
+      if (u.available && !updateToastShownRef.current) {
+        updateToastShownRef.current = true;
+        toast({
+          title: "Mise à jour disponible",
+          description:
+            "Une nouvelle version de Hermes est prête. Ouvrez Paramètres → Système pour l'installer.",
+        });
+      }
+    };
+    socket.on("system:update-state", onUpdateState);
 
     const onConversationsDeleted = (p: { id: string }) => {
       setConversations((prev) => prev.filter((c) => c.id !== p.id));
@@ -708,6 +747,7 @@ export function useHermesChat() {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("hello", onHello);
+      socket.off("system:update-state", onUpdateState);
       socket.off("stream:start", onStreamStart);
       socket.off("stream:delta", onStreamDelta);
       socket.off("stream:reasoning", onStreamReasoning);
@@ -1442,6 +1482,10 @@ export function useHermesChat() {
     // v2.4 — fournisseurs LLM actionnables (carte de statut honnête).
     engineProviders: serverInfo?.engineProviders ?? null,
     serverVersion: serverInfo?.version ?? null,
+    // v0.3.3 — état de mise à jour (service : démarrage + 6 h) : badge
+    // sur l'onglet Système, point sur l'engrenage, carte Mise à jour.
+    updateAvailable: (updateState?.available ?? null) as string | null,
+    updateState: updateState ?? null,
     // v2.4 (Paramètres → Système) — sondes réelles du hello.
     serverRevision: serverInfo?.appRevision ?? null,
     chromeHeadless: serverInfo?.chromeHeadless ?? null,

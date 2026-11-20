@@ -47,7 +47,7 @@ import { bindHandlerContext } from "./handlers/context";
 import { registerConversationsHandlers } from "./handlers/conversations";
 import { registerArtifactsSharesHandlers } from "./handlers/artifacts-shares";
 import { registerProvidersExtensionsHandlers } from "./handlers/providers-extensions";
-import { registerSettingsSystemHandlers } from "./handlers/settings-system";
+import { registerSettingsSystemHandlers, startUpdateWatchdog, currentUpdateState } from "./handlers/settings-system";
 import { registerStorageHandlers } from "./handlers/storage";
 import { HermesConnector } from "./hermes-connector";
 import { createLlmPool } from "./llm-pool";
@@ -638,6 +638,12 @@ function helloPayload() {
     // v2.4 (Paramètres → Système) : révision du dépôt et binaire de rendu,
     // sondes réelles — jamais simulées.
     appRevision: APP_REVISION,
+    // v0.3.3 : état de mise à jour partagé (vérifié par le service au
+    // démarrage puis toutes les 6 h, diffusé aussi via system:update-state).
+    // update.available non null = une nouvelle version existe sur GitHub —
+    // le front affiche le point d'information ET l'onglet Système le
+    // badge orange, même sans jamais ouvrir la page.
+    update: currentUpdateState(),
     chromeHeadless: chromeHeadlessStatus(),
     // Mémoire active (F-18) : le client affiche un état honnête.
     memoryChars: store.getSettingBool(MEMORY_ENABLED_KEY, true)
@@ -690,6 +696,9 @@ connector
     httpServer.listen(PORT, HOST, () => {
       console.log(`[hermes-chat] service démarré sur ${HOST}:${PORT} — mode : ${connector.mode}`);
       trace("boot", `service écoutant sur ${HOST}:${PORT} — mode ${connector.mode}`);
+      // v0.3.3 : vérification de mise à jour au démarrage puis toutes
+      // les 6 h — l'utilisateur est informé sans ouvrir la page Système.
+      startUpdateWatchdog();
       filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
         trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
@@ -714,6 +723,9 @@ connector
     httpServer.listen(PORT, HOST, () => {
       console.log(`[hermes-chat] service démarré sur ${HOST}:${PORT} — mode : ${connector.mode}`);
       trace("boot", `service écoutant sur ${HOST}:${PORT} — mode ${connector.mode}`);
+      // v0.3.3 : vérification de mise à jour au démarrage puis toutes
+      // les 6 h — l'utilisateur est informé sans ouvrir la page Système.
+      startUpdateWatchdog();
       filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
         trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
