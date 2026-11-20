@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes — Paramètres · Système &amp; Stockage</title>
+<style>
+  /* ═══ Jetons (copiés de la maquette validée — référence visuelle) ═══ */
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --hermes-text:oklch(0.55 0.16 42);
+    --hermes-strong:oklch(0.55 0.16 42);
+    --warning:oklch(0.55 0.12 62);
+    --warning-soft:oklch(0.55 0.12 62 / 0.12);
+    --destructive:oklch(0.577 0.245 27.325);
+    --success:oklch(0.52 0.115 163);
+    --r-sm:8px;--r-md:10px;--r-lg:12px;--r-xl:14px;--r-full:999px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  *:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  html,body{height:100%}
+  body{font-family:"Geist",system-ui,-apple-system,sans-serif;background:var(--background);color:var(--foreground);font-size:15px;line-height:1.5}
+  button{font-family:inherit}
+  [hidden]{display:none!important}
+  svg{display:block}
+
+  /* ═══ Structure : rail latéral + page ═══ */
+  .app{display:flex;min-height:100vh}
+  .rail{flex:0 0 220px;position:sticky;top:0;height:100vh;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px 12px;gap:2px}
+  .rail-top{display:flex;align-items:center;gap:9px;padding:2px 10px 18px}
+  .rail-top .logo{width:26px;height:26px;border-radius:var(--r-sm);background:var(--hermes);color:var(--hermes-foreground);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700}
+  .rail-top b{font-size:14px;letter-spacing:-.01em}
+  .rail-top .vtag{font-size:10px;font-weight:700;color:var(--hermes-text);background:var(--hermes-soft);border-radius:var(--r-full);padding:2px 8px;margin-left:auto}
+  .rail-nav{flex:1;display:flex;flex-direction:column;gap:2px;min-height:0;overflow-y:auto}
+  .rail-sep{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground);padding:14px 10px 6px}
+  .rn{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-md);border:none;background:none;font-size:13px;color:var(--muted-foreground);cursor:pointer;text-align:left;transition:background .15s,color .15s;width:100%;text-decoration:none}
+  .rn:hover{background:var(--muted);color:var(--foreground)}
+  .rn.on{background:var(--hermes-soft);color:var(--hermes-text);font-weight:600}
+  .rn svg{flex:none}
+  .rail-foot{padding:12px 10px 2px;font-size:11px;color:var(--muted-foreground);border-top:1px solid var(--border);line-height:1.6}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .main-scroll{flex:1;padding:26px 34px 80px;max-width:880px}
+
+  /* ═══ Page ═══ */
+  .pane h1{font-size:19px;font-weight:700;letter-spacing:-.015em}
+  .psub{font-size:12.5px;color:var(--muted-foreground);margin-top:4px;margin-bottom:22px;max-width:560px;line-height:1.5}
+  .grp{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground);margin:26px 0 6px;display:flex;align-items:baseline;gap:8px}
+  .grp .grpsub{font-size:11px;font-weight:500;text-transform:none;letter-spacing:0;opacity:.85}
+
+  .st{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap}
+  .st i{width:8px;height:8px;border-radius:50%;flex:none}
+  .st.ok i{background:var(--success)}
+  .st.ok{color:var(--success)}
+  .st.warn{color:var(--warning)} .st.warn i{background:var(--warning)}
+  .st.err{color:var(--destructive)} .st.err i{background:var(--destructive)}
+  .st.off{color:var(--muted-foreground)} .st.off i{background:var(--border)}
+  .st.busy i{background:var(--hermes);animation:pulse 1.6s ease infinite}
+
+  .btn{border:1px solid var(--border);background:var(--card);border-radius:var(--r-md);padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s}
+  .btn:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .btn-p{background:var(--hermes-strong);color:var(--hermes-foreground);border:none}
+  .btn-p:hover{opacity:.9;color:var(--hermes-foreground)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn-p:disabled:hover{opacity:.4}
+  .linkbtn{border:none;background:none;color:var(--hermes-text);font-size:12.5px;font-weight:600;cursor:pointer;padding:0}
+  .linkbtn:hover{text-decoration:underline}
+  .mini{font-size:11px;font-weight:600;padding:5px 11px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--card);cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s;flex:none}
+  .mini:hover:not(:disabled){border-color:var(--hermes);color:var(--hermes-text)}
+  .mini:disabled{opacity:.4;cursor:not-allowed}
+  .tin{width:100%;border:1px solid var(--border);border-radius:var(--r-md);padding:8px 11px;font-size:12.5px;background:var(--card);color:var(--foreground)}
+  .tin:focus{border-color:var(--hermes);outline:none}
+  .hint{font-size:11px;color:var(--muted-foreground);margin-top:8px;line-height:1.5}
+
+  .card{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--card);padding:14px 16px;margin-bottom:10px}
+  .uhead{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .ut{min-width:0;flex:1}
+  .utitle{font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .usub{font-size:12.5px;color:var(--muted-foreground);line-height:1.5;margin-top:3px;max-width:500px}
+  .usub b{color:var(--foreground);font-weight:600}
+  .uacts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:2px}
+
+  /* — carte Mise à jour — */
+  .steps{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .step{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--muted-foreground)}
+  .step i{width:17px;height:17px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;flex:none;font-style:normal;font-size:9px;line-height:1;color:#fff}
+  .step.done{color:var(--foreground)}
+  .step.done i{background:var(--success);border-color:var(--success)}
+  .step.now{color:var(--hermes-text)}
+  .step.now i{border-color:var(--hermes)}
+  .sep{width:26px;height:2px;background:var(--border);border-radius:1px;flex:none}
+  .sep.done{background:var(--success)}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 oklch(0.63 0.17 42 / .35)}50%{box-shadow:0 0 0 5px oklch(0.63 0.17 42 / 0)}}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--hermes-soft);border-top-color:var(--hermes);border-radius:50%;animation:rot .8s linear infinite;flex:none}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .prog{margin-top:12px}
+  .prog .pbar{height:6px;border-radius:3px;background:var(--muted);overflow:hidden}
+  .prog .pbar i{display:block;height:100%;width:0;background:var(--hermes-strong);border-radius:3px;transition:width .3s ease}
+  .prog .plab{font-size:11px;color:var(--muted-foreground);margin-top:5px;font-variant-numeric:tabular-nums}
+  .release{margin-top:12px;background:var(--background);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
+  .release b{font-size:12px}
+  .release ul{margin:6px 0 0 16px;font-size:11.5px;color:var(--muted-foreground);line-height:1.7}
+
+  /* — carte Agent — */
+  .trow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+  .trow:last-of-type{border-bottom:none}
+  .trow>span{color:var(--muted-foreground)}
+  .trow b{font-weight:600;font-variant-numeric:tabular-nums}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+  .fld{display:block;margin-top:10px}
+  .fld>span{display:block;font-size:11px;color:var(--muted-foreground);margin-bottom:5px;font-weight:600}
+  .adv-t{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted-foreground);background:none;border:none;cursor:pointer;padding:6px 0}
+  .adv-t:hover{color:var(--foreground)}
+  .adv-t .chev{transition:transform .15s;display:inline-flex}
+  .adv-t.open .chev{transform:rotate(180deg)}
+  .adv{margin-top:6px}
+
+  /* ═══ Page Stockage ═══ */
+  .glb{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--card);padding:14px 16px;margin-bottom:14px}
+  .glb .gtop{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+  .glb .gtitle{font-size:14px;font-weight:700}
+  .glb .gmeta{font-size:12.5px;color:var(--muted-foreground);margin-top:3px}
+  .glb .gmeta b{color:var(--foreground);font-weight:600;font-variant-numeric:tabular-nums}
+  .glb .gdone{font-size:12px;color:var(--success);font-weight:600;margin-top:6px}
+
+  .xplr{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--card)}
+  .xbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px 0;background:var(--card);border-bottom:1px solid var(--border)}
+  .xsearch{display:flex;align-items:center;gap:7px;flex:1;min-width:170px;border:1px solid var(--border);border-radius:var(--r-md);padding:6px 10px;color:var(--muted-foreground);background:var(--background)}
+  .xsearch:focus-within{border-color:var(--hermes)}
+  .xsearch input{border:none;background:none;outline:none;flex:1;min-width:0;font-size:12.5px;color:var(--foreground);font-family:inherit}
+  .xsearch input::placeholder{color:var(--muted-foreground)}
+  .xclear{border:none;background:none;color:var(--hermes-text);font-weight:600;font-size:11.5px;cursor:pointer;padding:0;font-family:inherit}
+  .xclear:hover{text-decoration:underline}
+  .xsel{border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);font-size:12px;font-weight:600;color:var(--foreground);padding:6px 8px;font-family:inherit;cursor:pointer}
+  .xsel:focus{border-color:var(--hermes);outline:none}
+  .xchips{width:100%;display:flex;gap:5px;flex-wrap:wrap;padding:8px 0 10px;align-items:center}
+  .xchip{border:1px solid var(--border);background:var(--card);border-radius:var(--r-full);padding:3px 11px;font-size:11px;font-weight:600;color:var(--muted-foreground);cursor:pointer;transition:all .15s}
+  .xchip:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .xchip.on{background:var(--hermes-soft);border-color:transparent;color:var(--hermes-text)}
+
+  .xres{padding:9px 14px;font-size:11.5px;color:var(--muted-foreground);border-bottom:1px solid var(--border);background:var(--background)}
+  .xres button{border:none;background:none;color:var(--hermes-text);font-weight:600;font-size:11.5px;cursor:pointer;padding:0;font-family:inherit}
+  .xres button:hover{text-decoration:underline}
+
+  .xprj{border-top:1px solid var(--border)}
+  .xprjhead{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;background:var(--card);width:100%;border:none;text-align:left;font-family:inherit}
+  .xprjhead:hover{background:var(--muted)}
+  .xprjhead .pchev{flex:none;color:var(--muted-foreground);transition:transform .18s ease;display:grid;place-items:center;width:12px}
+  .xprjhead.open .pchev{transform:rotate(90deg)}
+  .xprjhead .pname{font-weight:700;font-size:13px;color:var(--foreground);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .xprjhead.hors .pname{color:var(--muted-foreground);font-weight:600}
+  .xprjhead .pmeta{font-size:11.5px;color:var(--muted-foreground);white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}
+  .xprjhead .pclean{font-size:11px;font-weight:600;padding:4px 11px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--card);cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s;flex:none;font-family:inherit}
+  .xprjhead .pclean:hover:not(:disabled){border-color:var(--hermes);color:var(--hermes-text)}
+  .xprjhead .pclean:disabled{opacity:.4;cursor:not-allowed}
+  /* dépliage : transition sur grid-template-rows (180 ms), annulée si mouvement réduit */
+  .xwrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .18s ease}
+  .xwrap.open{grid-template-rows:1fr}
+  .xfiles{overflow:hidden;min-height:0;padding:0 6px 10px 16px}
+  .xfiles.openpad{padding-top:4px}
+
+  .frow{display:flex;align-items:center;gap:9px;padding:6px;border-radius:var(--r-sm);font-size:12px}
+  .frow:hover{background:var(--muted)}
+  .frow.off{opacity:.35}
+  .fkind{width:34px;height:22px;border-radius:4px;background:var(--muted);color:var(--muted-foreground);display:grid;place-items:center;font-size:8.5px;font-weight:700;letter-spacing:.03em;flex:none}
+  .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;display:flex;align-items:center;gap:6px}
+  .fname .vtag{font-size:9.5px;font-weight:700;color:var(--muted-foreground);background:var(--muted);border-radius:var(--r-full);padding:1px 7px;flex:none}
+  .fname .vtag.last{color:var(--success);background:oklch(0.52 0.115 163 / .1)}
+  .fpin{color:var(--warning);flex:none;display:inline-flex}
+  .fmeta{color:var(--muted-foreground);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}
+  .fdel{flex:none;width:24px;height:24px;border:none;background:none;border-radius:var(--r-sm);cursor:pointer;color:var(--muted-foreground);display:grid;place-items:center;transition:color .15s,background .15s}
+  .fdel:hover:not(:disabled){color:var(--destructive);background:oklch(0.577 0.245 27.325 / 0.08)}
+  .fdel:disabled{opacity:.3;cursor:not-allowed}
+  .fdel:disabled:hover{color:var(--muted-foreground);background:none}
+
+  .xempty{padding:26px 14px;text-align:center;color:var(--muted-foreground);font-size:12.5px;line-height:1.7}
+
+  /* — squelette de chargement — */
+  .skel{padding:6px 12px 14px}
+  .skel .sk{height:34px;border-radius:var(--r-md);background:linear-gradient(100deg,var(--muted) 40%,oklch(0.975 0.003 75) 50%,var(--muted) 60%);background-size:200% 100%;animation:shimmer 1.1s linear infinite;margin-top:8px}
+  @keyframes shimmer{to{background-position:-200% 0}}
+
+  /* — erreur de chargement — */
+  .xerr{padding:30px 20px;text-align:center}
+  .xerr .et{font-size:13.5px;font-weight:700}
+  .xerr .es{font-size:12.5px;color:var(--muted-foreground);margin:6px 0 14px}
+
+  /* ═══ Bandeaux (toasts) ═══ */
+  .toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;width:min(480px,calc(100vw - 24px))}
+  .toast{background:var(--foreground);color:oklch(0.98 0.002 80);border-radius:var(--r-lg);padding:11px 14px;display:flex;align-items:center;gap:12px;font-size:12.5px;box-shadow:0 10px 30px rgba(28,20,12,.22);animation:tin .18s ease}
+  @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .toast.out{opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s}
+  .toast .tmsg{flex:1;min-width:0;line-height:1.45}
+  .toast .tmsg b{font-variant-numeric:tabular-nums}
+  .toast .tundo{border:none;background:oklch(0.98 0.002 80);color:var(--foreground);font-size:11.5px;font-weight:700;border-radius:var(--r-md);padding:6px 12px;cursor:pointer;font-family:inherit;flex:none}
+  .toast .tundo:disabled{opacity:.45;cursor:default}
+  .toast .tw{height:3px;border-radius:2px;background:oklch(0.98 0.002 80 / .25);overflow:hidden;position:absolute;left:0;right:0;bottom:0}
+  .toast .tw i{display:block;height:100%;background:var(--hermes);width:100%;transform-origin:left;animation:tw 7s linear forwards}
+  @keyframes tw{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  .toast{position:relative}
+
+  /* ═══ Journal des appels agent (preuve de contrat) ═══ */
+  .journal{margin-top:26px;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--card)}
+  .journal summary{cursor:pointer;padding:11px 14px;font-size:12px;font-weight:700;list-style:none;display:flex;align-items:center;gap:8px}
+  .journal summary::-webkit-details-marker{display:none}
+  .journal summary .chev{transition:transform .15s;margin-left:auto;display:inline-flex;color:var(--muted-foreground)}
+  .journal[open] summary .chev{transform:rotate(180deg)}
+  .journal .jbody{padding:0 14px 12px;overflow-x:auto}
+  .journal table{width:100%;border-collapse:collapse;font-size:11px}
+  .journal th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+  .journal td{padding:5px 8px;border-bottom:1px solid var(--border);color:var(--muted-foreground);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+  .journal td.m{color:var(--foreground);font-weight:600}
+  .journal .jempty{padding:10px 2px;font-size:11.5px;color:var(--muted-foreground)}
+
+  /* ═══ Console démo (injections — n'existera pas en production) ═══ */
+  .demo{position:fixed;right:14px;bottom:14px;width:280px;z-index:80;background:var(--card);border:1px dashed oklch(0.55 0.12 62);border-radius:var(--r-lg);box-shadow:0 12px 32px rgba(28,20,12,.14);padding:12px 14px}
+  .demo-t{font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .demo-t span{font-weight:500;color:var(--muted-foreground)}
+  .demo-l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);margin:10px 0 5px}
+  .dchips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{border:1px solid var(--border);background:var(--card);border-radius:var(--r-full);padding:3px 10px;font-size:11px;font-weight:600;color:var(--muted-foreground);cursor:pointer;transition:all .15s;font-family:inherit}
+  .chip:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .chip.on{background:var(--warning-soft);border-color:transparent;color:var(--warning)}
+
+  /* ═══ Responsive ═══ */
+  @media (max-width:860px){
+    .app{flex-direction:column}
+    .rail{flex:none;flex-direction:row;align-items:center;height:auto;position:sticky;top:0;z-index:20;border-right:none;border-bottom:1px solid var(--border);padding:10px 12px 8px;gap:6px;overflow-x:auto}
+    .rail-top{padding:0 6px 0 2px}
+    .rail-top b{display:none}
+    .rail-sep{display:none}
+    .rail-nav{flex-direction:row;flex:none}
+    .rn{white-space:nowrap;padding:7px 10px}
+    .rail-foot{display:none}
+    .main-scroll{padding:18px 16px 90px}
+  }
+  @media (max-width:480px){
+    .xprjhead{flex-wrap:wrap}
+    .xprjhead .pname{flex-basis:calc(100% - 24px)}
+    .xprjhead .pmeta{flex-basis:100%;order:3;padding-left:22px}
+    .xprjhead .pclean{order:4}
+    .glb .gtop{flex-direction:column;align-items:flex-start}
+    .uhead{flex-direction:column;gap:10px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" aria-label="Navigation principale">
+    <div class="rail-top">
+      <span class="logo" aria-hidden="true">H</span><b>Hermes</b><span class="vtag" id="railVersion">0.2.1</span>
+    </div>
+    <div class="rail-nav">
+      <a class="rn" href="#/parametres" data-nav="parametres">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+      <a class="rn" href="#/stockage" data-nav="stockage">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 8-9-5-9 5v8l9 5 9-5V8Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+        Stockage
+      </a>
+    </div>
+    <div class="rail-foot">Agent local · simulation<br>UI v0.3.0 · révision c0ffee</div>
+  </nav>
+  <main class="main">
+    <div class="main-scroll" id="page"><!-- rempli par le routeur --></div>
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" role="status"></div>
+
+<!-- Console démo : injections de pannes pour éprouver les machines à états (hors production) -->
+<aside class="demo" id="demoConsole" aria-label="Console de démonstration">
+  <div class="demo-t">Console démo <span>— injections, hors production</span></div>
+  <div class="demo-l">Agent</div>
+  <div class="dchips">
+    <button class="chip" type="button" id="injOffline">Agent hors ligne</button>
+    <button class="chip" type="button" id="injWsDrop">Déconnexion ws</button>
+    <button class="chip" type="button" id="injRestartFail">Échec au redémarrage</button>
+  </div>
+  <div class="demo-l">Mise à jour</div>
+  <div class="dchips">
+    <button class="chip" type="button" id="injUpdFail">Dépôt injoignable</button>
+  </div>
+  <div class="demo-l">Opérations</div>
+  <div class="dchips">
+    <button class="chip" type="button" id="injDelFail">Échec de suppression</button>
+  </div>
+</aside>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════════════
+   Hermes — implémentation « Volet Système & page Stockage » (spéc. v1)
+   Fichier autonome : l'agent est SIMULÉ selon le contrat du chapitre 5.
+   Aucune requête périodique tant qu'une page est simplement affichée.
+   ══════════════════════════════════════════════════════════════════ */
+
+var UNDO_MS = 7000;          /* fenêtre d'annulation (spec §4.5) */
+var LAJK = "064f2c9e";       /* suffixe de jeton démo */
+
+/* ────────────────────────────────────────────────────────────────
+   Agent simulé — implémente exactement le contrat (Tableau 4) :
+   GET /api/artifacts · DELETE /api/artifacts/{id}/v/{n}
+   POST /api/artifacts/clean · POST /api/artifacts/undo/{jeton}
+   GET /api/updates/check · flux ws /api/ws (état de l'agent)
+   ──────────────────────────────────────────────────────────────── */
+var Agent = (function () {
+  /* Jeu de démonstration de la maquette (tailles en Mo → octets à l'interface) */
+  var SEED = [
+    { name: "Refonte site vitrine", docs: [
+      { n: "plan-de-charge.pdf", k: "PDF", pin: true, v: [[1, 2.1, "2026-11-08"], [2, 3.8, "2026-11-12"], [3, 12.4, "2026-11-18"]] },
+      { n: "benchmark-concurrents.xlsx", k: "XLSX", v: [[1, 5.4, "2026-11-11"], [2, 5.9, "2026-11-14"]] },
+      { n: "maquette-accueil.html", k: "HTML", v: [[1, 1.2, "2026-11-09"], [2, 4.1, "2026-11-17"]] },
+      { n: "maquette-tarifs.html", k: "HTML", v: [[1, 0.9, "2026-11-10"], [2, 1.6, "2026-11-12"], [3, 2.8, "2026-11-15"], [4, 3.8, "2026-11-18"]] },
+      { n: "logo-v2.png", k: "PNG", v: [[1, 0.4, "2026-11-08"], [2, 0.7, "2026-11-09"], [3, 1.0, "2026-11-10"], [4, 1.3, "2026-11-12"], [5, 1.7, "2026-11-13"], [6, 2.2, "2026-11-15"]] },
+      { n: "plan-sitemap.pdf", k: "PDF", v: [[1, 1.4, "2026-11-10"]] },
+      { n: "copywriting-guides.md", k: "MD", v: [[1, 0.1, "2026-11-07"], [2, 0.1, "2026-11-08"], [3, 0.1, "2026-11-10"], [4, 0.2, "2026-11-11"], [5, 0.2, "2026-11-12"], [6, 0.2, "2026-11-13"], [7, 0.3, "2026-11-14"], [8, 0.3, "2026-11-15"], [9, 0.3, "2026-11-15"]] },
+      { n: "notes-reunion-7-nov.md", k: "MD", v: [[1, 0.1, "2026-11-07"]] },
+      { n: "moodboard.png", k: "PNG", v: [[1, 1.1, "2026-11-11"], [2, 2.6, "2026-11-13"], [3, 3.2, "2026-11-14"]] }
+    ] },
+    { name: "Veille concurrence", docs: [
+      { n: "rapport-veille-semaine-43.pdf", k: "PDF", v: [[1, 6.1, "2026-10-29"]] },
+      { n: "rapport-veille-semaine-44.pdf", k: "PDF", v: [[1, 6.4, "2026-11-05"]] },
+      { n: "rapport-veille-semaine-45.pdf", k: "PDF", v: [[1, 6.6, "2026-11-12"]] },
+      { n: "rapport-veille-semaine-46.pdf", k: "PDF", pin: true, v: [[1, 8.7, "2026-11-16"]] },
+      { n: "alertes-concurrents.xlsx", k: "XLSX", v: [[1, 4.8, "2026-11-03"], [2, 5.5, "2026-11-10"], [3, 6.2, "2026-11-18"]] },
+      { n: "captures-prix-tarifs.pdf", k: "PDF", v: [[1, 3.1, "2026-11-08"], [2, 4.4, "2026-11-15"]] },
+      { n: "tableau-comparatif.html", k: "HTML", v: [[1, 1.2, "2026-11-11"], [2, 1.9, "2026-11-17"]] },
+      { n: "revue-presse.md", k: "MD", v: [[1, 0.1, "2026-11-08"], [2, 0.1, "2026-11-10"], [3, 0.2, "2026-11-12"], [4, 0.2, "2026-11-15"], [5, 0.2, "2026-11-17"]] }
+    ] },
+    { name: "Budget 2027", docs: [
+      { n: "previsionnel.xlsx", k: "XLSX", pin: true, v: [[1, 0.9, "2026-11-03"], [2, 1.0, "2026-11-04"], [3, 1.1, "2026-11-06"], [4, 1.3, "2026-11-08"], [5, 1.5, "2026-11-09"], [6, 1.8, "2026-11-11"], [7, 2.1, "2026-11-13"], [8, 2.4, "2026-11-16"], [9, 2.8, "2026-11-18"]] },
+      { n: "synthese-direction.pdf", k: "PDF", v: [[1, 1.2, "2026-11-14"], [2, 1.7, "2026-11-18"]] },
+      { n: "courbes-evolution.png", k: "PNG", v: [[1, 0.5, "2026-11-05"], [2, 0.6, "2026-11-08"], [3, 0.7, "2026-11-12"], [4, 0.9, "2026-11-16"]] },
+      { n: "notes-hypotheses.md", k: "MD", v: [[1, 0.1, "2026-11-06"], [2, 0.1, "2026-11-09"], [3, 0.2, "2026-11-13"]] }
+    ] },
+    { name: "Hors projet", hors: true, docs: [
+      { n: "export-conversation-15-nov.pdf", k: "PDF", v: [[1, 3.3, "2026-11-15"]] },
+      { n: "data-ventes-2025.xlsx", k: "XLSX", v: [[1, 2.5, "2026-11-09"]] },
+      { n: "screenshot-tableau.png", k: "PNG", v: [[1, 0.6, "2026-11-10"], [2, 1.1, "2026-11-12"]] },
+      { n: "brouillon-article.html", k: "HTML", v: [[1, 0.4, "2026-11-05"], [2, 0.5, "2026-11-07"], [3, 0.5, "2026-11-09"], [4, 0.6, "2026-11-11"], [5, 0.7, "2026-11-13"], [6, 0.7, "2026-11-15"], [7, 0.8, "2026-11-17"]] },
+      { n: "resume-reunion.md", k: "MD", v: [[1, 0.1, "2026-11-11"], [2, 0.1, "2026-11-11"]] },
+      { n: "modele-mail-relance.md", k: "MD", v: [[1, 0.1, "2026-11-03"]] }
+    ] }
+  ];
+
+  /* table artifacts aplatie : id stable = projet|nom (les noms font foi dans le jeu démo) */
+  var rows = [], seq = 0;
+  SEED.forEach(function (prj) {
+    prj.docs.forEach(function (doc) {
+      doc.v.forEach(function (vv) {
+        rows.push({
+          id: "a" + (++seq), projet: prj.name, nom: doc.n, type: doc.k,
+          version: vv[0], octets: Math.round(vv[1] * 1048576), date: vv[2],
+          epingle: !!doc.pin && vv[0] === doc.v[doc.v.length - 1][0]
+        });
+      });
+    });
+  });
+
+  /* fenêtres d'annulation : jeton → {rows, expire, timer} ; expiration = purge */
+  var pending = {}, jetons = 0;
+  var inject = { offline: false, updFail: false, delFail: false, restartFail: false };
+
+  /* journal des échanges (preuve de contrat, T17…) */
+  var log = [];
+  function trace(meth, path, status, ms) {
+    log.unshift({ t: new Date(), meth: meth, path: path, status: status, ms: ms });
+    if (log.length > 60) log.pop();
+    document.dispatchEvent(new CustomEvent("agent:log"));
+  }
+  function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* définition canonique « nettoyable » (spec §5.2) — par document, par numéro */
+  function maxVOf(r) {
+    var m = 0;
+    rows.forEach(function (o) { if (o.projet === r.projet && o.nom === r.nom && o.version > m) m = o.version; });
+    return m;
+  }
+  function nettoyable(r) { return !r.epingle && r.version < maxVOf(r); }
+
+  var api = {
+    inject: inject,
+    log: log,
+    /* GET /api/artifacts — liste plate ; le client groupe et agrège */
+    artifacts: function () {
+      var t0 = performance.now();
+      return delay(inject.offline ? 2600 : 420).then(function () {
+        if (inject.offline) {
+          trace("GET", "/api/artifacts", "— agent injoignable", Math.round(performance.now() - t0));
+          throw { code: 0, message: "L'agent local n'a pas répondu." };
+        }
+        trace("GET", "/api/artifacts", 200, Math.round(performance.now() - t0));
+        return rows.map(function (r) { return Object.assign({}, r); });
+      });
+    },
+    /* DELETE /api/artifacts/{id}/v/{n} — 204 + jeton · 409 épinglée · 404 absente */
+    deleteVersion: function (id, n) {
+      var t0 = performance.now();
+      return delay(inject.offline ? 2600 : 260).then(function () {
+        var ms = Math.round(performance.now() - t0);
+        var r = rows.find(function (o) { return o.id === id && o.version === n; });
+        if (!r) { trace("DELETE", "/api/artifacts/" + id + "/v/" + n, 404, ms); throw { code: 404, message: "Version introuvable." }; }
+        if (r.epingle) { trace("DELETE", "/api/artifacts/" + id + "/v/" + n, 409, ms); throw { code: 409, message: "Version épinglée — suppression refusée." }; }
+        if (inject.delFail) { trace("DELETE", "/api/artifacts/" + id + "/v/" + n, "— échec", ms); throw { code: 0, message: "Échec de la suppression côté agent." }; }
+        rows.splice(rows.indexOf(r), 1);
+        var jeton = "u" + (++jetons) + "-" + LAJK;
+        pending[jeton] = { rows: [r], expire: Date.now() + UNDO_MS };
+        pending[jeton].timer = setTimeout(function () { delete pending[jeton]; }, UNDO_MS);
+        trace("DELETE", "/api/artifacts/" + id + "/v/" + n, 204, ms);
+        return { jeton: jeton, octets: r.octets };
+      });
+    },
+    /* POST /api/artifacts/clean {projet} — idempotent, renvoie le mesuré */
+    clean: function (projet) {
+      var t0 = performance.now();
+      return delay(inject.offline ? 2600 : 640).then(function () {
+        var ms = Math.round(performance.now() - t0);
+        if (inject.offline) {
+          trace("POST", "/api/artifacts/clean", "— agent injoignable", ms);
+          throw { code: 0, message: "L'agent local n'a pas répondu." };
+        }
+        var cibles = rows.filter(function (r) { return r.projet === projet && nettoyable(r); });
+        var octets = cibles.reduce(function (s, r) { return s + r.octets; }, 0);
+        cibles.forEach(function (r) { rows.splice(rows.indexOf(r), 1); });
+        var jeton = "u" + (++jetons) + "-" + LAJK;
+        if (cibles.length) {
+          pending[jeton] = { rows: cibles.slice(), expire: Date.now() + UNDO_MS };
+          pending[jeton].timer = setTimeout(function () { delete pending[jeton]; }, UNDO_MS);
+        }
+        trace("POST", "/api/artifacts/clean", 200, ms);
+        return { supprimes: cibles.length, octetsLibres: octets, jeton: jeton };
+      });
+    },
+    /* POST /api/artifacts/undo/{jeton} — 204 · 410 si expirée */
+    undo: function (jeton) {
+      var t0 = performance.now();
+      return delay(220).then(function () {
+        var ms = Math.round(performance.now() - t0);
+        var p = pending[jeton];
+        if (!p) { trace("POST", "/api/artifacts/undo/" + jeton, 410, ms); throw { code: 410, message: "Fenêtre d'annulation expirée." }; }
+        clearTimeout(p.timer);
+        p.rows.forEach(function (r) { rows.push(r); });
+        delete pending[jeton];
+        trace("POST", "/api/artifacts/undo/" + jeton, 204, ms);
+        return { restaurees: p.rows.length };
+      });
+    },
+    /* GET /api/updates/check — réponse conditionnelle simulée */
+    checkUpdates: function () {
+      var t0 = performance.now();
+      return delay(inject.updFail ? 2400 : 480).then(function () {
+        var ms = Math.round(performance.now() - t0);
+        if (inject.updFail || inject.offline) {
+          trace("GET", "/api/updates/check", "— dépôt injoignable", ms);
+          throw { code: 0, message: "Dépôt de mise à jour injoignable." };
+        }
+        trace("GET", "/api/updates/check", 200, ms);
+        return { installee: APP_VERSION, disponible: "0.3.0", journal: [
+          "Volet Système allégé : cartes Mise à jour et Agent",
+          "Page Stockage dédiée (explorateur des documents générés)",
+          "Annulation des suppressions pendant 7 secondes"
+        ] };
+      });
+    },
+    /* fenêtre restante (affichage du compte à rebours) */
+    pendingReste: function (jeton) { return pending[jeton] ? Math.max(0, pending[jeton].expire - Date.now()) : 0; }
+  };
+  return api;
+})();
+
+/* ────────────────────────────────────────────────────────────────
+   Flux websocket simulé /api/ws — source unique de l'état agent.
+   Pousse : état (démarrage/connecté/déconnecté/erreur) + battements.
+   Reconnexion automatique à temporisation exponentielle silencieuse.
+   ──────────────────────────────────────────────────────────────── */
+var WS = (function () {
+  var listeners = [];
+  var etat = "demarrage", tentative = 0, timer = null, hb = null;
+  var lastSeen = null, motifDernier = null;
+  function emit(ev) { listeners.forEach(function (f) { f(ev); }); }
+  function heartbeat() {
+    lastSeen = new Date();
+    emit({ type: "hb", at: lastSeen });
+  }
+  function connect() {
+    etat = "demarrage"; motifDernier = null; emit({ type: "etat", etat: etat });
+    timer = setTimeout(function () {
+      if (Agent.inject.offline || Agent.inject.restartFail) {
+        etat = "erreur";
+        motifDernier = Agent.inject.offline ? "agent injoignable sur /api/ws." : "l'agent n'a pas redémarré dans le délai imparti.";
+        emit({ type: "etat", etat: "erreur", motif: "Échec : " + motifDernier });
+        return;
+      }
+      etat = "connecte"; tentative = 0;
+      emit({ type: "etat", etat: "connecte", version: "1.0.0" });
+      heartbeat();
+      clearInterval(hb);
+      hb = setInterval(heartbeat, 20000); /* flux poussé, pas un sondage de l'UI */
+    }, Agent.inject.restartFail ? 4000 : 900);
+  }
+  return {
+    on: function (f) { listeners.push(f); },
+    start: connect,
+    /* injection : micro-coupure → déconnecté → backoff silencieux → connecté */
+    drop: function () {
+      if (etat !== "connecte") return;
+      clearInterval(hb);
+      etat = "deconnecte"; emit({ type: "etat", etat: "deconnecte" });
+      tentative += 1;
+      var attente = Math.min(1000 * Math.pow(2, tentative - 1), 8000);
+      emit({ type: "etat", etat: "deconnecte", prochaine: attente });
+      timer = setTimeout(connect, attente);
+    },
+    restart: function () {
+      clearInterval(hb); clearTimeout(timer);
+      tentative = 0;
+      connect();
+    },
+    etat: function () { return etat; },
+    lastSeen: function () { return lastSeen; },
+    motif: function () { return motifDernier; }
+  };
+})();
+
+/* ─────────── utilitaires d'affichage ─────────── */
+var APP_VERSION = "0.2.1";
+var $ = function (sel, root) { return (root || document).querySelector(sel); };
+var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+var nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+var df = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+var hf = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function fmtOctets(o) {
+  var mo = o / 1048576;
+  if (mo >= 1024) return nf.format(Math.round(mo / 1024 * 10) / 10).replace(/\u202f/g, " ") + " Go";
+  return nf.format(Math.round(mo * 10) / 10).replace(/\u202f/g, " ") + " Mo";
+}
+function dfr(iso) { return df.format(new Date(iso + "T12:00:00")); }
+function norm(t) { return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+function echap(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+var CHEV = '<span class="pchev" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>';
+var PIN = '<span class="fpin" title="Version épinglée — non supprimable" role="img" aria-label="Version épinglée"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></span>';
+var TRASH = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+/* ─────────── bandeaux ─────────── */
+function toast(msg, opts) {
+  opts = opts || {};
+  var t = document.createElement("div");
+  t.className = "toast";
+  t.innerHTML = '<div class="tmsg">' + msg + '</div>';
+  if (opts.undo) {
+    var b = document.createElement("button");
+    b.className = "tundo"; b.type = "button";
+    b.textContent = "Annuler";
+    var w = document.createElement("div"); w.className = "tw"; w.innerHTML = "<i></i>";
+    t.appendChild(b); t.appendChild(w);
+    var close = setTimeout(closeToast, UNDO_MS + 400);
+    var fire = setTimeout(function () { b.disabled = true; b.textContent = "Fenêtre dépassée"; }, UNDO_MS);
+    b.addEventListener("click", function () {
+      opts.undo().then(function () { clearTimeout(close); clearTimeout(fire); retire(); })
+        .catch(function () { b.disabled = true; b.textContent = "Fenêtre dépassée"; });
+    });
+  } else {
+    setTimeout(closeToast, opts.duree || 3600);
+  }
+  function closeToast() { t.classList.add("out"); setTimeout(retire, 260); }
+  function retire() { if (t.parentNode) t.parentNode.removeChild(t); }
+  $("#toasts").appendChild(t);
+  return t;
+}
+//__PAGES__
+/* ══════════════════════════════════════════════════════════════════
+   JOURNAL DES ÉCHANGES (preuve de contrat — T17, T18)
+   ══════════════════════════════════════════════════════════════════ */
+function journalHTML() {
+  var lignes = Agent.log.map(function (l) {
+    return "<tr><td>" + hf.format(l.t) + '</td><td class="m">' + l.meth + "</td><td>" + echap(l.path) +
+      "</td><td>" + l.status + "</td><td>" + l.ms + " ms</td></tr>";
+  }).join("");
+  return '<details class="journal" id="journal"><summary>Journal des échanges avec l\'agent' +
+    '<span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span></summary>' +
+    '<div class="jbody">' + (lignes ? "<table><thead><tr><th>Heure</th><th>Méth.</th><th>Chemin</th><th>Statut</th><th>Durée</th></tr></thead><tbody>" + lignes + "</tbody></table>"
+      : '<p class="jempty">Aucun appel pour le moment.</p>') + "</div></details>";
+}
+function mountJournal() {
+  /* rendu initial + abonnement : le journal se met à jour à chaque appel agent */
+  var zone = $("#journalZone");
+  zone.innerHTML = journalHTML();
+  document.addEventListener("agent:log", function () {
+    var j = $("#journal");
+    if (j) { var open = j.open; zone.innerHTML = journalHTML(); var j2 = $("#journal"); j2.open = open; }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGE PARAMÈTRES · SYSTÈME — deux cartes, deux machines à états
+   Vérification à l'ouverture + à la demande. Aucun minuteur résidant.
+   ══════════════════════════════════════════════════════════════════ */
+var UPD = { etat: "inconnu", dist: null, journal: null, progress: 0, motif: null, timer: null };
+var AGHIST = [];
+
+function majCardHTML() {
+  var s = UPD.etat;
+  var chips = {
+    inconnu: '<span class="st busy"><i></i>Vérification…</span>',
+    ajour: '<span class="st ok"><i></i>À jour</span>',
+    disponible: '<span class="st warn"><i></i>Mise à jour disponible</span>',
+    telechargement: '<span class="st busy"><i></i>Téléchargement…</span>',
+    pret: '<span class="st warn"><i></i>Prête à installer</span>',
+    erreur: '<span class="st err"><i></i>Erreur</span>'
+  }[s];
+  var sub;
+  if (s === "inconnu") sub = "Interrogation du dépôt de mise à jour…";
+  else if (s === "ajour") sub = "Vous utilisez <b>Hermes " + APP_VERSION + "</b>, la dernière version publiée." + (UPD.verifie ? " Dernière vérification : " + UPD.verifie + "." : "");
+  else if (s === "disponible") sub = "Hermes <b>" + UPD.dist + "</b> est disponible. Version installée : " + APP_VERSION + ".";
+  else if (s === "telechargement") sub = "Réception de Hermes <b>" + UPD.dist + "</b> — " + UPD.progress + " %.";
+  else if (s === "pret") sub = "Hermes <b>" + UPD.dist + "</b> est téléchargé et prêt. L'installation relancera l'interface.";
+  else sub = "La vérification a échoué : " + UPD.motif + " Version installée : <b>" + APP_VERSION + "</b>.";
+  var acts = "";
+  if (s === "ajour") acts = '<button class="btn" id="uCheck" type="button">Vérifier à nouveau</button>';
+  if (s === "disponible") acts = '<button class="btn btn-p" id="uDl" type="button">Télécharger</button>';
+  if (s === "telechargement") acts = '<button class="btn" id="uCancel" type="button">Annuler</button>';
+  if (s === "pret") acts = '<button class="btn btn-p" id="uInstall" type="button">Installer et redémarrer</button><button class="btn" id="uCancel2" type="button">Annuler</button>';
+  if (s === "erreur") acts = '<button class="btn btn-p" id="uRetry" type="button">Réessayer</button>';
+  /* jalons : Vérifiée (un contrôle a abouti) → Téléchargée (prêt) → Installée */
+  var steps = (function () {
+    var d1 = ["ajour", "disponible", "telechargement", "pret"].indexOf(s) > -1 || UPD.installe;
+    var d2 = s === "pret" || UPD.installe;
+    var d3 = UPD.installe;
+    function st(done, now, lbl) {
+      return '<span class="step' + (done ? " done" : "") + (now ? " now" : "") + '"><i>' + (done ? "✓" : "") + "</i>" + lbl + "</span>";
+    }
+    return st(d1, s === "inconnu", "Vérifiée") +
+      '<span class="sep' + (d2 ? " done" : "") + '"></span>' + st(d2, s === "telechargement", "Téléchargée") +
+      '<span class="sep' + (d3 ? " done" : "") + '"></span>' + st(d3, s === "pret", "Installée");
+  })();
+  var extra = "";
+  if (s === "telechargement") extra = '<div class="prog"><div class="pbar"><i style="width:' + UPD.progress + '%"></i></div><div class="plab">' + UPD.progress + ' % — ' + (100 - UPD.progress) + ' % restants</div></div>';
+  if ((s === "disponible" || s === "pret") && UPD.journal) {
+    extra = '<div class="release"><b>Journal de la version ' + UPD.dist + "</b><ul>" + UPD.journal.map(function (l) { return "<li>" + echap(l) + "</li>"; }).join("") + "</ul></div>";
+  }
+  return '<div class="card" id="cardUpd">' +
+    '<div class="uhead"><div class="ut"><div class="utitle">Mise à jour ' + chips + '</div><div class="usub" id="uSub">' + sub + '</div></div>' +
+    '<div class="uacts" id="uActs">' + acts + "</div></div>" +
+    '<div class="steps">' + steps + "</div>" + extra + "</div>";
+}
+function agentCardHTML() {
+  var st = WS.etat();
+  var chips = {
+    demarrage: '<span class="st busy"><i></i>Démarrage</span>',
+    connecte: '<span class="st ok"><i></i>Connecté</span>',
+    deconnecte: '<span class="st off"><i></i>Reconnexion en cours</span>',
+    erreur: '<span class="st err"><i></i>Erreur</span>'
+  }[st];
+  var ls = WS.lastSeen();
+  var usub;
+  if (st === "erreur") usub = "La connexion a échoué : " + (WS.motif() || "cause inconnue.") + " Aucune attente infinie : réessayez quand vous voulez.";
+  else if (st === "deconnecte") usub = "Canal coupé — reconnexion automatique en cours (temporisation croissante, silencieuse).";
+  else if (st === "demarrage") usub = "Connexion du processus local en cours…";
+  else usub = "Processus local qui exécute les outils et gère les documents générés. Son état provient du flux websocket : <b>source unique</b>, sans sondage de l'interface. Dernier battement : " + (ls ? "à " + hf.format(ls) : "—") + ".";
+  var rows = '<div class="trow"><span>Version de l\'agent</span><b class="mono">' + (st === "connecte" ? "1.0.0" : "—") + "</b></div>" +
+    '<div class="trow"><span>Dernier battement reçu</span><b class="mono" id="agHb">' + (ls ? "à " + hf.format(ls) : "—") + "</b></div>" +
+    '<div class="trow"><span>Canal</span><b class="mono">/api/ws — flux poussé</b></div>';
+  var acts = "";
+  if (st !== "demarrage") acts += '<button class="btn" id="aRestart" type="button">Redémarrer l\'agent</button>';
+  acts += '<button class="btn" id="aLogs" type="button">Voir les journaux</button>';
+  return '<div class="card" id="cardAgent">' +
+    '<div class="uhead"><div class="ut"><div class="utitle">Agent Hermes ' + chips + '</div>' +
+    '<div class="usub">' + usub + '</div></div>' +
+    '<div class="uacts">' + acts + "</div></div>" + rows +
+    '<div id="aLogBox" hidden><pre class="log" id="aLogPre" style="white-space:pre-wrap;font-size:11px;background:var(--background);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px"></pre></div>' +
+    '<button class="adv-t" id="aAdv" type="button"><span class="chev">▾</span> Installation spéciale</button>' +
+    '<div class="adv" id="aAdvBox" hidden>' +
+    '<label class="fld"><span>Adresse de l\'agent</span><input class="tin" type="text" placeholder="http://127.0.0.1:8765"></label>' +
+    '<label class="fld"><span>Code d\'accès</span><input class="tin" type="password" placeholder="••••••••"></label>' +
+    '<div style="margin-top:10px"><button class="btn" id="aConnect" type="button">Connecter</button></div></div></div>';
+}
+function pageParametres(teardown) {
+  $("#page").innerHTML = "<div class=\"pane\"><h1>Système</h1>" +
+    '<p class="psub">Mise à jour du service et état de l\'agent local. La gestion de l\'espace disque a déménagé : elle dispose de sa propre page « Stockage ».</p>' +
+    '<div id="updSlot"></div><div id="agSlot"></div><div id="journalZone"></div></div>';
+  mountJournal();
+
+  function renderUpd() { $("#updSlot").innerHTML = majCardHTML(); wireUpd(); }
+  function check() {
+    UPD.etat = "inconnu"; UPD.motif = null; UPD.installe = false; renderUpd();
+    Agent.checkUpdates().then(function (r) {
+      UPD.verifie = hf.format(new Date());
+      if (r.disponible && r.disponible !== APP_VERSION) { UPD.etat = "disponible"; UPD.dist = r.disponible; UPD.journal = r.journal; }
+      else UPD.etat = "ajour";
+      renderUpd();
+    }).catch(function (e) {
+      UPD.etat = "erreur"; UPD.motif = e.message; renderUpd();
+    });
+  }
+  function wireUpd() {
+    var b;
+    if ((b = $("#uCheck")) || (b = $("#uRetry"))) b.addEventListener("click", check);
+    if (b = $("#uDl") ) b.addEventListener("click", function () {
+      UPD.etat = "telechargement"; UPD.progress = 0; renderUpd();
+      UPD.timer = setInterval(function () {
+        UPD.progress = Math.min(100, UPD.progress + 4);
+        if (UPD.progress >= 100) { clearInterval(UPD.timer); UPD.etat = "pret"; renderUpd(); }
+        else { $("#cardUpd").outerHTML = majCardHTML(); wireUpd(); }
+      }, 110);
+      teardown.push(function () { clearInterval(UPD.timer); });
+    });
+    if ((b = $("#uCancel")) || (b = $("#uCancel2"))) b.addEventListener("click", function () {
+      clearInterval(UPD.timer); UPD.etat = "disponible"; renderUpd();
+    });
+    if (b = $("#uInstall")) b.addEventListener("click", function () {
+      b.disabled = true; b.textContent = "Installation…";
+      setTimeout(function () {
+        APP_VERSION = UPD.dist; UPD.installe = true; UPD.etat = "ajour"; UPD.dist = null;
+        $("#railVersion").textContent = APP_VERSION;
+        renderUpd();
+        toast("Hermes " + APP_VERSION + " installé — l'interface a été relancée.");
+      }, 1400);
+    });
+  }
+  renderUpd();
+  check();   /* déclencheur : ouverture de la page (spec §3.1) */
+
+  function renderAg() {
+    $("#agSlot").innerHTML = agentCardHTML();
+    var rb = $("#aRestart");
+    if (rb) rb.addEventListener("click", function () { AGHIST.push("redémarrage demandé"); WS.restart(); });
+    $("#aLogs").addEventListener("click", function () {
+      var box = $("#aLogBox"); box.hidden = !box.hidden;
+      $("#aLogPre").textContent = AGHIST.length ? AGHIST.join("\n") : "(journal vide)";
+    });
+    $("#aAdv").addEventListener("click", function () {
+      var box = $("#aAdvBox"); box.hidden = !box.hidden; $("#aAdv").classList.toggle("open", !box.hidden);
+    });
+    $("#aConnect").addEventListener("click", function () { toast("Paramètres d'installation spéciale enregistrés (démo)."); });
+  }
+  var onWs = function (ev) {
+    AGHIST.push(hf.format(new Date()) + "  ws: " + ev.type + (ev.etat ? " → " + ev.etat : "") + (ev.motif ? " — " + ev.motif : "") + (ev.at ? " (battement)" : ""));
+    var pre = $("#aLogPre");
+    if (pre && !$("#aLogBox").hidden) pre.textContent = AGHIST.join("\n");   /* journaux ouverts : suivi en direct */
+    if (ev.type === "etat") { if ($("#cardAgent")) renderAg(); }             /* changement d'état : carte re-rendue */
+    else if (ev.at) { var hb = $("#agHb"); if (hb) hb.textContent = "à " + hf.format(ev.at); }  /* battement : simple mise à jour */
+  };
+  WS.on(onWs);
+  renderAg();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGE STOCKAGE — modèle déclaratif (spec §4.2)
+   déroulé(p) = filtrageActif ? résultats(p)>0 : (p === projetOuvert)
+   ══════════════════════════════════════════════════════════════════ */
+var STO = { ui: { projetOuvert: null, recherche: "", type: "Tous", tri: "taille" }, data: null, ordre: [], loading: false, error: null, freed: { n: 0, octets: 0 } };
+
+function filtrageActif() { return STO.ui.recherche !== "" || STO.ui.type !== "Tous"; }
+/* définition canonique « nettoyable » — même formule que l'agent (spec §5.2) */
+function maxVersion(data, projet, nom) {
+  var m = 0; data.forEach(function (r) { if (r.projet === projet && r.nom === nom && r.version > m) m = r.version; });
+  return m;
+}
+function nettoyable(data, r) { return !r.epingle && r.version < maxVersion(data, r.projet, r.nom); }
+function resultatsDe(data, prj) {
+  return data.filter(function (r) {
+    return r.projet === prj && (!STO.ui.recherche || norm(r.nom).indexOf(norm(STO.ui.recherche)) > -1) && (STO.ui.type === "Tous" || r.type === STO.ui.type);
+  });
+}
+function triRows(arr) {
+  return arr.slice().sort(function (a, b) {
+    if (STO.ui.tri === "taille") return b.octets - a.octets;
+    if (STO.ui.tri === "date") return a.date < b.date ? 1 : a.date > b.date ? -1 : b.version - a.version;
+    return a.nom.localeCompare(b.nom, "fr") || b.version - a.version;
+  });
+}
+
+function pageStockage(query) {
+  var lienProfond = query && query.projet ? decodeURIComponent(query.projet) : null;
+  /* état d'interface non persisté : l'entrée sur la page repart du repli par défaut,
+     sauf lien profond ?projet= — seul cas d'ouverture dépliée (spec §4.3) */
+  STO.ui = { projetOuvert: lienProfond, recherche: "", type: "Tous", tri: "taille" };
+  STO.data = null; STO.loading = true; STO.error = null;
+
+  $("#page").innerHTML = "<div class=\"pane\"><h1>Stockage</h1>" +
+    '<p class="psub">Tous les documents générés par vos conversations, groupés par projet. Les anciennes versions peuvent être nettoyées ; les documents épinglés sont toujours conservés.</p>' +
+    '<div class="glb" id="glb"></div>' +
+    '<div class="xplr"><div class="xbar">' +
+    '<div class="xsearch"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>' +
+    '<input id="xq" type="search" placeholder="Rechercher un fichier…" aria-label="Rechercher un fichier" autocomplete="off">' +
+    '<button class="xclear" id="xqClear" type="button" hidden>effacer</button></div>' +
+    '<select class="xsel" id="xsort" aria-label="Trier par">' +
+    '<option value="taille">Tri : taille</option><option value="date">Tri : date</option><option value="nom">Tri : nom</option></select>' +
+    '<div class="xchips" id="xchips" role="group" aria-label="Filtrer par type"></div>' +
+    '</div><div class="xres" id="xres" hidden></div><div id="xbody"></div></div>' +
+    '<div id="journalZone"></div></div>';
+  mountJournal();
+
+  /* — barre : chips de type (statique, états synchronisés) — */
+  var TYPES = ["Tous", "PDF", "XLSX", "HTML", "PNG", "MD"];
+  $("#xchips").innerHTML = TYPES.map(function (t) {
+    return '<button class="xchip' + (t === STO.ui.type ? " on" : "") + '" type="button" data-t="' + t + '"' +
+      (t === "Tous" ? ' aria-pressed="true"' : ' aria-pressed="false"') + ">" + t + "</button>";
+  }).join("");
+  $("#xq").value = STO.ui.recherche;
+  $("#xsort").value = STO.ui.tri;
+
+  var deb = null;
+  $("#xq").addEventListener("input", function () {
+    STO.ui.recherche = this.value.trim();
+    $("#xqClear").hidden = STO.ui.recherche === "";
+    clearTimeout(deb);
+    deb = setTimeout(function () { finDeFiltrageSiFin(); syncAll(); }, 120);   /* délai d'anticipation 120 ms (spec §4.4) */
+  });
+  $("#xqClear").addEventListener("click", function () {
+    STO.ui.recherche = ""; this.hidden = true; $("#xq").value = "";
+    finFiltrage(); syncAll(); $("#xqClear").focus();
+  });
+  $("#xchips").addEventListener("click", function (e) {
+    var c = e.target.closest(".xchip"); if (!c) return;
+    STO.ui.type = c.dataset.t;
+    $$(".xchip", this).forEach(function (x) {
+      var on = x.dataset.t === STO.ui.type;
+      x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on));
+    });
+    if (STO.ui.type === "Tous" && STO.ui.recherche === "") finFiltrage();   /* chip « Tous » : retour au repli (T09) */
+    syncAll();
+  });
+  $("#xsort").addEventListener("change", function () { STO.ui.tri = this.value; syncAll(); });
+
+  function finDeFiltrageSiFin() {
+    if (!filtrageActif()) { STO.ui.projetOuvert = null; }   /* champ vidé : retour au repli (T08) */
+  }
+  function finFiltrage() { STO.ui.projetOuvert = null; }    /* déclencheur bouton / chip Tous (T07, T09) */
+
+  /* — corps : squelette, erreur, groupes — */
+  function renderSkeleton() {
+    $("#xbody").innerHTML = '<div class="skel" aria-label="Chargement en cours">' +
+      "<div class=\"sk\"></div><div class=\"sk\"></div><div class=\"sk\"></div><div class=\"sk\"></div><div class=\"sk\"></div></div>";
+  }
+  function renderErreur(msg) {
+    $("#xbody").innerHTML = '<div class="xerr"><div class="et">Impossible de charger le stockage</div>' +
+      '<div class="es">' + echap(msg) + " Un outil de nettoyage ne doit jamais afficher des données périmées : rien n\'est mis en cache.</div>" +
+      '<button class="btn btn-p" id="xRetry" type="button">Réessayer</button></div>';
+    $("#xRetry").addEventListener("click", charger);
+  }
+  function charger() {
+    STO.loading = true; STO.error = null; renderSkeleton(); majGlb();
+    Agent.artifacts().then(function (rows) {
+      STO.data = rows; STO.loading = false;
+      /* ordre des projets stable d'un chargement à l'autre ; « Hors projet » toujours en dernier */
+      rows.forEach(function (r) { if (STO.ordre.indexOf(r.projet) === -1) STO.ordre.push(r.projet); });
+      var pos = {}; STO.ordre.forEach(function (p, i) { pos[p] = i; });
+      STO.ordre.sort(function (a, b) { return (a === "Hors projet" ? 1 : 0) - (b === "Hors projet" ? 1 : 0) || pos[a] - pos[b]; });
+      if (STO.ui.projetOuvert && !STO.ordre.some(function (p) { return p === STO.ui.projetOuvert; })) STO.ui.projetOuvert = null;
+      construireGroupes(); syncAll();
+    }).catch(function (e) { STO.loading = false; STO.error = e.message; renderErreur(e.message); });
+  }
+
+  function construireGroupes() {
+    $("#xbody").innerHTML = STO.ordre.map(function (p, i) {
+      return '<section class="xprj" data-p="' + echap(p) + '">' +
+        '<div class="xprjhead' + (p === "Hors projet" ? " hors" : "") + '" id="ph-' + i + '" role="button" tabindex="0" aria-expanded="false" aria-controls="fx-' + i + '" data-i="' + i + '">' + CHEV +
+        '<span class="pname">' + echap(p) + '</span><span class="pmeta" id="pm-' + i + '"></span>' +
+        '<button class="pclean" type="button" data-p="' + echap(p) + '" id="pc-' + i + '">Nettoyer</button></div>' +
+        '<div class="xwrap" id="wrap-' + i + '"><div class="xfiles" id="fx-' + i + '" role="list"></div></div></section>';
+    }).join("");
+
+    $$(".xprjhead").forEach(function (h) {
+      h.addEventListener("click", function (e) {
+        if (e.target.closest(".pclean")) return;   /* « Nettoyer » ne déplie jamais (spec §2.2-règle 6) */
+        bascule(this);
+      });
+      h.addEventListener("keydown", function (e) {
+        if (e.target.closest(".pclean")) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); bascule(this); }
+      });
+    });
+    $("#xbody").addEventListener("click", onClickCorps);
+  }
+
+  /* bascule manuelle : ignorée pendant un filtrage actif (spec §2.2-règle 4) */
+  function bascule(head) {
+    if (filtrageActif()) return;
+    var p = STO.ordre[Number(head.dataset.i)];
+    STO.ui.projetOuvert = (STO.ui.projetOuvert === p) ? null : p;   /* exclusivité par construction */
+    syncAll();
+  }
+
+  function onClickCorps(e) {
+    var del = e.target.closest(".fdel");
+    if (del && !del.disabled) {
+      supprimeVersion(del.dataset.id, Number(del.dataset.v), del.dataset.nom);
+      return;
+    }
+    var cl = e.target.closest(".pclean");
+    if (cl && !cl.disabled) nettoieProjet(cl.dataset.p, cl);
+  }
+
+  /* — synchronisation déclarative : un seul chemin de rendu — */
+  function syncAll() {
+    var data = STO.data || [];
+    var filt = filtrageActif();
+    var totDocs = 0, totOct = 0, totClean = 0;
+
+    STO.ordre.forEach(function (p, i) {
+      var rows = data.filter(function (r) { return r.projet === p; });
+      var res = resultatsDe(data, p);
+      var oct = rows.reduce(function (s, r) { return s + r.octets; }, 0);
+      var clean = rows.filter(function (r) { return nettoyable(data, r); }).reduce(function (s, r) { return s + r.octets; }, 0);
+      totDocs += rows.length; totOct += oct; totClean += clean;
+
+      var head = $("#ph-" + i), wrap = $("#wrap-" + i), files = $("#fx-" + i), meta = $("#pm-" + i), pc = $("#pc-" + i);
+      var deroule = filt ? res.length > 0 : (p === STO.ui.projetOuvert);   /* règle dérivée (spec §4.2) */
+
+      /* en-tête : compteurs en place, projet vidé conservé (règle 8) */
+      var visibles = filt ? res : rows;
+      meta.textContent = rows.length + (rows.length > 1 ? " documents" : " document") + " · " + fmtOctets(oct) + (clean > 0 ? " · dont " + fmtOctets(clean) + " récupérables" : "");
+      pc.disabled = clean <= 0 || pc.dataset.busy === "1";
+      if (pc.dataset.busy !== "1") pc.textContent = "Nettoyer";
+
+      /* dépliage : classe + aria (transition CSS 180 ms si mouvement autorisé) */
+      head.classList.toggle("open", deroule);
+      head.setAttribute("aria-expanded", String(deroule));
+      head.setAttribute("aria-disabled", filt ? "true" : "false");
+      wrap.classList.toggle("open", deroule);
+      files.classList.toggle("openpad", deroule && visibles.length > 0);
+
+      /* lignes : reconstruites si la signature change (contenu, filtre, tri) */
+      var sig = visibles.length + "|" + STO.ui.tri + "|" + STO.ui.recherche + "|" + STO.ui.type + "|" + data.length;
+      if (files.dataset.sig !== sig) {
+        files.dataset.sig = sig;
+        files.innerHTML = triRows(visibles).map(function (r) {
+          var estDerniere = r.version === maxVersion(data, r.projet, r.nom);
+          var bloquee = r.epingle;
+          return '<div class="frow" role="listitem">' +
+            '<span class="fkind">' + r.type + "</span>" +
+            '<span class="fname">' + echap(r.nom) + ' <span class="vtag' + (estDerniere ? " last" : "") + '">v' + r.version + "</span>" + (r.epingle ? PIN : "") + "</span>" +
+            '<span class="fmeta">' + fmtOctets(r.octets) + " · " + dfr(r.date) + "</span>" +
+            '<button class="fdel" type="button" data-id="' + r.id + '" data-v="' + r.version + '" data-nom="' + echap(r.nom) + '"' + (bloquee ? " disabled title=\"Version épinglée — non supprimable\"" : ' title="Supprimer cette version" aria-label="Supprimer ' + echap(r.nom) + " v" + r.version + '"') + ">" + TRASH + "</button></div>";
+        }).join("") || (filt ? "" : '<div class="xempty">Aucune version — ce projet a été entièrement nettoyé.</div>');
+      }
+    });
+
+    /* bandeau de résultats (T06) */
+    var xr = $("#xres");
+    if (filt) {
+      var n = data.filter(function (r) { return (!STO.ui.recherche || norm(r.nom).indexOf(norm(STO.ui.recherche)) > -1) && (STO.ui.type === "Tous" || r.type === STO.ui.type); }).length;
+      xr.hidden = false;
+      xr.innerHTML = (n > 0 ? "<b>" + n + "</b> fichier" + (n > 1 ? "s" : "") + " correspondent" : "Aucun fichier ne correspond") +
+        " — <button type=\"button\" id=\"xEfface\">effacer les filtres</button>";
+      $("#xEfface").addEventListener("click", function () {
+        STO.ui.recherche = ""; STO.ui.type = "Tous"; finFiltrage();
+        $("#xq").value = ""; $("#xqClear").hidden = true;
+        $$(".xchip").forEach(function (x) {
+          var on = x.dataset.t === "Tous";
+          x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on));
+        });
+        syncAll(); $("#xEfface").focus();   /* le focus reste sur le déclencheur (spec §6) */
+      });
+    } else xr.hidden = true;
+
+    /* groupes sans résultats : masqués pendant le filtrage (règle 3) */
+    $$(".xprj").forEach(function (sec) {
+      var i = STO.ordre.indexOf(sec.dataset.p);
+      var res = resultatsDe(data, sec.dataset.p);
+      sec.style.display = (filt && res.length === 0) ? "none" : "";
+    });
+
+    majGlb(totDocs, totOct, totClean);
+  }
+
+  function majGlb(d, o, c) {
+    var g = $("#glb"); if (!g) return;
+    if (STO.loading) { g.innerHTML = '<div class="gtitle">Documents générés</div><div class="gmeta">Chargement de l\'inventaire…</div>'; return; }
+    if (STO.error) { g.innerHTML = '<div class="gtitle">Documents générés</div><div class="gmeta">Inventaire indisponible.</div>'; return; }
+    g.innerHTML = '<div class="gtop"><div><div class="gtitle">Documents générés</div>' +
+      '<div class="gmeta"><b>' + d + "</b> versions · <b>" + fmtOctets(o) + "</b> au total · dont <b>" + fmtOctets(c) + "</b> récupérables par nettoyage</div>" +
+      (STO.freed.n > 0 ? '<div class="gdone">✓ ' + STO.freed.n + " fichier" + (STO.freed.n > 1 ? "s" : "") + " supprimé" + (STO.freed.n > 1 ? "s" : "") + " · " + fmtOctets(STO.freed.octets) + " libérés (mesuré)</div>" : "") +
+      '</div><div class="hint" style="margin:0;max-width:300px">Le nettoyage s\'applique projet par projet. Chaque suppression est annulable pendant 7 secondes.</div></div>';
+  }
+
+  /* — opérations destructrices (spec §4.5) — */
+  function rechargeApresMutation() {
+    return Agent.artifacts().then(function (rows) {
+      STO.data = rows;
+      rows.forEach(function (r) { if (STO.ordre.indexOf(r.projet) === -1) STO.ordre.push(r.projet); });
+      syncAll();   /* l'état d'interface (ouvert/recherche/tri) est préservé (T19) */
+    });
+  }
+  function supprimeVersion(id, v, nom) {
+    Agent.deleteVersion(id, v).then(function (res) {
+      STO.freed.n += 1; STO.freed.octets += res.octets;
+      toast("<b>« " + echap(nom) + " » (v" + v + ")</b> supprimée · " + fmtOctets(res.octets) + " libérés", {
+        undo: function () {
+          return Agent.undo(res.jeton).then(function (r) {
+            STO.freed.n -= r.restaurees;
+            STO.freed.octets -= res.octets;
+            return rechargeApresMutation().then(function () { toast(r.restaurees + " version restaurée."); });
+          });
+        }
+      });
+      rechargeApresMutation();
+    }).catch(function (e) {
+      /* échec par fichier : message ciblé, ligne conservée (T16) */
+      toast(e.code === 409 ? "Version épinglée — la suppression est refusée par l'agent." : "Échec : « " + echap(nom) + " » n'a pas été supprimée. " + echap(e.message || ""));
+    });
+  }
+  function nettoieProjet(p, btn) {
+    btn.dataset.busy = "1"; btn.disabled = true; btn.textContent = "Nettoyage…";
+    Agent.clean(p).then(function (res) {
+      delete btn.dataset.busy;
+      if (res.supprimes === 0) { toast("Rien à nettoyer dans « " + echap(p) + " » — les dernières versions sont conservées."); syncAll(); return; }
+      STO.freed.n += res.supprimes; STO.freed.octets += res.octetsLibres;
+      toast("<b>" + res.supprimes + " versions</b> supprimées dans « " + echap(p) + " » · " + fmtOctets(res.octetsLibres) + " libérés", {
+        undo: function () {
+          return Agent.undo(res.jeton).then(function (r) {
+            STO.freed.n -= r.restaurees; STO.freed.octets -= res.octetsLibres;
+            return rechargeApresMutation().then(function () { toast(r.restaurees + " versions restaurées."); });
+          });
+        }
+      });
+      rechargeApresMutation();
+    }).catch(function (e) {
+      delete btn.dataset.busy; btn.textContent = "Nettoyer";
+      toast("Le nettoyage de « " + echap(p) + " » a échoué. " + echap(e.message || ""));
+      syncAll();
+    });
+  }
+
+  charger();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ROUTEUR — #/parametres · #/stockage?projet=… (lien profond)
+   Chaque entrée sur Stockage recharge l'inventaire (T18) ; Paramètres
+   n'interroge jamais /api/artifacts (T17).
+   ══════════════════════════════════════════════════════════════════ */
+var teardown = [];
+function route() {
+  teardown.forEach(function (f) { try { f(); } catch (e) {} });
+  teardown = [];
+  var h = location.hash || "#/parametres";
+  var m = h.match(/^#\/(\w+)(?:\?(.*))?$/);
+  var name = m ? m[1] : "parametres";
+  var query = {};
+  if (m && m[2]) m[2].split("&").forEach(function (kv) { var p = kv.split("="); query[p[0]] = p[1] || ""; });
+  $$(".rn").forEach(function (a) { a.classList.toggle("on", a.dataset.nav === name); });
+  try { window.scrollTo(0, 0); } catch (e) {}
+  if (name === "stockage") pageStockage(query);
+  else pageParametres(teardown);
+}
+
+/* — console démo : injections — */
+function wireDemo() {
+  var off = $("#injOffline"), uf = $("#injUpdFail"), df = $("#injDelFail"), rf = $("#injRestartFail");
+  off.addEventListener("click", function () {
+    Agent.inject.offline = !Agent.inject.offline;
+    off.classList.toggle("on", Agent.inject.offline);
+    if (Agent.inject.offline) WS.drop(); else WS.restart();
+    toast(Agent.inject.offline ? "Agent simulé hors ligne." : "Agent simulé de retour.");
+  });
+  uf.addEventListener("click", function () { Agent.inject.updFail = !Agent.inject.updFail; uf.classList.toggle("on", Agent.inject.updFail); });
+  df.addEventListener("click", function () { Agent.inject.delFail = !Agent.inject.delFail; df.classList.toggle("on", Agent.inject.delFail); });
+  rf.addEventListener("click", function () { Agent.inject.restartFail = !Agent.inject.restartFail; rf.classList.toggle("on", Agent.inject.restartFail); });
+  $("#injWsDrop").addEventListener("click", function () { WS.drop(); });
+}
+
+WS.start();
+wireDemo();
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>

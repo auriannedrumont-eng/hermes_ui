@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Paramètres · Système (proposition)</title>
+<style>
+  /* Tokens & composants : copiés de design/maquette-parametres-v5.html (référence visuelle du repo) */
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --hermes-text:oklch(0.55 0.16 42);
+    --hermes-strong:oklch(0.55 0.16 42);
+    --warning:oklch(0.55 0.12 62);
+    --warning-soft:oklch(0.55 0.12 62 / 0.12);
+    --destructive:oklch(0.577 0.245 27.325);
+    --success:oklch(0.52 0.115 163);
+    --r-sm:8px;--r-md:10px;--r-lg:12px;--r-xl:14px;--r-full:999px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  *:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  html,body{height:100%}
+  body{font-family:"Geist",system-ui,-apple-system,sans-serif;background:var(--background);color:var(--foreground);font-size:15px;line-height:1.5;overflow:hidden}
+  button{font-family:inherit}
+  [hidden]{display:none!important}
+
+  /* ═══ Scène : application derrière le volet ═══ */
+  .app{position:fixed;inset:0;display:flex}
+  .ghost{flex:1;min-width:0;display:flex;gap:12px;padding:16px;opacity:.5;filter:grayscale(.3) blur(.3px);overflow:hidden}
+  .g-side{flex:0 0 240px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);padding:12px;display:flex;flex-direction:column;gap:8px}
+  .side-top{display:flex;align-items:center;gap:8px;padding:4px 6px}
+  .side-top .logo{width:22px;height:22px;border-radius:var(--r-sm);background:var(--hermes);color:var(--hermes-foreground);display:grid;place-items:center;flex:none;font-size:11px;font-weight:700}
+  .side-top .name{font-size:12.5px;font-weight:700;flex:1}
+  .side-search{border:1px solid var(--border);border-radius:var(--r-md);padding:6px 9px;font-size:11px;color:var(--muted-foreground)}
+  .side-lines{flex:1;display:flex;flex-direction:column;gap:8px;padding:6px}
+  .side-lines i{display:block;height:8px;border-radius:4px;background:var(--muted)}
+  .w1{width:62%}.w2{width:40%}.w3{width:74%}.w4{width:52%}
+  .side-lines .gap{height:10px}
+  .g-main{flex:1;display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);padding:16px;min-width:0}
+  .g-bubble{height:36px;border-radius:var(--r-lg);background:var(--muted);width:58%}
+  .g-bubble.b{align-self:flex-end;background:var(--hermes-soft);width:44%}
+  .g-composer{margin-top:auto;height:40px;border-radius:var(--r-lg);border:1px solid var(--border)}
+
+  /* ═══ Le volet ═══ */
+  .panel{order:-1;flex:0 0 860px;max-width:100%;display:flex;background:var(--card);border-right:1px solid var(--border);transition:margin-left .2s cubic-bezier(.32,.72,.24,1)}
+  .app.closed .panel{margin-left:-880px}
+  .rail{flex:0 0 208px;background:var(--background);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px 12px;gap:2px;min-height:0}
+  .rail-top{display:flex;align-items:center;gap:8px;padding:2px 10px 16px}
+  .rail-top .logo{width:26px;height:26px;border-radius:var(--r-sm);background:var(--hermes);color:var(--hermes-foreground);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700}
+  .rail-top b{font-size:14px;letter-spacing:-.01em}
+  .rail-nav{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;min-height:0}
+  .rn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-md);border:none;background:none;font-size:12.5px;color:var(--muted-foreground);cursor:pointer;text-align:left;transition:background .15s,color .15s;width:100%}
+  .rn:hover{background:var(--muted);color:var(--foreground)}
+  .rn.on{background:var(--hermes-soft);color:var(--hermes-text);font-weight:600}
+  .rn svg{flex:none}
+  .rn .rdot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--warning);flex:none}
+  .rail-foot{padding:12px 10px 2px;font-size:11px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .main-head{flex:none;height:52px;display:flex;align-items:center;justify-content:flex-end;padding:0 18px;border-bottom:1px solid var(--border)}
+  .x-btn{width:30px;height:32px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--card);display:grid;place-items:center;cursor:pointer;color:var(--muted-foreground);transition:color .15s,border-color .15s}
+  .x-btn:hover{color:var(--destructive);border-color:var(--destructive)}
+  .main-scroll{flex:1;overflow-y:auto;padding:26px 34px 70px}
+  .main-scroll::-webkit-scrollbar,.rail-nav::-webkit-scrollbar{width:8px}
+  .main-scroll::-webkit-scrollbar-thumb,.rail-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:var(--r-full)}
+
+  .pane h1{font-size:19px;font-weight:700;letter-spacing:-.015em}
+  .psub{font-size:12.5px;color:var(--muted-foreground);margin-top:4px;margin-bottom:22px;max-width:520px;line-height:1.5}
+  .grp{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground);margin:28px 0 4px;display:flex;align-items:baseline;gap:8px}
+  .grp .grpsub{font-size:11px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted-foreground);opacity:.85}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:13px 0;border-bottom:1px solid var(--border)}
+  .rt{min-width:0;flex:1;max-width:380px}
+  .rt .lbl{font-size:14px;font-weight:600}
+  .rt .desc{font-size:12.5px;color:var(--muted-foreground);line-height:1.45;margin-top:2px}
+  .rc{flex:none;display:flex;align-items:center;gap:8px}
+
+  .st{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap}
+  .st i{width:8px;height:8px;border-radius:50%;flex:none}
+  .st.ok i{background:var(--success)}
+  .st.warn{color:var(--warning)} .st.warn i{background:var(--warning)}
+  .st.err{color:var(--destructive)} .st.err i{background:var(--destructive)}
+  .st.off{color:var(--muted-foreground)} .st.off i{background:var(--border)}
+
+  .btn{border:1px solid var(--border);background:var(--card);border-radius:var(--r-md);padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s}
+  .btn:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .btn-p{background:var(--hermes-strong);color:var(--hermes-foreground);border:none}
+  .btn-p:hover{opacity:.9;color:var(--hermes-foreground)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .linkbtn{border:none;background:none;color:var(--hermes-text);font-size:12.5px;font-weight:600;cursor:pointer;padding:0}
+  .linkbtn:hover{text-decoration:underline}
+  .tin{width:100%;border:1px solid var(--border);border-radius:var(--r-md);padding:8px 11px;font-size:12.5px;background:var(--card);color:var(--foreground)}
+  .tin:focus{border-color:var(--hermes);outline:none}
+  .tin::placeholder{color:var(--muted-foreground)}
+  .hint{font-size:11px;color:var(--muted-foreground);margin-top:8px;line-height:1.5}
+  .adv-t{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted-foreground);background:none;border:none;cursor:pointer;padding:6px 0}
+  .adv-t:hover{color:var(--foreground)}
+  .adv-t .chev{transition:transform .15s}
+  .adv-t.open .chev{transform:rotate(180deg)}
+  .adv{margin-top:6px}
+
+  .card{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--card);padding:14px 16px;margin-bottom:10px}
+
+  /* — blocs de la proposition — */
+  .uhead{display:flex;align-items:center;justify-content:space-between;gap:24px}
+  .ut{min-width:0;flex:1}
+  .utitle{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .utitle .st{font-size:12.5px}
+  .usub{font-size:12.5px;color:var(--muted-foreground);line-height:1.5;margin-top:3px;max-width:480px}
+  .usub b{color:var(--foreground);font-weight:600}
+
+  .steps{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .step{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--muted-foreground)}
+  .step i{width:17px;height:17px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;flex:none;font-style:normal;font-size:9px;line-height:1}
+  .step.done{color:var(--foreground)}
+  .step.done i{background:var(--success);border-color:var(--success);color:#fff}
+  .step.done i::after{content:"✓"}
+  .step.now{color:var(--hermes-text)}
+  .step.now i{border-color:var(--hermes);color:var(--hermes-text);animation:pulse 1.3s infinite}
+  .step.now i::after{content:"•"}
+  .sep{width:26px;height:2px;background:var(--border);border-radius:1px;flex:none}
+  .sep.done{background:var(--success)}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 oklch(0.63 0.17 42 / .35)}50%{box-shadow:0 0 0 5px oklch(0.63 0.17 42 / 0)}}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--hermes-soft);border-top-color:var(--hermes);border-radius:50%;animation:rot .8s linear infinite;flex:none}
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  .log{margin-top:10px;background:var(--background);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;overflow-x:auto}
+  .log pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.7;color:var(--muted-foreground);white-space:pre-wrap}
+
+  .trow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+  .trow:last-of-type{border-bottom:none}
+  .trow>span{color:var(--muted-foreground)}
+  .trow b{font-weight:600}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+
+  .fld{display:block;margin-top:10px}
+  .fld>span{display:block;font-size:11px;color:var(--muted-foreground);margin-bottom:5px;font-weight:600}
+  .mini{font-size:11px;font-weight:600;padding:4px 11px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--card);cursor:pointer;color:var(--foreground);transition:border-color .15s,color .15s;flex:none}
+  .mini:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .dochead{display:flex;align-items:center;justify-content:space-between;gap:28px}
+  /* — Rangement : explorateur de documents (liste intégrale, déroulante) — */
+  .xplr{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--card);margin-top:2px}
+  .xbar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px 0;background:var(--card);border-bottom:1px solid var(--border)}
+  .xsearch{display:flex;align-items:center;gap:7px;flex:1;min-width:170px;border:1px solid var(--border);border-radius:var(--r-md);padding:6px 10px;color:var(--muted-foreground);background:var(--background)}
+  .xsearch input{border:none;background:none;outline:none;flex:1;min-width:0;font-size:12.5px;color:var(--foreground);font-family:inherit}
+  .xsearch input::placeholder{color:var(--muted-foreground)}
+  .xsel{border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);font-size:12px;font-weight:600;color:var(--foreground);padding:6px 8px;font-family:inherit;cursor:pointer}
+  .xchips{width:100%;display:flex;gap:5px;flex-wrap:wrap;padding:2px 0 10px}
+  .xchip{border:1px solid var(--border);background:var(--card);border-radius:var(--r-full);padding:3px 11px;font-size:11px;font-weight:600;color:var(--muted-foreground);cursor:pointer;transition:all .15s}
+  .xchip:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .xchip.on{background:var(--hermes-soft);border-color:transparent;color:var(--hermes-text)}
+  .xprj{border-top:1px solid var(--border)}
+  .xprjhead{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;background:var(--card)}
+  .xprjhead:hover{background:var(--muted)}
+  .xprjhead .pchev{flex:none;color:var(--muted-foreground);transition:transform .15s;display:grid;place-items:center;width:12px}
+  .xprjhead.open .pchev{transform:rotate(90deg)}
+  .xprjhead .pname{font-weight:700;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .xprjhead.hors .pname{color:var(--muted-foreground);font-weight:600}
+  .xprjhead .pmeta{font-size:11.5px;color:var(--muted-foreground);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .xfiles{padding:0 6px 10px 16px}
+  .xres{padding:9px 14px;font-size:11.5px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+  .xres button{border:none;background:none;color:var(--hermes-text);font-weight:600;font-size:11.5px;cursor:pointer;padding:0;font-family:inherit}
+  .xres button:hover{text-decoration:underline}
+  .frow{display:flex;align-items:center;gap:9px;padding:6px;border-radius:var(--r-sm);font-size:12px}
+  .frow:hover{background:var(--muted)}
+  .fkind{width:34px;height:22px;border-radius:4px;background:var(--muted);color:var(--muted-foreground);display:grid;place-items:center;font-size:8.5px;font-weight:700;letter-spacing:.03em;flex:none}
+  .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;display:flex;align-items:center;gap:6px}
+  .fpin{color:var(--warning);flex:none;display:inline-flex}
+  .fmeta{color:var(--muted-foreground);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}
+  .fdel{flex:none;width:24px;height:24px;border:none;background:none;border-radius:var(--r-sm);cursor:pointer;color:var(--muted-foreground);display:grid;place-items:center;transition:color .15s,background .15s}
+  .fdel:hover{color:var(--destructive);background:oklch(0.577 0.245 27.325 / 0.08)}
+  .fdel:disabled{opacity:.3;cursor:not-allowed}
+  .fdel:disabled:hover{color:var(--muted-foreground);background:none}
+
+  /* — barre de démo (n'existera pas dans le produit) — */
+  .demo{position:fixed;right:14px;bottom:14px;width:284px;z-index:80;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 12px 32px rgba(28,20,12,.14);padding:12px 14px}
+  .demo-t{font-size:12px;font-weight:700}
+  .demo-t span{font-weight:500;color:var(--muted-foreground)}
+  .demo-l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);margin:10px 0 5px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{border:1px solid var(--border);background:var(--card);border-radius:var(--r-full);padding:3px 10px;font-size:11px;font-weight:600;color:var(--muted-foreground);cursor:pointer;transition:all .15s}
+  .chip:hover{border-color:var(--hermes);color:var(--hermes-text)}
+  .chip.on{background:var(--hermes-soft);border-color:transparent;color:var(--hermes-text)}
+  .maq-tag{position:fixed;top:10px;left:10px;z-index:90;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--hermes-text);background:var(--hermes-soft);padding:4px 10px;border-radius:var(--r-full);pointer-events:none}
+
+  /* — responsive : le volet devient une page verticale sur petit écran — */
+  @media (max-width:1080px){.ghost{display:none}.panel{flex:1 1 auto;max-width:100%}}
+  @media (max-width:720px){
+    body{overflow:auto}
+    .app{position:static;height:auto}
+    .panel{flex-direction:column;width:100%;transition:none}
+    .app.closed .panel{margin-left:0;display:none}
+    .rail{flex:none;flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--border);padding:10px 10px 8px}
+    .rail-top,.rail-foot{display:none}
+    .rn{white-space:nowrap;width:auto;flex:none}
+    .rn .rdot{margin-left:2px}
+    .main-head{height:44px}
+    .main-scroll{padding:18px 16px 60px}
+    .uhead{flex-direction:column;align-items:flex-start;gap:10px}
+    .dochead{flex-direction:column;align-items:flex-start;gap:8px}
+    .row{flex-direction:column;align-items:flex-start;gap:8px}
+    .frow{flex-wrap:wrap}
+    .xbar{padding:8px 8px 0}
+    .xfiles{padding:0 4px 8px 10px}
+    .demo{position:static;width:auto;margin:12px;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div class="maq-tag">Maquette · proposition</div>
+
+<div class="app" id="app">
+  <!-- Application derrière (grisée) : contexte visuel -->
+  <div class="ghost" aria-hidden="true">
+    <div class="g-side">
+      <div class="side-top"><span class="logo">H</span><span class="name">Hermes</span></div>
+      <div class="side-search">Rechercher…</div>
+      <div class="side-lines">
+        <i class="w1"></i><i class="w3"></i><i class="w2"></i><i class="w4"></i>
+        <div class="gap"></div><i class="w2"></i><i class="w3"></i><i class="w1"></i>
+      </div>
+    </div>
+    <div class="g-main">
+      <div class="g-bubble"></div><div class="g-bubble b"></div><div class="g-bubble" style="width:40%"></div>
+      <div class="g-composer"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Le volet Paramètres ═══ -->
+  <div class="panel">
+    <nav class="rail">
+      <div class="rail-top"><span class="logo">H</span><b>Paramètres</b></div>
+      <div class="rail-nav">
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Interface</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>Modèles</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>Modes de chat</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Fournisseurs</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 9-9"/><path d="m17 4 3 3"/></svg>Clés de services</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18"/></svg>Chats web</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7a4 4 0 1 0-4.9 4.9L3 18l3 3 6.1-6.1A4 4 0 0 0 17 11l-3-4z"/></svg>Outils &amp; extensions</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></svg>Hermes</button>
+        <button class="rn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>Profils</button>
+        <button class="rn on" type="button" id="navSys"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>Système<span class="rdot" id="navDot" hidden></span></button>
+      </div>
+      <div class="rail-foot">Modifications non appliquées : 0</div>
+    </nav>
+
+    <div class="main">
+      <div class="main-head">
+        <button class="x-btn" type="button" id="xBtn" title="Fermer les paramètres" aria-label="Fermer les paramètres">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="main-scroll">
+        <section class="pane on">
+          <h1>Système</h1>
+          <p class="psub">L'état de l'application d'un coup d'œil : mise à jour, agent Hermes, place occupée. Quand tout va bien, il n'y a rien à faire.</p>
+
+          <!-- ═══ Zone 1 — Mise à jour (l'action principale de la page) ═══ -->
+          <div class="card" id="updCard">
+
+            <!-- état : à jour (défaut — option 1 : verdict écrit par le lanceur au démarrage) -->
+            <div class="ust" id="u-ok">
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="st ok"><i></i>À jour</span></div>
+                  <div class="usub">Version <b>0.2.1</b> · vérifiée au démarrage de l'application, il y a <b>2 h</b>.</div>
+                </div>
+                <button class="btn btn-p" type="button" data-u="encours">Mettre à jour</button>
+              </div>
+            </div>
+
+            <!-- état : mise à jour disponible -->
+            <div class="ust" id="u-dispo" hidden>
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="st warn"><i></i>Mise à jour disponible</span></div>
+                  <div class="usub">Une version plus récente a été repérée sur GitHub. Installez-la quand vous voulez — l'application redémarre toute seule à la fin.</div>
+                </div>
+                <button class="btn btn-p" type="button" data-u="encours">Mettre à jour</button>
+              </div>
+            </div>
+
+            <!-- état : GitHub injoignable au dernier démarrage -->
+            <div class="ust" id="u-off" hidden>
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="st off"><i></i>Vérification impossible</span></div>
+                  <div class="usub">GitHub était injoignable au dernier démarrage — la version 0.2.1 reste installée.</div>
+                </div>
+                <button class="btn" type="button" data-u="encours">Réessayer</button>
+              </div>
+            </div>
+
+            <!-- état : en cours (étapes nommées, journal dans le repli) -->
+            <div class="ust" id="u-encours" hidden>
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="spin" aria-hidden="true"></span>Mise à jour en cours…</div>
+                  <div class="usub">Reconstruction de l'interface — une à deux minutes.</div>
+                </div>
+              </div>
+              <div class="steps" role="status">
+                <span class="step done"><i></i>Téléchargement</span><span class="sep done"></span>
+                <span class="step now"><i></i>Installation</span><span class="sep"></span>
+                <span class="step"><i></i>Relance</span>
+              </div>
+              <button class="adv-t" type="button" data-adv="updLog">Détails techniques <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="log adv" id="updLog" hidden><pre>[19/11 14:02] Demande déposée depuis l'interface — attente du lanceur…
+[19/11 14:02] MAJ DEBUT - demande ramassee par le lanceur
+[19/11 14:02] consultation de GitHub...
+[19/11 14:02] 3 fichiers mis a jour — reconstruction de l'interface...
+[19/11 14:03] arret des services...</pre></div>
+            </div>
+
+            <!-- état : terminée (rechargement automatique — compte à rebours) -->
+            <div class="ust" id="u-term" hidden>
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="st ok"><i></i>Mise à jour terminée</span></div>
+                  <div class="usub">La nouvelle interface est prête — la page se recharge automatiquement dans <b><span id="cd">3</span>&nbsp;s</b>.</div>
+                </div>
+                <button class="btn btn-p" type="button" id="reloadNow">Recharger maintenant</button>
+              </div>
+            </div>
+
+            <!-- état : bloquée (une ligne, un bouton — le reste au repli) -->
+            <div class="ust" id="u-bloq" hidden>
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="st warn"><i></i>La mise à jour semble bloquée</span></div>
+                  <div class="usub">Aucune nouvelle depuis 45 s — une fenêtre GitHub demande peut-être votre accord (regardez la barre des tâches).</div>
+                </div>
+                <button class="btn" type="button" data-u="encours">Relancer</button>
+              </div>
+              <button class="adv-t" type="button" data-adv="bloqLog">Voir le journal <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="log adv" id="bloqLog" hidden><pre>[19/11 14:02] MAJ DEBUT - demande ramassee par le lanceur
+[19/11 14:02] consultation de GitHub...
+(plus rien depuis 45 s)</pre></div>
+            </div>
+
+            <!-- état : échec -->
+            <div class="ust" id="u-echec" hidden>
+              <div class="uhead">
+                <div class="ut">
+                  <div class="utitle"><span class="st err"><i></i>La mise à jour n'a pas abouti</span></div>
+                  <div class="usub">Vos données sont intactes — l'application continue avec la version installée. Le détail complet est dans le journal.</div>
+                </div>
+                <button class="btn" type="button" data-u="encours">Réessayer</button>
+              </div>
+              <button class="adv-t" type="button" data-adv="echecLog">Voir le journal <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="log adv" id="echecLog" hidden><pre>[19/11 14:03] MAJ ERREUR - git pull : authentication failed</pre></div>
+            </div>
+          </div>
+
+          <!-- ═══ Zone 2 — Agent Hermes (une ligne d'état ; l'exception au repli) ═══ -->
+          <div class="card">
+            <div class="uhead">
+              <div class="ut">
+                <div class="utitle" id="ag-title"><span class="st ok"><i></i>Agent connecté</span></div>
+                <div class="usub" id="ag-sub">Hermes répond avec ses propres outils — fichiers, terminal, web.</div>
+              </div>
+              <button class="linkbtn" type="button" id="ag-disc" style="color:var(--muted-foreground)">Déconnecter</button>
+            </div>
+            <button class="adv-t" type="button" data-adv="ag-adv" id="ag-adv-t">Installation spéciale <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="adv" id="ag-adv" hidden>
+              <label class="fld"><span>Adresse de l'agent</span>
+                <input class="tin" type="text" placeholder="exemple : ws://192.168.1.20:9120/api/ws" aria-label="Adresse de l'agent"></label>
+              <label class="fld"><span>Code d'accès</span>
+                <input class="tin" type="password" placeholder="laisser vide si aucun" aria-label="Code d'accès de l'agent"></label>
+              <div class="formrow" style="margin-top:10px"><button class="btn btn-p" type="button">Connecter</button></div>
+              <p class="hint">Pour brancher l'agent d'une autre machine (ou sur un autre port). En installation normale, c'est inutile : lancez l'agent et la connexion se fait toute seule.</p>
+              <p class="hint">Les réglages du moteur — mises à jour de l'agent, exécution des commandes, journaux — s'activeront avec lui.</p>
+            </div>
+          </div>
+
+          <!-- ═══ Zone 3 — Rangement : explorateur de documents, liste intégrale ═══ -->
+          <div class="grp">Rangement</div>
+          <div class="dochead">
+            <div class="rt">
+              <div class="lbl">Documents générés</div>
+              <div class="desc">Chaque ligne est une version de fichier produite par Hermes dans vos conversations. Dépliez un projet pour parcourir toutes ses versions — suppression à l'unité, ou nettoyage d'un coup des anciennes versions.</div>
+            </div>
+            <div class="rc">
+              <span class="roval" style="font-size:12.5px;font-weight:600;white-space:nowrap"><span id="docCount">–</span>&nbsp;doc&nbsp;·&nbsp;<span id="docTot">–</span></span>
+              <button class="btn" type="button" id="cleanAll">Tout nettoyer</button>
+            </div>
+          </div>
+
+          <!-- explorateur : la liste se déroule intégralement — ni découpe ni hauteur plafonnée -->
+          <div class="xplr" id="xplr">
+            <div class="xbar">
+              <label class="xsearch"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="xq" type="text" placeholder="Rechercher un fichier…" aria-label="Rechercher un fichier"></label>
+              <select class="xsel" id="xsort" aria-label="Trier les fichiers">
+                <option value="size">Tri : taille</option>
+                <option value="date">Tri : date</option>
+                <option value="name">Tri : nom</option>
+              </select>
+              <div class="xchips" id="xchips"></div>
+            </div>
+            <div id="xprojects"></div>
+            <p class="xres" id="xres" hidden></p>
+          </div>
+
+          <p class="hint">La corbeille supprime cette version précise. « Nettoyer » retire d'un coup toutes les anciennes versions du projet — la dernière version de chaque document et les documents épinglés sont toujours conservés.</p>
+          <p class="hint" id="docDone" hidden style="color:var(--success);font-weight:600"></p>
+
+          <!-- ═══ Détails techniques (support — replié par défaut) ═══ -->
+          <div class="grp">Détails techniques <span class="grpsub">support &amp; diagnostic — jamais nécessaire au quotidien</span></div>
+          <button class="adv-t" type="button" data-adv="techAdv" id="tech-t">Déplier <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="adv" id="techAdv" hidden>
+            <div class="trow"><span>Version du service</span><b>v1.0.0</b></div>
+            <div class="trow"><span>Version de l'interface</span><b>0.2.1</b></div>
+            <div class="trow"><span>Révision (git)</span><b class="mono">7d0754a · 19 nov. 2026</b></div>
+            <div class="trow"><span>Aperçus de documents</span><b><span class="st ok"><i></i>composant présent</span></b></div>
+            <div class="trow"><span>Fichiers temporaires de rendu</span><b>34&nbsp;Mo · purgés à chaque démarrage</b></div>
+            <div class="log"><pre>[19/11 14:02] MAJ DEBUT - demande ramassee par le lanceur
+[19/11 14:02] consultation de GitHub...
+[19/11 14:03] MAJ OK - pile relancee, rafraichissez l'onglet Hermes (F5).</pre></div>
+          </div>
+
+          <!-- /ZONES -->
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Barre de démo — pour la revue seulement, absente du produit ═══ -->
+<div class="demo" role="group" aria-label="Démo des états (maquette)">
+  <div class="demo-t">Tester les états <span>· barre absente du produit</span></div>
+  <div class="demo-l">Carte « Mise à jour »</div>
+  <div class="chips" id="chipsUpd">
+    <button class="chip on" type="button" data-uset="ok">À jour</button>
+    <button class="chip" type="button" data-uset="dispo">Disponible</button>
+    <button class="chip" type="button" data-uset="off">GitHub injoignable</button>
+    <button class="chip" type="button" data-uset="encours">En cours</button>
+    <button class="chip" type="button" data-uset="term">Terminée</button>
+    <button class="chip" type="button" data-uset="bloq">Bloquée</button>
+    <button class="chip" type="button" data-uset="echec">Échec</button>
+  </div>
+  <div class="demo-l">Carte « Agent Hermes »</div>
+  <div class="chips" id="chipsAg">
+    <button class="chip on" type="button" data-aset="connecte">Connecté</button>
+    <button class="chip" type="button" data-aset="cles">Non détecté · clés actives</button>
+    <button class="chip" type="button" data-aset="aucune">Non détecté · aucune clé</button>
+  </div>
+  <div class="demo-l">Volet</div>
+  <div class="chips">
+    <button class="chip" type="button" id="t-adv">Installation spéciale</button>
+    <button class="chip" type="button" id="t-close">Fermer / ouvrir</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* — États de la carte Mise à jour — */
+  var U = ["ok", "dispo", "off", "encours", "term", "bloq", "echec"];
+  var cdTimer = null, runTimer = null;
+
+  function setU(state) {
+    U.forEach(function (s) { $("u-" + s).hidden = s !== state; });
+    document.querySelectorAll("#chipsUpd .chip").forEach(function (c) {
+      c.classList.toggle("on", c.dataset.uset === state);
+    });
+    /* point d'alerte sur l'onglet Système du rail : uniquement si une mise à jour attend */
+    $("navDot").hidden = state !== "dispo";
+    if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+    if (runTimer) { clearTimeout(runTimer); runTimer = null; }
+    if (state === "encours") {
+      runTimer = setTimeout(function () { setU("term"); }, 3500); /* démo : 3,5 s au lieu de 1-2 min */
+    }
+    if (state === "term") {
+      var n = 3;
+      $("cd").textContent = String(n);
+      cdTimer = setInterval(function () {
+        n -= 1;
+        if (n <= 0) { finish(); return; }
+        $("cd").textContent = String(n);
+      }, 1000);
+    }
+  }
+
+  /* Fin du compte à rebours : rechargement simulé → retour à l'état « À jour », version neuve */
+  function finish() {
+    if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+    var ok = $("u-ok");
+    ok.querySelector(".usub").innerHTML =
+      "Version <b>0.3.0</b> · vérifiée à l’instant.";
+    setU("ok");
+  }
+
+  /* — États de la carte Agent — */
+  var AG = {
+    connecte: { tone: "ok", label: "Agent connecté",
+      sub: "Hermes répond avec ses propres outils — fichiers, terminal, web.", disc: true },
+    cles: { tone: "warn", label: "Agent non détecté",
+      sub: "Hermes répond via vos clés fournisseurs (2 actives). Lancez l’agent Hermes pour utiliser ses outils.", disc: false },
+    aucune: { tone: "off", label: "Agent non détecté",
+      sub: "Ajoutez une clé de service (onglet Clés de services) ou lancez l’agent Hermes pour recevoir des réponses.", disc: false }
+  };
+  function setA(state) {
+    var a = AG[state];
+    $("ag-title").innerHTML =
+      '<span class="st ' + a.tone + '"><i></i>' + a.label + "</span>";
+    $("ag-sub").textContent = a.sub;
+    $("ag-disc").style.display = a.disc ? "" : "none";
+    document.querySelectorAll("#chipsAg .chip").forEach(function (c) {
+      c.classList.toggle("on", c.dataset.aset === state);
+    });
+  }
+
+  /* — Câblage — */
+  document.querySelectorAll("[data-u]").forEach(function (b) {
+    b.addEventListener("click", function () { setU(b.dataset.u); });
+  });
+  document.querySelectorAll("#chipsUpd .chip").forEach(function (c) {
+    c.addEventListener("click", function () { setU(c.dataset.uset); });
+  });
+  document.querySelectorAll("#chipsAg .chip").forEach(function (c) {
+    c.addEventListener("click", function () { setA(c.dataset.aset); });
+  });
+  document.querySelectorAll("[data-adv]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var el = $(b.dataset.adv);
+      el.hidden = !el.hidden;
+      b.classList.toggle("open", !el.hidden);
+    });
+  });
+  $("reloadNow").addEventListener("click", finish);
+
+  /* — Documents générés : explorateur intégral, suppression à l'unité (démo) —
+     XDATA reflète la table artifacts : chaque document (clé) possède des
+     versions successives ; « pin » = dernière version épinglée. Groupes
+     projet REPLIÉS par défaut, accordéon exclusif (un seul ouvert à la fois).
+     Recherche / filtre : déroule les groupes qui ont des résultats ; la fin
+     du filtrage ramène au repli par défaut. */
+  var XDATA = [
+    { name: "Refonte site vitrine", docs: [
+      { n: "plan-de-charge.pdf", k: "PDF", pin: true, v: [[1, 2.1, "2026-11-08"], [2, 3.8, "2026-11-12"], [3, 12.4, "2026-11-18"]] },
+      { n: "benchmark-concurrents.xlsx", k: "XLSX", v: [[1, 5.4, "2026-11-11"], [2, 5.9, "2026-11-14"]] },
+      { n: "maquette-accueil.html", k: "HTML", v: [[1, 1.2, "2026-11-09"], [2, 4.1, "2026-11-17"]] },
+      { n: "maquette-tarifs.html", k: "HTML", v: [[1, 0.9, "2026-11-10"], [2, 1.6, "2026-11-12"], [3, 2.8, "2026-11-15"], [4, 3.8, "2026-11-18"]] },
+      { n: "logo-v2.png", k: "PNG", v: [[1, 0.4, "2026-11-08"], [2, 0.7, "2026-11-09"], [3, 1.0, "2026-11-10"], [4, 1.3, "2026-11-12"], [5, 1.7, "2026-11-13"], [6, 2.2, "2026-11-15"]] },
+      { n: "plan-sitemap.pdf", k: "PDF", v: [[1, 1.4, "2026-11-10"]] },
+      { n: "copywriting-guides.md", k: "MD", v: [[1, 0.1, "2026-11-07"], [2, 0.1, "2026-11-08"], [3, 0.1, "2026-11-10"], [4, 0.2, "2026-11-11"], [5, 0.2, "2026-11-12"], [6, 0.2, "2026-11-13"], [7, 0.3, "2026-11-14"], [8, 0.3, "2026-11-15"], [9, 0.3, "2026-11-15"]] },
+      { n: "notes-reunion-7-nov.md", k: "MD", v: [[1, 0.1, "2026-11-07"]] },
+      { n: "moodboard.png", k: "PNG", v: [[1, 1.1, "2026-11-11"], [2, 2.6, "2026-11-13"], [3, 3.2, "2026-11-14"]] }
+    ] },
+    { name: "Veille concurrence", docs: [
+      { n: "rapport-veille-semaine-43.pdf", k: "PDF", v: [[1, 6.1, "2026-10-29"]] },
+      { n: "rapport-veille-semaine-44.pdf", k: "PDF", v: [[1, 6.4, "2026-11-05"]] },
+      { n: "rapport-veille-semaine-45.pdf", k: "PDF", v: [[1, 6.6, "2026-11-12"]] },
+      { n: "rapport-veille-semaine-46.pdf", k: "PDF", pin: true, v: [[1, 8.7, "2026-11-16"]] },
+      { n: "alertes-concurrents.xlsx", k: "XLSX", v: [[1, 4.8, "2026-11-03"], [2, 5.5, "2026-11-10"], [3, 6.2, "2026-11-18"]] },
+      { n: "captures-prix-tarifs.pdf", k: "PDF", v: [[1, 3.1, "2026-11-08"], [2, 4.4, "2026-11-15"]] },
+      { n: "tableau-comparatif.html", k: "HTML", v: [[1, 1.2, "2026-11-11"], [2, 1.9, "2026-11-17"]] },
+      { n: "revue-presse.md", k: "MD", v: [[1, 0.1, "2026-11-08"], [2, 0.1, "2026-11-10"], [3, 0.2, "2026-11-12"], [4, 0.2, "2026-11-15"], [5, 0.2, "2026-11-17"]] }
+    ] },
+    { name: "Budget 2027", docs: [
+      { n: "previsionnel.xlsx", k: "XLSX", pin: true, v: [[1, 0.9, "2026-11-03"], [2, 1.0, "2026-11-04"], [3, 1.1, "2026-11-06"], [4, 1.3, "2026-11-08"], [5, 1.5, "2026-11-09"], [6, 1.8, "2026-11-11"], [7, 2.1, "2026-11-13"], [8, 2.4, "2026-11-16"], [9, 2.8, "2026-11-18"]] },
+      { n: "synthese-direction.pdf", k: "PDF", v: [[1, 1.2, "2026-11-14"], [2, 1.7, "2026-11-18"]] },
+      { n: "courbes-evolution.png", k: "PNG", v: [[1, 0.5, "2026-11-05"], [2, 0.6, "2026-11-08"], [3, 0.7, "2026-11-12"], [4, 0.9, "2026-11-16"]] },
+      { n: "notes-hypotheses.md", k: "MD", v: [[1, 0.1, "2026-11-06"], [2, 0.1, "2026-11-09"], [3, 0.2, "2026-11-13"]] }
+    ] },
+    { name: "Hors projet", hors: true, docs: [
+      { n: "export-conversation-15-nov.pdf", k: "PDF", v: [[1, 3.3, "2026-11-15"]] },
+      { n: "data-ventes-2025.xlsx", k: "XLSX", v: [[1, 2.5, "2026-11-09"]] },
+      { n: "screenshot-tableau.png", k: "PNG", v: [[1, 0.6, "2026-11-10"], [2, 1.1, "2026-11-12"]] },
+      { n: "brouillon-article.html", k: "HTML", v: [[1, 0.4, "2026-11-05"], [2, 0.5, "2026-11-07"], [3, 0.5, "2026-11-09"], [4, 0.6, "2026-11-11"], [5, 0.7, "2026-11-13"], [6, 0.7, "2026-11-15"], [7, 0.8, "2026-11-17"]] },
+      { n: "resume-reunion.md", k: "MD", v: [[1, 0.1, "2026-11-11"], [2, 0.1, "2026-11-11"]] },
+      { n: "modele-mail-relance.md", k: "MD", v: [[1, 0.1, "2026-11-03"]] }
+    ] }
+  ];
+  var CHEV = '<span class="pchev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>';
+  var PIN = '<span class="fpin" title="Document épinglé"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></span>';
+  var TRASH = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  var MOIS = { "01": "janv", "02": "févr", "03": "mars", "04": "avr", "05": "mai", "06": "juin", "07": "juil", "08": "août", "09": "sept", "10": "oct", "11": "nov", "12": "déc" };
+  function dfr(iso) { return Number(iso.slice(8, 10)) + "\u00A0" + MOIS[iso.slice(5, 7)]; }
+  function norm(t) { return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  function fmt(mb) { var v = Math.round(mb * 10) / 10; return String(v).replace(".", ",") + "\u00A0Mo"; }
+
+  var freedMb = 0, freedFiles = 0;
+  var ROWS = [], PRJS = [];
+  var st = { q: "", kind: "Tous", sort: "size" };
+  var wasFiltering = false;
+
+  function aliveRows(pi) { return ROWS.filter(function (r) { return !r.gone && (pi === undefined || r.pi === pi); }); }
+  function maxV(pi, di) {
+    var m = 0;
+    aliveRows(pi).forEach(function (r) { if (r.di === di && r.v > m) m = r.v; });
+    return m;
+  }
+  /* nettoyables : toutes les versions dépassées, sauf épinglées (toujours dernières) */
+  function cleanable(r) { return !r.pin && r.v < maxV(r.pi, r.di); }
+  function visRow(r) {
+    return (!st.q || norm(r.name).indexOf(st.q) > -1) && (st.kind === "Tous" || r.kind === st.kind);
+  }
+  function setOpen(p, open) {
+    p.open = open;
+    p.files.hidden = !open;
+    p.head.classList.toggle("open", open);
+    p.head.setAttribute("aria-expanded", String(open));
+  }
+  function delRow(r) {
+    r.gone = true; r.el.remove();
+    freedMb = Math.round((freedMb + r.mb) * 10) / 10; freedFiles += 1;
+    render(); apply();
+  }
+  function cleanProject(pi) {
+    aliveRows(pi).filter(cleanable).forEach(function (r) {
+      r.gone = true; r.el.remove();
+      freedMb = Math.round((freedMb + r.mb) * 10) / 10;
+    });
+    render(); apply();
+  }
+  function render() {
+    var tDocs = 0, tMb = 0;
+    PRJS.forEach(function (p) {
+      var rows = aliveRows(p.pi), mb = 0, clean = 0;
+      rows.forEach(function (r) { mb += r.mb; if (cleanable(r)) clean += r.mb; });
+      mb = Math.round(mb * 10) / 10; clean = Math.round(clean * 10) / 10;
+      p.meta.textContent = rows.length + (rows.length > 1 ? " documents" : " document") + " · " + fmt(mb) +
+        (clean > 0 ? " · dont " + fmt(clean) + " récupérables" : "");
+      p.btn.disabled = clean <= 0;
+      tDocs += rows.length; tMb += mb;
+    });
+    $("docCount").textContent = String(tDocs);
+    $("docTot").textContent = fmt(tMb);
+    var parts = [];
+    if (freedFiles > 0) parts.push(freedFiles + (freedFiles > 1 ? " fichiers supprimés" : " fichier supprimé"));
+    if (freedMb > 0) parts.push(fmt(freedMb) + " libérés");
+    $("docDone").textContent = parts.length ? "✓ " + parts.join(" · ") : "";
+    $("docDone").hidden = parts.length === 0;
+  }
+  function sortAll() {
+    PRJS.forEach(function (p) {
+      aliveRows(p.pi).sort(function (a, b) {
+        if (st.sort === "size") return b.mb - a.mb;
+        if (st.sort === "date") return a.d < b.d ? 1 : a.d > b.d ? -1 : b.v - a.v;
+        return a.name.localeCompare(b.name) || b.v - a.v;
+      }).forEach(function (r) { p.files.appendChild(r.el); });
+    });
+  }
+  function apply() {
+    var filtering = st.q !== "" || st.kind !== "Tous";
+    /* fin de filtrage (bouton, champ vidé, chip « Tous ») : retour au repli par défaut */
+    if (wasFiltering && !filtering) PRJS.forEach(function (p) { setOpen(p, false); });
+    wasFiltering = filtering;
+    var shown = 0;
+    PRJS.forEach(function (p) {
+      var any = false;
+      aliveRows(p.pi).forEach(function (r) {
+        var vis = filtering ? visRow(r) : true;
+        r.el.hidden = !vis;
+        if (vis) { any = true; shown += 1; }
+      });
+      p.el.hidden = filtering && !any;
+      if (filtering && any && !p.open) setOpen(p, true); /* filtrage : tout déroulé */
+    });
+    sortAll();
+    var xr = $("xres");
+    if (filtering) {
+      xr.hidden = false;
+      xr.innerHTML = shown + (shown > 1 ? " fichiers correspondent" : " fichier correspond") +
+        ' — <button type="button" id="xclear">effacer les filtres</button>';
+      $("xclear").addEventListener("click", function () {
+        st.q = ""; st.kind = "Tous";
+        $("xq").value = "";
+        chipEls.forEach(function (c) { c.classList.toggle("on", c.dataset.k === "Tous"); });
+        apply();
+      });
+    } else {
+      xr.hidden = true;
+    }
+  }
+
+  /* — construction de l'explorateur — */
+  XDATA.forEach(function (p, pi) {
+    var el = document.createElement("div"); el.className = "xprj";
+    var head = document.createElement("div");
+    head.className = "xprjhead" + (p.hors ? " hors" : "");
+    head.setAttribute("role", "button"); head.tabIndex = 0; head.setAttribute("aria-expanded", "false");
+    head.innerHTML = CHEV + '<span class="pname">' + p.name + '</span><span class="pmeta"></span>';
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "mini cleanprj"; btn.textContent = "Nettoyer";
+    head.appendChild(btn);
+    var files = document.createElement("div");
+    files.className = "xfiles"; files.id = "xg" + pi; files.hidden = true; /* replié par défaut */
+    head.setAttribute("aria-controls", files.id);
+    el.appendChild(head); el.appendChild(files);
+    var P = { el: el, head: head, meta: head.querySelector(".pmeta"), btn: btn, files: files, pi: pi, open: false };
+    PRJS.push(P);
+    head.addEventListener("click", function (e) {
+      if (e.target.closest(".mini")) return;          /* Nettoyer ne déplie pas */
+      if (st.q !== "" || st.kind !== "Tous") return;  /* pendant un filtrage, résultats imposés */
+      var target = P.open ? null : P;                 /* groupe ouvert : on referme tout */
+      PRJS.forEach(function (o) { setOpen(o, o === target); }); /* accordéon exclusif */
+    });
+    head.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); head.click(); }
+    });
+    btn.addEventListener("click", function (e) { e.stopPropagation(); cleanProject(pi); });
+    p.docs.forEach(function (doc, di) {
+      var lastV = doc.v[doc.v.length - 1][0];
+      doc.v.forEach(function (ver) {
+        var isPin = !!doc.pin && ver[0] === lastV;
+        var row = document.createElement("div"); row.className = "frow";
+        row.innerHTML = '<span class="fkind">' + doc.k + '</span><span class="fname">' + doc.n +
+          (isPin ? PIN : "") + '</span><span class="fmeta">v' + ver[0] + " · " + dfr(ver[2]) + " · " + fmt(ver[1]) + "</span>";
+        var del = document.createElement("button");
+        del.type = "button"; del.className = "fdel"; del.innerHTML = TRASH;
+        del.setAttribute("aria-label", "Supprimer " + doc.n + " (v" + ver[0] + ")");
+        var R = { el: row, pi: pi, di: di, v: ver[0], mb: ver[1], d: ver[2], name: doc.n, kind: doc.k, pin: isPin, gone: false };
+        if (isPin) {
+          del.disabled = true;
+          del.title = "Document épinglé — détachez-le dans la conversation pour le supprimer";
+        } else {
+          del.addEventListener("click", function () { delRow(R); });
+        }
+        row.appendChild(del);
+        ROWS.push(R);
+        files.appendChild(row);
+      });
+    });
+    $("xprojects").appendChild(el);
+  });
+
+  /* chips de type, issues des données */
+  var kinds = [];
+  ROWS.forEach(function (r) { if (kinds.indexOf(r.kind) === -1) kinds.push(r.kind); });
+  var chipEls = [];
+  ["Tous"].concat(kinds).forEach(function (k) {
+    var c = document.createElement("button");
+    c.type = "button"; c.className = "xchip" + (k === "Tous" ? " on" : ""); c.dataset.k = k; c.textContent = k;
+    c.addEventListener("click", function () {
+      st.kind = k;
+      chipEls.forEach(function (x) { x.classList.toggle("on", x === c); });
+      apply();
+    });
+    chipEls.push(c);
+    $("xchips").appendChild(c);
+  });
+
+  $("xq").addEventListener("input", function () { st.q = norm($("xq").value.trim()); apply(); });
+  $("xsort").addEventListener("change", function () { st.sort = $("xsort").value; apply(); });
+  $("cleanAll").addEventListener("click", function () {
+    PRJS.forEach(function (p) { cleanProject(p.pi); });
+  });
+
+  render();
+  apply();
+  $("t-adv").addEventListener("click", function () {
+    var el = $("ag-adv");
+    el.hidden = !el.hidden;
+    $("ag-adv-t").classList.toggle("open", !el.hidden);
+    this.classList.toggle("on", !el.hidden);
+  });
+  function togglePanel() { $("app").classList.toggle("closed"); }
+  $("t-close").addEventListener("click", togglePanel);
+  $("xBtn").addEventListener("click", togglePanel);
+})();
+</script>
+
+</body>
+</html>
