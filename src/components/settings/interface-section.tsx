@@ -10,7 +10,6 @@ import { useTheme } from "next-themes";
 import { Segmented } from "@/components/shared/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { InfoTip } from "@/components/shared/info-tip";
 import {
   Select,
   SelectContent,
@@ -24,6 +23,7 @@ import {
   readClientSetting,
   writeClientSetting,
 } from "@/lib/settings";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/chat-types";
 
@@ -38,21 +38,18 @@ export function SettingRow({
   label,
   description,
   children,
-  dim = false,
 }: {
   label: string;
   description?: string;
   children: React.ReactNode;
-  dim?: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-x-7 gap-y-2 border-b border-border py-3 transition-opacity last:border-b-0",
-        dim ? "opacity-55 hover:opacity-100" : undefined
-      )}
-    >
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-wrap items-center justify-between gap-x-7 gap-y-2 border-b border-border py-3 last:border-b-0">
+      {/* Lot audit : min-width de lisibilité — à 375 px le texte se
+          comprimait à un mot par ligne au profit du contrôle ; en dessous
+          de 200 px disponibles, le contrôle passe À LA LIGNE SUIVANTE
+          (flex-wrap) au lieu d'écraser le texte. */}
+      <div className="min-w-[200px] flex-1">
         <div className="text-[14px] font-medium">{label}</div>
         {description ? (
           <div className="mt-px max-w-[480px] text-[12.5px] leading-snug text-muted-foreground">
@@ -68,11 +65,24 @@ export function SettingRow({
 // ── Section Interface (registres client — effet immédiat) ────────────
 
 export function InterfacePane({ projects }: { projects: Project[] }) {
+  const { toast } = useToast();
   // Le volet ne s'ouvre que sur interaction (post-hydration) : la valeur
   // du thème est donc toujours résolue lorsque ce composant est rendu.
   const { theme, setTheme } = useTheme();
   const [rev, setRev] = useState(0);
   useEffect(() => onSettingsChanged(() => setRev((r) => r + 1)), []);
+
+  // Lot audit : écriture localStorage en échec (quota, navigation privée) =
+  // feedback visible — avant, le clic était mort sans message.
+  const write = (key: string, value: unknown) => {
+    if (!writeClientSetting(key, value)) {
+      toast({
+        title: "Réglage non enregistré",
+        description: "Le stockage local est indisponible (navigation privée, quota atteint).",
+        variant: "destructive",
+      });
+    }
+  };
 
   const values = useMemo(() => {
     let collapsed: string[] = [];
@@ -125,11 +135,14 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
         <div className="flex w-[196px] flex-none items-center gap-2.5">
           <Slider
             aria-label="Largeur de la colonne"
-            value={[Math.min(34, Math.max(12, Math.round(values.width ?? 19)))]}
+            // Maquette ligne 448 : min 12, max 30 (audit design §2.5 — les
+            // bornes avaient silencieusement divergé ; la valeur stockée
+            // hors bornes est ramenée dans la grille à l'affichage).
+            value={[Math.min(30, Math.max(12, Math.round(values.width ?? 19)))]}
             min={12}
-            max={34}
+            max={30}
             step={1}
-            onValueChange={([v]) => writeClientSetting("fork.ui.sidebar.width", v)}
+            onValueChange={([v]) => write("fork.ui.sidebar.width", v)}
             className="flex-1"
           />
           <span className="w-[38px] flex-none text-right text-[11px] font-semibold tabular-nums text-hermes-text">
@@ -139,15 +152,15 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
       </SettingRow>
 
       <SettingRow
-        label="Ordre des projets"
-        description="Les plus récents d'abord, ou par ordre de nom."
+        label="Ordre des conversations"
+        description="À l'intérieur de chaque projet — les plus récentes d'abord, par création ou par nom."
       >
         <Select
           value={values.sort}
-          onValueChange={(v) => writeClientSetting("fork.projects.sort", v)}
+          onValueChange={(v) => write("fork.projects.sort", v)}
         >
           <SelectTrigger
-            aria-label="Ordre des projets"
+            aria-label="Ordre des conversations dans un projet"
             className="h-8 w-[150px] max-w-full rounded-md bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
           >
             <SelectValue placeholder="Récents" />
@@ -164,15 +177,18 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
 
       <SettingRow
         label="Dossiers repliés"
-        description="Les dossiers de projets démarrent fermés."
-        dim={projects.length === 0}
+        description={
+          projects.length === 0
+            ? "Les dossiers de projets démarrent fermés — aucun projet pour l'instant."
+            : "Les dossiers de projets démarrent fermés."
+        }
       >
         <Switch
           aria-label="Dossiers repliés"
           checked={allCollapsed}
           disabled={projects.length === 0}
           onCheckedChange={(on) =>
-            writeClientSetting(
+            write(
               "fork.projects.collapsed",
               JSON.stringify(on ? projects.map((p) => p.id) : [])
             )
@@ -187,7 +203,7 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
         <Switch
           aria-label="Jauge de contexte"
           checked={values.gauge !== false}
-          onCheckedChange={(on) => writeClientSetting("fork.context.gauge", on)}
+          onCheckedChange={(on) => write("fork.context.gauge", on)}
         />
       </SettingRow>
 
@@ -198,7 +214,7 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
         <Switch
           aria-label="Afficher le raisonnement"
           checked={values.showReasoning !== false}
-          onCheckedChange={(on) => writeClientSetting("fork.ui.showReasoning", on)}
+          onCheckedChange={(on) => write("fork.ui.showReasoning", on)}
         />
       </SettingRow>
     </section>

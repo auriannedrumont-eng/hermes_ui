@@ -34,12 +34,17 @@ import {
 import type { ProviderKind, ProviderStrategy, ProviderView } from "@/lib/chat-types";
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { AddAnything } from "@/components/settings/add-anything";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+/** Message commun quand le service n'acquitte pas (chien de garde 8 s). */
+const SILENT_SERVICE =
+  "Le service n'a pas répondu (8 s) — réessayez une fois la connexion rétablie.";
 
 const STRATEGY_LABELS: Record<ProviderStrategy, { label: string; sub?: string }> = {
   fill_first: { label: "Première disponible" },
@@ -95,6 +100,9 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   const [advEndpoint, setAdvEndpoint] = useState("");
   const [savingBase, setSavingBase] = useState(false);
   const [testing, setTesting] = useState<Set<string>>(new Set());
+  // Lot audit 2026-11-21 : suppressions gardées par ConfirmDestructiveDialog.
+  const [pendingRemoveKey, setPendingRemoveKey] = useState<{ id: string; label: string } | null>(null);
+  const [pendingRemoveProvider, setPendingRemoveProvider] = useState(false);
   const status = providerCardStatus(provider);
   const isLlm = provider.kind === "llm";
   const endpoint = effectiveBaseUrl(provider, api);
@@ -104,11 +112,13 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   // au test, édition depuis un autre champ) : ajustement d'état pendant le
   // rendu (motif React officiel) — un effet appelant setState synchronement
   // est interdit par la règle react-hooks/set-state-in-effect.
+  // Lot audit : un champ EN COURS D'ÉDITION (≠ ancienne valeur suivie) n'est
+  // plus écrasé par un broadcast arrivant pendant la saisie.
   const [prevEndpoint, setPrevEndpoint] = useState(endpoint);
   if (endpoint !== prevEndpoint) {
     setPrevEndpoint(endpoint);
-    setKeyEndpoint(endpoint);
-    setAdvEndpoint(endpoint);
+    setKeyEndpoint((v) => (v === prevEndpoint ? endpoint : v));
+    setAdvEndpoint((v) => (v === prevEndpoint ? endpoint : v));
   }
 
   const handleAddKey = async () => {
@@ -120,12 +130,20 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       const nextBase = keyEndpoint.trim();
       if (nextBase && nextBase !== endpoint) {
         const base = await api.setProviderBase(provider.id, nextBase);
+        if (base === null) {
+          toast({ title: "Adresse non enregistrée", description: SILENT_SERVICE, variant: "destructive" });
+          return;
+        }
         if (base.error) {
           toast({ title: "Adresse refusée", description: base.error, variant: "destructive" });
           return;
         }
       }
       const res = await api.addKey(provider.id, keyLabel.trim(), keySecret.trim());
+      if (res === null) {
+        toast({ title: "Clé non ajoutée", description: SILENT_SERVICE, variant: "destructive" });
+        return;
+      }
       if (res.error) {
         toast({ title: "Clé refusée", description: res.error, variant: "destructive" });
         return;
@@ -151,6 +169,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       next.delete(keyId);
       return next;
     });
+    if (res === null) {
+      toast({ title: "Test impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Test impossible", description: res.error, variant: "destructive" });
       return;
@@ -167,6 +189,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
 
   const handleRemoveKey = async (keyId: string, label: string) => {
     const res = await api.removeKey(keyId);
+    if (res === null) {
+      toast({ title: "Suppression impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Suppression impossible", description: res.error, variant: "destructive" });
       return;
@@ -176,6 +202,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
 
   const handleRemoveProvider = async () => {
     const res = await api.removeProvider(provider.id);
+    if (res === null) {
+      toast({ title: "Suppression impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Suppression impossible", description: res.error, variant: "destructive" });
       return;
@@ -185,6 +215,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
 
   const handleStrategy = async (strategy: ProviderStrategy) => {
     const res = await api.setStrategy(provider.id, strategy);
+    if (res === null) {
+      toast({ title: "Réglage non enregistré", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Réglage impossible", description: res.error, variant: "destructive" });
     }
@@ -197,6 +231,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
     setSavingBase(true);
     const res = await api.setProviderBase(provider.id, next);
     setSavingBase(false);
+    if (res === null) {
+      toast({ title: "Adresse non enregistrée", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Adresse refusée", description: res.error, variant: "destructive" });
       return;
@@ -212,6 +250,10 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
     setSavingBase(true);
     const res = await api.setProviderBase(provider.id, "");
     setSavingBase(false);
+    if (res === null) {
+      toast({ title: "Réinitialisation impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Réinitialisation impossible", description: res.error, variant: "destructive" });
       return;
@@ -253,12 +295,39 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
           variant="ghost"
           title={`Retirer ${provider.name}`}
           aria-label={`Retirer ${provider.name}`}
-          onClick={handleRemoveProvider}
+          onClick={() => setPendingRemoveProvider(true)}
           className="flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
         >
           <Trash2 className="size-[13px]" strokeWidth={2} />
         </Button>
       </div>
+      {/* Garde destructive — retire le fournisseur ET toutes ses clés. */}
+      <ConfirmDestructiveDialog
+        open={pendingRemoveProvider}
+        onOpenChange={setPendingRemoveProvider}
+        title={`Retirer ${provider.name} ?`}
+        description={`Le fournisseur et ses ${keyCount} clé(s) sont supprimés du porte-clés. Cette action est irréversible — pensez à sauvegarder les clés avant de les retirer.`}
+        confirmLabel={`Retirer ${provider.name}`}
+        onConfirm={() => {
+          setPendingRemoveProvider(false);
+          void handleRemoveProvider();
+        }}
+      />
+      {/* Garde destructive — suppression d'une clé. */}
+      <ConfirmDestructiveDialog
+        open={pendingRemoveKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoveKey(null);
+        }}
+        title={`Supprimer la clé « ${pendingRemoveKey?.label ?? ""} » ?`}
+        description="La clé est retirée du porte-clés. Cette action est irréversible — le moteur ne pourra plus l'utiliser."
+        confirmLabel="Supprimer la clé"
+        onConfirm={() => {
+          const k = pendingRemoveKey;
+          setPendingRemoveKey(null);
+          if (k) void handleRemoveKey(k.id, k.label);
+        }}
+      />
 
       {/* Porte-clés */}
       {provider.keys.length > 0 ? (
@@ -299,7 +368,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   variant="ghost"
                   title={`Supprimer la clé « ${k.label} »`}
                   aria-label={`Supprimer la clé « ${k.label} »`}
-                  onClick={() => handleRemoveKey(k.id, k.label)}
+                  onClick={() => setPendingRemoveKey({ id: k.id, label: k.label })}
                   className="flex size-[24px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
                 >
                   <Trash2 className="size-[12px]" strokeWidth={2} />
@@ -314,7 +383,12 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       {!provider.keyless ? (
         <>
           <div className="mt-2">
-            <AddLine onClick={() => setShowAddKey((v) => !v)}>Ajouter une clé</AddLine>
+            <AddLine
+              onClick={() => setShowAddKey((v) => !v)}
+              aria-expanded={showAddKey}
+            >
+              Ajouter une clé
+            </AddLine>
           </div>
           {showAddKey ? (
             <div className="mt-2">
@@ -328,6 +402,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 />
                 <Input
                   type="password"
+                  autoComplete="new-password"
                   value={keySecret}
                   onChange={(e) => setKeySecret(e.target.value)}
                   onKeyDown={(e) => {
@@ -342,7 +417,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   variant="primary"
                   onClick={handleAddKey}
                   disabled={!keySecret.trim() || addingKey}
-                  className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
+                  className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {addingKey ? "Ajout…" : "Ajouter"}
                 </Button>
@@ -373,6 +448,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
         type="button"
         variant="ghost"
         onClick={() => setShowAdv((v) => !v)}
+        aria-expanded={showAdv}
         className="mt-2.5 inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
       >
         <ChevronDown
@@ -408,7 +484,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 variant="primary"
                 onClick={handleSaveAdvEndpoint}
                 disabled={savingBase || !advEndpoint.trim() || advEndpoint.trim() === endpoint}
-                className="h-8 cursor-pointer rounded-md bg-hermes px-2.5 text-[11px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 cursor-pointer rounded-md bg-hermes-strong px-2.5 text-[11px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {savingBase ? "…" : "Enregistrer"}
               </Button>
@@ -515,6 +591,10 @@ function AddProviderPanel({
         : undefined;
     const res = await api.addProvider(name, kind, sendBase);
     setAdding(false);
+    if (res === null) {
+      toast({ title: "Ajout impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Ajout impossible", description: res.error, variant: "destructive" });
       return;
@@ -607,7 +687,7 @@ function AddProviderPanel({
           variant="primary"
           onClick={handleAdd}
           disabled={adding || (isCustom && !/^https?:\/\//i.test(endpoint.trim()))}
-          className="h-8 cursor-pointer rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {adding ? "Ajout…" : "Ajouter"}
         </Button>
@@ -639,14 +719,23 @@ export function ProvidersSection({
       {list.map((p) => (
         <ProviderCard key={p.id} provider={p} api={api} />
       ))}
-      {list.length === 0 ? (
+      {/* Lot audit : « aucun… configuré » ne s'affiche plus PENDANT le
+          chargement (flash trompeur à chaque ouverture lente). */}
+      {list.length === 0 && api.providersLoaded ? (
         <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
           Aucun {kind === "llm" ? "fournisseur" : "service"} configuré pour l&apos;instant.
         </p>
       ) : null}
+      {list.length === 0 && !api.providersLoaded ? (
+        <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-muted-foreground">
+          Chargement…
+        </p>
+      ) : null}
 
       <div className="mt-1">
-        <AddLine onClick={() => setShowAdd((v) => !v)}>{texts.addLabel}</AddLine>
+        <AddLine onClick={() => setShowAdd((v) => !v)} aria-expanded={showAdd}>
+          {texts.addLabel}
+        </AddLine>
       </div>
       {showAdd ? (
         kind === "service" ? (

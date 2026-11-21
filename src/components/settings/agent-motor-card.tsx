@@ -38,6 +38,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import {
   type FilLigne,
   heureVersMs,
@@ -49,6 +50,7 @@ import {
 } from "@/components/settings/fil-live";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { getSocket } from "@/lib/socket";
 import type {
   AgentRelease,
@@ -71,6 +73,7 @@ const JALONS_MAJ = ["Demande envoyée", "Sauvegarde", "Mise à jour", "Contrôle
 const JALONS_RETOUR = ["Demande envoyée", "Arrêt", "Retour aux fichiers", "Contrôle"];
 
 export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMotorCardProps) {
+  const { toast } = useToast();
   const [state, setState] = useState<MotorState | null>(null);
   const [journal, setJournal] = useState<JournalWire[]>([]);
   const [log, setLog] = useState<string | null>(null);
@@ -80,6 +83,10 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Lot audit 2026-11-21 : états pending + chien de garde des demandes
+  // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
+  const [checking, setChecking] = useState(false);
+  const [requesting, setRequesting] = useState(false);
 
   /** Applique un snapshot du journal d'opération (toujours réel — appelé
    *  par le relais en direct ou après une demande explicite). */
@@ -130,21 +137,24 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
     };
   }, [appliqueLog]);
 
-  useEffect(() => {
-    if (!confirmOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirmOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [confirmOpen]);
-
   const op = state?.op ?? null;
   const installed = state?.installed ?? null;
   const release: AgentRelease | null = state?.release ?? null;
   const previous = state?.previousVersion ?? null;
   const control = state?.lastControl ?? null;
-  const checkedAt = state?.checkedAt ? hf.format(new Date(state.checkedAt)) : null;
+  // Lot audit : « vérifiée aujourd'hui à … » n'est plus affirmé quelle que
+  // soit l'ancienneté — le libellé porte la vraie date si ce n'est pas
+  // aujourd'hui (checkedAt est persisté côté service).
+  const verifieLabel = useMemo(() => {
+    if (!state?.checkedAt) return null;
+    const d = new Date(state.checkedAt);
+    if (Number.isNaN(d.getTime())) return null;
+    const heure = hf.format(d);
+    const memeJour = new Date().toDateString() === d.toDateString();
+    return memeJour
+      ? `vérifiée aujourd'hui à ${heure}`
+      : `vérifiée le ${df.format(d)}`;
+  }, [state?.checkedAt]);
   /** État moteur reçu au moins une fois — distingue « chargement » de
    *  « Hermes non détecté » (v0.5.1 : le bouton Revérifier suit). */
   const stateConnu = state !== null;
@@ -189,32 +199,69 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 ? "À jour"
                 : "Hermes non détecté";
 
+  /** Lot audit : chien de garde générique — une demande jamais acquittée
+   *  toast au bout de 8 s au lieu de laisser l'utilisateur sans réponse. */
+  const demander = useCallback(
+    (
+      event: string,
+      payload: Record<string, unknown> | undefined,
+      onRes: (res: { ok?: boolean; error?: string } | null) => void
+    ) => {
+      const garde = window.setTimeout(() => onRes(null), 8_000);
+      getSocket().emit(event, payload, (res: { ok?: boolean; error?: string } = {}) => {
+        window.clearTimeout(garde);
+        onRes(res ?? {});
+      });
+    },
+    []
+  );
+
   const requestUpdate = () => {
-    getSocket().emit(
-      "agent:update-request",
-      (res: { ok?: boolean; error?: string } = {}) => {
-        if (!res?.ok && res?.error) window.alert(res.error);
-        // L'opération vient d'être demandée : son journal est vivant.
-        getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
-          appliqueLog(r)
-        );
+    if (requesting) return;
+    setRequesting(true);
+    demander("agent:update-request", undefined, (res) => {
+      setRequesting(false);
+      if (res === null) {
+        toast({ title: "Demande non transmise", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
+      } else if (!res.ok && res.error) {
+        // window.alert remplacé par le système de toasts (cohérence volet).
+        toast({ title: "Mise à jour impossible", description: res.error, variant: "destructive" });
       }
-    );
+      // L'opération vient d'être demandée : son journal est vivant.
+      getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
+        appliqueLog(r)
+      );
+    });
   };
   const requestRollback = () => {
     setConfirmOpen(false);
-    getSocket().emit(
-      "agent:rollback-request",
-      (res: { ok?: boolean; error?: string } = {}) => {
-        if (!res?.ok && res?.error) window.alert(res.error);
-        getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
-          appliqueLog(r)
-        );
+    if (requesting) return;
+    setRequesting(true);
+    demander("agent:rollback-request", undefined, (res) => {
+      setRequesting(false);
+      if (res === null) {
+        toast({ title: "Demande non transmise", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
+      } else if (!res.ok && res.error) {
+        toast({ title: "Retour arrière impossible", description: res.error, variant: "destructive" });
       }
-    );
+      getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
+        appliqueLog(r)
+      );
+    });
   };
   const requestCheck = () => {
-    getSocket().emit("agent:check-request", () => {});
+    if (checking) return;
+    setChecking(true);
+    demander("agent:check-request", undefined, (res) => {
+      setChecking(false);
+      if (res === null) {
+        toast({ title: "Vérification impossible", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
+      } else if (res.ok) {
+        toast({ title: "Vérification lancée", duration: 2500 });
+      } else if (res.error) {
+        toast({ title: "Vérification impossible", description: res.error, variant: "destructive" });
+      }
+    });
   };
 
   /** Message à transmettre (copier-coller) si le contrôle échoue. */
@@ -234,7 +281,13 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* presse-papier indisponible : le texte reste sélectionnable */
+      // Lot audit : échec de copie = retour visible, plus un clic mort.
+      setCopied(false);
+      toast({
+        title: "Copie impossible",
+        description: "Sélectionnez le texte du message et copiez-le à la main.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -252,7 +305,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
   const ageLigne = (l: FilLigne): string | null => {
     if (!l.heure) return null;
     const age = Math.max(1, Math.round((tick - heureVersMs(l.heure)) / 1000));
-    return `il y a ${age} s`;
+    // Lot audit : format FR — plus de « il y a 600 s » au bout d'une minute.
+    if (age < 60) return `il y a ${age} s`;
+    return `il y a ${Math.floor(age / 60)} min`;
   };
 
   // Notes de version : les 3 premières entrées (aperçu borné maquette),
@@ -297,39 +352,37 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </>
               ) : installed ? (
                 <>
-                  Version <b>{installed}</b>{checkedAt ? `, vérifiée aujourd'hui à ${checkedAt}` : ""}.
+                  Version <b>{installed}</b>{verifieLabel ? `, ${verifieLabel}` : ""}.
                   {previous ? (
                     <>
                       {" "}La version d&apos;avant (<b>{previous}</b>) reste en réserve&nbsp;:{" "}
-                      <a
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setConfirmOpen(true);
-                        }}
+                      <Button
+                        type="button"
+                        variant="link"
+                        onClick={() => setConfirmOpen(true)}
+                        className="h-auto px-0 py-0 font-semibold text-hermes-text underline-offset-2 hover:underline"
                       >
                         revenir en arrière
-                      </a> si besoin.
+                      </Button> si besoin.
                     </>
                   ) : null}
                 </>
               ) : (
                 <>
                   Hermes n&apos;est pas détecté sur ce poste. Lancez-le puis «&nbsp;Revérifier&nbsp;» —
-                  ou <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setAdvOpen(true);
-                    }}
-                  >il est installé sur un autre poste</a>.
+                  ou <Button
+                    type="button"
+                    variant="link"
+                    onClick={() => setAdvOpen(true)}
+                    className="h-auto px-0 py-0 font-semibold text-hermes-text underline-offset-2 hover:underline"
+                  >il est installé sur un autre poste</Button>.
                 </>
               )}
             </p>
           </div>
 
-          <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
-            max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
+          {/* Lot audit : classe Tailwind corrompue réparée (voir system-section). */}
+          <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
             {pbDetecte && previous ? (
               <Button
                 type="button"
@@ -344,22 +397,24 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 type="button"
                 variant="primary"
                 onClick={requestUpdate}
-                className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
+                disabled={requesting}
+                className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Mettre Hermes à jour
+                {requesting ? "Demande…" : "Mettre Hermes à jour"}
               </Button>
             ) : null}
             {/* v0.5.1 : « Revérifier » de retour quand Hermes n'est pas
-                détecté (le fil y renvoie) — régression v0.5.0. */}
+                détecté (le fil y renvoie) — régression v0.5.0.
+                Lot audit : état pending + retour visible. */}
             {pbDetecte || (!op && (installed || !connected || (stateConnu && !installed))) ? (
               <Button
                 type="button"
                 variant="outline"
                 onClick={requestCheck}
-                disabled={!!op}
-                className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!!op || checking}
+                className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-wait disabled:opacity-40"
               >
-                Revérifier
+                {checking ? "Vérification…" : "Revérifier"}
               </Button>
             ) : null}
           </div>
@@ -578,28 +633,37 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 Rien pour l&apos;instant — l&apos;historique se remplit à la première vérification.
               </p>
             ) : (
-              journal.slice(0, 8).map((e) => (
-                <div
-                  key={e.id}
-                  className="flex flex-wrap items-baseline justify-between gap-x-3.5 gap-y-0.5 border-b border-border py-1.5 last:border-b-0"
-                >
-                  <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground">
-                    {df.format(new Date(e.at))}
-                  </span>
-                  <span className="min-w-0 flex-1 text-[12.5px]">
-                    {e.label}
-                    {e.version ? <b className="ml-1.5 font-mono text-[11px] tabular-nums">v{e.version}</b> : null}
-                  </span>
-                  <span
-                    className={
-                      "flex-none text-[11px] font-semibold " +
-                      (e.resultat === "ok" ? "text-success" : e.resultat === "echec" ? "text-destructive" : "text-muted-foreground")
-                    }
+              <>
+                {journal.slice(0, 8).map((e) => (
+                  <div
+                    key={e.id}
+                    className="flex flex-wrap items-baseline justify-between gap-x-3.5 gap-y-0.5 border-b border-border py-1.5 last:border-b-0"
                   >
-                    {e.resultat === "ok" ? "✓" : e.resultat === "echec" ? "✕" : "·"}
-                  </span>
-                </div>
-              ))
+                    <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                      {df.format(new Date(e.at))}
+                    </span>
+                    <span className="min-w-0 flex-1 text-[12.5px]">
+                      {e.label}
+                      {e.version ? <b className="ml-1.5 font-mono text-[11px] tabular-nums">v{e.version}</b> : null}
+                    </span>
+                    <span
+                      className={
+                        "flex-none text-[11px] font-semibold " +
+                        (e.resultat === "ok" ? "text-success" : e.resultat === "echec" ? "text-destructive" : "text-muted-foreground")
+                      }
+                    >
+                      {e.resultat === "ok" ? "✓" : e.resultat === "echec" ? "✕" : "·"}
+                    </span>
+                  </div>
+                ))}
+                {/* Lot audit : l'en-tête annonçait N étapes mais n'en montrait
+                    que 8 — le compte est maintenant honnête. */}
+                {journal.length > 8 ? (
+                  <p className="pt-1.5 text-[11px] text-muted-foreground">
+                    Les 8 plus récentes sont affichées sur {journal.length}.
+                  </p>
+                ) : null}
+              </>
             )}
           </div>
         </details>
@@ -618,61 +682,31 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
         ) : null}
       </section>
 
-      {/* Fenêtre de confirmation du retour arrière (3 promesses, v0.4). */}
-      {confirmOpen && previous ? (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirmer le retour arrière"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmOpen(false);
-          }}
-        >
-          <div className="w-full max-w-[460px] rounded-xl border border-border bg-card p-5 shadow-xl">
-            <p className="text-[15.5px] font-bold tracking-tight">
-              Revenir à Hermes {previous}&nbsp;?
-            </p>
-            <ul className="mt-3.5 flex list-none flex-col gap-2.5">
-              <li className="flex items-start gap-2.5 text-[12.5px] leading-relaxed">
-                <span aria-hidden className="mt-1 inline-block size-[7px] flex-none rounded-full bg-hermes" />
-                Hermes revient à la version <b>{previous}</b>, celle d&apos;avant la mise à jour. Le problème disparaît.
-              </li>
-              <li className="flex items-start gap-2.5 text-[12.5px] leading-relaxed">
-                <span aria-hidden className="mt-1 inline-block size-[7px] flex-none rounded-full bg-hermes" />
-                Vos fichiers, vos conversations et vos réglages <b>ne sont pas touchés</b>.
-              </li>
-              <li className="flex items-start gap-2.5 text-[12.5px] leading-relaxed">
-                <span aria-hidden className="mt-1 inline-block size-[7px] flex-none rounded-full bg-hermes" />
-                L&apos;interface se re-teste toute seule à la fin (jusqu&apos;à 2&nbsp;minutes). Vous pourrez re-tenter la mise à jour plus tard.
-              </li>
-            </ul>
-            <p className="mt-3.5 border-t border-border pt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-              Le retour utilise la procédure officielle de Hermes. L&apos;interface
-              demande et vérifie — Hermes agit.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                autoFocus
-                onClick={() => setConfirmOpen(false)}
-                className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60"
-              >
-                Annuler
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={requestRollback}
-                className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
-              >
-                Oui, revenir à Hermes {previous}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Fenêtre de confirmation du retour arrière (3 promesses, v0.4).
+          Lot audit : le dialog Radix du repo (ConfirmDestructiveDialog)
+          remplace la modal maison — piège de focus réel, Escape, focus
+          rendu à la fermeture (l'ancienne div role="dialog" laissait Tab
+          atteindre la carte sous-jacente). */}
+      <ConfirmDestructiveDialog
+        open={confirmOpen && !!previous}
+        onOpenChange={setConfirmOpen}
+        title={`Revenir à Hermes ${previous ?? ""} ?`}
+        description={
+          <span className="block space-y-2">
+            <span className="block">
+              Hermes revient à la version <b>{previous}</b>, celle d&apos;avant la mise à jour. Le problème disparaît.
+            </span>
+            <span className="block">
+              Vos fichiers, vos conversations et vos réglages <b>ne sont pas touchés</b>.
+            </span>
+            <span className="block">
+              L&apos;interface se re-teste toute seule à la fin (jusqu&apos;à 2&nbsp;minutes). Vous pourrez re-tenter la mise à jour plus tard.
+            </span>
+          </span>
+        }
+        confirmLabel={previous ? `Oui, revenir à Hermes ${previous}` : "Confirmer"}
+        onConfirm={requestRollback}
+      />
     </>
   );
 }

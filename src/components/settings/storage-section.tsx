@@ -39,11 +39,20 @@ function norm(t: string): string {
 
 const df = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
+/** Chien de garde de l'inventaire — un seul endroit pour le texte FR. */
+const STORAGE_WATCHDOG_MS = 8_000;
+
 /** Date SQLite ("2026-11-20 12:34:56") → Date valide, TOUT navigateur :
  *  l'espace devient un « T », l'heure manquante vaut midi (le tri par date
- *  reste correct au sein d'un même jour ; le fuseau est neutre). */
+ *  reste correct au sein d'un même jour ; le fuseau est neutre).
+ *  Lot audit 2026-11-21 : le test de présence d'heure se fait sur la chaîne
+ *  NORMALISÉE — l'ancien code testait la chaîne originale et produisait
+ *  « …T12:34:56T12:00:00 » (Invalid Date → toutes les dates devenaient
+ *  aujourd'hui dès qu'une ligne arrivait en "YYYY-MM-DD HH:MM:SS"). */
 function parseDate(iso: string): Date {
-  const normalized = (/^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.replace(" ", "T") : iso) + (/T/.test(iso) ? "" : "T12:00:00");
+  const hasTime = /\d{2}:\d{2}/.test(iso);
+  const normalized =
+    /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.replace(" ", "T") + (hasTime ? "" : "T12:00:00") : iso;
   const d = new Date(normalized);
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
@@ -166,15 +175,27 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
   // Anti-fuite : un ack qui arrive après le démontage ne setState pas.
   const mountedRef = useRef(true);
   const toastSeq = useRef(0);
+  // Lot audit : compteur de requêtes — le chien de garde d'une requête A
+  // traîarde n'affiche plus l'erreur si une requête B (broadcast, réessai)
+  // a déjà répondu entre-temps.
+  const reqSeqRef = useRef(0);
+  // Lot audit : re-render à l'expiration d'un toast « Annuler » — le bouton
+  // se désactive à la SECONDE où le jeton service meurt (7,0 s), plus
+  // d'action proposée alors qu'elle va échouer.
+  const [, setExpiryTick] = useState(0);
 
-  /** Ajoute un toast d'annulation (durée = fenêtre + marge). */
+  /** Ajoute un toast d'annulation (durée = fenêtre + marge d'affichage). */
   const pushToast = useCallback(
     (t: Omit<(typeof toasts)[number], "key" | "expireAt">) => {
       const key = ++toastSeq.current;
-      setToasts((prev) => [...prev.slice(-2), { ...t, key, expireAt: Date.now() + STORAGE_UNDO_MS + 1500 }]);
+      const expireAt = Date.now() + STORAGE_UNDO_MS;
+      setToasts((prev) => [...prev.slice(-2), { ...t, key, expireAt }]);
+      // À l'expiration : le bouton « Annuler » se désactive (re-render),
+      // le bandeau reste 1,5 s de plus pour être lu.
+      window.setTimeout(() => setExpiryTick((v) => v + 1), STORAGE_UNDO_MS);
       window.setTimeout(() => {
         setToasts((prev) => prev.filter((x) => x.key !== key));
-      }, STORAGE_UNDO_MS + 1800);
+      }, STORAGE_UNDO_MS + 1500);
     },
     []
   );
@@ -187,16 +208,19 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
    * aboutit à l'écran d'erreur, jamais à un chargement éternel.
    */
   const demandeInventaire = useCallback((silencieux: boolean) => {
+    const seq = ++reqSeqRef.current;
     const garde = window.setTimeout(() => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || seq !== reqSeqRef.current) return;
       setLoading(false);
-      setError("Le service n'a pas répondu (8 s).");
-    }, 8_000);
+      setError(
+        `Le service n'a pas répondu (${STORAGE_WATCHDOG_MS / 1000} s).`
+      );
+    }, STORAGE_WATCHDOG_MS);
     getSocket().emit(
       "storage:list",
       (res: { entries?: StorageEntry[] } | { error?: string } = {}) => {
         window.clearTimeout(garde);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || seq !== reqSeqRef.current) return;
         setLoading(false);
         if ("entries" in res && Array.isArray(res.entries)) {
           setEntries(res.entries);
@@ -285,6 +309,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
         "storage:undo",
         { token },
         (res: StorageUndoResult | StorageMutationError = {} as StorageMutationError) => {
+          if (!mountedRef.current) return;
           if ("ok" in res && res.ok) {
             setFreedTotal((t) => ({ n: t.n - n, bytes: t.bytes - bytes }));
             pushToast({
@@ -293,9 +318,19 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               tone: "ok",
             });
           } else {
+            // Lot audit : ne plus annoncer « fenêtre expirée » pour TOUT
+            // échec — seul l'échec d'expiration a ce message.
+            const expired =
+              "error" in res && /expir/i.test(res.error ?? "");
             pushToast({
-              title: "Fenêtre d'annulation expirée",
-              description: "Les 7 secondes sont passées — la suppression est définitive.",
+              title: expired
+                ? "Fenêtre d'annulation expirée"
+                : "Annulation impossible",
+              description: expired
+                ? `Les ${STORAGE_UNDO_MS / 1000} secondes sont passées — la suppression est définitive.`
+                : "error" in res && res.error
+                  ? res.error
+                  : "La suppression reste en place.",
               tone: "warn",
             });
           }
@@ -306,15 +341,33 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
   );
 
   const deleteVersion = (e: StorageEntry) => {
+    if (busy === e.id) return;
+    setBusy(e.id);
+    // Chien de garde : sans ack, le bouton restait en échec silencieux et
+    // la ligne re-supprimable en double-clic.
+    const garde = window.setTimeout(() => {
+      if (!mountedRef.current) return;
+      setBusy(null);
+      pushToast({
+        title: "Le service n'a pas répondu",
+        description: `Suppression non confirmée (${STORAGE_WATCHDOG_MS / 1000} s) — réessayez.`,
+        tone: "warn",
+      });
+    }, STORAGE_WATCHDOG_MS);
     getSocket().emit(
       "storage:deleteVersion",
       { id: e.id },
       (res: StorageMutationResult | StorageMutationError = {} as StorageMutationError) => {
+        window.clearTimeout(garde);
+        if (!mountedRef.current) return;
+        setBusy(null);
         if ("ok" in res && res.ok) {
           setFreedTotal((t) => ({ n: t.n + res.removed, bytes: t.bytes + res.bytesFreed }));
           pushToast({
             title: "« " + e.name + " » (v" + e.version + ") supprimée",
-            description: formatArtifactBytes(res.bytesFreed) + " libérés — annulable pendant 7 secondes.",
+            description:
+              formatArtifactBytes(res.bytesFreed) +
+              " libérés — annulable pendant " + STORAGE_UNDO_MS / 1000 + " secondes.",
             tone: "ok",
             undo: res.undoToken ? { token: res.undoToken, bytes: res.bytesFreed, n: res.removed } : undefined,
           });
@@ -338,11 +391,25 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
   };
 
   const cleanProject = (g: ProjectGroup) => {
+    if (busy === g.id) return;
     setBusy(g.id);
+    // Lot audit : chien de garde — « Nettoyage… » ne reste plus figé pour
+    // toujours si le service n'acquitte pas.
+    const garde = window.setTimeout(() => {
+      if (!mountedRef.current) return;
+      setBusy(null);
+      pushToast({
+        title: "Le service n'a pas répondu",
+        description: `Nettoyage non confirmé (${STORAGE_WATCHDOG_MS / 1000} s) — réessayez.`,
+        tone: "warn",
+      });
+    }, STORAGE_WATCHDOG_MS);
     getSocket().emit(
       "storage:cleanProject",
       { projectId: g.id },
       (res: StorageMutationResult | StorageMutationError = {} as StorageMutationError) => {
+        window.clearTimeout(garde);
+        if (!mountedRef.current) return;
         setBusy(null);
         if ("ok" in res && res.ok) {
           if (res.removed === 0) {
@@ -356,7 +423,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
           setFreedTotal((t) => ({ n: t.n + res.removed, bytes: t.bytes + res.bytesFreed }));
           pushToast({
             title: res.removed + " versions supprimées dans « " + g.name + " »",
-            description: formatArtifactBytes(res.bytesFreed) + " libérés (mesuré) — annulable pendant 7 secondes.",
+            description:
+              formatArtifactBytes(res.bytesFreed) +
+              " libérés (mesuré) — annulable pendant " + STORAGE_UNDO_MS / 1000 + " secondes.",
             tone: "ok",
             undo: res.undoToken ? { token: res.undoToken, bytes: res.bytesFreed, n: res.removed } : undefined,
           });
@@ -402,7 +471,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
           ) : (
             <span className="max-w-[300px] flex-none text-[11px] leading-snug text-muted-foreground">
               Le nettoyage s&apos;applique projet par projet ; chaque suppression est annulable
-              pendant 7 secondes.
+              pendant {STORAGE_UNDO_MS / 1000} secondes.
             </span>
           )}
         </div>
@@ -498,7 +567,10 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 <Button
                   type="button"
                   variant="link"
-                  onClick={() => finFiltrage(document.activeElement as HTMLElement | null)}
+                  // Lot audit : le focus retourne au champ de recherche —
+                  // l'ancienne cible (le bouton « effacer les filtres »
+                  // lui-même) se démontait juste après : focus perdu.
+                  onClick={() => finFiltrage(inputRef.current)}
                   className="h-auto px-0 py-0 font-semibold text-hermes-text hover:underline"
                 >
                   effacer les filtres
@@ -526,7 +598,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 type="button"
                 variant="primary"
                 onClick={() => fetchEntries()}
-                className="mt-4 inline-flex h-8 cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
+                className="mt-4 inline-flex h-8 cursor-pointer items-center justify-center rounded-md bg-hermes-strong px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Réessayer
               </Button>
@@ -551,53 +623,54 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                     aria-label={"Projet " + g.name}
                   >
                     {/* En-tête : compteurs + Nettoyer en place, fonctionne
-                        replié (§2.2 « nettoyer sans déplier ») */}
+                        replié (§2.2 « nettoyer sans déplier »).
+                        Lot audit : le déroulé est un VRAI <button> (le
+                        conteneur role="button" avec un <button> Nettoyer
+                        imbriqué violait ARIA : descendants interactifs
+                        interdits). */}
                     <div
-                      role="button"
-                      tabIndex={filtrageActif ? -1 : 0}
-                      aria-expanded={deroule}
-                      aria-disabled={filtrageActif ? "true" : undefined}
-                      aria-label={`${g.name} — ${g.entries.length} documents, ${formatArtifactBytes(g.bytes)}`}
-                      onClick={() => {
-                        // Repliage manuel IGNORÉ pendant un filtrage actif (§2.2).
-                        if (filtrageActif) return;
-                        // Accordéon exclusif par construction.
-                        setProjetOuvert((p) => (p === g.id ? null : g.id));
-                      }}
-                      onKeyDown={(e) => {
-                        if (filtrageActif) return;
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setProjetOuvert((p) => (p === g.id ? null : g.id));
-                        }
-                      }}
                       className={cn(
                         "flex w-full flex-wrap items-center gap-2.5 px-3 py-2",
-                        !filtrageActif && "cursor-pointer hover:bg-muted"
+                        !filtrageActif && "hover:bg-muted"
                       )}
                     >
-                      <span
-                        className={cn(
-                          "min-w-0 flex-1 truncate text-[13px] font-bold",
-                          g.hors && "font-semibold text-muted-foreground"
-                        )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        tabIndex={filtrageActif ? -1 : 0}
+                        aria-expanded={deroule}
+                        aria-disabled={filtrageActif ? true : undefined}
+                        aria-label={`${g.name} — ${g.entries.length} documents, ${formatArtifactBytes(g.bytes)}`}
+                        onClick={() => {
+                          // Repliage manuel IGNORÉ pendant un filtrage actif (§2.2).
+                          if (filtrageActif) return;
+                          // Accordéon exclusif par construction.
+                          setProjetOuvert((p) => (p === g.id ? null : g.id));
+                        }}
+                        className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-2.5 rounded-sm px-0 py-0 text-left hover:bg-transparent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes"
                       >
-                        {g.name}
-                      </span>
-                      <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
-                        {g.entries.length}
-                        {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
-                      </span>
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 truncate text-[13px] font-bold",
+                            g.hors && "font-semibold text-muted-foreground"
+                          )}
+                        >
+                          {g.name}
+                        </span>
+                        <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
+                          {g.entries.length}
+                          {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
+                        </span>
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={(e) => {
+                        onClick={() => {
                           // « Nettoyer » ne déplie JAMAIS le groupe (§2.2).
-                          e.stopPropagation();
                           cleanProject(g);
                         }}
                         disabled={busy === g.id}
-                        className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-wait disabled:opacity-40"
                       >
                         {busy === g.id ? "Nettoyage…" : "Nettoyer"}
                       </Button>
@@ -641,7 +714,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                                   type="button"
                                   variant="ghost"
                                   onClick={() => deleteVersion(e)}
-                                  disabled={bloquee}
+                                  disabled={bloquee || busy === e.id}
                                   title={
                                     bloquee
                                       ? "Version épinglée — non supprimable"
@@ -705,7 +778,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 type="button"
                 variant="outline"
                 onClick={() => void undo(t.undo!.token, t.undo!.bytes, t.undo!.n)}
-                className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+                disabled={Date.now() >= t.expireAt}
+                title={Date.now() >= t.expireAt ? "Fenêtre d'annulation expirée" : undefined}
+                className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Annuler
               </Button>

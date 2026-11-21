@@ -18,23 +18,32 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Segmented } from "@/components/shared/segmented";
 import { X } from "lucide-react";
-import { InfoTip } from "@/components/shared/info-tip";
 import { SettingRow } from "@/components/settings/interface-section";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { GENERIC_EFFORTS, type ModelOption } from "@/lib/chat-types";
 import { PRICING_KEY, type PricingMap, parseModelLabel } from "@/lib/pricing";
-import { useModelPricing } from "@/hooks/use-pricing";
-import { getSocket } from "@/lib/socket";
+import { useModelPricing, usePricingState } from "@/hooks/use-pricing";
+import { emitAck } from "@/lib/emit-ack";
 
 // ── Libellés FR des valeurs brutes du registre (présentation seule) ──
 const EFFORT_LABELS: Record<string, string> = {
-  off: "Off",
+  off: "Désactivé",
   low: "Léger",
   medium: "Moyen",
   high: "Élevé",
   max: "Max",
   standard: "Standard",
   minimal: "Minimal",
+};
+
+// Tarif $/M affiché sans perdre les petites valeurs (0,0005 s'affichait
+// « 0,001 » voire « 0 » avec toLocaleString par défaut — même logique que
+// formatUsd, sans le suffixe $).
+const formatTarif = (n: number): string => {
+  if (n > 0 && n < 0.0001) return "< 0,0001";
+  if (n >= 1)
+    return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 };
 
 export function ModelesPane({
@@ -58,28 +67,34 @@ export function ModelesPane({
     effort && effortOptions.some((o) => o.value === effort) ? effort : null;
 
   // Tarifs (F-21) : déclarés ici, appliqués au coût des réponses.
+  // Lot audit 2026-11-21 : `pricingLoaded` garde TOUTE écriture tant que la
+  // map serveur n'a pas été lue — ajouter/retirer un tarif pendant le
+  // chargement écrivait une map neuve et effaçait tous les tarifs existants.
   const pricing = useModelPricing();
+  const { loaded: pricingLoaded, error: pricingError } = usePricingState();
   const [tarifModel, setTarifModel] = useState<string>("");
   const [tarifInput, setTarifInput] = useState("");
   const [tarifOutput, setTarifOutput] = useState("");
 
-  const savePricing = (next: PricingMap) => {
-    // Lot 5 (audit) : la sauvegarde des tarifs était « aveugle » — sans ack,
-    // un échec (service arrêté) passait inaperçu et l'utilisateur croyait
-    // ses prix enregistrés. Ack + retour visible comme les autres réglages.
-    getSocket().emit(
-      "settings:set",
-      { key: PRICING_KEY, value: JSON.stringify(next) },
-      (res: { ok?: boolean; error?: string } = {}) => {
-        if (res?.error) {
-          toast({
-            title: "Tarifs non enregistrés",
-            description: res.error,
-            variant: "destructive",
-          });
-        }
-      }
-    );
+  const savePricing = async (next: PricingMap) => {
+    if (!pricingLoaded) return;
+    // Lot 5 + lot 2026-11-21 : ack vérifié ET chien de garde — un service
+    // muet (socket coupée) ne laisse plus croire à une sauvegarde réussie.
+    const res = await emitAck<{ ok?: boolean; error?: string }>("settings:set", {
+      key: PRICING_KEY,
+      value: JSON.stringify(next),
+    });
+    if (res === null) {
+      toast({
+        title: "Tarifs non enregistrés",
+        description: "Le service n'a pas répondu (8 s). Réessayez une fois la connexion rétablie.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (res.error) {
+      toast({ title: "Tarifs non enregistrés", description: res.error, variant: "destructive" });
+    }
   };
   const parseFloatFr = (raw: string): number | null => {
     const n = Number(raw.trim().replace(",", "."));
@@ -87,10 +102,10 @@ export function ModelesPane({
   };
   const tarifIn = parseFloatFr(tarifInput);
   const tarifOut = parseFloatFr(tarifOutput);
-  const canAdd = !!tarifModel && tarifIn !== null && tarifOut !== null;
+  const canAdd = !!tarifModel && tarifIn !== null && tarifOut !== null && pricingLoaded;
   const addTarif = () => {
     if (!canAdd) return;
-    savePricing({ ...pricing, [tarifModel]: { input: tarifIn!, output: tarifOut! } });
+    void savePricing({ ...pricing, [tarifModel]: { input: tarifIn!, output: tarifOut! } });
     setTarifModel("");
     setTarifInput("");
     setTarifOutput("");
@@ -101,7 +116,11 @@ export function ModelesPane({
   const windowLabel = (m: ModelOption) => {
     if (!m.contextWindow) return m.provider;
     const cw = m.contextWindow;
-    const w = cw >= 1e6 ? `${Math.round(cw / 1e6)}M` : `${Math.round(cw / 1000)}k`;
+    // 1 500 000 jetons s'affichait « 2M » (Math.round) — décimale si besoin.
+    const w =
+      cw >= 1e6
+        ? `${(cw / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}M`
+        : `${Math.round(cw / 1000)}k`;
     return `${m.provider} · fenêtre ${w}`;
   };
 
@@ -200,12 +219,21 @@ export function ModelesPane({
             variant="primary"
             onClick={addTarif}
             disabled={!canAdd}
-            className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             Ajouter
           </Button>
         </div>
-        {Object.keys(pricing).length > 0 ? (
+        {pricingError ? (
+          <p className="mt-2 text-[11px] font-medium text-warning" role="alert">
+            Le service n&apos;a pas répondu — les tarifs enregistrés ne sont pas
+            chargés. La déclaration est bloquée pour ne rien écraser.
+          </p>
+        ) : !pricingLoaded ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Chargement des tarifs…
+          </p>
+        ) : Object.keys(pricing).length > 0 ? (
           <ul className="mt-2.5 grid gap-1">
             {Object.entries(pricing).map(([id, p]) => (
               <li
@@ -214,7 +242,7 @@ export function ModelesPane({
               >
                 <span className="min-w-0 flex-1 truncate font-medium">{labelOf(id)}</span>
                 <span className="flex-none tabular-nums text-muted-foreground">
-                  entrée {p.input.toLocaleString("fr-FR")} · sortie {p.output.toLocaleString("fr-FR")} $/M
+                  entrée {formatTarif(p.input)} · sortie {formatTarif(p.output)} $/M
                 </span>
                 <Button
                   type="button"
@@ -223,7 +251,7 @@ export function ModelesPane({
                   onClick={() => {
                     const next = { ...pricing };
                     delete next[id];
-                    savePricing(next);
+                    void savePricing(next);
                   }}
                   className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >

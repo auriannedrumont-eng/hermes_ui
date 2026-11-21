@@ -1,3 +1,5 @@
+"use client";
+
 // Volet « Paramètres » v4 — remplace le sheet 460 px de la phase 1.
 // Design de référence : design/maquette-parametres-v4.html (la maquette
 // fait foi) : volet gauche ~860 px ancré (plein écran < 1100 px),
@@ -16,11 +18,14 @@
 // (ajout unifié), Hermes (presets + instructions + mémoire +
 // conversations longues), Profils et Système (statuts et sondes réels,
 // jamais simulés ; le moteur reste verrouillé « gateway »).
-"use client";
+// ── Le volet ─────────────────────────────────────────────────────────
+// Lot audit 2026-11-21 : nettoyage du code mort — les imports non utilisés
+// (useTheme, getSocket, Select, Slider, Segmented, Switch,
+// readClientSetting), le EFFORT_LABELS dupliqué (la source est dans
+// models-section) et le SettingRow jamais rendu (chaque section a sa copie
+// ; InterfacePane exporte celle de référence).
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useTheme } from "next-themes";
-import { useToast } from "@/hooks/use-toast";
+import { useEffect, useRef, useState } from "react";
 import {
   Archive,
   Cpu,
@@ -33,19 +38,8 @@ import {
   Sparkle,
   UserRound,
   Wrench,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Segmented } from "@/components/shared/segmented";
-import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { InfoTip } from "@/components/shared/info-tip";
 import { WebchatSection } from "@/components/settings/webchat-section";
@@ -82,18 +76,9 @@ import { InterfacePane } from "@/components/settings/interface-section";
 import { ModelesPane } from "@/components/settings/models-section";
 import { cn } from "@/lib/utils";
 
-// ── Libellés FR des valeurs brutes du registre (présentation seule) ──
-const EFFORT_LABELS: Record<string, string> = {
-  off: "Off",
-  low: "Léger",
-  medium: "Moyen",
-  high: "Élevé",
-  max: "Max",
-  standard: "Standard",
-  minimal: "Minimal",
-};
-// ── Rail v2.7 (F-30) : 10 sections — « Modes de chat » rejoint le rail
-// entre Modèles et Fournisseurs (ordre du maquette-parametres-modes.html).
+// ── Rail v2.7 (F-30) : « Modes de chat » rejoint le rail entre Modèles
+// et Fournisseurs (ordre du maquette-parametres-modes.html) ; v0.3.0 a
+// ajouté « Stockage » — le rail compte désormais 11 entrées.
 const SECTIONS = [
   { id: "interface", icon: Monitor, label: "Interface" },
   { id: "modeles", icon: Cpu, label: "Modèles" },
@@ -167,39 +152,9 @@ interface SettingsPanelProps {
   webSearchAvailable?: boolean;
 }
 
-// ── Une ligne de réglage : libellé + description à gauche, contrôle ──
-function SettingRow({
-  label,
-  description,
-  children,
-  dim = false,
-}: {
-  label: string;
-  description?: string;
-  children: React.ReactNode;
-  dim?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-x-7 gap-y-2 border-b border-border py-3 transition-opacity last:border-b-0",
-        dim ? "opacity-55 hover:opacity-100" : undefined
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium">{label}</div>
-        {description ? (
-          <div className="mt-px max-w-[480px] text-[12.5px] leading-snug text-muted-foreground">
-            {description}
-          </div>
-        ) : null}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ── Section Interface (registres client — effet immédiat) ────────────
+// ── Une ligne de réglage : la référence est SettingRow dans
+// interface-section.tsx (partagée avec Modèles) — la copie locale,
+// jamais rendue, a été retirée (lot audit 2026-11-21).
 // ── Le volet ─────────────────────────────────────────────────────────
 export function SettingsPanel({
   open,
@@ -223,7 +178,6 @@ export function SettingsPanel({
   onConnectGateway,
   webSearchAvailable = false,
 }: SettingsPanelProps) {
-  const { toast } = useToast();
   const [section, setSection] = useState<SectionId>("interface");
 
   // Fermeture : la prochaine ouverture repart de la première section.
@@ -272,7 +226,7 @@ export function SettingsPanel({
       case "modeles":
         return <ModelesPane models={models} selectedModel={selectedModel} />;
       case "modes":
-        return <ModesSection models={models} />;
+        return <ModesSection models={models} connected={connected} />;
       case "fournisseurs":
         return <ProvidersSection kind="llm" api={api} />;
       case "cles":
@@ -335,13 +289,16 @@ export function SettingsPanel({
           {/* ── Rail de sections ─────────────────────────────────────── */}
           <nav
             aria-label="Sections des paramètres"
-            className="flex flex-none flex-col gap-2 border-border bg-background p-3 max-[1100px]:flex-row max-[1100px]:overflow-x-auto max-[1100px]:border-b min-[1100px]:w-[208px] min-[1100px]:border-r"
+            className="flex flex-none flex-col gap-2 border-border bg-background p-3 max-[1100px]:flex-row max-[1100px]:overflow-x-auto max-[1100px]:border-b max-[1100px]:pr-12 min-[1100px]:w-[208px] min-[1100px]:border-r"
           >
             <div className="flex items-center gap-2 px-1 pb-1 max-[1100px]:hidden">
-              <span className="flex size-[22px] items-center justify-center rounded-sm bg-hermes/10 text-hermes-text">
-                <Sparkle className="size-[13px]" strokeWidth={2} />
+              {/* Maquette : logo 26 px PLEIN --hermes, icône --hermes-foreground,
+                  titre 14 px/700 (audit design §2.3 — la pastille pâle 22 px
+                  affaiblissait le pavage de marque). */}
+              <span className="flex size-[26px] items-center justify-center rounded-sm bg-hermes text-hermes-foreground">
+                <Sparkle className="size-[14px]" strokeWidth={2} />
               </span>
-              <b className="text-[12.5px] font-semibold tracking-tight">Paramètres</b>
+              <b className="text-[14px] font-bold tracking-tight">Paramètres</b>
             </div>
             <div className="flex flex-col gap-0.5 max-[1100px]:flex-row max-[1100px]:gap-1">
               {SECTIONS.map(({ id, icon: Icon, label }) => {
@@ -356,7 +313,10 @@ export function SettingsPanel({
                     className={cn(
                       "flex flex-none cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
-                      active && "bg-muted font-semibold text-foreground"
+                      // Maquette .rn.on : l'entrée active est TEINTÉE hermès
+                      // (--hermes-soft + hermes-text, 4,50/4,91:1 mesurés) —
+                      // la signature du rail (audit design §2.2).
+                      active && "bg-hermes-soft font-semibold text-hermes-text"
                     )}
                   >
                     <Icon className="size-[14px] flex-none" strokeWidth={2} />
@@ -381,8 +341,9 @@ export function SettingsPanel({
               })}
             </div>
             {/* Version du service — l'état du moteur est en pied de volet,
-                une seule fois (v2.6 : doublon retiré). */}
-            <div className="mt-auto px-2 pt-2 text-[11px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
+                une seule fois (v2.6 : doublon retiré). Maquette .rail-foot :
+                isolée par un filet haut (audit design §2.4). */}
+            <div className="mt-auto border-t border-border px-2 pt-3 text-[11px] whitespace-nowrap text-muted-foreground max-[1100px]:hidden">
               {serverVersion ? <span>service v{serverVersion}</span> : null}
             </div>
           </nav>
@@ -392,7 +353,7 @@ export function SettingsPanel({
 
             <div
               key={section}
-              className="min-h-0 flex-1 animate-in fade-in overflow-y-auto overscroll-contain px-5 pt-2 pb-8 duration-150 min-[1100px]:px-[34px] min-[1100px]:pt-0 min-[1100px]:pb-[70px]"
+              className="min-h-0 flex-1 animate-in fade-in overflow-y-auto overscroll-contain px-5 pt-2 pb-8 duration-150 min-[1100px]:px-[34px] min-[1100px]:pt-[26px] min-[1100px]:pb-[70px]"
             >
               {pane()}
             </div>

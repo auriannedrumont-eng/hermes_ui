@@ -24,8 +24,11 @@ interface SystemPromptPanelProps {
   /** Bibliothèque de presets réutilisables. */
   presets: SystemPromptPreset[];
   conversationTitle: string | null;
-  onSave: (content: string, presetTitle?: string | null) => void;
-  onClear: () => void;
+  /** Sauvegarde — résout `true` UNIQUEMENT si le service a accepté :
+   *  le badge « Non enregistré » du panneau en dépend. */
+  onSave: (content: string, presetTitle?: string | null) => Promise<boolean>;
+  /** Retrait — résout `true` UNIQUEMENT si le service a accepté. */
+  onClear: () => Promise<boolean>;
   /** Crée un preset depuis le contenu en cours d'édition (F-11). */
   onCreatePreset: (title: string, content: string) => Promise<SystemPromptPreset | null>;
 }
@@ -40,41 +43,21 @@ export function SystemPromptPanel({
   onClear,
   onCreatePreset,
 }: SystemPromptPanelProps) {
-  // Brouillon local : la sauvegarde est explicite (bouton Enregistrer).
-  const [draft, setDraft] = useState("");
-  const [presetTitle, setPresetTitle] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newPresetName, setNewPresetName] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // À l'ouverture : repart du prompt enregistré (jamais du brouillon précédent).
-  // Pattern « reset by key » : le corps du sheet est remonté à chaque ouverture
-  // (key = timestamp d'ouverture), l'état d'édition repart de l'état serveur —
-  // pas de resynchronisation par effet.
+  // Pattern « reset by key » : le corps du sheet est remonté à chaque
+  // ouverture (key = timestamp d'ouverture), l'état d'édition repart de
+  // l'état serveur — pas de resynchronisation par effet.
   // Lot 3 (audit L3-3) : le timestamp est REMIS À ZÉRO à la fermeture — sinon
   // la key ne change qu'une fois par vie de l'app et rouvrir sur une AUTRE
   // conversation rééditait le prompt de la première. La key embarque aussi la
-  // conversation cible + l'horodatage du prompt serveur : si la cible change
-  // pendant que le sheet est ouvert (sync socket), le corps remonte aussi.
+  // conversation cible. Lot audit 2026-11-21 : `updatedAt` en a été RETIRÉ —
+  // un broadcast `system-prompt:changed` (autre onglet) pendant l'édition
+  // remontait le corps et DÉTRUISAIT le brouillon en cours de frappe.
   const openedAtRef = useRef<number>(0);
   if (open && openedAtRef.current === 0) {
     openedAtRef.current = Date.now();
   } else if (!open && openedAtRef.current !== 0) {
     openedAtRef.current = 0;
   }
-  const body = (
-    <PromptPanelBody
-      key={`${openedAtRef.current}|${prompt?.conversationId ?? "none"}|${prompt?.updatedAt ?? ""}`}
-      prompt={prompt}
-      presets={presets}
-      conversationTitle={conversationTitle}
-      onSave={onSave}
-      onClear={onClear}
-      onCreatePreset={onCreatePreset}
-    />
-  );
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -85,7 +68,15 @@ export function SystemPromptPanel({
         <SheetTitle className="sr-only">
           Prompt système de la conversation
         </SheetTitle>
-          {body}
+        <PromptPanelBody
+          key={`${openedAtRef.current}|${prompt?.conversationId ?? "none"}`}
+          prompt={prompt}
+          presets={presets}
+          conversationTitle={conversationTitle}
+          onSave={onSave}
+          onClear={onClear}
+          onCreatePreset={onCreatePreset}
+        />
       </SheetContent>
     </Sheet>
   );
@@ -103,15 +94,18 @@ function PromptPanelBody({
   prompt: ConversationPrompt | null;
   presets: SystemPromptPreset[];
   conversationTitle: string | null;
-  onSave: (content: string, presetTitle?: string | null) => void;
-  onClear: () => void;
+  onSave: (content: string, presetTitle?: string | null) => Promise<boolean>;
+  onClear: () => Promise<boolean>;
   onCreatePreset: (title: string, content: string) => Promise<SystemPromptPreset | null>;
 }) {
   // Brouillon initialisé depuis l'état serveur (remontée à l'ouverture).
   const [draft, setDraft] = useState(prompt?.content ?? "");
   const [presetTitle, setPresetTitle] = useState<string | null>(prompt?.presetTitle ?? null);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [presetSaving, setPresetSaving] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -127,16 +121,25 @@ function PromptPanelBody({
 
   const canSave = dirty && draft.trim().length > 0 && remaining >= 0;
 
-  const save = () => {
-    onSave(draft.trim(), presetTitle);
-    setDirty(false);
+  // Lot audit 2026-11-21 : la sauvegarde est ATTENDUE et son résultat fait
+  // foi — avant, `dirty` repassait à false sans attendre l'ack : en cas
+  // d'échec (service muet, refus), le badge « Non enregistré » disparaissait
+  // alors que rien n'avait été persisté.
+  const save = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    const ok = await onSave(draft.trim(), presetTitle);
+    setSaving(false);
+    if (ok) setDirty(false);
   };
 
   /** Sauvegarde le brouillon courant comme preset de la bibliothèque. */
   const saveAsPreset = async () => {
     const title = newPresetName.trim();
-    if (!title || !draft.trim()) return;
+    if (!title || !draft.trim() || presetSaving) return;
+    setPresetSaving(true);
     const created = await onCreatePreset(title, draft.trim());
+    setPresetSaving(false);
     if (created) {
       setPresetTitle(created.title);
       setCreating(false);
@@ -267,11 +270,11 @@ function PromptPanelBody({
                   type="button"
                   variant="primary"
                   onClick={() => void saveAsPreset()}
-                  disabled={!newPresetName.trim() || !draft.trim()}
+                  disabled={!newPresetName.trim() || !draft.trim() || presetSaving}
                   className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Check className="size-3.5" strokeWidth={2.5} />
-                  Créer
+                  {presetSaving ? "Création…" : "Créer"}
                 </Button>
                 <Button
                   type="button"
@@ -303,8 +306,15 @@ function PromptPanelBody({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  onClear();
+                disabled={clearing}
+                onClick={async () => {
+                  // Lot audit : le retrait est ATTENDU — en cas d'échec le
+                  // prompt serveur subsiste et réapparaît à la réouverture,
+                  // l'UI ne doit donc pas l'effacer localement.
+                  setClearing(true);
+                  const ok = await onClear();
+                  setClearing(false);
+                  if (!ok) return;
                   setDraft("");
                   setPresetTitle(null);
                   setDirty(false);
@@ -312,7 +322,7 @@ function PromptPanelBody({
                 className="inline-flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-destructive dark:hover:text-destructive"
               >
                 <Trash2 className="size-[13px]" strokeWidth={2} />
-                Retirer
+                {clearing ? "Retrait…" : "Retirer"}
               </Button>
             ) : (
               <span className="text-[11px] text-muted-foreground">
@@ -328,12 +338,12 @@ function PromptPanelBody({
               <Button
                 type="button"
                 variant="primary"
-                onClick={save}
-                disabled={!canSave}
+                onClick={() => void save()}
+                disabled={!canSave || saving}
                 className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-hermes-strong px-4 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Check className="size-[14px]" strokeWidth={2.5} />
-                Enregistrer · prochain tour
+                {saving ? "Enregistrement…" : "Enregistrer · prochain tour"}
               </Button>
             </div>
           </div>

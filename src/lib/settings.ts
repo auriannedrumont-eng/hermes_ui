@@ -384,15 +384,19 @@ export function readClientSetting<T = unknown>(key: string): T {
   return (raw === null ? def.default : parse(def, raw)) as T;
 }
 
-/** Écrit un réglage client (silencieusement ignoré si hors registre ou invalide). */
-export function writeClientSetting(key: string, value: unknown): void {
+/** Écrit un réglage client (silencieusement ignoré si hors registre ou
+ *  invalide). Lot audit 2026-11-21 : retourne `false` si l'écriture a été
+ *  ignorée (hors registre, valeur invalide, localStorage indisponible —
+ *  quota, navigation privée) : l'appelant peut signaler l'échec au lieu
+ *  d'un clic mort sans feedback. */
+export function writeClientSetting(key: string, value: unknown): boolean {
   const def = REGISTRY.get(key);
-  if (!def || def.scope !== "client") return;
+  if (!def || def.scope !== "client") return false;
   let stored: string;
   switch (def.type) {
     case "number": {
       const n = Number(value);
-      if (!Number.isFinite(n)) return;
+      if (!Number.isFinite(n)) return false;
       stored = String(n);
       break;
     }
@@ -401,21 +405,21 @@ export function writeClientSetting(key: string, value: unknown): void {
       break;
     case "enum": {
       const v = String(value);
-      if (!def.options?.includes(v)) return;
+      if (!def.options?.includes(v)) return false;
       stored = v;
       break;
     }
     default:
       stored = String(value ?? "");
   }
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return false;
   try {
     window.localStorage.setItem(PREFIX + key, stored);
     // Nettoyage des anciennes clés une fois migrées
     for (const k of def.legacyKeys ?? []) window.localStorage.removeItem(k);
   } catch {
     /* stockage indisponible */
-    return;
+    return false;
   }
   // Application immédiate (page de paramètres, FORK.md §7.4).
   window.dispatchEvent(
@@ -423,6 +427,7 @@ export function writeClientSetting(key: string, value: unknown): void {
       detail: { key, value: parse(def, stored) },
     })
   );
+  return true;
 }
 
 /** Efface un réglage client : la clé redevient absente (retour au défaut

@@ -5,6 +5,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { emitAck } from "@/lib/emit-ack";
 import { getSocket } from "@/lib/socket";
 import type {
   ExtensionCommit,
@@ -41,6 +42,10 @@ export function useProviders() {
   const [providers, setProviders] = useState<ProviderView[]>([]);
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
   const [extensions, setExtensions] = useState<ExtensionView[]>([]);
+  // Lot audit 2026-11-21 : distinguer « en chargement » et « vide » — l'état
+  // vide s'affichait immédiatement à chaque ouverture lente (« Aucun
+  // fournisseur configuré »), trompeur.
+  const [providersLoaded, setProvidersLoaded] = useState(false);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
 
   // Correctif 2026-11-19 (6), suite M-1 : le service reconstruit ses vues à
@@ -73,53 +78,14 @@ export function useProviders() {
     setExtensions(next);
   }, []);
 
-  useEffect(() => {
-    const socket = getSocket();
-    socketRef.current = socket;
-
-    const refresh = () => {
-      socket.emit("providers:list", (res: { providers?: ProviderView[] } = {}) => {
-        if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
-      });
-      socket.emit("providers:catalog", (res: { catalog?: ProviderCatalogEntry[] } = {}) => {
-        if (Array.isArray(res.catalog)) setCatalogIfChanged(res.catalog);
-      });
-      socket.emit("extensions:list", (res: { extensions?: ExtensionView[] } = {}) => {
-        if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
-      });
-    };
-    if (socket.connected) refresh();
-    socket.on("connect", refresh);
-    const onProviders = (res: { providers?: ProviderView[] } = {}) => {
-      if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
-    };
-    const onExtensions = (res: { extensions?: ExtensionView[] } = {}) => {
-      if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
-    };
-    socket.on("providers:changed", onProviders);
-    socket.on("extensions:changed", onExtensions);
-    return () => {
-      socket.off("connect", refresh);
-      socket.off("providers:changed", onProviders);
-      socket.off("extensions:changed", onExtensions);
-    };
-  }, []);
-
-  /** Émet un événement et renvoie la réponse du service (toujours résolue). */
-  const emit = useCallback(
-    <T,>(event: string, payload: unknown): Promise<T> =>
-      new Promise<T>((resolve) => {
-        const socket = socketRef.current ?? getSocket();
-        socketRef.current = socket;
-        socket.emit(event, payload, (res: T) => resolve(res));
-      }),
-    []
-  );
-
   const refresh = useCallback(() => {
     const socket = socketRef.current ?? getSocket();
+    socketRef.current = socket;
     socket.emit("providers:list", (res: { providers?: ProviderView[] } = {}) => {
-      if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
+      if (Array.isArray(res.providers)) {
+        setProvidersIfChanged(res.providers);
+        setProvidersLoaded(true);
+      }
     });
     socket.emit("providers:catalog", (res: { catalog?: ProviderCatalogEntry[] } = {}) => {
       if (Array.isArray(res.catalog)) setCatalogIfChanged(res.catalog);
@@ -128,6 +94,36 @@ export function useProviders() {
       if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
     });
   }, []);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socketRef.current = socket;
+
+    const onProviders = (res: { providers?: ProviderView[] } = {}) => {
+      if (Array.isArray(res.providers)) setProvidersIfChanged(res.providers);
+    };
+    const onExtensions = (res: { extensions?: ExtensionView[] } = {}) => {
+      if (Array.isArray(res.extensions)) setExtensionsIfChanged(res.extensions);
+    };
+    if (socket.connected) refresh();
+    socket.on("connect", refresh);
+    socket.on("providers:changed", onProviders);
+    socket.on("extensions:changed", onExtensions);
+    return () => {
+      socket.off("connect", refresh);
+      socket.off("providers:changed", onProviders);
+      socket.off("extensions:changed", onExtensions);
+    };
+  }, [refresh]);
+
+  /** Émet un événement et renvoie la réponse du service, ou `null` si le
+   *  service n'acquitte pas dans le délai (chien de garde emitAck) — les
+   *  états « en cours » des boutons ne restent plus figés pour toujours.
+   *  L'appelant doit traiter `null` comme un échec visible. */
+  const emit = useCallback(
+    <T,>(event: string, payload: unknown): Promise<T | null> => emitAck<T>(event, payload),
+    []
+  );
 
   // ── Fournisseurs & clés ───────────────────────────────────────────
 
@@ -256,6 +252,7 @@ export function useProviders() {
       providers,
       catalog,
       extensions,
+      providersLoaded,
       pendingEngineCount,
       refresh,
       addProvider,
@@ -277,6 +274,7 @@ export function useProviders() {
       providers,
       catalog,
       extensions,
+      providersLoaded,
       pendingEngineCount,
       refresh,
       addProvider,
@@ -299,16 +297,18 @@ export function useProviders() {
 
 export type ProvidersApi = ReturnType<typeof useProviders>;
 
-/** Statut dérivé d'une carte fournisseur (pastille v4). */
+/** Statut dérivé d'une carte fournisseur (pastille v4).
+ *  Lot audit 2026-11-21 : `ok` est testé AVANT `exhausted` — un porte-clés
+ *  [ok, exhausted] affichait rouge « à réparer » alors qu'une clé
+ *  fonctionnelle existe et que `fill_first` la sautera. */
 export function providerCardStatus(p: ProviderView): {
   tone: "ok" | "warn" | "err" | "off";
   label?: string;
 } {
   if (p.keyless) return { tone: "off" };
   if (p.keys.length === 0) return { tone: "off" };
-  if (p.keys.some((k) => k.status === "exhausted")) return { tone: "err", label: "à réparer" };
-  if (p.keys.every((k) => k.status === "ok")) return { tone: "ok" };
   if (p.keys.some((k) => k.status === "ok")) return { tone: "ok" };
+  if (p.keys.some((k) => k.status === "exhausted")) return { tone: "err", label: "à réparer" };
   if (p.keys.some((k) => k.status === "error")) return { tone: "err", label: "à réparer" };
   return { tone: "warn", label: "à tester" };
 }

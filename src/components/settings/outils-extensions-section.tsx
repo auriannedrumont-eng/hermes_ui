@@ -6,7 +6,7 @@
 // listé (pas de rangée « gateway » décorative).
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExtensionRow } from "@/components/settings/extensions-section";
 import { AddAnything } from "@/components/settings/add-anything";
 import { Pastille } from "@/components/settings/bits";
@@ -74,6 +74,23 @@ export function ToolsExtensionsSection({
       return next;
     });
   };
+  // Lot audit : purge des commits d'une extension retirée (entrées orphelines).
+  // queueMicrotask : pas de setState synchrone dans le corps d'un effet
+  // (règle react-hooks/set-state-in-effect, motif du repo).
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCommitsByExt((m) => {
+        const ids = new Set(api.extensions.map((e) => e.id));
+        const next: Record<string, ExtensionCommit[]> = {};
+        let changed = false;
+        for (const k of Object.keys(m)) {
+          if (ids.has(k)) next[k] = m[k];
+          else changed = true;
+        }
+        return changed ? next : m;
+      });
+    });
+  }, [api.extensions]);
 
   // Outils réellement disponibles aujourd'hui — rien de décoratif.
   const tools: ToolRow[] = [
@@ -87,7 +104,8 @@ export function ToolsExtensionsSection({
     {
       name: "Analyse d'images",
       desc: "Les modèles vision analysent les images jointes.",
-      tone: "ok",
+      // Neutre : la capacité dépend du modèle choisi, rien n'est « prêt » ici.
+      tone: "off",
       status: "selon le modèle",
     },
     {
@@ -123,9 +141,14 @@ export function ToolsExtensionsSection({
             onCommits={setCommits}
           />
         ))}
-        {api.extensions.length === 0 ? (
+        {api.extensions.length === 0 && api.providersLoaded ? (
           <p className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-[12.5px] text-muted-foreground">
             Aucun dépôt ni serveur pour l&apos;instant — collez une adresse dans le champ ci-dessus.
+          </p>
+        ) : null}
+        {api.extensions.length === 0 && !api.providersLoaded ? (
+          <p className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-[12.5px] text-muted-foreground">
+            Chargement…
           </p>
         ) : null}
       </div>

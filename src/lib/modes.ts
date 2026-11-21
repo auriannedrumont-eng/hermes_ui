@@ -95,6 +95,10 @@ export const VOICE_CHARS_KEY = "hermes.modes.voiceChars";
 export const VOICE_CHARS_MIN = 500;
 export const VOICE_CHARS_MAX = 8000;
 export const VOICE_CHARS_DEFAULT = 2000;
+/** Pas du compteur de la page Paramètres — les valeurs lues du service sont
+ *  realignées sur ce multiple (une valeur hors grille ne doit pas faire
+ *  « sauter » le compteur au premier clic). */
+export const VOICE_CHARS_STEP = 500;
 
 /** Valeurs par défaut des voix (réglage hermes.modes.voices — page Paramètres).
  *  F-30b : null partout = « Modèle de la conversation » — les défauts ne

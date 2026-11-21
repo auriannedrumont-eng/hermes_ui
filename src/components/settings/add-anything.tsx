@@ -32,6 +32,18 @@ export function AddAnything({
     setBusy(true);
     const res = await api.installAnything(source);
     setBusy(false);
+    // res === null : le service n'a pas acquitté (chien de garde 8 s) —
+    // l'ancien code lisait `res.error` sur un ack vide (TypeError silencieux)
+    // ou restait « Recherche… » pour toujours si la socket était coupée.
+    if (res === null) {
+      toast({
+        title: "Ajout impossible",
+        description:
+          "Le service n'a pas répondu (8 s) — l'installation n'a peut-être pas abouti, réessayez une fois la connexion rétablie.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (res.error) {
       toast({ title: "Ajout impossible", description: res.error, variant: "destructive" });
       return;
@@ -83,7 +95,7 @@ export function AddAnything({
           variant="primary"
           onClick={() => void install()}
           disabled={!value.trim() || busy}
-          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? <Loader2 className="size-[12px] animate-spin" strokeWidth={2} /> : null}
           {busy ? "Recherche…" : "Ajouter"}

@@ -273,6 +273,17 @@ socket.on(
       if (typeof cb === "function") cb({ error: "Clé trop courte" });
       return;
     }
+    // Lot audit 2026-11-21 : déduplication — la même clé collée deux fois
+    // créait deux lignes indépendantes (double comptage pour `least_used`,
+    // clé épuisée retentée par `fill_first`).
+    const duplicate = ctx.store
+      .listKeyRows(providerId)
+      .some((k) => k.secret === secret);
+    if (duplicate) {
+      if (typeof cb === "function")
+        cb({ error: "Cette clé existe déjà sur ce fournisseur — ajoutez un autre secret." });
+      return;
+    }
     const row = ctx.store.createProviderKey(providerId, label, secret, ctx.maskSecret(secret));
     console.log(
       `[hermes-chat] clé ajoutée pour ${provider.name} : « ${label} » (${row.masked})`
@@ -346,6 +357,20 @@ socket.on(
 
 // ── Extensions : dépôts importés + serveurs MCP ───────────────────
 
+/** Lot audit 2026-11-21 : déduplication — coller deux fois la même source
+ *  (dépôt GitHub, adresse https, commande) créait deux lignes indépendantes
+ *  et donc une double installation au redémarrage. owner/repo est comparé
+ *  insensible à la casse (GitHub). */
+function findExtensionBySource(
+  store: { listExtensionRows(): { kind: string; source: string | null }[] },
+  kind: "repo" | "mcp",
+  source: string
+): boolean {
+  return store
+    .listExtensionRows()
+    .some((e) => e.kind === kind && (e.source ?? "").toLowerCase() === source.toLowerCase());
+}
+
 socket.on("extensions:list", (cb?: (data: unknown) => void) => {
   if (typeof cb === "function") cb({ extensions: ctx.extensionsWire() });
 });
@@ -364,6 +389,10 @@ socket.on(
       return;
     }
     if (kind === "mcp") {
+      if (findExtensionBySource(ctx.store, kind, source)) {
+        if (typeof cb === "function") cb({ error: "Ce serveur est déjà ajouté." });
+        return;
+      }
       const row = ctx.store.createExtension({
         name: source.slice(0, 80),
         kind,
@@ -378,6 +407,10 @@ socket.on(
     if (!ref) {
       if (typeof cb === "function")
         cb({ error: "Adresse de dépôt invalide (https://github.com/owner/repo)" });
+      return;
+    }
+    if (findExtensionBySource(ctx.store, "repo", `${ref.owner}/${ref.repo}`)) {
+      if (typeof cb === "function") cb({ error: "Ce dépôt est déjà importé." });
       return;
     }
     try {
@@ -426,6 +459,10 @@ socket.on(
     // 1. Dépôt GitHub ?
     const repoRef = ctx.parseRepoInput(raw);
     if (repoRef) {
+      if (findExtensionBySource(ctx.store, "repo", `${repoRef.owner}/${repoRef.repo}`)) {
+        if (typeof cb === "function") cb({ error: "Ce dépôt est déjà importé." });
+        return;
+      }
       try {
         const snap = await ctx.fetchRepoSnapshot(repoRef, null);
         const row = ctx.store.createExtension({
@@ -452,6 +489,10 @@ socket.on(
 
     // 2. Adresse https → serveur MCP. 3. Commande de lancement → MCP aussi.
     if (/^https?:\/\//i.test(raw) || /^(npx|uvx|bunx|node|python3?|docker)\b/i.test(raw)) {
+      if (findExtensionBySource(ctx.store, "mcp", raw)) {
+        if (typeof cb === "function") cb({ error: "Ce serveur est déjà ajouté." });
+        return;
+      }
       const row = ctx.store.createExtension({
         name: raw.slice(0, 80),
         kind: "mcp",

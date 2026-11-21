@@ -8,6 +8,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { emitAck } from "@/lib/emit-ack";
 import { getSocket } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -21,6 +22,10 @@ const INSTRUCTIONS_TOAST = {
   title: "Instructions personnalisées enregistrées",
   duration: 2500,
 } as const;
+
+// Lot audit 2026-11-21 : chien de garde sur TOUS les acks (avant, socket
+// coupée = promesse jamais résolue, bouton « Enregistrer » bloqué à vie)
+// et aucun échec silencieux — chaque `null`/ack inattendu est toasté.
 
 export function useSystemPrompts(activeConversationId: string | null) {
   const { toast } = useToast();
@@ -105,64 +110,106 @@ export function useSystemPrompts(activeConversationId: string | null) {
     };
   }, [activeConversationId]);
 
-  /** Définit le prompt de la conversation active (effet au prochain tour). */
+  /** Définit le prompt de la conversation active (effet au prochain tour).
+   *  Résout `null` en cas d'échec — l'appelant ne doit PAS considérer la
+   *  valeur comme enregistrée ; la cause est toastée ici. */
   const savePrompt = useCallback(
     (
       content: string,
       presetTitle?: string | null
     ): Promise<ConversationPrompt | null> =>
-      new Promise((resolve) => {
-        const conversationId = activeConversationId;
-        if (!conversationId) return resolve(null);
-        getSocket().emit(
-          "system-prompt:set",
-          { conversationId, content, presetTitle: presetTitle ?? null },
-          (res: { prompt?: ConversationPrompt; error?: string } = {}) => {
-            if (res.prompt) {
-              setPrompt(res.prompt);
-              toast(SAVED_TOAST);
-            } else if (res.error) {
-              toast({ title: "Prompt refusé", description: res.error, variant: "destructive" });
-            }
-            resolve(res.prompt ?? null);
-          }
-        );
+      emitAck<{ prompt?: ConversationPrompt; error?: string }>("system-prompt:set", {
+        conversationId: activeConversationId,
+        content,
+        presetTitle: presetTitle ?? null,
+      }).then((res) => {
+        if (res === null) {
+          toast({
+            title: "Prompt non enregistré",
+            description: "Le service n'a pas répondu (8 s).",
+            variant: "destructive",
+          });
+          return null;
+        }
+        if (res.prompt) {
+          setPrompt(res.prompt);
+          toast(SAVED_TOAST);
+          return res.prompt;
+        }
+        if (res.error) {
+          toast({ title: "Prompt refusé", description: res.error, variant: "destructive" });
+          return null;
+        }
+        // Ack inattendu (ni prompt ni error) — ne pas faire croire au succès.
+        toast({
+          title: "Prompt non enregistré",
+          description: "Réponse inattendue du service.",
+          variant: "destructive",
+        });
+        return null;
       }),
     [activeConversationId, toast]
   );
 
-  /** Retire le prompt de la conversation active. */
+  /** Retire le prompt de la conversation active (toast sur tout échec). */
   const clearPrompt = useCallback(
-    (): Promise<boolean> =>
-      new Promise((resolve) => {
-        const conversationId = activeConversationId;
-        if (!conversationId) return resolve(false);
-        getSocket().emit(
-          "system-prompt:clear",
-          { conversationId },
-          (res: { ok?: boolean; error?: string } = {}) => {
-            if (res.ok) setPrompt(null);
-            resolve(!!res.ok);
-          }
-        );
-      }),
-    [activeConversationId]
+    (): Promise<boolean> => {
+      if (!activeConversationId) {
+        toast({
+          title: "Aucune conversation active",
+          description: "Ouvrez une conversation pour retirer son prompt.",
+          variant: "destructive",
+        });
+        return Promise.resolve(false);
+      }
+      return emitAck<{ ok?: boolean; error?: string }>("system-prompt:clear", {
+        conversationId: activeConversationId,
+      }).then((res) => {
+        if (res === null) {
+          toast({
+            title: "Retrait impossible",
+            description: "Le service n'a pas répondu (8 s).",
+            variant: "destructive",
+          });
+          return false;
+        }
+        if (res.ok) {
+          setPrompt(null);
+          return true;
+        }
+        toast({
+          title: "Retrait impossible",
+          description: res.error ?? "Réponse inattendue du service.",
+          variant: "destructive",
+        });
+        return false;
+      });
+    },
+    [activeConversationId, toast]
   );
 
   /** Crée un preset dans la bibliothèque (section Hermes du volet). */
   const createPreset = useCallback(
     (title: string, content: string): Promise<SystemPromptPreset | null> =>
-      new Promise((resolve) => {
-        getSocket().emit(
-          "system-prompts:create",
-          { title, content },
-          (res: { preset?: SystemPromptPreset; error?: string } = {}) => {
-            if (!res.preset && res.error) {
-              toast({ title: "Preset refusé", description: res.error, variant: "destructive" });
-            }
-            resolve(res.preset ?? null);
-          }
-        );
+      emitAck<{ preset?: SystemPromptPreset; error?: string }>("system-prompts:create", {
+        title,
+        content,
+      }).then((res) => {
+        if (res === null) {
+          toast({
+            title: "Preset non créé",
+            description: "Le service n'a pas répondu (8 s).",
+            variant: "destructive",
+          });
+          return null;
+        }
+        if (res.preset) return res.preset;
+        toast({
+          title: "Preset refusé",
+          description: res.error ?? "Réponse inattendue du service.",
+          variant: "destructive",
+        });
+        return null;
       }),
     [toast]
   );
@@ -170,17 +217,26 @@ export function useSystemPrompts(activeConversationId: string | null) {
   /** Met à jour un preset existant. */
   const updatePreset = useCallback(
     (id: string, title: string, content: string): Promise<SystemPromptPreset | null> =>
-      new Promise((resolve) => {
-        getSocket().emit(
-          "system-prompts:update",
-          { id, title, content },
-          (res: { preset?: SystemPromptPreset; error?: string } = {}) => {
-            if (!res.preset && res.error) {
-              toast({ title: "Preset refusé", description: res.error, variant: "destructive" });
-            }
-            resolve(res.preset ?? null);
-          }
-        );
+      emitAck<{ preset?: SystemPromptPreset; error?: string }>("system-prompts:update", {
+        id,
+        title,
+        content,
+      }).then((res) => {
+        if (res === null) {
+          toast({
+            title: "Preset non enregistré",
+            description: "Le service n'a pas répondu (8 s).",
+            variant: "destructive",
+          });
+          return null;
+        }
+        if (res.preset) return res.preset;
+        toast({
+          title: "Preset refusé",
+          description: res.error ?? "Réponse inattendue du service.",
+          variant: "destructive",
+        });
+        return null;
       }),
     [toast]
   );
@@ -188,43 +244,54 @@ export function useSystemPrompts(activeConversationId: string | null) {
   /** Supprime un preset de la bibliothèque. */
   const deletePreset = useCallback(
     (id: string): Promise<boolean> =>
-      new Promise((resolve) => {
-        getSocket().emit(
-          "system-prompts:delete",
-          { id },
-          (res: { ok?: boolean; error?: string } = {}) => {
-            if (!res.ok && res.error) {
-              toast({ title: "Suppression impossible", description: res.error, variant: "destructive" });
-            }
-            resolve(!!res.ok);
+      emitAck<{ ok?: boolean; error?: string }>("system-prompts:delete", { id }).then(
+        (res) => {
+          if (res === null) {
+            toast({
+              title: "Suppression impossible",
+              description: "Le service n'a pas répondu (8 s).",
+              variant: "destructive",
+            });
+            return false;
           }
-        );
-      }),
+          if (res.ok) return true;
+          toast({
+            title: "Suppression impossible",
+            description: res.error ?? "Réponse inattendue du service.",
+            variant: "destructive",
+          });
+          return false;
+        }
+      ),
     [toast]
   );
 
   /** Enregistre les instructions personnalisées globales (F-19). */
   const saveCustomInstructions = useCallback(
     (value: string): Promise<boolean> =>
-      new Promise((resolve) => {
-        getSocket().emit(
-          "custom-instructions:set",
-          { value },
-          (res: { ok?: boolean; error?: string } = {}) => {
-            if (res.ok) {
-              setCustomInstructions(value);
-              toast(INSTRUCTIONS_TOAST);
-            } else if (res.error) {
-              toast({
-                title: "Instructions refusées",
-                description: res.error,
-                variant: "destructive",
-              });
-            }
-            resolve(!!res.ok);
+      emitAck<{ ok?: boolean; error?: string }>("custom-instructions:set", { value }).then(
+        (res) => {
+          if (res === null) {
+            toast({
+              title: "Instructions non enregistrées",
+              description: "Le service n'a pas répondu (8 s).",
+              variant: "destructive",
+            });
+            return false;
           }
-        );
-      }),
+          if (res.ok) {
+            setCustomInstructions(value);
+            toast(INSTRUCTIONS_TOAST);
+            return true;
+          }
+          toast({
+            title: "Instructions refusées",
+            description: res.error ?? "Réponse inattendue du service.",
+            variant: "destructive",
+          });
+          return false;
+        }
+      ),
     [toast]
   );
 

@@ -41,6 +41,7 @@
   --color-hermes-foreground: var(--hermes-foreground);
   --color-hermes-text: var(--hermes-text);
   --color-hermes-strong: var(--hermes-strong);
+  --color-hermes-soft: var(--hermes-soft);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
@@ -73,16 +74,23 @@
   --warning-foreground: oklch(0.99 0.002 80);
   --success: oklch(0.52 0.115 163);
   --border: oklch(0.915 0.004 75);
-  --input: oklch(0.915 0.004 75);
+  /* input : frontière de saisie / piste OFF du switch — mesuré 3,65:1 sur
+     card (audit design §3.3 ; l'ancien 0.915 tombait à 1,29:1, sous le
+     seuil UI 1.4.11). Les séparateurs (--border) restent subtils : ce ne
+     sont pas des frontières interactives. */
+  --input: oklch(0.62 0.008 60);
   --ring: oklch(0.66 0.17 42);
   --hermes: oklch(0.63 0.17 42);
   --hermes-foreground: oklch(0.99 0.002 80);
   /* hermes-text : terracotta des libellés d'accent (< 14 px) — AA 5,03:1
      sur fond clair, là où --hermes (marque, surfaces) passe sous 4,5:1.
      hermes-strong : surface interactive des boutons primaires — AA 5,05:1
-     avec hermes-foreground. La marque elle-même (--hermes) ne bouge pas. */
+     avec hermes-foreground. La marque elle-même (--hermes) ne bouge pas.
+     hermes-soft : fond teinté des états actifs (rail du volet Paramètres,
+     maquette .rn.on) — hermes-text dessus : 4,50:1 mesuré. */
   --hermes-text: oklch(0.55 0.16 42);
   --hermes-strong: oklch(0.55 0.16 42);
+  --hermes-soft: oklch(0.63 0.17 42 / 12%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -119,14 +127,17 @@
   --warning-foreground: oklch(0.16 0.01 45);
   --success: oklch(0.765 0.13 163);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  /* input sombre : blanc 40 % — 3,78:1 sur card (l'ancien 15 % : 1,35:1). */
+  --input: oklch(1 0 0 / 40%);
   --ring: oklch(0.72 0.16 48);
   --hermes: oklch(0.72 0.16 48);
   --hermes-foreground: oklch(0.16 0.01 45);
   /* En sombre, la marque terracotta passe l'AA sur le charbon chaud :
-     les tokens strong/text rejoignent la marque (7,42:1 mesuré). */
+     les tokens strong/text rejoignent la marque (7,42:1 mesuré).
+     hermes-soft : teinte d'activation 16 % — 4,91:1 avec hermes-text. */
   --hermes-text: oklch(0.72 0.16 48);
   --hermes-strong: oklch(0.72 0.16 48);
+  --hermes-soft: oklch(0.72 0.16 48 / 16%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);

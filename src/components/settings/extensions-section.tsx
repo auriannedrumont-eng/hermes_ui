@@ -15,11 +15,16 @@ import {
 } from "lucide-react";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import type { ExtensionCommit, ExtensionView } from "@/lib/chat-types";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import { Pastille } from "@/components/settings/bits";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+/** Message commun quand le service n'acquitte pas (chien de garde 8 s). */
+const SILENT_SERVICE =
+  "Le service n'a pas répondu (8 s) — réessayez une fois la connexion rétablie.";
 
 function timeAgo(iso: string): string {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -45,10 +50,21 @@ export function ExtensionRow({
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<"check" | "update" | null>(null);
+  // Lot audit : garde sur la bascule (double-bascule rapide = deux événements
+  // contradictoires) + garde destructive sur la suppression.
+  const [toggling, setToggling] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState(false);
   const isRepo = ext.kind === "repo";
 
   const handleToggle = async (enabled: boolean) => {
+    if (toggling) return;
+    setToggling(true);
     const res = await api.toggleExtension(ext.id, enabled);
+    setToggling(false);
+    if (res === null) {
+      toast({ title: "Action impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Action impossible", description: res.error, variant: "destructive" });
       return;
@@ -64,6 +80,10 @@ export function ExtensionRow({
     setBusy("check");
     const res = await api.checkExtension(ext.id);
     setBusy(null);
+    if (res === null) {
+      toast({ title: "Vérification impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Vérification impossible", description: res.error, variant: "destructive" });
       return;
@@ -86,6 +106,10 @@ export function ExtensionRow({
     setBusy("update");
     const res = await api.updateExtension(ext.id);
     setBusy(null);
+    if (res === null) {
+      toast({ title: "Mise à jour impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Mise à jour impossible", description: res.error, variant: "destructive" });
       return;
@@ -99,6 +123,10 @@ export function ExtensionRow({
 
   const handlePin = async () => {
     const res = await api.pinExtension(ext.id, !ext.pinned);
+    if (res === null) {
+      toast({ title: "Action impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Action impossible", description: res.error, variant: "destructive" });
       return;
@@ -113,6 +141,10 @@ export function ExtensionRow({
 
   const handleRemove = async () => {
     const res = await api.removeExtension(ext.id);
+    if (res === null) {
+      toast({ title: "Suppression impossible", description: SILENT_SERVICE, variant: "destructive" });
+      return;
+    }
     if (res.error) {
       toast({ title: "Suppression impossible", description: res.error, variant: "destructive" });
       return;
@@ -176,7 +208,8 @@ export function ExtensionRow({
         <Switch
           checked={ext.enabled}
           onCheckedChange={(v) => void handleToggle(v)}
-          aria-label={`Activer ${ext.name}`}
+          disabled={toggling}
+          aria-label={ext.enabled ? `Désactiver ${ext.name}` : `Activer ${ext.name}`}
         />
       </div>
 
@@ -190,7 +223,7 @@ export function ExtensionRow({
                 variant="primary"
                 onClick={handleUpdate}
                 disabled={busy !== null}
-                className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
+                className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
               >
                 {busy === "update" ? (
                   <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
@@ -231,7 +264,7 @@ export function ExtensionRow({
             <Button
               type="button"
               variant="ghost"
-              onClick={handleRemove}
+              onClick={() => setPendingRemove(true)}
               className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
             >
               <Trash2 className="size-[12px]" strokeWidth={2} />
@@ -263,6 +296,23 @@ export function ExtensionRow({
           ) : null}
         </div>
       ) : null}
+
+      {/* Garde destructive — retirer l'extension est irréversible. */}
+      <ConfirmDestructiveDialog
+        open={pendingRemove}
+        onOpenChange={setPendingRemove}
+        title={`Retirer ${ext.name} ?`}
+        description={
+          isRepo
+            ? "Le dépôt n'est plus chargé par Hermes au prochain redémarrage. Cette action est irréversible."
+            : "Le serveur n'est plus chargé par Hermes au prochain redémarrage. Cette action est irréversible."
+        }
+        confirmLabel={`Retirer ${ext.name}`}
+        onConfirm={() => {
+          setPendingRemove(false);
+          void handleRemove();
+        }}
+      />
     </div>
   );
 }

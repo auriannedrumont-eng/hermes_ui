@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { emitAck } from "@/lib/emit-ack";
 import { getSocket } from "@/lib/socket";
 
 interface SiteStatus {
@@ -50,28 +51,32 @@ type ServerSettings = Partial<{
 
 const DEFAULTS = { port: 9222, timeoutS: 240, idleMin: 5 };
 
-/** Lit une clé serveur (table settings — settings:get). */
-function getServerSetting(key: string): Promise<unknown> {
-  return new Promise((resolve) => {
-    getSocket().emit("settings:get", { key }, (res: { value?: unknown } = {}) =>
-      resolve(res.value ?? null)
-    );
-  });
+/** Lit une clé serveur (table settings — settings:get, avec chien de garde :
+ *  null = le service n'a pas acquitté, JAMAIS confondu avec « clé absente »). */
+function getServerSetting(key: string): Promise<{ value?: unknown } | null> {
+  return emitAck<{ value?: unknown }>("settings:get", { key });
 }
 
-/** Écrit une clé serveur (settings:set — broadcast settings:changed). */
+/** Écrit une clé serveur (settings:set — broadcast settings:changed).
+ *  Chien de garde : false = pas d'ack (service muet). */
 function setServerSetting(key: string, value: string | number): Promise<boolean> {
-  return new Promise((resolve) => {
-    getSocket().emit("settings:set", { key, value }, (res: { ok?: boolean } = {}) =>
-      resolve(res.ok === true)
-    );
-  });
+  return emitAck<{ ok?: boolean }>("settings:set", { key, value }).then(
+    (res) => res?.ok === true
+  );
 }
 
 export function WebchatSection() {
   const [status, setStatus] = useState<WebchatStatusPayload | null>(null);
   const [settings, setSettings] = useState<ServerSettings>({});
   const [drafts, setDrafts] = useState<ServerSettings>({});
+  // Lot audit 2026-11-21 : la lecture était silencieuse — socket coupée à
+  // l'ouverture, les champs affichaient les DÉFAUTS comme si c'étaient la
+  // config réelle, et le premier « Enregistrer » réécrivait les 5 clés avec
+  // ces défauts (perte de config). `settingsLoaded` / `loadError` verrouillent
+  // l'enregistrement tant que la lecture n'est pas complète et honnête.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,10 +92,22 @@ export function WebchatSection() {
       "fork.webchat.profileDir",
       "fork.webchat.browserPath",
     ];
-    Promise.all(keys.map((k) => getServerSetting(k))).then((values) => {
+    // queueMicrotask : pas de setState synchrone dans le corps d'un effet
+    // (règle react-hooks/set-state-in-effect, motif du repo).
+    queueMicrotask(() => setSettingsLoaded(false));
+    Promise.all(keys.map((k) => getServerSetting(k))).then((acks) => {
+      if (acks.some((a) => a === null)) {
+        // Au moins une clé jamais acquittée : on ne touche à RIEN — afficher
+        // des valeurs par défaut inviterait à les enregistrer par-dessus la
+        // config réelle.
+        setLoadError(true);
+        return;
+      }
+      setLoadError(false);
+      setSettingsLoaded(true);
       const next: ServerSettings = {};
       keys.forEach((k, i) => {
-        (next as Record<string, unknown>)[k] = values[i];
+        (next as Record<string, unknown>)[k] = acks[i]?.value ?? null;
       });
       setSettings(next);
       setDrafts(next);
@@ -106,41 +123,85 @@ export function WebchatSection() {
     const ok = await setServerSetting(key, value);
     if (ok) {
       setSettings((s) => ({ ...s, [key]: value } as ServerSettings));
+    }
+    return ok;
+  };
+
+  // Lot audit 2026-11-21 : un seul flash final — avant, chaque clé posait
+  // son propre « Enregistré… » et un échec en milieu de série laissait le
+  // vert affiché EN MÊME TEMPS que l'erreur, sans dire quelle clé a échoué.
+  const saveAll = async () => {
+    if (!settingsLoaded) {
+      setError(
+        "La configuration n'a pas pu être lue côté service — enregistrement bloqué pour ne pas écraser les vraies valeurs par des défauts."
+      );
+      setTimeout(() => setError(null), 6000);
+      return;
+    }
+    setSaving(true);
+    const targets: Array<[keyof ServerSettings, string | number]> = [
+      ["fork.webchat.port", port],
+      ["fork.webchat.timeoutS", timeoutS],
+      ["fork.webchat.idleMin", idleMin],
+      ["fork.webchat.outDir", outDir.trim()],
+      ["fork.webchat.browserPath", browserPath.trim()],
+    ];
+    const failed: string[] = [];
+    for (const [key, value] of targets) {
+      const ok = await save(key, value);
+      if (!ok) failed.push(key);
+    }
+    setSaving(false);
+    if (failed.length === 0) {
       setFlash("Enregistré — pris en compte au prochain tour webchat.");
       setTimeout(() => setFlash(null), 3500);
       getSocket().emit("webchat:status", (res: WebchatStatusPayload) => setStatus(res));
     } else {
-      setError("Échec de l'enregistrement côté service.");
-      setTimeout(() => setError(null), 3500);
+      setError(
+        `Échec de l'enregistrement pour ${failed.length} réglage(s) sur ${targets.length} — les autres sont enregistrés.`
+      );
+      setTimeout(() => setError(null), 6000);
+      getSocket().emit("webchat:status", (res: WebchatStatusPayload) => setStatus(res));
     }
   };
 
-  const openBrowser = (site: string | null) => {
+  const openBrowser = async (site: string | null) => {
     setOpening(site ?? "x");
     setError(null);
-    getSocket().emit("webchat:open", { site: site ?? undefined }, (res: { ok?: boolean; error?: string; pid?: number } = {}) => {
-      setOpening(null);
-      if (res.ok) {
-        setFlash(
-          res.pid
-            ? `Navigateur de pilotage lancé (pid ${res.pid}) — connectez-vous aux sites à la main, une seule fois.`
-            : "Navigateur de pilotage déjà lancé — connectez-vous aux sites à la main."
-        );
-        setTimeout(() => setFlash(null), 6000);
-      } else {
-        setError(res.error ?? "Ouverture impossible.");
-        setTimeout(() => setError(null), 6000);
-      }
-      getSocket().emit("webchat:status", (s: WebchatStatusPayload) => setStatus(s));
+    // Chien de garde : sans ack, `opening` restait non-null et les boutons
+    // restaient désactivés pour toujours.
+    const res = await emitAck<{ ok?: boolean; error?: string; pid?: number }>("webchat:open", {
+      site: site ?? undefined,
     });
+    setOpening(null);
+    if (res === null) {
+      setError("Le service n'a pas répondu (8 s) — navigateur non lancé.");
+      setTimeout(() => setError(null), 6000);
+    } else if (res.ok) {
+      setFlash(
+        res.pid
+          ? `Navigateur de pilotage lancé (pid ${res.pid}) — connectez-vous aux sites à la main, une seule fois.`
+          : "Navigateur de pilotage déjà lancé — connectez-vous aux sites à la main."
+      );
+      setTimeout(() => setFlash(null), 6000);
+    } else {
+      setError(res.error ?? "Ouverture impossible.");
+      setTimeout(() => setError(null), 6000);
+    }
+    getSocket().emit("webchat:status", (s: WebchatStatusPayload) => setStatus(s));
   };
 
-  const closeBrowser = () => {
-    getSocket().emit("webchat:close", (res: { ok?: boolean; closed?: boolean } = {}) => {
-      setFlash(res.closed ? "Navigateur de pilotage fermé." : "Le navigateur de pilotage n'était pas lancé.");
-      setTimeout(() => setFlash(null), 3500);
-      getSocket().emit("webchat:status", (s: WebchatStatusPayload) => setStatus(s));
-    });
+  const closeBrowser = async () => {
+    const res = await emitAck<{ ok?: boolean; closed?: boolean }>("webchat:close", undefined);
+    setFlash(
+      res === null
+        ? "Le service n'a pas répondu — l'état du navigateur est incertain."
+        : res.closed
+          ? "Navigateur de pilotage fermé."
+          : "Le navigateur de pilotage n'était pas lancé."
+    );
+    setTimeout(() => setFlash(null), 3500);
+    getSocket().emit("webchat:status", (s: WebchatStatusPayload) => setStatus(s));
   };
 
   const cfg = status?.config;
@@ -159,14 +220,6 @@ export function WebchatSection() {
     idleMin !== Number(settings["fork.webchat.idleMin"] ?? idleMin) ||
     outDir !== String(settings["fork.webchat.outDir"] ?? "") ||
     browserPath !== String(settings["fork.webchat.browserPath"] ?? "");
-
-  const saveAll = async () => {
-    await save("fork.webchat.port", port);
-    await save("fork.webchat.timeoutS", timeoutS);
-    await save("fork.webchat.idleMin", idleMin);
-    await save("fork.webchat.outDir", outDir.trim());
-    await save("fork.webchat.browserPath", browserPath.trim());
-  };
 
   return (
     <section>
@@ -225,9 +278,9 @@ export function WebchatSection() {
           <Button
             type="button"
             variant="primary"
-            onClick={() => openBrowser(null)}
+            onClick={() => void openBrowser(null)}
             disabled={opening !== null}
-            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ExternalLink className="size-[13px]" strokeWidth={2} />
             {opening !== null ? "Ouverture…" : "Ouvrir le navigateur"}
@@ -236,7 +289,7 @@ export function WebchatSection() {
             <Button
               type="button"
               variant="ghost"
-              onClick={closeBrowser}
+              onClick={() => void closeBrowser()}
               className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X className="size-[13px]" strokeWidth={2} />
@@ -266,6 +319,7 @@ export function WebchatSection() {
           type="button"
           variant="ghost"
           onClick={() => setShowAdv((v) => !v)}
+          aria-expanded={showAdv}
           className="inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           <ChevronDown
@@ -274,6 +328,13 @@ export function WebchatSection() {
           />
           Réglages avancés
         </Button>
+        {loadError ? (
+          <p className="mt-2 text-[11px] font-medium text-warning" role="alert">
+            Le service n&apos;a pas répondu — la configuration enregistrée
+            n&apos;est pas chargée. L&apos;enregistrement est bloqué pour ne pas
+            écraser les vraies valeurs par des défauts.
+          </p>
+        ) : null}
         {showAdv ? (
           <div className="mt-2 rounded-xl border border-border px-4 py-3">
             <div className="flex items-center justify-between gap-3">
@@ -283,9 +344,10 @@ export function WebchatSection() {
                   type="button"
                   variant="primary"
                   onClick={() => void saveAll()}
-                  className="inline-flex h-8 cursor-pointer items-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
+                  disabled={saving || !settingsLoaded}
+                  className="inline-flex h-8 cursor-pointer items-center rounded-md bg-hermes-strong px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Enregistrer
+                  {saving ? "Enregistrement…" : "Enregistrer"}
                 </Button>
               ) : (
                 <Pastille tone="off" label="à jour" className="flex-none" />

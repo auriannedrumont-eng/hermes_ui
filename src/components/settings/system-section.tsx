@@ -84,15 +84,30 @@ export function SystemSection({
 }: SystemSectionProps) {
   // ── État de vérification (à jour / disponible / erreur) ───────────────
   const [majEtat, setMajEtat] = useState<"inconnu" | "ajour" | "disponible" | "erreur">("inconnu");
-  const [majVerifie, setMajVerifie] = useState<string | null>(null);
+  /** Instant de la dernière vérification RÉUSSIE (ISO — le libellé « aujourd'hui »
+   *  n'est plus affiché que si c'est vrai). */
+  const [majVerifieAt, setMajVerifieAt] = useState<string | null>(null);
   const [majMotif, setMajMotif] = useState<string | null>(null);
   const majAJour = majEtat === "ajour";
+
+  const majVerifieLabel = useMemo(() => {
+    if (!majVerifieAt) return null;
+    const d = new Date(majVerifieAt);
+    if (Number.isNaN(d.getTime())) return null;
+    const heure = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    const memeJour = new Date().toDateString() === d.toDateString();
+    return memeJour
+      ? `aujourd'hui à ${heure}`
+      : `le ${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${heure}`;
+  }, [majVerifieAt]);
 
   // LA sonde (v0.5.1 : un seul exemplaire — montage, bouton, B-6). Le
   // service re-sonde vraiment GitHub (refreshUpdateState) et répond
   // honnêtement : à jour / disponible / erreur. Le reset d'état part au
   // microtask suivant (queueMicrotask) : jamais de setState synchrone
   // dans le corps d'un effet (react-hooks/set-state-in-effect).
+  // Lot audit 2026-11-21 : chien de garde 8 s — service muet, le bouton ne
+  // reste plus figé sur « Vérification… » pour toujours (constat visuel).
   const prodeMajCheck = useCallback((silencieux = false) => {
     if (!silencieux) {
       queueMicrotask(() => {
@@ -100,7 +115,13 @@ export function SystemSection({
         setMajMotif(null);
       });
     }
+    const garde = window.setTimeout(() => {
+      if (silencieux) return;
+      setMajEtat("erreur");
+      setMajMotif("Le service n'a pas répondu (8 s) — réessayez une fois la connexion rétablie.");
+    }, 8_000);
     getSocket().emit("system:update-check", (res: UpdateCheckRes = {}) => {
+      window.clearTimeout(garde);
       if (res?.error) {
         if (!silencieux) {
           setMajEtat("erreur");
@@ -108,11 +129,7 @@ export function SystemSection({
         }
         return; // B-6 silencieux : le fil reste sur son verdict
       }
-      setMajVerifie(
-        res.checkedAt
-          ? new Date(res.checkedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-          : new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-      );
+      setMajVerifieAt(res.checkedAt ?? new Date().toISOString());
       setMajEtat(res.available && res.available !== (res.installed ?? undefined) ? "disponible" : "ajour");
     });
   }, []);
@@ -124,17 +141,6 @@ export function SystemSection({
   useEffect(() => {
     prodeMajCheck();
   }, [prodeMajCheck]);
-
-  // Synchro pendant le rendu (pattern officiel React — le prop peut
-  // arriver après le montage via hello rediffusé, ou être déjà là).
-  const [dernierUpdateDispo, setDernierUpdateDispo] = useState<string | null>(updateAvailable);
-  if (updateAvailable !== dernierUpdateDispo) {
-    setDernierUpdateDispo(updateAvailable);
-    if (updateAvailable) {
-      setMajEtat("disponible");
-      setMajVerifie(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
-    }
-  }
 
   // ── La mise à jour en cours : journal + fil + garde-fou ───────────────
   const [updating, setUpdating] = useState(false);
@@ -153,6 +159,23 @@ export function SystemSection({
   const majLastChangeRef = useRef(0);
 
   const majActif = majLog !== null && majDone === null;
+
+  // Synchro pendant le rendu (pattern officiel React — le prop peut
+  // arriver après le montage via hello rediffusé, ou être déjà là).
+  // Lot audit : la synchro fonctionne aussi dans l'autre sens —
+  // `updateAvailable` repassant à null fait sortir de « disponible »
+  // (mise à jour faite depuis une autre fenêtre), au lieu d'y rester
+  // collé pour toujours. (Placé APRÈS les déclarations majActif/majDone.)
+  const [dernierUpdateDispo, setDernierUpdateDispo] = useState<string | null>(updateAvailable);
+  if (updateAvailable !== dernierUpdateDispo) {
+    setDernierUpdateDispo(updateAvailable);
+    if (updateAvailable) {
+      setMajEtat("disponible");
+      setMajVerifieAt(new Date().toISOString());
+    } else if (!majActif && majDone === null) {
+      setMajEtat((e) => (e === "disponible" ? "ajour" : e));
+    }
+  }
   const majAttendGitHub = majActif && derniereLigne(majLog ?? "").toLowerCase().includes("github");
 
   /** Applique un snapshot du journal : battement sur l'ÂGE DU JOURNAL
@@ -190,9 +213,16 @@ export function SystemSection({
     setUpdating(true);
     setUpdateError(null);
     setMajDone(null);
+    // Lot audit : chien de garde — service muet, « Envoi… » ne reste plus
+    // bloqué pour toujours.
+    const garde = window.setTimeout(() => {
+      setUpdating(false);
+      setUpdateError("Le service n'a pas répondu (8 s) — réessayez une fois la connexion rétablie.");
+    }, 8_000);
     getSocket().emit(
       "system:update-request",
       (res: { ok?: boolean; alreadyRunning?: boolean; error?: string } = {}) => {
+        window.clearTimeout(garde);
         setUpdating(false);
         if (res?.ok) {
           // B-2 : demande déjà en vol (autre client, double-clic) — on
@@ -344,7 +374,7 @@ export function SystemSection({
               <p className="fil mt-1 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
                 {majDone === "ok" ? (
                   <>
-                    Terminé à <b>{majFinA ?? new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</b> —
+                    Terminé à <b>{majFinA ?? majVerifieLabel ?? "—"}</b> —
                     rechargez la page pour découvrir la nouvelle version. Vos conversations et
                     réglages sont intacts.
                   </>
@@ -363,7 +393,7 @@ export function SystemSection({
                   </>
                 ) : majEtat === "ajour" ? (
                   <>
-                    Dernière vérification&nbsp;: aujourd&apos;hui à <b>{majVerifie ?? "—"}</b>. Votre
+                    Dernière vérification&nbsp;: {majVerifieLabel ?? "à une heure inconnue"}. Votre
                     version est la plus récente.
                   </>
                 ) : (
@@ -372,8 +402,11 @@ export function SystemSection({
               </p>
             </div>
 
-            <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
-              max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
+            {/* Lot audit : classe Tailwind corrompue réparée —
+                « max-[560px]:stretch » et « max-[560px]:*: » (variante
+                inachevée, retour à la ligne dans la chaîne) n'existaient pas ;
+                l'intention responsive < 560 px est rétablie. */}
+            <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
               {majDone === "ok" ? (
                 <Button
                   type="button"
@@ -416,7 +449,7 @@ export function SystemSection({
                   type="button"
                   variant="primary"
                   disabled
-                  className="h-8 cursor-not-allowed rounded-lg bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground opacity-40"
+                  className="h-8 cursor-not-allowed rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground opacity-40"
                 >
                   Vérification…
                 </Button>

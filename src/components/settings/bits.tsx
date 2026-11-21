@@ -25,8 +25,11 @@ export function Pastille({
     warn: "bg-warning",
     err: "bg-destructive",
     off: "bg-border",
-    // « busy » (maquette Système — « Vérification… ») : point animé.
-    busy: "bg-hermes animate-pulse",
+    // « busy » (attente neutre : « Vérification… », « Reconnexion… ») :
+    // point animé GRIS — l'orange est réservé aux états « à compléter /
+    // problème » (audit design §6.1 : deux langues de couleur pour la
+    // même famille « en cours » brouillaient la lecture).
+    busy: "bg-muted-foreground animate-pulse",
   }[tone];
   const text = {
     ok: "text-muted-foreground",
@@ -54,16 +57,20 @@ export function AddLine({
   children,
   onClick,
   className,
+  "aria-expanded": ariaExpanded,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   className?: string;
+  /** État du bloc révélé (divulgation accessible). */
+  "aria-expanded"?: boolean;
 }) {
   return (
     <Button
       type="button"
       variant="ghost"
       onClick={onClick}
+      aria-expanded={ariaExpanded}
       className={cn(
         "inline-flex h-auto cursor-pointer items-center justify-start gap-2 px-0 py-0 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:bg-transparent hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
         className

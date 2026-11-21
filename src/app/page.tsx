@@ -574,12 +574,14 @@ export default function HermesWebPage() {
         prompt={promptsApi.prompt}
         presets={promptsApi.presets}
         conversationTitle={activeConversation?.title ?? null}
-        onSave={(content, presetTitle) => {
-          void promptsApi.savePrompt(content, presetTitle);
-        }}
-        onClear={() => {
-          void promptsApi.clearPrompt();
-        }}
+        // Lot audit 2026-11-21 : le résultat remonte au panneau — le badge
+        // « Non enregistré » ne disparaît QUE si le service a bien accepté.
+        onSave={(content, presetTitle) =>
+          promptsApi
+            .savePrompt(content, presetTitle)
+            .then((saved) => saved !== null)
+        }
+        onClear={() => promptsApi.clearPrompt()}
         onCreatePreset={promptsApi.createPreset}
       />
 

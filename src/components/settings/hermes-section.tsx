@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
+import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import { MemoryCard } from "@/components/settings/memory-card";
 import type { MemoryState, ModelOption, SystemPromptPreset } from "@/lib/chat-types";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
@@ -42,13 +43,17 @@ interface HermesSectionProps {
   selectedModel: string | null;
 }
 
-/** Éditeur d'un preset (création ou modification) — ligne dépliable du volet. */
+/** Éditeur d'un preset (création ou modification) — ligne dépliable du volet.
+ *  `busy` : verrou anti double-clic pendant l'aller-retour service (avant,
+ *  deux clics rapides créaient deux presets identiques). */
 function PresetEditor({
   initial,
+  busy = false,
   onCancel,
   onSubmit,
 }: {
   initial: { title: string; content: string } | null;
+  busy?: boolean;
   onCancel: () => void;
   onSubmit: (title: string, content: string) => void;
 }) {
@@ -86,11 +91,11 @@ function PresetEditor({
           type="button"
           variant="primary"
           onClick={() => onSubmit(title.trim(), content.trim())}
-          disabled={!title.trim() || !content.trim()}
+          disabled={!title.trim() || !content.trim() || busy}
           className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-3.5" strokeWidth={2.5} />
-          {initial ? "Enregistrer" : "Créer"}
+          {busy ? "Enregistrement…" : initial ? "Enregistrer" : "Créer"}
         </Button>
       </div>
     </div>
@@ -228,6 +233,11 @@ export function HermesSection({
   // Instructions globales : édition locale, sauvegarde explicite
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Lot audit : verrou de soumission (double-clic) + garde destructive sur
+  // la suppression d'un preset (règle du repo : toute destruction passe par
+  // ConfirmDestructiveDialog).
+  const [submitting, setSubmitting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SystemPromptPreset | null>(null);
 
   // Lot 3 (audit L3-2) : le brouillon n'est matérialisé QUE sur frappe —
   // l'ancienne initialisation par effet passait de null à « "" » avant la
@@ -258,12 +268,18 @@ export function HermesSection({
   };
 
   const submit = async (title: string, content: string) => {
-    if (editingId) {
-      const updated = await onUpdatePreset(editingId, title, content);
-      if (updated) closeEditor();
-    } else {
-      const created = await onCreatePreset(title, content);
-      if (created) closeEditor();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      if (editingId) {
+        const updated = await onUpdatePreset(editingId, title, content);
+        if (updated) closeEditor();
+      } else {
+        const created = await onCreatePreset(title, content);
+        if (created) closeEditor();
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -368,6 +384,7 @@ export function HermesSection({
         {creating ? (
           <PresetEditor
             initial={null}
+            busy={submitting}
             onCancel={closeEditor}
             onSubmit={(t, c) => void submit(t, c)}
           />
@@ -417,7 +434,7 @@ export function HermesSection({
                       variant="ghost"
                       title="Supprimer ce preset"
                       aria-label={`Supprimer ${p.title}`}
-                      onClick={() => void onDeletePreset(p.id)}
+                      onClick={() => setPendingDelete(p)}
                       className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                     >
                       <Trash2 className="size-[13px]" strokeWidth={2} />
@@ -427,6 +444,7 @@ export function HermesSection({
                 {isOpen ? (
                   <PresetEditor
                     initial={{ title: p.title, content: p.content }}
+                    busy={submitting}
                     onCancel={closeEditor}
                     onSubmit={(t, c) => void submit(t, c)}
                   />
@@ -437,6 +455,21 @@ export function HermesSection({
         </div>
       </div>
 
+      {/* Garde destructive — suppression d'un preset (irréversible). */}
+      <ConfirmDestructiveDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title={`Supprimer le preset « ${pendingDelete?.title ?? ""} » ?`}
+        description="Le preset est retiré de la bibliothèque. Cette action est irréversible — les conversations déjà enregistrées avec ce prompt ne sont pas modifiées."
+        confirmLabel="Supprimer le preset"
+        onConfirm={() => {
+          const p = pendingDelete;
+          setPendingDelete(null);
+          if (p) void onDeletePreset(p.id);
+        }}
+      />
 
     </section>
   );

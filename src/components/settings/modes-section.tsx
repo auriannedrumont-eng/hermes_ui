@@ -38,7 +38,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getSocket } from "@/lib/socket";
+import { emitAck } from "@/lib/emit-ack";
+import { useToast } from "@/hooks/use-toast";
 import {
   onSettingsChanged,
   readClientSetting,
@@ -64,28 +65,31 @@ import {
   VOICE_CHARS_KEY,
   VOICE_CHARS_MAX,
   VOICE_CHARS_MIN,
+  VOICE_CHARS_STEP,
   clampInt,
   normalizeWebchatModelId,
   type ConversationMode,
 } from "@/lib/modes";
 
 // ── Consignes côté service (table settings — settings:get/set) ─────────
+// Lot audit 2026-11-21 : toutes les lectures/écritures passent par emitAck
+// (chien de garde 8 s). Avant : socket coupée → promesse jamais résolue,
+// `promptsLoaded` faux pour toujours (13 textareas morts sans explication),
+// et les échecs de sauvegarde étaient avalés (`void save…` sans test).
 
-function getServerPrompts(): Promise<Record<string, string>> {
-  return new Promise((resolve) => {
-    getSocket().emit(
-      "settings:get",
-      { key: "hermes.modes.prompts" },
-      (res: { value?: unknown } = {}) => {
-        if (!res.value || typeof res.value !== "string") return resolve({});
-        try {
-          const parsed = JSON.parse(res.value) as unknown;
-          resolve(parsed && typeof parsed === "object" ? flattenPrompts(parsed) : {});
-        } catch {
-          resolve({});
-        }
-      }
-    );
+function getServerPrompts(): Promise<Record<string, string> | null> {
+  return emitAck<{ value?: unknown }>("settings:get", {
+    key: "hermes.modes.prompts",
+  }).then((res) => {
+    if (res === null) return null;
+    const raw = res.value;
+    if (!raw || typeof raw !== "string") return {};
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed && typeof parsed === "object" ? flattenPrompts(parsed) : {};
+    } catch {
+      return {};
+    }
   });
 }
 
@@ -108,41 +112,33 @@ function saveServerPrompts(flat: Record<string, string>): Promise<boolean> {
     if (!mode || !voice) continue;
     (nested[mode] ??= {})[voice] = text;
   }
-  return new Promise((resolve) => {
-    getSocket().emit(
-      "settings:set",
-      { key: "hermes.modes.prompts", value: JSON.stringify(nested) },
-      (res: { ok?: boolean } = {}) => resolve(res.ok === true)
-    );
-  });
+  return emitAck<{ ok?: boolean }>("settings:set", {
+    key: "hermes.modes.prompts",
+    value: JSON.stringify(nested),
+  }).then((res) => res?.ok === true);
 }
 
 // ── Longueur des interventions (F-58) — côté service, relu à chaque tour ──
 
-function getServerVoiceChars(): Promise<number> {
-  return new Promise((resolve) => {
-    getSocket().emit(
-      "settings:get",
-      { key: VOICE_CHARS_KEY },
-      (res: { value?: unknown } = {}) => {
-        const n = Number(res.value);
-        if (!Number.isFinite(n)) return resolve(VOICE_CHARS_DEFAULT);
-        resolve(
-          Math.min(VOICE_CHARS_MAX, Math.max(VOICE_CHARS_MIN, Math.round(n)))
-        );
-      }
-    );
-  });
+function getServerVoiceChars(): Promise<number | null> {
+  return emitAck<{ value?: unknown }>("settings:get", { key: VOICE_CHARS_KEY }).then(
+    (res) => {
+      if (res === null) return null;
+      const n = Number(res.value);
+      if (!Number.isFinite(n)) return VOICE_CHARS_DEFAULT;
+      // Bornes + alignement au pas (500) : une valeur stockée hors grille
+      // (2200) ne faisait plus « sauter » de 700 au premier clic −.
+      const stepped = Math.round(n / VOICE_CHARS_STEP) * VOICE_CHARS_STEP;
+      return Math.min(VOICE_CHARS_MAX, Math.max(VOICE_CHARS_MIN, stepped));
+    }
+  );
 }
 
 function saveServerVoiceChars(v: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    getSocket().emit(
-      "settings:set",
-      { key: VOICE_CHARS_KEY, value: String(v) },
-      (res: { ok?: boolean } = {}) => resolve(res.ok === true)
-    );
-  });
+  return emitAck<{ ok?: boolean }>("settings:set", {
+    key: VOICE_CHARS_KEY,
+    value: String(v),
+  }).then((res) => res?.ok === true);
 }
 
 // ── Briques de la page ─────────────────────────────────────────────────
@@ -507,32 +503,65 @@ const MODE_META: Record<
 
 // ── La section ─────────────────────────────────────────────────────────
 
-export function ModesSection({ models }: { models: ModelOption[] }) {
+export function ModesSection({
+  models,
+  connected = true,
+}: {
+  models: ModelOption[];
+  /** État socket transmis par le panneau racine — une section « consignes »
+   *  tout juste lue doit pouvoir dire POURQUOI elle est en attente. */
+  connected?: boolean;
+}) {
+  const { toast } = useToast();
   const [rev, setRev] = useState(0);
   /** Surcharges des consignes côté service (chargées à l'ouverture). */
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [promptsLoaded, setPromptsLoaded] = useState(false);
+  // Lot audit 2026-11-21 : lecture jamais acquittée (service muet) —
+  // avant, 13 textareas restaient désactivés sans la moindre explication.
+  const [promptsError, setPromptsError] = useState(false);
   // M-7 (revue 2026-11-19) : true dès la première édition locale — le
   // chargement serveur tardif ne doit pas écraser une saisie en cours.
   const promptsTouchedRef = useRef(false);
   const overridesRef = useRef(overrides);
   overridesRef.current = overrides;
 
-  useEffect(
-    () => {
-      void getServerPrompts().then((ov) => {
-        // M-7 (revue 2026-11-19) : une saisie commencée AVANT l'arrivée du
-        // chargement ne doit pas être écrasée par l'état serveur (la frappe
-        // disparaissait). Le chargement n'installe ses valeurs que si aucune
-        // édition locale n'a eu lieu entre-temps ; l'utilisateur repart
-        // sinon de sa saisie, la sauvegarde débouncée fera converger le
-        // service.
-        if (!promptsTouchedRef.current) setOverrides(ov);
-        setPromptsLoaded(true);
+  const loadPrompts = useCallback(() => {
+    setPromptsError(false);
+    void getServerPrompts().then((ov) => {
+      if (ov === null) {
+        setPromptsError(true);
+        return;
+      }
+      // M-7 (revue 2026-11-19) : une saisie commencée AVANT l'arrivée du
+      // chargement ne doit pas être écrasée par l'état serveur (la frappe
+      // disparaissait). Le chargement n'installe ses valeurs que si aucune
+      // édition locale n'a eu lieu entre-temps ; l'utilisateur repart
+      // sinon de sa saisie, la sauvegarde débouncée fera converger le
+      // service.
+      if (!promptsTouchedRef.current) setOverrides(ov);
+      setPromptsLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    loadPrompts();
+    return undefined;
+  }, [loadPrompts]);
+
+  /** Toast destructif commun aux échecs de sauvegarde (ack false ou
+   *  chien de garde) — avant, l'UI affichait la valeur éditée comme si
+   *  elle était enregistrée. */
+  const reportSaveFailure = useCallback(
+    (title: string) => {
+      toast({
+        title,
+        description:
+          "Le service n'a pas répondu — réessayez une fois la connexion rétablie.",
+        variant: "destructive",
       });
-      return undefined;
     },
-    []
+    [toast]
   );
 
   // Réglages client (défauts) — revus à chaque écriture du bus
@@ -552,7 +581,13 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
         const parsed = JSON.parse(rawModels) as unknown;
         if (parsed && typeof parsed === "object") {
           for (const [modeKey, id] of Object.entries(parsed as Record<string, unknown>)) {
-            modeModels[modeKey] = typeof id === "string" ? normalizeWebchatModelId(id) : (id as null);
+            // Lot audit : rejeter ce qui n'est ni string ni null (JSON
+            // corrompu s'affichait brut dans une pastille de modèle).
+            if (typeof id === "string") {
+              modeModels[modeKey] = normalizeWebchatModelId(id);
+            } else if (id === null) {
+              modeModels[modeKey] = null;
+            }
           }
         }
       }
@@ -618,18 +653,43 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
    *  un textarea posait une écriture SQLite + un broadcast settings:changed
    *  sur la socket (200 frappes = 200 écritures). */
   const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedSavePrompts = useCallback((next: Record<string, string>) => {
-    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
-    saveDebounceRef.current = setTimeout(() => {
+  const pendingSaveRef = useRef<Record<string, string> | null>(null);
+  const flushPendingPrompts = useCallback(() => {
+    const pending = pendingSaveRef.current;
+    if (saveDebounceRef.current) {
+      clearTimeout(saveDebounceRef.current);
       saveDebounceRef.current = null;
-      void saveServerPrompts(next);
-    }, 300);
-  }, []);
+    }
+    pendingSaveRef.current = null;
+    if (pending) {
+      void saveServerPrompts(pending).then((ok) => {
+        if (!ok) reportSaveFailure("Consignes non enregistrées");
+      });
+    }
+  }, [reportSaveFailure]);
+  const debouncedSavePrompts = useCallback(
+    (next: Record<string, string>) => {
+      pendingSaveRef.current = next;
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+      saveDebounceRef.current = setTimeout(() => {
+        saveDebounceRef.current = null;
+        pendingSaveRef.current = null;
+        void saveServerPrompts(next).then((ok) => {
+          if (!ok) reportSaveFailure("Consignes non enregistrées");
+        });
+      }, 300);
+    },
+    [reportSaveFailure]
+  );
   useEffect(
     () => () => {
-      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+      // Lot audit 2026-11-21 : FLUSH (et non clearTimeout) au démontage —
+      // changer de section ou fermer le volet dans les 300 ms suivant une
+      // frappe détruisait le minuteur AU LIEU de sauvegarder : la dernière
+      // édition était perdue sans avertissement.
+      flushPendingPrompts();
     },
-    []
+    [flushPendingPrompts]
   );
 
   /** Édite une consigne : clamp 4 000, ajout/retrait de la surcharge —
@@ -653,11 +713,12 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
     setOverrides(next);
     // Reset : clic unique, pas une frappe — sauvegarde immédiate (et toute
     // sauvegarde débouncée en attente est remplacée par cet état plus frais).
-    if (saveDebounceRef.current) {
-      clearTimeout(saveDebounceRef.current);
-      saveDebounceRef.current = null;
+    flushPendingPrompts();
+    const ok = await saveServerPrompts(next);
+    if (!ok) {
+      reportSaveFailure("Consignes non enregistrées");
+      return;
     }
-    await saveServerPrompts(next);
   };
 
   // F-58 — longueur visée des interventions du débat : lue au montage,
@@ -665,11 +726,14 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
   // TOUR — effet immédiat, même en plein débat, sans redémarrage.
   const [voiceChars, setVoiceChars] = useState(VOICE_CHARS_DEFAULT);
   useEffect(() => {
-    getServerVoiceChars().then(setVoiceChars);
+    getServerVoiceChars().then((v) => {
+      if (v !== null) setVoiceChars(v);
+    });
   }, []);
   const saveVoiceChars = async (v: number) => {
     setVoiceChars(v);
-    await saveServerVoiceChars(v);
+    const ok = await saveServerVoiceChars(v);
+    if (!ok) reportSaveFailure("Longueur des interventions non enregistrée");
   };
 
   const promptValue = (key: string) => overrides[key] ?? DEFAULT_PROMPTS[key] ?? "";
@@ -715,6 +779,29 @@ export function ModesSection({ models }: { models: ModelOption[] }) {
         Une conversation peut toujours changer ces réglages depuis la zone de
         message : c&apos;est elle qui décide du traitement du prochain message.
       </p>
+
+      {/* Lot audit : service muet = explication visible + réessai — avant,
+          les 13 zones restaient désactivées sans spinner ni raison. */}
+      {!promptsLoaded && (promptsError || !connected) ? (
+        <div
+          role="alert"
+          className="mt-1 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/8 px-3 py-2 text-[12.5px] font-medium text-warning"
+        >
+          <span className="min-w-0 flex-1">
+            Le service n&apos;est pas joignable — les consignes enregistrées ne
+            sont pas chargées. Les zones d&apos;édition restent fermées pour ne
+            rien écraser ; elles s&apos;ouvriront dès le chargement.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={loadPrompts}
+            className="h-7 flex-none cursor-pointer rounded-md border border-warning/50 px-3 text-[11px] font-semibold text-warning hover:bg-warning/10"
+          >
+            Réessayer
+          </Button>
+        </div>
+      ) : null}
 
       {/* ── Général — ce que toute nouvelle conversation utilise ──────── */}
       <ModeCard icon={Layers} title="Général" sub="ce que toute nouvelle conversation utilise">
@@ -875,7 +962,7 @@ promptKey="compare.main"
             value={defaults.rounds}
             min={DEBATE_ROUNDS_MIN}
             max={DEBATE_ROUNDS_MAX}
-            maxLabel="10 max"
+            maxLabel={`${DEBATE_ROUNDS_MAX} max`}
             ariaLabel="tours du débat"
             onChange={(v) => writeClientSetting("hermes.modes.debateRounds", v)}
           />
@@ -889,8 +976,8 @@ promptKey="compare.main"
             value={voiceChars}
             min={VOICE_CHARS_MIN}
             max={VOICE_CHARS_MAX}
-            step={500}
-            maxLabel="8000"
+            step={VOICE_CHARS_STEP}
+            maxLabel={String(VOICE_CHARS_MAX)}
             ariaLabel="longueur des interventions"
             onChange={(v) => void saveVoiceChars(v)}
           />
@@ -948,7 +1035,7 @@ promptKey="debate.juge"
             value={defaults.members}
             min={COUNCIL_MEMBERS_MIN}
             max={COUNCIL_MEMBERS_MAX}
-            maxLabel="5 max"
+            maxLabel={`${COUNCIL_MEMBERS_MAX} max`}
             ariaLabel="membres du conseil"
             onChange={(v) => writeClientSetting("hermes.modes.councilMembers", v)}
           />
@@ -1016,7 +1103,7 @@ promptKey="council.president"
             value={defaults.retries}
             min={AUTO_RETRIES_MIN}
             max={AUTO_RETRIES_MAX}
-            maxLabel="3 max"
+            maxLabel={`${AUTO_RETRIES_MAX} max`}
             ariaLabel="reprises après échec"
             onChange={(v) => writeClientSetting("hermes.modes.autoRetries", v)}
           />

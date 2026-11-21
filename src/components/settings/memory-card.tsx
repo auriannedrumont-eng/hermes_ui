@@ -35,6 +35,8 @@ export function MemoryCard({
   // premier « Enregistrer »). draft === null = « suit la valeur du service ».
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Lot audit : verrou des bascules (clics rapides = émissions contradictoires).
+  const [toggling, setToggling] = useState(false);
 
   const notesValue = draft ?? state?.notes ?? "";
   const maxChars = state?.maxChars ?? 12_000;
@@ -42,6 +44,20 @@ export function MemoryCard({
   const dirty = draft !== null && draft.trim() !== (state?.notes ?? "").trim();
   const enabled = state?.enabled ?? true;
   const autoLearn = state?.autoLearn ?? false;
+
+  const toggleEnabled = async (v: boolean) => {
+    if (toggling) return;
+    setToggling(true);
+    await onSetEnabled(v);
+    setToggling(false);
+  };
+
+  const toggleAuto = async (v: boolean) => {
+    if (toggling) return;
+    setToggling(true);
+    await onSetAuto(v);
+    setToggling(false);
+  };
 
   const saveNotes = async () => {
     setSaving(true);
@@ -81,7 +97,9 @@ export function MemoryCard({
                 ? "off"
                 : notesValue.trim()
                   ? "ok"
-                  : "warn"
+                  : // Audit design §6.2 : un état vide est NEUTRE (off),
+                    // pas un avertissement — l'orange alarmait à tort.
+                    "off"
             }
             label={
               !enabled
@@ -94,7 +112,8 @@ export function MemoryCard({
           {/* Interrupteur activer/désactiver — le Switch Radix unique du repo */}
           <Switch
             checked={enabled}
-            onCheckedChange={(v) => void onSetEnabled(v)}
+            onCheckedChange={(v) => void toggleEnabled(v)}
+            disabled={toggling}
             aria-label={enabled ? "Désactiver la mémoire" : "Activer la mémoire"}
           />
         </div>
@@ -117,8 +136,8 @@ export function MemoryCard({
         <Switch
           id="memory-auto-learn"
           checked={autoLearn}
-          disabled={!enabled}
-          onCheckedChange={(v) => void onSetAuto(v)}
+          disabled={!enabled || toggling}
+          onCheckedChange={(v) => void toggleAuto(v)}
           aria-label="Apprentissage automatique"
         />
       </Label>
