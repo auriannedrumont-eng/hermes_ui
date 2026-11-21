@@ -33,3 +33,9 @@
 6. **Tests** : les scripts `scripts/test-*-flow.ts` sont la QA de référence —
    lancer ceux du périmètre touché (`bun run scripts/test-…ts`), ne pas tout
    rejouer à chaque fois.
+7. **Livrables documents en Markdown uniquement** (demande de l'utilisatrice,
+   2026-11-21) : quand elle demande un document — audit, plan, review, rapport,
+   synthèse — livrer **un fichier `.md`** (dans le repo sous `docs/`, ou en
+   pièce jointe texte). **Jamais** de `.docx`, `.pdf` ou autre format binaire ;
+   et **pas d'export `.png` pour les maquettes** non plus (les maquettes restent
+   du HTML éditable dans `design/`).
