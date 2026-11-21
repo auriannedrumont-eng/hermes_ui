@@ -418,11 +418,17 @@ export async function runSensesCheck(deps: MotorDeps): Promise<MotorControl> {
 // ── Mise à jour du moteur : `hermes update --backup` (officiel) ────────────
 export async function startAgentUpdate(deps: MotorDeps): Promise<{ ok: boolean; error?: string }> {
   if (motorState.op) return { ok: false, error: "une opération est déjà en cours" };
+  // (audit 2026-11-21) Réservation SYNCHRONE avant tout await : le test
+  // ci-dessus puis `await hermesVersion(true)` (jusqu'à 4 s) laissaient une
+  // fenêtre où deux déclenchements (deux onglets) passaient tous deux le
+  // garde et lançaient deux `hermes update --backup` en parallèle sur la
+  // même installation. Si la sonde échoue, on libère l'opération.
+  setState({ op: { kind: "update", startedAt: new Date().toISOString() } }, deps);
   const before = await hermesVersion(true);
   if (!before) {
+    setState({ op: null }, deps);
     return { ok: false, error: "commande hermes introuvable — le moteur Hermes n'est pas installé sur ce poste ?" };
   }
-  setState({ op: { kind: "update", startedAt: new Date().toISOString() } }, deps);
   logLine(deps, `mise à jour du moteur Hermes demandée depuis l'interface — version actuelle ${before}, gardée en mémoire pour un retour arrière`, true);
   const res = await runLogged(deps, agentBin(), ["update", "--backup"], { timeoutMs: UPDATE_TIMEOUT_MS });
   if (res.code !== 0) {

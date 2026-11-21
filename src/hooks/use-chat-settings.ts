@@ -182,13 +182,24 @@ export function useChatSettings() {
       effort
     );
   }, [models, selectedModel, effort]);
-  // Le cran résolu persiste au registre (effet de synchronisation externe :
-  // localStorage) — écriture uniquement, jamais de setState ici.
+  // (audit 2026-11-21) La ref qui part dans chat:send / chat:regenerate /
+  // message:edit suit TOUJOURS le cran résolu AFFICHÉ — jamais le brut
+  // obsolète (l'UI montrait « medium », le tour partait avec « minimal »).
   useEffect(() => {
+    effortRef.current = effortForScale;
+  }, [effortForScale]);
+  // Le cran résolu devient aussi l'état : motif React officiel « adjust
+  // state on prop change » (re-render immédiat pendant le rendu, pas
+  // d'effet — la ref, elle, est synchronisée par l'effet ci-dessus).
+  const [effortResolvedFor, setEffortResolvedFor] = useState<string | null>(null);
+  const effortSignature = `${selectedModel ?? ""}|${effort ?? ""}`;
+  if (effortResolvedFor !== effortSignature) {
+    setEffortResolvedFor(effortSignature);
     if (effortForScale !== effort && effortForScale != null) {
+      setEffortState(effortForScale);
       writeClientSetting(EFFORT_SETTING_KEY, effortForScale);
     }
-  }, [effortForScale, effort]);
+  }
 
   /** F-09/F-12 — bascule la recherche web du tour (persistée hermes.tools.web). */
   const toggleWebSearch = useCallback(() => {

@@ -65,8 +65,15 @@ GW_LOG="$LOG_DIR/passerelle.log"
 # Ports fixes imposés par le client (constantes SERVICE_PORT/FILES_PORT)
 CHAT_PORT=3003
 FILES_PORT=3004
-# Ordre de préférence pour les ports mobiles
+# Ordre de préférence pour les ports mobiles. (audit 2026-11-21) Sous
+# Linux, les ports < 1024 sont PRIVILÉGIÉS : un caddy non root ne peut pas
+# les binder (permission denied) et pick_port ne teste que l'occupation —
+# le premier lancement échouait donc chez un utilisateur standard au lieu
+# de basculer sur 8081. On ne propose 81 qu'à root.
 GW_PORTS=(81 8081 8181 18081)
+if [ "$(id -u)" -ne 0 ]; then
+  GW_PORTS=(8081 8181 18081)
+fi
 UI_PORTS=(3000 3001 3002 3005)
 
 MAX_RESTARTS=3
@@ -388,7 +395,11 @@ do_start() {
 
   # Mise à jour GitHub (même idiome que le lanceur Windows : fusion rapide
   # ff-only ; en cas d'écart local, version locale conservée sans toucher).
-  local avant apres
+  # (audit 2026-11-21) apres initialisé : sous set -u, un git fetch qui
+  # échoue (réseau coupé) laissait apres non définie et la comparaison
+  # avala fin « unbound variable » — arrêt brutal, ni marqueur MAJ ni
+  # relance de la pile.
+  local avant="" apres=""
   avant="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
   maj_log "consultation de GitHub…"
   if [ -n "$avant" ] && git -C "$ROOT" fetch --quiet origin 2>/dev/null; then

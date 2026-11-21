@@ -127,6 +127,10 @@ export function useHermesChat() {
   const [promptInfo, setPromptInfo] = useState<ChatPromptInfo | null>(null);
   const promptInfoRef = useRef<ChatPromptInfo | null>(null);
   const activeIdRef = useRef<string | null>(null);
+  /** (audit 2026-11-21) Identifiant du chargement d'historique EN COURS :
+   *  un ack écarté (navigation, nouvelle conversation, suppression) ne doit
+   *  jamais laisser loadingHistory vrai — le squelette restait collé. */
+  const loadingForRef = useRef<string | null>(null);
 
   // Synchronise la ref activeId (lecture seule côté handlers d'événements)
   useEffect(() => {
@@ -488,9 +492,13 @@ export function useHermesChat() {
     // Compaction terminée côté service : le résumé est en tête de session,
     // la jauge et le popover reflètent le nouveau contexte envoyé au modèle.
     const onConversationCompacted = (p: { conversationId: string; compact?: CompactInfo }) => {
+      // (audit 2026-11-21) la compaction est terminée où qu'elle soit : on
+      // lève le spinner AVANT le garde d'activité, sinon un ack/broadcast
+      // arrivé pendant qu'une autre conversation est affichée le laissait
+      // bloqué à true (plus rien ne le repassait à false).
+      setCompacting(false);
       if (p.conversationId !== activeIdRef.current) return;
       setCompactInfo(p.compact ?? null);
-      setCompacting(false);
       if (p.compact) {
         toast({
           title: "Contexte compacté",
@@ -789,6 +797,20 @@ export function useHermesChat() {
       if (creatingRef.current) return null;
       creatingRef.current = true;
       return new Promise((resolve) => {
+        // (audit 2026-11-21) chien de garde : si l'ack n'arrive jamais
+        // (service tué net, coupure socket au moment du clic), creatingRef
+        // restait vrai pour toujours — plus aucune création possible, sans
+        // aucun message. On libère au bout de 10 s.
+        const watchdog = setTimeout(() => {
+          if (!creatingRef.current) return;
+          creatingRef.current = false;
+          toast({
+            title: "Création impossible",
+            description: "Le service n'a pas répondu — vérifiez la connexion puis réessayez.",
+            variant: "destructive",
+          });
+          resolve(null);
+        }, 10_000);
         // F-30 : le mode des nouvelles conversations = choix « nouveau » de la
         // pastille, sinon le réglage hermes.modes.defaultMode. Le service le
         // résout et le borne (valeur inconnue → chat).
@@ -802,6 +824,7 @@ export function useHermesChat() {
             ...(mode !== "chat" ? { mode, modeConfig: pending?.config } : {}),
           },
           (res: { conversation?: ConversationMeta }) => {
+            clearTimeout(watchdog);
             if (res.conversation) {
               activeIdRef.current = res.conversation.id;
               setConversations((prev) => [res.conversation as ConversationMeta, ...prev]);
@@ -811,6 +834,10 @@ export function useHermesChat() {
               setCompactInfo(null);
               setModeFlowLive(null);
               setPendingMode(null);
+              // (audit 2026-11-21) un squelette d'historique resté en attente
+              // sur l'ancienne conversation ne doit pas survivre au fil vierge.
+              loadingForRef.current = null;
+              setLoadingHistory(false);
               creatingRef.current = false;
               resolve(res.conversation.id);
             } else {
@@ -821,13 +848,14 @@ export function useHermesChat() {
         );
       });
     },
-    []
+    [toast]
   );
 
   const openConversation = useCallback(
     (id: string) => {
       const socket = getSocket();
       setLoadingHistory(true);
+      loadingForRef.current = id;
       activeIdRef.current = id;
       setActiveId(id);
       // M-11 (revue 2026-11-19) : frontière étanche — resetStreams vide le
@@ -838,6 +866,11 @@ export function useHermesChat() {
       resetStreams();
       setTurnError(null);
       setCompactInfo(null);
+      // (audit 2026-11-21) le spinner « Compaction… » appartient à la
+      // conversation quittée : sans reset, un broadcast reçu pendant qu'une
+      // AUTRE conversation est ouverte (filtré par activeIdRef) le laissait
+      // collé jusqu'au rechargement.
+      setCompacting(false);
       setModeFlowLive(null);
       setPendingMode(null);
       // Le panneau appartient à la conversation : on le referme au changement
@@ -868,6 +901,16 @@ export function useHermesChat() {
           // conversation ACTIVE (activeIdRef), pas à la closure — navigation
           // A→B→C rapide, l'ack tardif de A ne doit rien écrire dans le fil
           // de C ni couper prématurément son spinner d'historique.
+          // (audit 2026-11-21) Le squelette ne doit jamais rester collé :
+          // on n'écrit le fil que si la conversation est toujours active,
+          // mais on lève le spinner dès que CET ack correspond au chargement
+          // en cours — sinon un ack écarté (navigation A→B, nouvelle
+          // conversation, suppression pendant le chargement) laissait
+          // loadingHistory vrai pour toujours.
+          if (loadingForRef.current === id) {
+            loadingForRef.current = null;
+            setLoadingHistory(false);
+          }
           if (id !== activeIdRef.current) return;
           if (res.conversationId === id) {
             setMessages(res.messages ?? []);
@@ -911,7 +954,6 @@ export function useHermesChat() {
               }
             }
           }
-          setLoadingHistory(false);
         }
       );
       fetchArtifacts(id);

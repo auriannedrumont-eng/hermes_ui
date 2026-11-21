@@ -25,8 +25,11 @@ cd mini-services/hermes-chat && bun install && bun run dev   # Service socket.io
 ```
 
 Rendu des artefacts HTML : pipeline `chrome-headless-shell` (voir README du
-mini-service). `.env` racine : `HERMES_SERVICE_TOKEN` (généré par le lanceur),
-`HERMES_GATEWAY_URL` / `HERMES_GATEWAY_TOKEN` (optionnels).
+mini-service). `HERMES_SERVICE_TOKEN` : écrit par les lanceurs dans
+`desktop/runtime/service-token.env` et exporté vers le service (pas de
+`.env` racine — en lancement manuel, exportez la variable vous-même).
+`HERMES_GATEWAY_URL` / `HERMES_GATEWAY_TOKEN` : optionnels, dans
+l'environnement.
 
 ## Carte du territoire (fichiers clés)
 

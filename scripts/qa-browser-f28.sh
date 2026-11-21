@@ -10,7 +10,9 @@ mkdir -p "$SHOTS"
 
 HERMES_CHAT_DB=$DB nohup bun mini-services/hermes-chat/index.ts > /tmp/qa-service.log 2>&1 &
 PID_SERVICE=$!
-QA_PROXY_PORT=8181 nohup node scripts/qa-proxy.ts > /tmp/qa-proxy.log 2>&1 &
+# (audit 2026-11-21) bun et non node : Node n'exécute pas de .ts — le proxy
+# QA ne démarrait jamais et la pile échouait (« ECHEC pile ») à chaque fois.
+QA_PROXY_PORT=8181 nohup bun scripts/qa-proxy.ts > /tmp/qa-proxy.log 2>&1 &
 PID_PROXY=$!
 NODE_ENV=production PORT=3000 nohup bun .next/standalone/server.js > /tmp/qa-next.log 2>&1 &
 PID_NEXT=$!

@@ -420,7 +420,7 @@ async function serviceTests() {
   } catch (err) {
     socket.close();
     throw new Error(
-      `service non lancé — démarrez : HERMES_CHAT_DB=/tmp/qa-f30/hermes.sqlite PORT_SOCKET=3013 PORT_HTTP=3014 bun index.ts (${(err as Error).message})`
+      `service non lancé — démarrez : HERMES_CHAT_DB=/tmp/qa-f30/hermes.sqlite HERMES_CHAT_PORT=3013 HERMES_CHAT_FILES_PORT=3014 bun index.ts (${(err as Error).message})`
     );
   }
 

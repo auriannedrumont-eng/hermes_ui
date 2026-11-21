@@ -159,9 +159,28 @@ export function registerSettingsSystemHandlers(socket: Socket) {
 socket.on(
   "settings:get",
   (payload: { key?: string }, cb?: (data: unknown) => void) => {
-    const key = (payload?.key ?? "").trim();
+    const key = String(payload?.key ?? "").trim();
     if (!key) {
-      if (typeof cb === "function") cb({ settings: ctx.store.listSettings() });
+      // (audit 2026-11-21) La vue liste ne doit JAMAIS exposer les clés
+      // secrètes : hermes.gateway.token est le jeton Bearer de la gateway,
+      // stocké en clair en base et volontairement masqué partout ailleurs
+      // (gateway:get ne renvoie que tokenSet). Sans ce filtre, tout client
+      // socket récupérait le jeton intact via la liste.
+      const settings = ctx.store
+        .listSettings()
+        .filter((s) => s.key !== ctx.GATEWAY_TOKEN_KEY);
+      if (typeof cb === "function") cb({ settings });
+      return;
+    }
+    // (audit 2026-11-21) Lecture directe de la clé secrète interdite :
+    // seul l'indicateur « défini ou non » sort, jamais la valeur.
+    if (key === ctx.GATEWAY_TOKEN_KEY) {
+      if (typeof cb === "function")
+        cb({
+          key,
+          value: null,
+          tokenSet: Boolean((ctx.store.getSetting(key) ?? "").trim()),
+        });
       return;
     }
     if (typeof cb === "function") cb({ key, value: ctx.store.getSetting(key) });
@@ -172,10 +191,19 @@ socket.on(
 socket.on(
   "settings:set",
   (payload: { key?: string; value?: string }, cb?: (data: unknown) => void) => {
-    const key = (payload?.key ?? "").trim();
-    const value = payload?.value ?? "";
+    const key = String(payload?.key ?? "").trim();
+    // (audit 2026-11-21) payload réseau : value non-chaîne (objet, nombre)
+    // levait dans le binding bun:sqlite et tuait le process — garde explicite.
+    const value = typeof payload?.value === "string" ? payload.value : "";
     if (!key) {
       if (typeof cb === "function") cb({ error: "key requise" });
+      return;
+    }
+    // (audit 2026-11-21) Le jeton gateway ne s'écrit QUE via gateway:set
+    // (qui valide et notifie le connecteur) — pas en écrivant direct la clé.
+    if (key === ctx.GATEWAY_TOKEN_KEY) {
+      if (typeof cb === "function")
+        cb({ error: "clé réservée — passer par gateway:set" });
       return;
     }
     ctx.store.setSetting(key, value);

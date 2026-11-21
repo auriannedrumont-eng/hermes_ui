@@ -785,3 +785,14 @@ function shutdown(signal: string): void {
 }
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+// (audit 2026-11-21) Filets process : un payload réseau mal typé qui
+// échapperait à une garde levait un TypeError hors des listeners socket.io
+// — rejection non gérée = mort immédiate du service (défaut Node/Bun),
+// toutes les conversations perdaient le fil. On journalise et on continue :
+// pour un service local de chat, la résilience prime sur l'arrêt sec.
+process.on("unhandledRejection", (reason) => {
+  console.error("[hermes-chat] promesse rejetée non gérée :", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[hermes-chat] exception non interceptée :", err);
+});

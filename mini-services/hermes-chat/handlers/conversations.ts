@@ -95,7 +95,10 @@ socket.on(
 
 socket.on("conversations:rename", (payload: { id?: string; title?: string }, cb?: (data: unknown) => void) => {
   const id = payload?.id;
-  const title = (payload?.title ?? "").trim();
+  // (audit 2026-11-21) payload réseau : title peut arriver non-chaîne
+  // (client bogué) — .trim() sur un nombre levait un TypeError qui tuait
+  // le process (socket.io n'isole pas les listeners).
+  const title = String(payload?.title ?? "").trim();
   if (!id || !title) {
     if (typeof cb === "function") cb({ error: "id et title requis" });
     return;
@@ -138,7 +141,12 @@ socket.on("conversations:delete", (payload: { id?: string }, cb?: (data: unknown
 
 socket.on("conversations:open", (payload: { id?: string }, cb?: (data: unknown) => void) => {
   const id = payload?.id;
-  if (!id) return;
+  // (audit 2026-11-21) id absent → ack d'erreur, jamais un return nu :
+  // le client restait sinon suspendu sur son spinner d'historique.
+  if (!id) {
+    if (typeof cb === "function") cb({ error: "conversationId requis" });
+    return;
+  }
   const messages = ctx.store.getMessages(id);
   ctx.attachArtifactCards(id, messages);
   const compact = ctx.compactInfoWire(id);
@@ -455,7 +463,12 @@ socket.on(
     cb?: (data: unknown) => void
   ) => {
     const conversationId = payload?.conversationId;
-    if (!conversationId) return;
+    // (audit 2026-11-21) id absent → ack d'erreur, jamais un return nu :
+    // la promesse côté client restait pendante pour toujours.
+    if (!conversationId) {
+      if (typeof cb === "function") cb({ error: "conversationId requis" });
+      return;
+    }
     // Garde (audit passe 3, F-02) : refuser pendant un tour en vol — la
     // troncature ci-dessous supprimerait le message que le tour rédige,
     // puis le tour aborté le ré-insérerait (message fantôme + streams
@@ -482,6 +495,18 @@ socket.on(
     const { lastUser, supersededIds, groups } =
       ctx.store.supersedeTrailingAssistant(conversationId, variant);
     if (!lastUser) {
+      // (audit 2026-11-21) supersedeTrailingAssistant a DÉJÀ passé les
+      // réponses en version_active = 0 avant de découvrir l'absence de
+      // message utilisateur (ex. supprimé via message:delete). Sans
+      // restauration, les réponses du fil disparaissaient en base sans
+      // messages:refreshed ni chemin de retour — au rechargement, fil vide.
+      const touchedGroups = [...new Set(Object.values(groups).filter(Boolean))];
+      for (const g of touchedGroups) ctx.store.restoreLatestVersion(conversationId, g as string);
+      if (touchedGroups.length) {
+        const refreshed = ctx.store.getMessages(conversationId);
+        ctx.attachArtifactCards(conversationId, refreshed);
+        ctx.io.emit("messages:refreshed", { conversationId, messages: refreshed });
+      }
       if (typeof cb === "function") cb({ error: "Aucun message à régénérer" });
       return;
     }

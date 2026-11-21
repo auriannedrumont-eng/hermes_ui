@@ -365,7 +365,11 @@ export function MessageList({
                 </div>
               ) : (
                 <ComparePair
-                  key={`compare-${i}`}
+                  // (audit 2026-11-21) clé dérivée des ids des messages de la
+                  // paire : une clé d'index remontait toutes les paires
+                  // suivantes quand un message antérieur était supprimé/édité
+                  // (perte de l'état éphémère des bulles, saut du scroll).
+                  key={`${row.a?.message?.id ?? "a-"}-${row.b?.message?.id ?? "b-"}`}
                   pair={row}
                   isBusy={isBusy}
                   onRegenerateVariant={onRegenerateVariant}

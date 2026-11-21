@@ -180,6 +180,22 @@ export function Composer({
     // re-render immédiat : motif React officiel « adjust state on prop
     // change » — l'écriture pendant le rendu est autorisée ici (React
     // rejoue le rendu avant de committer), pas dans un effet.
+    // (audit 2026-11-21) flush du brouillon SORTANT : le changement de
+    // conversation annule le timer de debounce — sans cette écriture
+    // immédiate sous l'ANCIENNE clé, les frappes des derniers 300 ms
+    // étaient perdues (et c'est ici, et nulle part après, que `value`
+    // contient encore l'ancien brouillon).
+    if (draftLoaded) {
+      try {
+        if (value.trim()) {
+          window.localStorage.setItem(draftStorageKey(draftLoaded), value);
+        } else {
+          window.localStorage.removeItem(draftStorageKey(draftLoaded));
+        }
+      } catch {
+        /* stockage indisponible */
+      }
+    }
     setDraftLoaded(draftKey);
     try {
       setValue(window.localStorage.getItem(draftStorageKey(draftKey)) ?? "");

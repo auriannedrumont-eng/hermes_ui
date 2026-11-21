@@ -91,10 +91,14 @@ async function main() {
         JSON.stringify(userMsg?.attachments ?? null)
       );
     } catch (err) {
+      // (audit 2026-11-21) l'échec doit sortir en 1 : le try/catch avalait
+      // l'exception et le finally sortait toujours en 0 — le test comptait
+      // « OK » dans bun run test:e2e même en erreur.
       console.error("ÉCHEC DU TEST :", err);
+      process.exitCode = 1;
     } finally {
       socket.close();
-      process.exit(0);
+      process.exit(process.exitCode === 1 ? 1 : 0);
     }
   });
 

@@ -15,7 +15,13 @@ echo "════ 1. pile ════"
 pkill -f "standalone/server.js" 2>/dev/null
 pkill -f "bun --hot" 2>/dev/null
 sleep 1
-TOK=$(cat /tmp/hermes-tok.txt)
+# (audit 2026-11-21) garde : fichier jeton absent → TOK vide → toutes les
+# sockets refusées par le service, échecs incompréhensibles ensuite.
+TOK=$(cat /tmp/hermes-tok.txt 2>/dev/null || true)
+if [ -z "$TOK" ]; then
+  echo "ECHEC: /tmp/hermes-tok.txt absent — lancez d'abord desktop/hermes-ui.sh (il génère le jeton service)"
+  exit 1
+fi
 (cd mini-services/hermes-chat && HERMES_SERVICE_TOKEN=$TOK setsid nohup bun run dev > /tmp/hermes-chat.log 2>&1 < /dev/null &)
 (PORT=3000 HOSTNAME=0.0.0.0 setsid nohup bun .next/standalone/server.js > /tmp/hermes-ui.log 2>&1 < /dev/null &)
 UI=""; CHAT=""
@@ -30,6 +36,10 @@ echo "UI=$UI CHAT=$CHAT (essai $i)"
 [ "$CHAT" != "200" ] && { echo "ECHEC CHAT"; exit 1; }
 
 echo "════ 2. accueil ════"
+# (audit 2026-11-21) garde : ce script ne démarre pas Caddy — sans passerelle
+# résiduelle sur :81, tout le parcours navigait vers une page morte.
+GW=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:81/ 2>/dev/null)
+[ "$GW" = "200" ] || { echo "ECHEC: passerelle :81 absente (Caddy) — lancez desktop/hermes-ui.sh d'abord"; exit 1; }
 $AB open http://localhost:81/
 sleep 8
 $AB screenshot /tmp/p1-accueil.png

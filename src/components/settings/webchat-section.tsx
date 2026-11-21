@@ -139,10 +139,24 @@ export function WebchatSection() {
       return;
     }
     setSaving(true);
+    // (audit 2026-11-21) clamp à l'enregistrement : les attributs min/max
+    // HTML ne bloquent pas la frappe et le service n'exige que n > 0 — un
+    // « 80 » en port CDP ou « 1 » en plafond partait en base et sabotait
+    // silencieusement le prochain tour webchat. Les champs se corrigent
+    // d'eux-mêmes (drafts) pour ne pas afficher une valeur non sauvegardée.
+    const portClamp = Math.min(65535, Math.max(1024, Math.round(Number(port) || 0)));
+    const timeoutClamp = Math.min(1800, Math.max(30, Math.round(Number(timeoutS) || 0)));
+    const idleClamp = Math.min(60, Math.max(1, Math.round(Number(idleMin) || 0)));
+    setDrafts((d) => ({
+      ...d,
+      "fork.webchat.port": portClamp,
+      "fork.webchat.timeoutS": timeoutClamp,
+      "fork.webchat.idleMin": idleClamp,
+    }) as ServerSettings);
     const targets: Array<[keyof ServerSettings, string | number]> = [
-      ["fork.webchat.port", port],
-      ["fork.webchat.timeoutS", timeoutS],
-      ["fork.webchat.idleMin", idleMin],
+      ["fork.webchat.port", portClamp],
+      ["fork.webchat.timeoutS", timeoutClamp],
+      ["fork.webchat.idleMin", idleClamp],
       ["fork.webchat.outDir", outDir.trim()],
       ["fork.webchat.browserPath", browserPath.trim()],
     ];

@@ -38,14 +38,19 @@ socket.on("artifact:updated", (p: any) => {
     fetch(`http://localhost:3004${a.thumbnailUrl}`)
       .then((r) => {
         log(`thumb HTTP: ${r.status} ${r.headers.get("content-type")}`);
+        // (audit 2026-11-21) statut vérifié : sans lui, « SUCCÈS » s'affichait
+        // même si toutes les réponses étaient 401/404 (service à jeton).
+        if (r.status !== 200) throw new Error(`thumbnail HTTP ${r.status}`);
         return fetch(`http://localhost:3004${a.pdfUrl}`);
       })
       .then((r) => {
         log(`pdf HTTP: ${r.status}`);
+        if (r.status !== 200) throw new Error(`pdf HTTP ${r.status}`);
         return fetch(`http://localhost:3004${a.rawUrl}`);
       })
       .then((r) => {
         log(`raw HTTP: ${r.status} ${r.headers.get("content-type")}`);
+        if (r.status !== 200) throw new Error(`raw HTTP ${r.status}`);
         console.log("\nSUCCÈS — flux artefact complet validé");
         socket.close();
         process.exit(0);

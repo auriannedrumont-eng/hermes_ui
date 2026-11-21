@@ -10,6 +10,17 @@ import type { IncomingMessage } from "http";
 
 export const SERVICE_TOKEN = process.env.HERMES_SERVICE_TOKEN ?? null;
 
+// (audit 2026-11-21) Mode sans jeton : signalé bruyamment au démarrage —
+// la protection ne repose alors que sur la garde d'origine boucle locale.
+// Si la passerelle est un jour exposée au-delà de la boucle locale (port
+// régénéré ouvert, proxy ajouté), tout le 3004 (uploads, artefacts,
+// /diagnostics) serait lisible sans jeton via de simples navigations.
+if (!SERVICE_TOKEN) {
+  console.warn(
+    "[hermes-chat] HERMES_SERVICE_TOKEN absent — mode dev : authentification désactivée (protection = origine boucle locale uniquement)"
+  );
+}
+
 // Garde d'origine (Lot 1, audit L1-1) : sans jeton, le service ne doit pas
 // être joignable depuis une page web tierce (DNS rebinding compris) — seules
 // les origines boucle locale de la propre machine de l'utilisateur passent.

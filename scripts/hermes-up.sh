@@ -20,9 +20,18 @@ CHROME="$(ls "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev
 
 echo "— arrêt des restants (stall-server, service, next, navigateur de pilotage)"
 pkill -f "stall-server.ts" 2>/dev/null || true
-pkill -f "bun index.ts" 2>/dev/null || true
-pkill -f "next dev" 2>/dev/null || true
 pkill -f "remote-debugging-port=9222" 2>/dev/null || true
+# (audit 2026-11-21) les motifs génériques « bun index.ts » / « next dev »
+# abattaient le service d'un AUTRE projet sur la même machine : on ne tue
+# que les processus dont le répertoire de travail est sous CE projet.
+for pid in $(pgrep -f "bun index.ts" 2>/dev/null); do
+  cwd="$(readlink -f /proc/$pid/cwd 2>/dev/null || true)"
+  case "$cwd" in "$ROOT"|"$ROOT"/*) kill "$pid" 2>/dev/null || true ;; esac
+done
+for pid in $(pgrep -f "next dev" 2>/dev/null); do
+  cwd="$(readlink -f /proc/$pid/cwd 2>/dev/null || true)"
+  case "$cwd" in "$ROOT"|"$ROOT"/*) kill "$pid" 2>/dev/null || true ;; esac
+done
 sleep 1
 
 if [ -n "$CHROME" ]; then
@@ -42,10 +51,14 @@ echo "— service hermes-chat : 3003 (socket) + 3004 (fichiers + diagnostics)"
 
 cd "$ROOT"
 nohup bunx next dev -p 3000 >"$LOGS/next.log" 2>&1 &
-echo "— interface Next : 3000 (Caddy :81 devant)"
+# (audit 2026-11-21) ce script ne démarre PAS Caddy — l'ancien echo laissait
+# croire que :81 était servi.
+echo "— interface Next : 3000 (passerelle Caddy :81 NON démarrée par ce script — lancez desktop/hermes-ui.sh pour la pile complète)"
 
 # ── Santé ─────────────────────────────────────────────────────────────────
-ok() { curl -s -o /dev/null "$1"; }
+# (audit 2026-11-21) -f : sans lui, curl renvoyait 0 même sur HTTP 500 —
+# « ✓ service répondu » même KO.
+ok() { curl -sf --max-time 2 -o /dev/null "$1"; }
 for i in $(seq 1 30); do ok "http://127.0.0.1:3004/diagnostics" && break; sleep 1; done
 if ok "http://127.0.0.1:3004/diagnostics"; then
   echo "✓ service répondu sur 3004"

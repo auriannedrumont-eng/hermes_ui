@@ -44,15 +44,22 @@ async function main() {
   // relative garde → coupure du spinner.
   const guardIdx = ackWindow.indexOf("id !== activeIdRef.current");
   const spinnerIdx = ackWindow.indexOf("setLoadingHistory(false)");
+  const gateIdx = ackWindow.indexOf("loadingForRef.current === id");
   check("l'ack porte la garde activeIdRef", guardIdx >= 0);
-  check("la garde précède la coupure du spinner (l'ack tardif ne coupe pas le chargement de C)",
-    guardIdx >= 0 && spinnerIdx >= 0 && guardIdx < spinnerIdx);
+  // (audit 2026-11-21) la coupure du spinner est ENCADRÉE par la porte
+  // loadingForRef : elle ne s'exprime que si l'ack correspond au chargement
+  // EN COURS — un ack tardif de A pendant que C charge ne coupe rien.
+  // (L'ancien ordre « garde puis coupure » laissait au contraire le
+  // squelette collé pour toujours quand A n'était plus active du tout :
+  // nouvelle conversation, suppression pendant le chargement.)
+  check("la coupure du spinner est gated par loadingForRef (l'ack tardif ne coupe pas le chargement de C)",
+    gateIdx >= 0 && spinnerIdx >= 0 && gateIdx < spinnerIdx);
   const seedIdx = ackWindow.indexOf("res.live ?? []");
   check("le re-semis des tours en vol est dans l'ack, derrière la garde (l'ack tardif d'une autre conversation ne sème rien)",
-    seedIdx > guardIdx && seedIdx < spinnerIdx);
+    seedIdx > guardIdx);
   const flowIdx = ackWindow.indexOf("t.modeFlow?.length");
   check("le déroulé multi-voix (modeFlow) est ré-attaché dans l'ack, derrière la garde (le bloc des voix survit à quitter/ revenir)",
-    flowIdx > guardIdx && flowIdx < spinnerIdx);
+    flowIdx > guardIdx);
 
   console.log("[3] handlers stream:*/mode:flow/artifact:* : garde activeIdRef");
   // Découpage 2026-11 (FORK.md §10) : les handlers stream:*/mode:flow vivent

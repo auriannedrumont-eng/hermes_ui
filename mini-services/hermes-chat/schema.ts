@@ -220,7 +220,12 @@ export function applySchema(db: Database): void {
 function softAlter(db: Database, table: string, column: string): void {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
-  } catch {
-    /* colonne déjà présente */
+  } catch (err) {
+    // (audit 2026-11-21) Seule l'erreur « colonne déjà présente » est
+    // tolérée : avaler TOUT (ex. SQLITE_BUSY résiduel) sautait silencieusement
+    // une migration, et les requêtes ultérieures échouaient en
+    // « no such column » sans explication.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/already exists|duplicate column/i.test(msg)) throw err;
   }
 }

@@ -124,6 +124,11 @@ function getServerVoiceChars(): Promise<number | null> {
   return emitAck<{ value?: unknown }>("settings:get", { key: VOICE_CHARS_KEY }).then(
     (res) => {
       if (res === null) return null;
+      // (audit 2026-11-21) clé jamais enregistrée → valeur null/absente :
+      // Number(null) vaut 0, fini, donc le clamp renvoyait 500 au lieu du
+      // défaut 2000 (le compteur mentait et un clic « + » changeait
+      // silencieusement le comportement réel du service).
+      if (res.value == null || res.value === "") return VOICE_CHARS_DEFAULT;
       const n = Number(res.value);
       if (!Number.isFinite(n)) return VOICE_CHARS_DEFAULT;
       // Bornes + alignement au pas (500) : une valeur stockée hors grille

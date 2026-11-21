@@ -540,6 +540,14 @@ async function runCouncil(
       }
     }),
   );
+  // (audit 2026-11-21) Toutes les voix membres ont échoué → le conseil meurt
+  // franchement, même garde que le débat : lancer quand même le président
+  // avec « Voici leurs avis… » suivi de rien gaspillait un appel LLM et
+  // produisait une fusion absurde sur une liste vide.
+  const echecs = avis.filter((a) => !a.content && a.error);
+  if (echecs.length === members.length && !ctx.signal.aborted) {
+    throw new Error(echecs[0]?.error ?? "toutes les voix du conseil ont échoué");
+  }
   // Fusion : les avis partent anonymisés (A, B, C…) — on juge les arguments,
   // pas les auteurs. Le président streame la réponse conservée.
   // Garde d'abort : un Stop pendant les membres ne lance pas le président.

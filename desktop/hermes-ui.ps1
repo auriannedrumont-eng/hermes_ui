@@ -281,7 +281,10 @@ public class JobKill {
         # 0x4000 = BELOW_NORMAL_PRIORITY_CLASS : Hermes cede le processeur
         # a vos autres logiciels des qu ils en ont besoin (machine moins
         # chaude, ventilateurs plus discrets).
-        $info.LimitFlags = 0x2000 -bor 0x40
+        # (audit 2026-11-21) 0x20 = JOB_OBJECT_LIMIT_PRIORITY_CLASS (0x40
+        # vaut JOB_OBJECT_LIMIT_USERRIGHT : la priorite basse etait
+        # silencieusement ignoree).
+        $info.LimitFlags = 0x2000 -bor 0x20
         $info.PriorityClass = 0x4000
         $Script:JobHandle = [JobKill]::CreateJobObject([IntPtr]::Zero, $null)
         [void][JobKill]::SetInformationJobObject($Script:JobHandle, 1, [ref]$info, [Runtime.InteropServices.Marshal]::SizeOf($info))

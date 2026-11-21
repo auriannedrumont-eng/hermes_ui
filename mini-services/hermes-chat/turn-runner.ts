@@ -1027,8 +1027,43 @@ const runAssistantTurn = async (
     liveClose();
   }
 };
+
+// (audit 2026-11-21) Filet global du tour. La phase de PRÉPARATION
+// (lectures SQLite, compaction, consigne de mode) est HORS du try/finally
+// interne : une exception là laissait running/liveTurns remplis — isRunning
+// restait vrai (plus aucun envoi possible sur la conversation) et
+// conversations:open ré-attachait un tour mort. Pire : la promesse remontait
+// au handler chat:send sans catch → rejection non gérée → le process pouvait
+// mourir. Le wrapper purge les registres, émet un stream:error (le client
+// déroule son spinner) et AVALE l'erreur — même contrat que le catch interne.
+// Sans risque pour un tour remplaçant : aucun nouveau tour ne peut démarrer
+// tant que la clé est occupée (isRunning refuse chat:send/regenerate).
+const runAssistantTurnGuarded = async (
+  conversationId: string,
+  opts: Parameters<typeof runAssistantTurn>[1]
+) => {
+  const turnKey = opts.variant ? `${conversationId}:${opts.variant}` : conversationId;
+  try {
+    return await runAssistantTurn(conversationId, opts);
+  } catch (err) {
+    if (running.has(turnKey)) running.delete(turnKey);
+    liveTurns.delete(turnKey);
+    console.error(
+      `[hermes-chat] tour en échec (phase préparation) : ${err instanceof Error ? err.message : "erreur inconnue"}`
+    );
+    io.emit("stream:error", {
+      conversationId,
+      error: err instanceof Error ? err.message : "Erreur inconnue du tour",
+      ...(opts.variant ? { variant: opts.variant } : {}),
+    });
+    // Contrat = Promise<void> (aucun appelant ne lit le résultat — la
+    // persistance et les événements terminaux ont déjà été émis, ou ne
+    // peuvent pas l'être : c'est la phase préparation qui a échoué).
+    return;
+  }
+};
   return {
-    runAssistantTurn,
+    runAssistantTurn: runAssistantTurnGuarded,
     isRunning,
     abortRunning,
     liveTurnsOf,
