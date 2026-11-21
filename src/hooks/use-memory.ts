@@ -37,18 +37,37 @@ export function useMemory(): MemoryApi {
 
   useEffect(() => {
     const socket = getSocket();
+    // Le service répond à `memory:get` en quelques millisecondes (handler
+    // synchrone, aucun chemin d'erreur) : un silence de 8 s ne peut venir
+    // que d'une connexion coupée entre l'émission et l'ack. Or socket.io
+    // garde la requête EN FILE et la sert à la reconnexion — le chargement
+    // finit donc par réussir. Toaster systématiquement produisait une
+    // fausse alerte (« Mémoire non chargée ») suivie d'une carte chargée
+    // quelques secondes plus tard (scénario réel : page ouverte pendant un
+    // redémarrage du service). D'où : silence si la socket est coupée au
+    // moment du verdict (« connect » relance déjà load), et un dernier
+    // essai silencieux avant de toaster le vrai échec (connecté + muet).
     const load = () => {
-      void emitAck<MemoryState>("memory:get", undefined).then((res) => {
-        if (res === null) {
-          toast({
-            title: "Mémoire non chargée",
-            description: "Le service n'a pas répondu (8 s) — réessayez à la reconnexion.",
-            variant: "destructive",
-          });
+      void (async () => {
+        const res = await emitAck<MemoryState>("memory:get", undefined);
+        if (res && typeof res.notes === "string") {
+          setState(res);
           return;
         }
-        if (res && typeof res.notes === "string") setState(res);
-      });
+        if (res === null && !getSocket().connected) return; // en file, servie à la reconnexion
+        await new Promise((r) => setTimeout(r, 1200)); // laisse finir un ack en course
+        const retry = await emitAck<MemoryState>("memory:get", undefined);
+        if (retry && typeof retry.notes === "string") {
+          setState(retry);
+          return;
+        }
+        if (retry === null && !getSocket().connected) return;
+        toast({
+          title: "Mémoire non chargée",
+          description: "Le service ne répond pas alors que la connexion est établie — réessayez.",
+          variant: "destructive",
+        });
+      })();
     };
     const onChanged = (p: Partial<MemoryState>) => {
       setState((prev) => ({ ...(prev ?? MEMORY_DEFAULTS), ...p }));

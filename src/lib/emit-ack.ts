@@ -35,6 +35,18 @@ export function emitAck<T>(
       resolve(value);
     };
     const timer = setTimeout(() => finish(null), timeoutMs);
-    socket.emit(event, payload, (res: T) => finish((res ?? null) as T | null));
+    // ⚠ NE PAS émettre `(event, undefined, ack)` : le sérialiseur socket.io
+    // transforme l'argument `undefined` en `null` sur le fil, et un handler
+    // sans payload — `socket.on("ev", (cb?) => …)` — reçoit alors
+    // `(null, ackFn)` : son paramètre vaut `null`, il n'appelle JAMAIS l'ack
+    // (memory:get rendait « Mémoire non chargée » à chaque chargement, le
+    // handler s'exécutait mais sa réponse n'avait pas de destinataire).
+    // Payload absent ⇒ émettre `(event, ack)` — le handler reçoit l'ack en
+    // premier argument. (Audit v0.5.2 suivi : reproduit par sonde directe.)
+    if (payload === undefined) {
+      socket.emit(event, (res: T) => finish((res ?? null) as T | null));
+    } else {
+      socket.emit(event, payload, (res: T) => finish((res ?? null) as T | null));
+    }
   });
 }

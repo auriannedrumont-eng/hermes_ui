@@ -669,9 +669,12 @@ io.on("connection", (socket) => {
   registerAgentMotorHandlers(socket);
   registerStorageHandlers(socket);
 
-  socket.on("disconnect", () => {
-    console.log(`[hermes-chat] client déconnecté : ${socket.id}`);
-    trace("socket", "client déconnecté — un tour en vol côté client restera sans réponse jusqu'au prochain essai");
+  socket.on("disconnect", (reason) => {
+    console.log(`[hermes-chat] client déconnecté : ${socket.id} (${reason})`);
+    // La raison socket.io (« transport close », « ping timeout »,
+    // « transport error »…) fait la différence entre un rechargement de
+    // page et une connexion instable — demandée par le diagnostic client.
+    trace(`socket`, `client déconnecté (${reason}) — un tour en vol côté client restera sans réponse jusqu'au prochain essai`);
   });
 
   socket.on("error", (error) => {

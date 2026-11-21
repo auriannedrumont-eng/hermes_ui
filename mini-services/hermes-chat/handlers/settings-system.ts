@@ -576,7 +576,13 @@ socket.on(
 // mémoire est active. Jamais un mot-clé magique : la composition reste
 // le fait du service (prompts.ts), le client n'assemble rien.
 
-socket.on("memory:get", (cb?: (data: unknown) => void) => {
+// Robuste à l'arité du client : l'ack est le DERNIER argument fonction —
+// un client qui émettrait un payload superflu (ex. undefined sérialisé en
+// null) ne doit pas casser la réponse (cf. emit-ack.ts, piège du fil).
+socket.on("memory:get", (...args: unknown[]) => {
+  const cb = args.find((a) => typeof a === "function") as
+    | ((data: unknown) => void)
+    | undefined;
   if (typeof cb === "function")
     cb({
       enabled: ctx.store.getSettingBool(ctx.MEMORY_ENABLED_KEY, true),
