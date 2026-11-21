@@ -76,7 +76,7 @@ function waitCompareEnd(conversationId: string, expected = 2, timeoutMs = 120_00
 /** Attend UN done (tour simple) et capture son éventuelle variante. */
 function waitOneEnd(conversationId: string, timeoutMs = 120_000) {
   return new Promise<{ variant?: string; message?: any; stopped?: boolean; error?: string }>((resolve) => {
-    const timer = setTimeout(() => done({ error: "timeout" }), timeoutMs);
+    const timer = setTimeout(() => resolve({ error: "timeout" }), timeoutMs);
     function cleanup() {
       clearTimeout(timer);
       socket.off("stream:done", onDone);

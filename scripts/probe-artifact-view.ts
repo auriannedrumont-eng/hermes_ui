@@ -107,9 +107,9 @@ async function main() {
   } finally {
     proc.kill();
     await new Promise((r) => setTimeout(r, 300));
-    rmSync(process.env.HERMES_CHAT_DB, { force: true });
-    rmSync(`${process.env.HERMES_CHAT_DB}-wal`, { force: true });
-    rmSync(`${process.env.HERMES_CHAT_DB}-shm`, { force: true });
+    rmSync(process.env.HERMES_CHAT_DB!, { force: true });
+    rmSync(`${process.env.HERMES_CHAT_DB!}-wal`, { force: true });
+    rmSync(`${process.env.HERMES_CHAT_DB!}-shm`, { force: true });
   }
 
   console.log(failures === 0 ? "\nVue onglet : 0 échec" : `\nVue onglet : ${failures} échec(s)`);

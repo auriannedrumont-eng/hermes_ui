@@ -6,9 +6,11 @@ const W = Number(process.argv[2] ?? 1280);
 const H = Number(process.argv[3] ?? 1080);
 const OUT = "/tmp/qa-hermes";
 
-async function boxes(page, sels) {
-  return page.evaluate((sels) => {
-    const out = {};
+type SelMap = Record<string, string>;
+
+async function boxes(page: import("playwright").Page, sels: SelMap) {
+  return page.evaluate((sels: SelMap) => {
+    const out: Record<string, unknown> = {};
     for (const [name, sel] of Object.entries(sels)) {
       const el = document.querySelector(sel);
       if (!el) { out[name] = null; continue; }
@@ -36,8 +38,9 @@ async function main() {
     sidebar: '[aria-label="Historique des conversations"]',
     composer: "textarea",
   });
+  const homeRec = home as Record<string, unknown>;
   // carte de statut (contient « Moteur local ») cherchée par texte
-  home.statusCard = await page.evaluate(() => {
+  homeRec.statusCard = await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("*")).find(
       (e) => e.children.length === 0 && e.textContent?.includes("Moteur local"),
     );
@@ -54,7 +57,7 @@ async function main() {
 
   const settings = await page.evaluate(() => {
     const drawer = document.querySelector('[role="dialog"]');
-    const r = {};
+    const r: Record<string, unknown> = {};
     r.drawer = drawer?.getBoundingClientRect().toJSON();
     const kids = drawer ? Array.from(drawer.children).map((k) => ({
       tag: k.tagName.toLowerCase(),

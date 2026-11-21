@@ -72,7 +72,7 @@ try {
   await page.screenshot({ path: "/home/z/my-project/download/v0.3.3-systeme-disponible.png" });
   console.log("capture : v0.3.3-systeme-disponible.png");
 } catch (e) {
-  console.error("✗ erreur de parcours :", e.message);
+  console.error("✗ erreur de parcours :", (e as Error).message);
   failures++;
 } finally {
   await browser.close();

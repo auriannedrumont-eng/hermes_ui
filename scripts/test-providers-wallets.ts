@@ -218,18 +218,19 @@ async function main() {
       const coding = resolveKnownProvider("z.ai Coding Plan");
       check(
         "« z.ai Coding Plan » reconnu comme preset distinct",
-        "known" in (coding ?? {}) && coding!.known.name === "z.ai Coding Plan",
+        Boolean(coding !== null && "known" in coding && coding.known.name === "z.ai Coding Plan"),
         JSON.stringify(coding ?? null).slice(0, 60)
       );
       const std = resolveKnownProvider("z.ai");
       check(
         "« z.ai » reste le preset API standard",
-        "known" in (std ?? {}) && std!.known.name === "z.ai",
+        Boolean(std !== null && "known" in std && std.known.name === "z.ai"),
         JSON.stringify(std ?? null).slice(0, 60)
       );
+      const glmp = resolveKnownProvider("GLM Coding Plan");
       check(
         "« GLM Coding Plan » reconnu comme Coding Plan",
-        resolveKnownProvider("GLM Coding Plan")?.known?.name === "z.ai Coding Plan"
+        Boolean(glmp !== null && "known" in glmp && glmp.known.name === "z.ai Coding Plan")
       );
       check(
         "capabilities : preset Coding Plan sans adresse",

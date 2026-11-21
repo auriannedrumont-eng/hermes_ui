@@ -7,6 +7,9 @@ const [file, question] = [process.argv[2], process.argv[3] ?? "Décris cette int
 async function main() {
   const zai = await ZAI.create();
   const b64 = readFileSync(file).toString("base64");
+  // Pas de `model` explicite : le serveur en choisit un par défaut (le SDK
+  // transmet le body tel quel) — le type exige le champ, on préserve le
+  // comportement réel par un cast plutôt que d'inventer un modèle.
   const res: any = await zai.chat.completions.createVision({
     messages: [
       {
@@ -18,7 +21,7 @@ async function main() {
       },
     ],
     thinking: { type: "disabled" },
-  });
+  } as any);
   console.log(res.choices?.[0]?.message?.content ?? "(réponse vide)");
 }
 

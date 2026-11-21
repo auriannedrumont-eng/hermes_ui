@@ -3,7 +3,6 @@ import ZAI from 'z-ai-web-dev-sdk';
 
 async function testStream() {
   const zai = await ZAI.create();
-  // @ts-expect-error option stream
   const stream = await zai.chat.completions.create({
     messages: [
       { role: 'assistant', content: 'Réponds en une phrase courte.' },

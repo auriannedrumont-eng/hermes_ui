@@ -14,6 +14,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { io } from "socket.io-client";
+import type { OrchestratorDeps } from "../mini-services/hermes-chat/orchestrator";
 
 let passed = 0;
 let failed = 0;
@@ -127,7 +128,7 @@ async function unitTests() {
 
   // A6. Orchestrateur — faux moteur (aucun LLM) : ordre et contenu
   const seen: { label: string; model: string | null; prompt: string; content: string }[] = [];
-  const fakeDeps: orch.OrchestratorDeps = {
+  const fakeDeps: OrchestratorDeps = {
     runVoiceTurn: async (req) => {
       const label = `${req.content.match(/posture : (\w+)/)?.[1] ?? req.systemPrompt?.slice(0, 18) ?? "?"}`;
       seen.push({
@@ -196,7 +197,7 @@ async function unitTests() {
   // parallèle, ~150 ms si les 9 tours de voix s'enchaînaient.
   {
     const tPar = Date.now();
-    const slowDeps: orch.OrchestratorDeps = {
+    const slowDeps: OrchestratorDeps = {
       runVoiceTurn: async () => {
         await new Promise((r) => setTimeout(r, 15));
         return { content: "avis", reasoning: "", model: "fake" };

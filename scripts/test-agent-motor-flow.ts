@@ -55,7 +55,7 @@ async function partB() {
   const agentDir = join(root, "agent");
 
   // Faux dépôt git de l'agent : deux tags, VERSION porté par le checkout.
-  const git = (args: string) =>
+  const git = (args: string[]) =>
     spawnSync("git", ["-C", agentDir, ...args], { encoding: "utf8" });
   mkdirSync(agentDir, { recursive: true });
   git(["init", "-q"]);

@@ -3,7 +3,6 @@ import ZAI from 'z-ai-web-dev-sdk';
 
 async function testStream() {
   const zai = await ZAI.create();
-  // @ts-expect-error test signature optionnelle stream
   const stream = await zai.chat.completions.create({
     messages: [
       { role: 'assistant', content: 'Réponds en une phrase.' },
@@ -13,7 +12,7 @@ async function testStream() {
     thinking: { type: 'enabled' },
   });
 
-  if (typeof (stream as AsyncIterable)[Symbol.asyncIterator] !== 'function') {
+  if (typeof (stream as AsyncIterable<unknown>)[Symbol.asyncIterator] !== 'function') {
     console.log('NO_ASYNC_ITERATOR');
     console.log('RAW:', JSON.stringify(stream).slice(0, 500));
     return;

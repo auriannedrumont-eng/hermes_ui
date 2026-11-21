@@ -169,19 +169,19 @@ async function main() {
       const byName = resolveKnownProvider("opencode");
       check(
         "« opencode » reconnu comme fournisseur connu",
-        byName && "known" in byName && byName.known.name === "opencode",
+        Boolean(byName && "known" in byName && byName.known.name === "opencode"),
         JSON.stringify(byName && "known" in byName ? byName.known.name : byName)
       );
       const byUrl = resolveKnownProvider("https://opencode.ai/inference/openai/v1");
       check(
         "adresse opencode collée → opencode (PAS OpenAI)",
-        byUrl && "known" in byUrl && byUrl.known.name === "opencode",
+        Boolean(byUrl && "known" in byUrl && byUrl.known.name === "opencode"),
         JSON.stringify(byUrl && "known" in byUrl ? byUrl.known.name : byUrl)
       );
       const openai = resolveKnownProvider("OpenAI");
       check(
         "« OpenAI » reste reconnu comme OpenAI (non régressé)",
-        openai && "known" in openai && openai.known.name === "OpenAI"
+        Boolean(openai && "known" in openai && openai.known.name === "OpenAI")
       );
       const caps = providerCapabilities("opencode", null);
       check(

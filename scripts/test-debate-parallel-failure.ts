@@ -6,7 +6,8 @@
 // rend quand même le verdict) ; SEULE la perte de TOUTES les voix d'un tour
 // tue le débat (déjà couvert par le service). Le déroulé reste honnête : la
 // ligne de la voix morte est en « error », jamais « en cours » sans fin.
-import { runOrchestratedTurn, type OrchestratorContext, type OrchestratorDeps, type ModeFlowRow } from "../mini-services/hermes-chat/orchestrator";
+import { runOrchestratedTurn, type OrchestratorContext, type OrchestratorDeps } from "../mini-services/hermes-chat/orchestrator";
+import type { ModeFlowRow } from "../mini-services/hermes-chat/types";
 
 let failures = 0;
 function check(label: string, ok: boolean, extra = "") {

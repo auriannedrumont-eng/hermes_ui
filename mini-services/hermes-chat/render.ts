@@ -267,19 +267,44 @@ export class ChromeRenderer {
     }
   }
 
-  /** Ouvre une page (target) et renvoie le client CDP + targetId. */
+  /** Ouvre une page (target) et renvoie le client CDP + targetId.
+   *  Auto-bornée et auto-nettoyante : si la création OU l'ouverture WebSocket
+   *  dépasse le délai global, l'onglet déjà créé et son WebSocket sont
+   *  refermés avant de rejeter. (Avant : renderHtml courait newPage contre
+   *  une course de 45 s ; à l'expiration, targetId/page étaient encore null
+   *  dans le finally pendant que newPage finissait en arrière-plan —
+   *  l'onglet et sa WebSocket fuyaient dans le navigateur singleton.) */
   private async newPage(): Promise<{ page: CdpPage; targetId: string }> {
     await this.ensureStarted();
     const res = await fetch(`http://127.0.0.1:${this.debugPort}/json/new?about:blank`, {
       method: "PUT",
+      signal: AbortSignal.timeout(GLOBAL_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`Impossible d'ouvrir une page CDP (${res.status})`);
     const target = (await res.json()) as { webSocketDebuggerUrl: string; id: string };
     const ws = new WebSocket(target.webSocketDebuggerUrl, { perMessageDeflate: false });
-    await new Promise<void>((resolve, reject) => {
-      ws.once("open", () => resolve());
-      ws.once("error", (err: Error) => reject(err));
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("Ouverture de page CDP expirée")),
+          GLOBAL_TIMEOUT_MS
+        );
+        ws.once("open", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        ws.once("error", (err: Error) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+      });
+    } catch (err) {
+      try {
+        ws.close();
+      } catch {}
+      await this.closeTarget(target.id); // l'onglet ne fuit pas
+      throw err;
+    }
     return { page: new CdpPage(ws), targetId: target.id };
   }
 
@@ -301,12 +326,11 @@ export class ChromeRenderer {
       try {
         mkdirSync(tmpdir(), { recursive: true });
         writeFileSync(tmpHtml, html, "utf-8");
-        const opened = await Promise.race([
-          this.newPage(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Ouverture de page CDP expirée")), GLOBAL_TIMEOUT_MS)
-          ),
-        ]);
+        // Auto-bornée : newPage referme elle-même l'onglet si l'ouverture
+        // dépasse le délai global (l'ancienne course laissait newPage finir
+        // APRÈS l'expiration — onglet et WebSocket fuyants, invisibles du
+        // finally ci-dessous).
+        const opened = await this.newPage();
         page = opened.page;
         targetId = opened.targetId;
         await page.send("Page.enable");

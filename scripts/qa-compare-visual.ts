@@ -60,7 +60,7 @@ async function main() {
       header: c.querySelector("span.truncate")?.textContent?.trim() ?? null,
       len: c.querySelector('[class*="prose"], .markdown, p')?.textContent?.length ?? 0,
     }));
-    return { pairW: Math.round(pair.getBoundingClientRect().width, 0), cols };
+    return { pairW: Math.round(pair.getBoundingClientRect().width), cols };
   });
   console.log("mesures:", JSON.stringify(measures, null, 1));
 

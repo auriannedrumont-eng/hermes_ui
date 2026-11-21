@@ -1,6 +1,6 @@
 // Gestion des pièces jointes multimédia : sauvegarde sur disque (db/uploads),
 // détection du type, service HTTP et nettoyage.
-import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, copyFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import type { Attachment, AttachmentKind } from "./types";
 
@@ -134,4 +134,26 @@ export function deleteAttachmentFiles(attachments: Attachment[] | undefined | nu
       /* déjà supprimé */
     }
   }
+}
+
+/** Copie physique d'une pièce jointe pour un fork de conversation — même
+ *  convention que copyArtifactsToFork : une suppression (de l'original OU du
+ *  fork) ne doit pas casser les fichiers de l'autre branche, qui partageait
+ *  sinon le MÊME fichier disque sous la même URL /uploads/<id>.<ext>.
+ *  Le fichier est copié sous un NOUVEL id ; l'Attachment renvoyé ne change
+ *  que id et url (nom, type, taille, kind conservés). Source déjà absente ou
+ *  copie impossible : l'attachment d'origine est rendu tel quel (déjà cassé
+ *  ou comportement d'avant — jamais pire). */
+export function copyAttachmentForFork(a: Attachment): Attachment {
+  const served = resolveUploadFile(a.url);
+  if (!served) return a;
+  const dot = served.filePath.lastIndexOf(".");
+  const ext = dot >= 0 ? served.filePath.slice(dot + 1) : "bin";
+  const fileName = `${crypto.randomUUID()}.${ext}`;
+  try {
+    copyFileSync(served.filePath, join(UPLOADS_DIR, fileName));
+  } catch {
+    return a;
+  }
+  return { ...a, id: fileName.slice(0, -ext.length - 1), url: `/uploads/${fileName}` };
 }

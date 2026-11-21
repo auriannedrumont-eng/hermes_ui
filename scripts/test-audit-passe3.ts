@@ -158,8 +158,11 @@ async function main() {
   console.log("\n[F-11] Allowlist de colonnes extensions");
   {
     process.env.HERMES_CHAT_DB = join(TMP, "store-ext-audit3.sqlite");
-    // ré-import d'un module frais : le DB_PATH du premier import est figé
-    const { Store } = await import("../mini-services/hermes-chat/store.ts?ext=1");
+    // ré-import d'un module frais : le DB_PATH du premier import est figé.
+    // Le suffixe « ?ext=1 » force bun à recharger le module sous une seconde
+    // clé de cache ; le spécifiant non littéral reste opaque pour tsc.
+    const freshStoreSpecifier = "../mini-services/hermes-chat/store.ts?ext=1";
+    const { Store } = await import(freshStoreSpecifier);
     const store = new Store();
     const ext = store.createExtension({ name: "ext test", kind: "repo", version: "1.0.0" });
     let noThrow = true;

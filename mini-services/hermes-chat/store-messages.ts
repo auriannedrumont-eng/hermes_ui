@@ -4,6 +4,7 @@
 import type { Store, ArtifactRow, ProjectRow } from "./store";
 import { parseJsonWire, parseModeConfigWire, parseModeFlowWire, rowToProject } from "./store";
 import { copyFileSync, existsSync } from "node:fs";
+import { copyAttachmentForFork } from "./uploads";
 import { resolveMode } from "./modes";
 import type { ConversationMode, ModeConfig } from "./modes";
 import { normalizeWebchatModelId } from "./webchat/fiches";
@@ -866,7 +867,12 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
             content: m.content,
             reasoning: m.reasoning,
             toolEvents: m.toolEvents,
-            attachments: m.attachments,
+            // Pièces jointes : COPIES physiques (nouvel id, nouveau fichier
+            // sous db/uploads) — même convention que copyArtifactsToFork.
+            // Avant : les mêmes URLs /uploads étaient référencées par les deux
+            // branches et la première suppression (original ou fork) cassait
+            // les images/audio de l'autre (fichier unlinké sous ses pieds).
+            attachments: m.attachments?.map(copyAttachmentForFork),
             model: m.model,
             createdAt: m.createdAt,
             stopped: m.stopped,

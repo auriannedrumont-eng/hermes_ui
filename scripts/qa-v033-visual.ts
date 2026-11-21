@@ -73,7 +73,7 @@ try {
   await page.screenshot({ path: "/home/z/my-project/download/v0.3.3-systeme-ajour.png", fullPage: false });
   console.log("capture : v0.3.3-systeme-ajour.png");
 } catch (e) {
-  console.error("✗ erreur de parcours :", e.message);
+  console.error("✗ erreur de parcours :", (e as Error).message);
   failures++;
 } finally {
   await browser.close();

@@ -37,7 +37,7 @@ const mock = createServer((req, res) => {
 });
 
 async function main() {
-  await new Promise((r) => mock.listen(MOCK_PORT, "127.0.0.1", r));
+  await new Promise<void>((r) => mock.listen(MOCK_PORT, "127.0.0.1", () => r()));
   mkdirSync(DB_DIR, { recursive: true });
   const service = spawn("bun", ["mini-services/hermes-chat/index.ts"], {
     cwd: new URL("..", import.meta.url).pathname,

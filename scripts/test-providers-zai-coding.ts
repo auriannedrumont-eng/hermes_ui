@@ -16,7 +16,10 @@
 //       transmise, la surface standard n'est JAMAIS appelée (preuve du
 //       routage du moteur), message étiqueté glm-5.3 · z.ai
 //   [F] repli documenté : surface coding privée de /models → la liste de
-//       repli (glm-4.6…) prend le relais après invalidation du cache
+//       repli (glm-4.6…) prend le relais après invalidation du cache.
+//       Idiome réaligné (dédup v0.5.2) : le MÊME secret est refusé sur un
+//       fournisseur — l'invalidation passe par une clé DISTINCTE, et le
+//       refus du doublon est lui-même vérifié.
 // Aucun réseau externe : le faux serveur tourne sur localhost.
 import { io } from "socket.io-client";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -33,6 +36,11 @@ const MOCK_PORT = 3319;
 const MOCK_JWT =
   "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhdXJpYW5uZSJ9.c2lnbmF0dXJlLWZhdXNzZQ";
 const MOCK_API_KEY = "fauxecle.abcdef123456"; // clé API standard (paas/v4)
+// Seconde clé DISTINCTE (même forme JWT) : la dédup refusant le même secret
+// sur un fournisseur (v0.5.2), c'est elle qui force l'invalidation des
+// caches de listes dans la section [F].
+const MOCK_JWT2 =
+  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZXV4aWVtZSJ9.c2Vjb25kZS1zaWduYXR1cmUtZmF1c3Nl";
 const MOCK_CONTENT = "Réponse du faux z.ai coding : la clé Coding Plan fonctionne.";
 
 let failures = 0;
@@ -316,13 +324,30 @@ async function main() {
     console.log("\n[F] Repli documenté (surface sans liste de modèles)");
     {
       mock!.codingModelsBroken.value = true;
+      // Dédup v0.5.2 : ré-ajouter le MÊME secret est refusé — l'ancien
+      // idiome « ré-ajouter la clé pour vider les caches » ne passe plus.
+      // Le refus est vérifié, puis une clé DISTINCTE invalide les caches.
+      const dup = await emitAck(socket, "providers:add-key", {
+        providerId,
+        label: "Doublon",
+        secret: MOCK_JWT,
+      });
+      check(
+        "dédup : même secret refusé sur un fournisseur",
+        dup?.ok !== true && !dup?.key?.id && /existe déjà/.test(String(dup?.error ?? "")),
+        JSON.stringify(dup).slice(0, 90)
+      );
       // Le changement du porte-clés vide les caches de listes.
       const k2 = await emitAck(socket, "providers:add-key", {
         providerId,
         label: "Seconde clé",
-        secret: MOCK_JWT,
+        secret: MOCK_JWT2,
       });
-      check("seconde clé ajoutée (force l'invalidation des caches)", Boolean(k2?.key?.id));
+      check(
+        "seconde clé DISTINCTE ajoutée (force l'invalidation des caches)",
+        Boolean(k2?.key?.id),
+        JSON.stringify(k2).slice(0, 90)
+      );
       const models = await emitAck(socket, "models:list");
       const ids = (models?.models ?? []).map((m: any) => m.id);
       check(

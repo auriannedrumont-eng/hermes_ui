@@ -83,7 +83,7 @@ const modeFile = join(qaDir, "gw-mode");
 writeFileSync(modeFile, "ok");
 const gwSrv = Bun.serve({
   port: 9120,
-  host: "127.0.0.1",
+  hostname: "127.0.0.1",
   fetch: async (req) => {
     const url = new URL(req.url);
     if (!url.pathname.startsWith("/api/model/options")) return new Response("nf", { status: 404 });

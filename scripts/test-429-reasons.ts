@@ -262,6 +262,7 @@ async function main() {
         body: "",
         json: false,
         exact: "z.ai : limite z.ai atteinte (HTTP 429) — plus aucune clé disponible",
+        wantLong: "limite z.ai atteinte (HTTP 429)",
         wantShort: "limite atteinte",
       },
       {
