@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 export interface SegmentedOption {
@@ -18,11 +18,14 @@ type SegmentedProps = {
   classNameItem?: string;
 };
 
-/* Le segmenté unique du repo (audit passe 2 C1.3) : un radiogroup accessible —
-   flèches ←↑↓→ pour naviguer (sélection au déplacement, comme un vrai radio),
-   une seule tabulation pour entrer dans le groupe (tabindex roving), pilule
-   active en relief avec le libellé d'accent AA. Le focus vient de la règle
-   globale *:focus-visible de globals.css — aucune exception locale. */
+/* Le segmenté unique du repo (audit passe 2 C1.3), désormais monté sur la
+   primitive Tabs de Radix (shadcn) : navigation clavier native — flèches
+   ←→ et Home/End, sélection au déplacement, une seule tabulation pour
+   entrer dans le groupe (tabindex roving géré par Radix). Pilule active
+   en relief avec le libellé d'accent AA, classes historiques conservées.
+   L'API (ariaLabel, value nullable, classNameItem) ne change pas pour
+   les usages existants du repo. Le focus vient de la règle globale
+   *:focus-visible de globals.css — aucune exception locale. */
 export function Segmented({
   ariaLabel,
   options,
@@ -31,54 +34,35 @@ export function Segmented({
   className,
   classNameItem,
 }: SegmentedProps) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const selectedIdx = options.findIndex((o) => o.value === value);
-  const tabbableIdx = selectedIdx >= 0 ? selectedIdx : 0;
-
-  const move = (next: number) => {
-    const i = (next + options.length) % options.length;
-    refs.current[i]?.focus();
-    onChange(options[i].value);
-  };
-
   return (
-    <div
-      role="radiogroup"
-      aria-label={ariaLabel}
-      className={cn("flex flex-none gap-0.5 rounded-md bg-muted p-0.5", className)}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-          e.preventDefault();
-          move(tabbableIdx === selectedIdx ? selectedIdx + 1 : tabbableIdx);
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-          e.preventDefault();
-          move(tabbableIdx === selectedIdx ? selectedIdx - 1 : tabbableIdx - 1);
-        }
-      }}
+    <Tabs
+      /* Toujours contrôlé : la valeur vide ne correspond à aucune option, donc
+         rien de coché — la 1re option reçoit le tab stop (roving Radix). */
+      value={value ?? ""}
+      onValueChange={onChange}
+      className="flex-none gap-0"
     >
-      {options.map((o, i) => {
-        const selected = o.value === value;
-        return (
-          <button
+      <TabsList
+        aria-label={ariaLabel}
+        className={cn(
+          "inline-flex h-auto flex-none justify-start gap-0.5 rounded-md bg-muted p-0.5",
+          className
+        )}
+      >
+        {options.map((o) => (
+          <TabsTrigger
             key={o.value}
-            ref={(el) => {
-              refs.current[i] = el;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            tabIndex={i === tabbableIdx ? 0 : -1}
-            onClick={() => onChange(o.value)}
+            value={o.value}
             className={cn(
-              "cursor-pointer rounded-sm px-2 py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-              selected && "bg-card font-semibold text-hermes-text shadow-sm",
+              "h-auto flex-none cursor-pointer rounded-sm px-2 py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
+              "data-[state=active]:bg-card data-[state=active]:font-semibold data-[state=active]:text-hermes-text data-[state=active]:shadow-sm",
               classNameItem
             )}
           >
             {o.label}
-          </button>
-        );
-      })}
-    </div>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
