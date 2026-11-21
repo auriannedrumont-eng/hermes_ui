@@ -1,10 +1,16 @@
 "use client";
 
-// Cartes « Moteur Hermes » (v0.4.0) — maquette validée
-// download/maquette-systeme-rollback.html : mise à jour du moteur avec
-// liste des changements et marqueur « touche l'interface », contrôle
-// automatique après la mise à jour (test des sens), filet de sécurité
-// (retour arrière vers la version précédente, fenêtre de confirmation),
+// Carte « Moteur Hermes » (v0.4.1) — maquette validée
+// design/maquette-systeme-v2.html : LA carte du moteur, fusion des
+// anciennes cartes « Agent Hermes » (v0.3.3 : liaison) et « Moteur
+// Hermes » (v0.4.0 : maintenance) — c'est le même programme, un seul
+// nom désormais. Porte donc : pastille d'état (connecté / mise à jour
+// disponible / problème / opération), lignes de liaison (dernier
+// contact, liaison) ET de version, mise à jour avec liste des
+// changements et marqueur « touche l'interface », contrôle automatique
+// (test des sens), repli « Moteur sur un autre poste », bouton
+// « Documents générés → ». Suivent le filet de sécurité (retour
+// arrière vers la version précédente, fenêtre de confirmation) et le
 // carnet de bord (chaque étape notée, prête à transmettre).
 //
 // SURCOUCHE : la mise à jour et le retour utilisent les commandes
@@ -17,6 +23,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
 import { getSocket } from "@/lib/socket";
+
+export interface AgentMotorCardProps {
+  /** État RÉEL de la socket vers le service — la pastille « connecté »
+   *  suit ce flux (un seul flux, aucune requête dédiée). */
+  connected?: boolean;
+  /** Navigation vers la page Stockage (lien « documents générés »). */
+  onNavigateStorage?: () => void;
+}
 
 interface AgentRelease {
   tag: string;
@@ -66,7 +80,7 @@ function logVerdict(text: string): null | "ok" | "erreur" {
   return null;
 }
 
-export function AgentMotorCard() {
+export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMotorCardProps) {
   const [state, setState] = useState<MotorStateWire | null>(null);
   const [journal, setJournal] = useState<JournalWire[]>([]);
   const [log, setLog] = useState<string | null>(null);
@@ -75,6 +89,23 @@ export function AgentMotorCard() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const logRef = useRef<HTMLPreElement | null>(null);
+
+  // ── Liaison (ex carte « Agent Hermes » v0.3.3, §3.2) : sonde réelle
+  //    unique — le battement de TOUT événement socket rafraîchit
+  //    « dernier contact », le canal est la socket elle-même. */
+  const [lastSeen, setLastSeen] = useState<number>(Date.now());
+  useEffect(() => {
+    const onAny = () => setLastSeen(Date.now());
+    const socket = getSocket();
+    socket.onAny(onAny);
+    return () => {
+      socket.offAny(onAny);
+    };
+  }, []);
+
+  // « Moteur sur un autre poste » (ex « Agent sur un autre poste ») :
+  // replié par défaut, les champs restent locaux à la session.
+  const [advOpen, setAdvOpen] = useState(false);
 
   const fetchLog = useCallback(() => {
     getSocket().emit(
@@ -146,30 +177,38 @@ export function AgentMotorCard() {
     !!control && !control.ok && !!control.versionLue && majRecente && !op;
   const agentAbsent = !!control && !control.ok && !control.versionLue && !op;
 
-  // ── État d'affichage de la carte moteur (maquette : calme → dispo →
-  //    en cours → contrôle → ok | problème → retour) ──────────────────────
+  // ── État d'affichage de la carte moteur fusionnée (maquette v2 :
+  //    calme → dispo → en cours → ok | problème → retour ; la liaison
+  //    coupée passe devant — sans moteur joignable, pas de maintenance).
+  //    NB : « connecté » dit si l'INTERFACE parle au service local, qui
+  //    relaie vers le moteur — c'est la liaison qu'on montre, pas un
+  //    état du moteur en lui-même (honnêteté v0.4.0).
   const tone: "ok" | "warn" | "err" | "off" | "busy" =
-    op
-      ? "busy"
-      : pbDetecte
-        ? "err"
-        : release
-          ? "warn"
-          : installed
-            ? "ok"
-            : "off";
-  const etatLabel =
-    op?.kind === "update"
-      ? "Mise à jour en cours…"
-      : op?.kind === "rollback"
-        ? "Retour en cours…"
+    !connected
+      ? "off"
+      : op
+        ? "busy"
         : pbDetecte
-          ? "Problème détecté"
+          ? "err"
           : release
-            ? "Mise à jour disponible"
+            ? "warn"
             : installed
-              ? "À jour"
-              : "Moteur non détecté";
+              ? "ok"
+              : "off";
+  const etatLabel =
+    !connected
+      ? "Reconnexion en cours"
+      : op?.kind === "update"
+        ? "Mise à jour en cours…"
+        : op?.kind === "rollback"
+          ? "Retour en cours…"
+          : pbDetecte
+            ? "Problème détecté"
+            : release
+              ? "Mise à jour disponible"
+              : installed
+                ? "À jour"
+                : "Moteur non détecté";
 
   const requestUpdate = () => {
     getSocket().emit(
@@ -285,7 +324,8 @@ export function AgentMotorCard() {
 
   return (
     <>
-      {/* ── Carte 3 : Moteur Hermes — version, mise à jour, contrôle ──── */}
+      {/* ── Carte Moteur Hermes — fusion v0.4.1 : liaison + version,
+          mise à jour, contrôle, repli « autre poste » (maquette v2) ── */}
       <div className="rounded-xl border border-border bg-card px-4 py-3">
         <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
           <div className="min-w-0 flex-1">
@@ -293,12 +333,15 @@ export function AgentMotorCard() {
               Moteur Hermes <Pastille tone={tone} label={etatLabel} />
             </div>
             <div className="mt-0.5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-              {op ? (
-                op.kind === "update" ? (
-                  <>Hermes s&apos;occupe de sa propre mise à jour — le déroulé apparaît ci-dessous, rien à faire.</>
-                ) : (
-                  <>Retour vers la version {previous ?? "précédente"} — procédure officielle de Hermes, déroulé ci-dessous.</>
-                )
+              {!connected ? (
+                <>
+                  Le programme Hermes n&apos;est plus joignable. Rien n&apos;est perdu —
+                  la reconnexion est automatique et silencieuse.
+                </>
+              ) : op?.kind === "update" ? (
+                <>Hermes s&apos;occupe de sa propre mise à jour — le déroulé apparaît ci-dessous, rien à faire.</>
+              ) : op?.kind === "rollback" ? (
+                <>Retour vers la version {previous ?? "précédente"} — procédure officielle de Hermes, déroulé ci-dessous.</>
               ) : pbDetecte ? (
                 <>
                   Depuis la mise à jour, l&apos;interface n&apos;arrive plus à parler au moteur
@@ -312,12 +355,14 @@ export function AgentMotorCard() {
                 </>
               ) : installed ? (
                 <>
-                  Le moteur qui travaille pour vous. {checkedAt ? `Dernière vérification à ${checkedAt}.` : ""}
+                  Le programme Hermes qui tourne sur votre machine&nbsp;: il répond à vos
+                  questions, exécute les outils et enregistre les documents que vous
+                  générez. {checkedAt ? `Dernière vérification à ${checkedAt}.` : ""}
                 </>
               ) : (
                 <>
                   Le moteur Hermes n&apos;est pas détecté sur ce poste. Installez ou lancez
-                  l&apos;agent Hermes, puis «&nbsp;Revérifier&nbsp;».
+                  le moteur Hermes, puis «&nbsp;Revérifier&nbsp;».
                 </>
               )}
             </div>
@@ -342,10 +387,21 @@ export function AgentMotorCard() {
                 Revérifier
               </button>
             ) : null}
+            {onNavigateStorage ? (
+              <button
+                type="button"
+                onClick={onNavigateStorage}
+                className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+              >
+                Documents générés →
+              </button>
+            ) : null}
           </div>
         </div>
 
-        {/* Lignes : version installée / dernière release */}
+        {/* Lignes : version installée / dernière release / liaison (fusion
+            v0.4.1 — ex lignes de la carte Agent, sonde réelle unique : le
+            battement du flux websocket, le canal est la socket elle-même). */}
         <div className="mt-1 text-[12.5px]">
           <div className="flex items-center justify-between gap-4 border-b border-border py-2">
             <span className="text-muted-foreground">Version installée</span>
@@ -361,7 +417,59 @@ export function AgentMotorCard() {
               </b>
             </div>
           ) : null}
+          <div className="flex items-center justify-between gap-4 border-b border-border py-2">
+            <span className="text-muted-foreground">Dernier contact</span>
+            <b className="font-mono text-[11.5px] font-semibold tabular-nums">
+              {connected ? `à ${hf.format(lastSeen)}` : "—"}
+            </b>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2">
+            <span className="text-muted-foreground">Liaison</span>
+            <b className="font-mono text-[11.5px] font-semibold">
+              {connected ? "locale, en continu" : "perdue, reconnexion…"}
+            </b>
+          </div>
         </div>
+
+        {/* « Moteur sur un autre poste » (ex « Agent sur un autre poste »,
+            v0.3.3) : replié par défaut, les champs restent locaux à la
+            session — aucune donnée n'est envoyée sans action explicite. */}
+        <button
+          type="button"
+          onClick={() => setAdvOpen((v) => !v)}
+          aria-expanded={advOpen}
+          className="mt-1 inline-flex cursor-pointer items-center gap-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronDown
+            className={"size-[12px] transition-transform " + (advOpen ? "rotate-180" : "")}
+            strokeWidth={2.5}
+          />
+          Moteur sur un autre poste
+        </button>
+        {advOpen ? (
+          <div className="mt-1.5">
+            <label className="mt-2.5 block">
+              <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Adresse du moteur</span>
+              <input
+                type="text"
+                placeholder="http://127.0.0.1:8765"
+                className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
+              />
+            </label>
+            <label className="mt-2.5 block">
+              <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Code d&apos;accès</span>
+              <input
+                type="password"
+                placeholder="••••••••"
+                className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
+              />
+            </label>
+            <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+              Si le moteur Hermes est installé sur un autre ordinateur que celui-ci&nbsp;:
+              indiquez ici son adresse et son code d&apos;accès. Rien ne change avant que vous validiez.
+            </p>
+          </div>
+        ) : null}
 
         {/* Liste des changements (état « disponible ») + marqueur interface */}
         {release && !op ? (

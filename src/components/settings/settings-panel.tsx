@@ -310,7 +310,7 @@ export function SettingsPanel({
           return (
             <SystemSection
               connected={connected}
-              serverVersion={serverVersion ?? null}
+              appRevision={appRevision}
               updateAvailable={updateAvailable}
               onNavigateStorage={() => goto("stockage")}
             />
@@ -411,11 +411,11 @@ export function SettingsPanel({
                 ) : (
                 <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
                   <span className="size-[7px] flex-none rounded-full bg-muted-foreground/50" />
-                  <span className="truncate">Agent Hermes non détecté</span>
+                  <span className="truncate">Moteur Hermes non détecté</span>
                   <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                    Lancez l'agent Hermes — la connexion est automatique.
+                    Lancez le moteur Hermes — la connexion est automatique.
                     Ou ajoutez la clé d'un fournisseur (section Fournisseurs)
-                    pour répondre sans agent.
+                    pour répondre sans moteur.
                   </span>
                 </div>
                 )

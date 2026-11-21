@@ -1,17 +1,18 @@
-// Section « Système » — v0.3.3 : DEUX cartes (maquette de référence
-// hermes-systeme-stockage.html, partie Système).
-// Carte 1 « Mise à jour » : pastille d'état (Vérification… / À jour /
-// Mise à jour disponible / Erreur), jalons Vérifiée → Téléchargée →
-// Installée, journal live du lanceur (system:update-log + relais
-// system:update-log:changed, verdict « MAJ OK / MAJ ERREUR », chien de
-// garde 45 s). v0.3.3 : l'état vient du SERVICE (hello.update +
-// system:update-state — vérification au démarrage puis toutes les 6 h),
-// la page n'est plus le seul déclencheur ; bouton « Mettre à jour »
-// (drapeau au lanceur) grisé « À jour » quand il n'y a rien à faire.
-// Carte 2 « Agent Hermes » : textes en français courant (comprendre sans
-// être technicien — v0.3.3, demande utilisatrice), pastille d'état,
-// lignes techniques (version, dernier contact, liaison), bloc « Agent sur
-// un autre poste » repliable. Sondes RÉELLES uniquement, jamais simulées.
+// Section « Système » — v0.4.1 : DEUX GROUPES nommés (maquette de
+// référence design/maquette-systeme-v2.html, validée par l'utilisatrice).
+// Groupe « L'interface » : carte « Mise à jour de l'interface »
+// (ex carte « Mise à jour », mécanisme v0.2.1/v0.3.3 conservé : pastille
+// d'état, jalons Vérifiée → Téléchargée → Installée, journal live du
+// lanceur, verdict « MAJ OK / MAJ ERREUR », chien de garde 45 s) + filet
+// de sécurité interface (retour manuel documenté — révision d'avant).
+// Groupe « Le moteur » : carte unique « Moteur Hermes » (agent-motor-card,
+// fusion v0.4.1 des anciennes cartes « Agent » et « Moteur » — le même
+// programme, un seul nom).
+// v0.3.3 : l'état vient du SERVICE (hello.update + system:update-state —
+// vérification au démarrage puis toutes les 6 h), la page n'est plus le
+// seul déclencheur ; bouton « Mettre à jour » (drapeau au lanceur) grisé
+// « À jour » quand il n'y a rien à faire. Sondes RÉELLES uniquement,
+// jamais simulées.
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -22,12 +23,14 @@ import { getSocket } from "@/lib/socket";
 
 interface SystemSectionProps {
   /** État RÉEL de la socket vers le service — la pastille « connecté » de
-   *  la carte Agent suit ce flux (§3.2 : un seul flux, aucune requête). */
+   *  la carte Moteur suit ce flux (un seul flux, aucune requête). */
   connected?: boolean;
-  serverVersion: string | null;
   /** v0.3.3 — révision disponible (null = à jour) : prop du panneau,
    *  même valeur que le point orange sur l'engrenage. */
   updateAvailable?: string | null;
+  /** Révision git du déploiement (sonde hello.appRevision — filet de
+   *  sécurité interface : la révision d'avant reste documentée). */
+  appRevision?: string | null;
   /** Navigation vers la page Stockage (lien « documents générés »). */
   onNavigateStorage?: () => void;
 }
@@ -50,8 +53,8 @@ function majDerniereLigne(text: string): string {
 
 export function SystemSection({
   connected = true,
-  serverVersion,
   updateAvailable = null,
+  appRevision = null,
   onNavigateStorage,
 }: SystemSectionProps) {
   // ── Carte Mise à jour : demande + journal live du lanceur ──────────
@@ -95,12 +98,18 @@ export function SystemSection({
   // v0.3.3 : l'état vivant du service (hello.update / system:update-state,
   // vérifié au démarrage + 6 h) précède la réponse — si le service vient
   // d'annoncer « disponible », la carte l'affiche immédiatement.
-  useEffect(() => {
+  // Synchro pendant le rendu (ajustement d'état officiel React, pas un
+  // effet — évite les rendus en cascade signalés par la règle
+  // react-hooks/set-state-in-effect) : le prop peut arriver après le
+  // montage (hello rediffusé) comme être déjà là au premier rendu.
+  const [dernierUpdateDispo, setDernierUpdateDispo] = useState<string | null>(updateAvailable);
+  if (updateAvailable !== dernierUpdateDispo) {
+    setDernierUpdateDispo(updateAvailable);
     if (updateAvailable) {
       setMajEtat("disponible");
       setMajVerifie(new Date().toLocaleTimeString("fr-FR"));
     }
-  }, [updateAvailable]);
+  }
 
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -203,35 +212,37 @@ export function SystemSection({
     if (el) el.scrollTop = el.scrollHeight;
   }, [majLog]);
 
-  // ── Carte Agent : état de la socket (flux unique — §3.2) ────────────
-  const hf = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const [lastSeen, setLastSeen] = useState<number>(Date.now());
+  /** Révision installée, lue à la vérification (filet de sécurité —
+   *  c'est la révision que « git checkout » restaurera si besoin). */
+  const [majInstallee, setMajInstallee] = useState<string | null>(null);
   useEffect(() => {
-    const onAny = () => setLastSeen(Date.now());
-    const socket = getSocket();
-    socket.onAny(onAny);
-    return () => {
-      socket.offAny(onAny);
-    };
+    getSocket().emit(
+      "system:update-check",
+      (res: { installed?: string | null } = {}) => {
+        if (res?.installed) setMajInstallee(res.installed);
+      }
+    );
   }, []);
-
-  // « Installation spéciale » (maquette) : repliée par défaut.
-  const [advOpen, setAdvOpen] = useState(false);
 
   return (
     <section aria-label="Système" className="mx-auto w-full max-w-[880px]">
       <h1 className="text-[19px] font-bold tracking-tight">Système</h1>
       <p className="mt-1 mb-4 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-        Mise à jour de Hermes et état du programme qui le fait tourner.
+        Mise à jour de l&apos;application et du moteur Hermes qui travaille pour vous.
       </p>
 
       <div className="space-y-3">
-        {/* ── Carte 1 : Mise à jour (action principale — spec §3.1) ────── */}
+        {/* ── Groupe « L'interface » — cette application (maquette v2) ── */}
+        <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          L&apos;interface <span className="font-medium normal-case tracking-normal opacity-85">— cette application (hermes_ui)</span>
+        </p>
+
+        {/* ── Carte : Mise à jour de l'interface (action principale) ── */}
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
-                Mise à jour{" "}
+                Mise à jour de l&apos;interface{" "}
                 {majEtat === "inconnu" ? (
                   <Pastille tone="busy" label="Vérification…" />
                 ) : majEtat === "ajour" ? (
@@ -247,12 +258,12 @@ export function SystemSection({
                   ? "Vérification de la disponibilité d'une nouvelle version…"
                   : majEtat === "ajour"
                     ? <>
-                        Votre version de Hermes est la plus récente — rien à installer.
+                        Votre version de l&apos;application est la plus récente — rien à installer.
                         {majVerifie ? ` Vérifié à ${majVerifie}.` : ""}
                       </>
                     : majEtat === "disponible"
                       ? <>
-                          Une nouvelle version de Hermes est prête à être installée. Le bouton
+                          Une nouvelle version de l&apos;application est prête à être installée. Le bouton
                           «&nbsp;Mettre à jour&nbsp;» télécharge et installe tout&nbsp;: l&apos;application
                           redémarre ensuite toute seule (1&nbsp;à&nbsp;2&nbsp;minutes).
                         </>
@@ -422,102 +433,42 @@ export function SystemSection({
           )}
         </div>
 
-        {/* ── Carte 2 : Agent Hermes (état + lignes techniques — §3.2) ── */}
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
-                Agent Hermes{" "}
-                {connected ? (
-                  <Pastille tone="ok" label="Connecté" />
-                ) : (
-                  <Pastille tone="off" label="Reconnexion en cours" />
-                )}
-              </div>
-              <div className="mt-0.5 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground">
-                {connected
-                  ? "Le programme qui tourne sur votre machine et fait tourner Hermes : il répond à vos questions, exécute les outils et enregistre les documents que vous générez."
-                  : "Le programme qui fait tourner Hermes n'est plus joignable. Rien n'est perdu — Hermes tente de le retrouver automatiquement ; la reprise est silencieuse."}
-              </div>
-            </div>
-            <div className="flex flex-none items-center gap-2">
-              <button
-                type="button"
-                onClick={onNavigateStorage}
-                className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
-              >
-                Documents générés →
-              </button>
-            </div>
+        {/* ── Filet de sécurité — interface (retour manuel documenté) ── */}
+        <div className="rounded-xl border border-border bg-muted px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
+            Filet de sécurité — interface{" "}
+            <Pastille tone="off" label="retour manuel" />
           </div>
-
-          {/* Lignes techniques (maquette) : sonde réelle unique — la
-              version vient du hello du service, le battement du flux
-              websocket, le canal est la socket elle-même. Libellés v0.3.3 :
-              français courant (comprendre sans être technicien). */}
-          <div className="mt-1 text-[12.5px]">
-            <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-              <span className="text-muted-foreground">Version de Hermes</span>
-              <b className="font-mono text-[11.5px] font-semibold tabular-nums">
-                {connected ? (serverVersion ? `v${serverVersion}` : "—") : "—"}
-              </b>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-              <span className="text-muted-foreground">Dernier contact</span>
-              <b className="font-mono text-[11.5px] font-semibold tabular-nums">
-                {connected ? `à ${hf.format(lastSeen)}` : "—"}
-              </b>
-            </div>
-            <div className="flex items-center justify-between gap-4 py-2">
-              <span className="text-muted-foreground">Liaison</span>
-              <b className="font-mono text-[11.5px] font-semibold">locale, en continu</b>
-            </div>
-          </div>
-
-          {/* « Agent sur un autre poste » (ex « Installation spéciale ») :
-              replié par défaut, les champs restent locaux à la session —
-              aucune donnée n'est envoyée sans action explicite. */}
-          <button
-            type="button"
-            onClick={() => setAdvOpen((v) => !v)}
-            aria-expanded={advOpen}
-            className="mt-1 inline-flex cursor-pointer items-center gap-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronDown
-              className={"size-[12px] transition-transform " + (advOpen ? "rotate-180" : "")}
-              strokeWidth={2.5}
-            />
-            Agent sur un autre poste
-          </button>
-          {advOpen ? (
-            <div className="mt-1.5">
-              <label className="mt-2.5 block">
-                <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Adresse de l&apos;agent</span>
-                <input
-                  type="text"
-                  placeholder="http://127.0.0.1:8765"
-                  className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
-                />
-              </label>
-              <label className="mt-2.5 block">
-                <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Code d&apos;accès</span>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
-                />
-              </label>
-              <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                Si Hermes est installé sur un autre ordinateur que celui-ci : indiquez ici son
-                adresse et son code d&apos;accès. Rien ne change avant que vous validiez.
-              </p>
-            </div>
-          ) : null}
+          <p className="mt-0.5 max-w-[560px] text-[12.5px] leading-relaxed text-muted-foreground">
+            {majInstallee || appRevision ? (
+              <>
+                La révision d&apos;avant <b className="font-mono text-[11.5px]">{majInstallee ?? appRevision}</b> reste
+                toujours connue. Le retour arrière de l&apos;interface n&apos;est pas encore un
+                bouton&nbsp;: il se fait dans le dossier de l&apos;application — «&nbsp;git checkout{" "}
+                {majInstallee ?? appRevision}
+                &nbsp;», puis relancez Hermes-Web. Vos conversations et vos réglages ne
+                sont pas touchés.
+              </>
+            ) : (
+              <>
+                Le retour arrière de l&apos;interface se fait dans le dossier de
+                l&apos;application («&nbsp;git checkout&nbsp;» vers une révision passée, puis
+                relancez Hermes-Web). Vos conversations et vos réglages ne sont pas
+                touchés. La révision en cours s&apos;affichera ici dès la première
+                vérification.
+              </>
+            )}
+          </p>
         </div>
 
-        {/* ── v0.4.0 : Moteur Hermes — mise à jour, contrôle, retour
-            arrière, carnet de bord (maquette maquette-systeme-rollback) ── */}
-        <AgentMotorCard />
+        {/* ── Groupe « Le moteur » — le programme Hermes (maquette v2) ── */}
+        <p className="pt-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Le moteur <span className="font-medium normal-case tracking-normal opacity-85">— le programme Hermes</span>
+        </p>
+
+        {/* v0.4.1 : carte unique Moteur Hermes — fusion des anciennes
+            cartes « Agent » (liaison) et « Moteur » (maintenance). */}
+        <AgentMotorCard connected={connected} onNavigateStorage={onNavigateStorage} />
       </div>
     </section>
   );

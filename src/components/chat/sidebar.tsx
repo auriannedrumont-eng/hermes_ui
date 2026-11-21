@@ -688,10 +688,10 @@ export function Sidebar({
               {!connected
                 ? "Hors ligne"
                 : mode === "gateway"
-                  ? "Agent Hermes connecté"
+                  ? "Moteur Hermes connecté"
                   : poolActive
                     ? "Moteur local · vos clés répondent"
-                    : "Agent Hermes non détecté"}
+                    : "Moteur Hermes non détecté"}
             </p>
             {/* Entrée unique des paramètres (décision v1 confirmée v3).
                 v0.3.3 : point orange tant qu'une mise à jour est

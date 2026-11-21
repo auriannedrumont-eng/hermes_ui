@@ -560,7 +560,7 @@ export function Composer({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px]">
                   {mode !== "local"
-                    ? "Recherche web : gérée par l'agent Hermes quand la gateway est branchée"
+                    ? "Recherche web : gérée par le moteur Hermes quand la gateway est branchée"
                     : webSearchAvailable
                       ? webSearch
                         ? "Couper la recherche web (Tavily/Exa)"
@@ -601,7 +601,7 @@ export function Composer({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px]">
                   {mode !== "gateway"
-                    ? "Autorisations de l'agent : actives quand l'agent Hermes est lancé (connexion automatique). Lancez l'agent puis revenez ici."
+                    ? "Autorisations de l'agent : actives quand le moteur Hermes est lancé (connexion automatique). Lancez le moteur puis revenez ici."
                     : permissionsMode === "auto"
                       ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
                       : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}

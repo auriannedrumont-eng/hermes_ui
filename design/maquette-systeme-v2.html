@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette v2 — Volet Système · Hermes Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ═══ Maquette v2 — Volet Système · Hermes Web · 21 novembre 2026 ═══
+     Suite des discussions sur la mise à jour du moteur (v0.4.0) :
+     · deux groupes nommés — « L'interface » (hermes_ui) / « Le moteur » (programme Hermes)
+     · les cartes « Agent Hermes » et « Moteur Hermes » fusionnent : c'est le
+       même programme (v0.3.3 le nommait « agent », v0.4.0 « moteur ») — un seul
+       nom désormais, la carte unique porte liaison + version + mise à jour
+     · carte « Mise à jour » → « Mise à jour de l'interface »
+     · la ligne « Version de Hermes » (v1.3.0 — en fait l'interface) disparaît de la
+       carte Agent : la version de l'interface vit en haut, celle du moteur en bas
+       (l'ancienne carte Agent est absorbée par la carte unique « Moteur Hermes »)
+     · filet de sécurité de l'interface : affiché, honnête (retour manuel documenté)
+     · versions visibles des deux côtés : installée · publiée · dernière vérification
+     · un carnet de bord unifié, chaque entrée étiquetée interface / moteur
+     Échelles et tokens officiels (globals.css, maquette v5) :
+     · Texte — 7 crans : 11 · 12.5 · 14 · 15 · 17 · 19 · 26
+     · Rayons — sm 8 · md 10 · lg 12 · xl 14 · 2xl 22 · full
+     · Hauteurs de contrôle — 32 · 36 · 40 · Gaps — 2 · 4 · 6 · 8 · 12 · 16 · 28
+     · Durées — 150 · 200 ms · Trait d'icône — 2 · 2.5 · Opacité désactivée — 40
+     Mécanismes conservés (surcouche, jamais substitution) : lanceur + journal live
+     pour l'interface ; hermes update --backup, contrôle des sens, retour arrière
+     assisté et carnet pour le moteur. Valeurs affichées : exemples. */
+  :root{
+    --background:oklch(0.988 0.002 80);
+    --foreground:oklch(0.19 0.004 60);
+    --card:oklch(1 0 0);
+    --muted:oklch(0.955 0.003 75);
+    --muted-foreground:oklch(0.51 0.01 60);
+    --border:oklch(0.915 0.004 75);
+    --hermes:oklch(0.63 0.17 42);
+    --hermes-foreground:oklch(0.99 0.002 80);
+    --hermes-soft:oklch(0.63 0.17 42 / 0.10);
+    --hermes-text:oklch(0.55 0.16 42);
+    --hermes-strong:oklch(0.55 0.16 42);
+    --warning:oklch(0.55 0.12 62);
+    --warning-soft:oklch(0.55 0.12 62 / 0.12);
+    --destructive:oklch(0.577 0.245 27.325);
+    --success:oklch(0.52 0.115 163);
+    --r-sm:8px;--r-md:10px;--r-lg:12px;--r-xl:14px;--r-2xl:22px;--r-full:999px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  *:focus-visible{outline:2px solid var(--hermes);outline-offset:2px}
+  html,body{min-height:100%}
+  body{
+    font-family:"Geist",system-ui,-apple-system,sans-serif;
+    background:var(--background);color:var(--foreground);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5;
+  }
+  .mono{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  .wrap{max-width:980px;margin:0 auto;padding:30px 20px 80px}
+
+  /* — tête de page — */
+  .page-head h1{font-size:19px;font-weight:700;letter-spacing:-.015em}
+  .page-head .sub{font-size:12.5px;color:var(--muted-foreground);line-height:1.55;
+    margin-top:6px;max-width:760px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;font-weight:500;padding:4px 11px;border-radius:var(--r-full);
+    background:var(--muted);color:var(--muted-foreground)}
+  .chip b{color:var(--foreground);font-weight:600}
+
+  /* — scènes — */
+  .scene{background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:22px 24px 24px;margin-top:26px}
+  .scene-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .scene-num{flex:none;width:26px;height:26px;border-radius:var(--r-sm);background:var(--hermes-soft);
+    color:var(--hermes-text);font-size:12.5px;font-weight:700;display:grid;place-items:center}
+  .scene-head h2{font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .why{width:100%;color:var(--muted-foreground);font-size:13.5px;margin-top:4px;
+    padding-left:38px;line-height:1.55;max-width:820px}
+
+  /* — groupes de cartes — */
+  .grp{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted-foreground);margin:22px 0 8px;display:flex;align-items:baseline;
+    gap:8px;flex-wrap:wrap}
+  .grp:first-of-type{margin-top:16px}
+  .grp .grpsub{font-size:11px;font-weight:500;text-transform:none;letter-spacing:0;opacity:.85}
+  .stack{display:flex;flex-direction:column;gap:12px}
+
+  /* — cartes — */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);
+    padding:12px 16px}
+  .card.soft{background:var(--muted)}
+  .chead{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;
+    gap:12px 8px}
+  /* Mobile : boutons longs (« Revenir à Hermes v1.2.8 » + « Revérifier »)
+     ne doivent pas étrangler le corps — ils passent dessous en pleine largeur. */
+  @media (max-width:640px){
+    .chead{flex-direction:column;align-items:stretch}
+    .cactions{flex-wrap:wrap}
+    .cactions .btn{flex:1 1 auto;min-width:0}
+  }
+  .cbody{min-width:0;flex:1}
+  .ctitle{font-size:14px;font-weight:700;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .cdesc{font-size:12.5px;line-height:1.55;color:var(--muted-foreground);
+    margin-top:2px;max-width:520px}
+  .cdesc b{color:var(--foreground);font-weight:600}
+  .cactions{display:flex;flex:none;flex-wrap:wrap;align-items:center;gap:8px}
+
+  /* — pastilles d'état (langue unique : le point) — */
+  .st{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap}
+  .st i{width:7px;height:7px;border-radius:50%;flex:none}
+  .st.ok{color:var(--muted-foreground)} .st.ok i{background:var(--success)}
+  .st.warn{color:var(--warning)} .st.warn i{background:var(--warning)}
+  .st.err{color:var(--destructive)} .st.err i{background:var(--destructive)}
+  .st.off{color:var(--muted-foreground)} .st.off i{background:var(--border)}
+  .st.busy{color:var(--muted-foreground)} .st.busy i{background:var(--hermes);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.5}}
+
+  /* — contrôles — */
+  .btn{height:32px;padding:0 12px;border-radius:var(--r-md);font-size:12.5px;font-weight:600;
+    cursor:pointer;border:none;font-family:inherit;white-space:nowrap;
+    transition:opacity .15s,border-color .15s,color .15s}
+  .btn.primary{background:var(--hermes-strong);color:var(--hermes-foreground)}
+  .btn.primary:hover{opacity:.9}
+  .btn.ghost{border:1px solid var(--border);background:var(--card);color:var(--foreground)}
+  .btn.ghost:hover{border-color:color-mix(in oklch,var(--hermes) 60%,transparent);color:var(--hermes-text)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .field{margin-top:10px;display:block}
+  .field .fl{display:block;font-size:11px;font-weight:600;color:var(--muted-foreground);margin-bottom:4px}
+  .field input{height:36px;width:100%;border:1px solid var(--border);border-radius:var(--r-md);
+    background:var(--card);padding:0 10px;font-size:12.5px;font-family:inherit;
+    color:var(--foreground);outline:none;transition:border-color .15s}
+  .field input:focus{border-color:var(--hermes)}
+
+  /* — lignes techniques libellé / valeur — */
+  .rows{margin-top:4px;font-size:12.5px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    border-bottom:1px solid var(--border);padding:8px 0}
+  .rows .row:last-child{border-bottom:none}
+  .row .k{color:var(--muted-foreground)}
+  .row .v{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+  .row .v.acc{color:var(--hermes-text)}
+
+  /* — notes de prévention — */
+  .note{font-size:11px;line-height:1.55;color:var(--muted-foreground);margin-top:8px;max-width:560px}
+  .alerte{display:flex;gap:6px;align-items:flex-start;
+    border:1px solid color-mix(in oklch,var(--warning) 40%,transparent);
+    background:var(--warning-soft);color:var(--warning);font-size:11.5px;font-weight:500;
+    line-height:1.55;border-radius:var(--r-md);padding:8px 10px;margin-top:10px}
+  .alerte span:first-child{flex:none}
+
+  /* — liste des changements (release notes) — */
+  .changes{margin-top:10px;border:1px solid var(--border);border-radius:var(--r-md)}
+  .changes pre{max-height:150px;overflow:auto;white-space:pre-wrap;padding:8px 10px;
+    font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px;line-height:1.6;color:var(--muted-foreground)}
+  .ch-foot{display:flex;align-items:center;gap:14px;margin-top:6px;flex-wrap:wrap}
+  .linkish{background:none;border:none;font-size:11px;font-weight:600;
+    color:var(--muted-foreground);cursor:pointer;display:inline-flex;
+    align-items:center;gap:4px;padding:0;font-family:inherit;transition:color .15s}
+  .linkish:hover{color:var(--foreground)}
+  .alink{font-size:11px;font-weight:600;color:var(--hermes-text);text-decoration:none}
+  .alink:hover{text-decoration:underline}
+
+  /* — journal en direct — */
+  .journal{margin-top:10px}
+  .journal pre{max-height:144px;overflow:auto;white-space:pre-wrap;
+    border:1px solid var(--border);background:var(--background);border-radius:var(--r-md);
+    padding:8px 10px;font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px;line-height:1.6;color:var(--muted-foreground)}
+  .jstat{margin-top:8px;font-size:11px;color:var(--muted-foreground);line-height:1.5}
+
+  /* — jalons — */
+  .jalons{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:14px}
+  .jal{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+  .jal i{width:17px;height:17px;border-radius:50%;border:2px solid var(--border);
+    display:grid;place-items:center;font-size:9px;color:#fff;flex:none;font-style:normal}
+  .jal.done{color:var(--foreground)} .jal.done i{border-color:var(--success);background:var(--success)}
+  .jal.now{color:var(--hermes-text)} .jal.now i{border-color:var(--hermes)}
+  .jal.todo{color:var(--muted-foreground)}
+  .jsep{width:26px;height:2px;border-radius:var(--r-full);background:var(--border);flex:none}
+  .jsep.done{background:var(--success)}
+
+  /* — replis (détails natifs) — */
+  details.fold summary{list-style:none;cursor:pointer;display:inline-flex;
+    align-items:center;gap:6px;font-size:11px;font-weight:600;
+    color:var(--muted-foreground);padding:6px 0;transition:color .15s}
+  details.fold summary::-webkit-details-marker{display:none}
+  details.fold summary:hover{color:var(--foreground)}
+  details.fold summary svg{transition:transform .15s}
+  details.fold[open] summary svg{transform:rotate(180deg)}
+  .adv{margin-top:6px}
+
+  /* — carnet de bord — */
+  .jrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+    gap:4px 16px;border-bottom:1px solid var(--border);padding:8px 0}
+  .jrow:last-child{border-bottom:none}
+  .jdate{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px;color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+  .jmain{min-width:0;flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+  .jver{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px;font-weight:600}
+  .tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--r-full);white-space:nowrap}
+  .tag.ui{background:var(--hermes-soft);color:var(--hermes-text)}
+  .tag.motor{background:var(--muted);color:var(--muted-foreground)}
+  .badge{font-size:10.5px;font-weight:700;padding:2px 10px;border-radius:var(--r-full);white-space:nowrap}
+  .badge.ok{background:color-mix(in oklch,var(--success) 10%,transparent);color:var(--success)}
+  .badge.err{background:color-mix(in oklch,var(--destructive) 10%,transparent);color:var(--destructive)}
+  .badge.info{background:var(--muted);color:var(--muted-foreground)}
+
+  /* — message à transmettre — */
+  .msg{margin-top:6px}
+  .msg pre{overflow:auto;white-space:pre-wrap;border:1px solid var(--border);
+    background:var(--background);border-radius:var(--r-md);padding:8px 10px;
+    font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px;line-height:1.6;color:var(--muted-foreground)}
+  .copy{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:none;
+    border:none;font-size:11px;font-weight:600;color:var(--hermes-text);cursor:pointer;
+    font-family:inherit;padding:0}
+  .copy:hover{text-decoration:underline}
+
+  /* — fenêtre modale (démonstration) — */
+  .backdrop{background:rgba(28,20,12,.4);border-radius:var(--r-lg);padding:44px 20px;
+    display:grid;place-items:center;margin-top:14px}
+  .modal{width:100%;max-width:460px;background:var(--card);border:1px solid var(--border);
+    border-radius:var(--r-xl);padding:20px;box-shadow:0 20px 50px rgba(28,20,12,.25)}
+  .modal h3{font-size:15.5px;font-weight:700;letter-spacing:-.01em}
+  .promises{list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .promises li{display:flex;gap:10px;font-size:12.5px;line-height:1.55}
+  .promises .mdot{width:7px;height:7px;border-radius:50%;background:var(--hermes);
+    flex:none;margin-top:6px}
+  .mfoot{margin-top:14px;border-top:1px solid var(--border);padding-top:10px;
+    font-size:11px;line-height:1.55;color:var(--muted-foreground)}
+  .macts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .caption{font-size:11px;color:var(--muted-foreground);margin-top:8px;text-align:center;line-height:1.5}
+
+  .page-foot{margin-top:30px;text-align:center;font-size:11.5px;color:var(--muted-foreground);line-height:1.6}
+
+  @media (max-width:640px){
+    .wrap{padding:20px 12px 60px}
+    .scene{padding:16px 14px 18px;border-radius:var(--r-xl)}
+    .why{padding-left:0}
+    .row{flex-wrap:wrap;gap:4px 12px}
+    .jalons{gap:8px}
+    .jsep{width:16px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>Maquette v2 — Volet Système</h1>
+    <p class="sub">Hermes Web · suite des discussions sur la mise à jour du moteur (v0.4.0). La page
+    Système sépare enfin ses deux mondes&nbsp;: <b>l'interface</b> (cette application, hermes_ui) et
+    <b>le moteur</b> (le programme Hermes). Les mécanismes livrés sont conservés — surcouche des
+    commandes officielles, jamais de substitution. La scène A montre la structure complète, les
+    suivantes les états qui changent. Les valeurs affichées sont des exemples.</p>
+    <div class="chips">
+      <span class="chip"><b>Deux groupes</b> : « L'interface » et « Le moteur » — chaque carte dit de qui elle parle</span>
+      <span class="chip">La carte « Mise à jour » devient <b>« Mise à jour de l'interface »</b></span>
+      <span class="chip">Agent + Moteur <b>fusionnés en une carte « Moteur Hermes »</b> — c'est le même programme (deux noms, un seul être)</span>
+      <span class="chip">La ligne <b>« Version de Hermes » disparaît</b> — elle montrait la version de l'interface, pas du moteur</span>
+      <span class="chip"><b>Filet de sécurité de l'interface</b> : affiché honnêtement — retour manuel documenté</span>
+      <span class="chip">Versions visibles des deux côtés : <b>installée · publiée · dernière vérification</b></span>
+      <span class="chip">Prévention affichée <b>avant</b> d'agir : version locale conservée · sauvegarde complète</span>
+      <span class="chip"><b>Un carnet de bord</b> pour les deux mondes, chaque entrée étiquetée</span>
+    </div>
+  </header>
+
+  <!-- ══════════ SCÈNE A ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">A</span>
+      <h2>Au calme — la nouvelle hiérarchie</h2>
+      <p class="why">Cinq cartes se suivaient sans dire de qui elles parlaient&nbsp;: l'application et le
+      programme s'y côtoyaient — et le programme lui-même avait deux cartes sous deux noms (« Agent »,
+      « Moteur »). Deux groupes nommés séparent les mondes, et les deux cartes du programme fusionnent
+      en une seule «&nbsp;Moteur Hermes&nbsp;»&nbsp;: liaison, version, mise à jour, tout au même
+      endroit. La ligne « Version de Hermes » de l'ancienne carte Agent (qui affichait v1.3.0, la
+      version… de l'interface) disparaît.</p>
+    </div>
+
+    <div class="grp">L'interface <span class="grpsub">— cette application (hermes_ui)</span></div>
+    <div class="stack">
+
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Mise à jour de l'interface <span class="st ok"><i></i>À jour</span></div>
+            <p class="cdesc">L'application que vous regardez. Sa mise à jour est installée par le petit
+            programme «&nbsp;Hermes Web&nbsp;» (le lanceur)&nbsp;: il prendra la demande dans les
+            15&nbsp;secondes, mettra tout à jour, puis relancera tout seul.</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn ghost">Vérifier à nouveau</button>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">Version installée</span><b class="v">v0.4.0 · b08e432</b></div>
+          <div class="row"><span class="k">Dernière vérification</span><b class="v">à 14:32</b></div>
+        </div>
+        <p class="note">Prévention — la mise à jour n'est appliquée que si aucun fichier local n'a été
+        modifié&nbsp;: sinon, votre version locale est conservée et le journal vous le dira.</p>
+      </div>
+
+      <div class="card soft">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Filet de sécurité — interface <span class="st off"><i></i>retour manuel</span></div>
+            <p class="cdesc">La révision d'avant <b class="mono">9904849</b> reste toujours connue. Le
+            retour arrière de l'interface n'est pas encore un bouton&nbsp;: il se fait dans le dossier
+            de l'application — «&nbsp;git checkout 9904849&nbsp;», puis relancez Hermes-Web. Vos
+            conversations et vos réglages ne sont pas touchés.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="grp">Le moteur <span class="grpsub">— le programme Hermes</span></div>
+    <div class="stack">
+
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Moteur Hermes <span class="st ok"><i></i>Connecté</span></div>
+            <p class="cdesc">Le programme Hermes qui tourne sur votre machine&nbsp;: il répond à vos
+            questions, exécute les outils et enregistre les documents que vous générez.</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn ghost">Revérifier</button>
+            <button type="button" class="btn ghost">Documents générés →</button>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">Version installée</span><b class="v">v1.2.8 · à jour</b></div>
+          <div class="row"><span class="k">Dernière vérification</span><b class="v">à 14:32</b></div>
+          <div class="row"><span class="k">Dernier contact</span><b class="v">à 14:32</b></div>
+          <div class="row"><span class="k">Liaison</span><b class="v">locale, en continu</b></div>
+        </div>
+        <details class="fold">
+          <summary>Moteur sur un autre poste
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </summary>
+          <div class="adv">
+            <label class="field">
+              <span class="fl">Adresse du moteur</span>
+              <input type="text" placeholder="http://127.0.0.1:8765">
+            </label>
+            <label class="field">
+              <span class="fl">Code d'accès</span>
+              <input type="password" placeholder="••••••••">
+            </label>
+            <p class="note">Si Hermes est installé sur un autre ordinateur que celui-ci&nbsp;: indiquez
+            ici son adresse et son code d'accès. Rien ne change avant que vous validiez.</p>
+          </div>
+        </details>
+      </div>
+
+      <div class="card soft">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Filet de sécurité — moteur <span class="st off"><i></i>veille</span></div>
+            <p class="cdesc">À la prochaine mise à jour vue par l'interface, la version précédente sera
+            gardée en mémoire pour permettre un retour arrière.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Carnet de bord</div>
+            <p class="cdesc">L'interface note chaque étape, des deux mondes&nbsp;: mise à jour de
+            l'application, mise à jour du moteur, contrôles, retours arrière. Le jour où quelque chose
+            casse, l'histoire complète est là, prête à transmettre.</p>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="jrow">
+            <span class="jdate">21/11 14:32</span>
+            <span class="jmain">Contrôle automatique de l'interface <b class="jver">v1.2.8</b> <span class="tag motor">moteur</span></span>
+            <span class="badge ok">réussi</span>
+          </div>
+          <div class="jrow">
+            <span class="jdate">21/11 09:03</span>
+            <span class="jmain">Vérification de l'interface — à jour <b class="jver">v0.4.0</b> <span class="tag ui">interface</span></span>
+            <span class="badge info">noté</span>
+          </div>
+          <div class="jrow">
+            <span class="jdate">20/11 18:46</span>
+            <span class="jmain">Contrôle automatique de l'interface <b class="jver">v1.2.8</b> <span class="tag motor">moteur</span></span>
+            <span class="badge ok">réussi</span>
+          </div>
+          <div class="jrow">
+            <span class="jdate">20/11 18:44</span>
+            <span class="jmain">Mise à jour du moteur Hermes <b class="jver">1.2.7 → 1.2.8</b> <span class="tag motor">moteur</span></span>
+            <span class="badge info">noté</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ SCÈNE B ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">B</span>
+      <h2>Deux mises à jour disponibles</h2>
+      <p class="why">Les deux mises à jour vivent côte à côte, chacune avec sa prévention affichée
+      avant d'agir&nbsp;: l'interface ne touche pas à une version localement modifiée&nbsp;; le moteur
+      est sauvegardé intégralement par Hermes avant sa propre mise à jour, et l'alerte «&nbsp;touche
+      l'interface&nbsp;» signale les changements risqués pour la liaison.</p>
+    </div>
+
+    <div class="grp">L'interface <span class="grpsub">— cette application (hermes_ui)</span></div>
+    <div class="stack">
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Mise à jour de l'interface <span class="st warn"><i></i>Mise à jour disponible</span></div>
+            <p class="cdesc">Une nouvelle version de l'application est prête à être installée. Le bouton
+            «&nbsp;Mettre à jour&nbsp;» télécharge et installe tout&nbsp;: l'application redémarre
+            ensuite toute seule (1&nbsp;à&nbsp;2&nbsp;minutes).</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn primary">Mettre à jour</button>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">Version installée</span><b class="v">v0.4.0 · b08e432</b></div>
+          <div class="row"><span class="k">Dernière version publiée</span><b class="v acc">v0.4.1 · 4c1a97f</b></div>
+        </div>
+        <p class="note">Pendant l'opération, la révision actuelle reste connue — le retour manuel reste
+        possible (filet de sécurité ci-dessous).</p>
+      </div>
+    </div>
+
+    <div class="grp">Le moteur <span class="grpsub">— le programme Hermes</span></div>
+    <div class="stack">
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Moteur Hermes <span class="st warn"><i></i>Mise à jour disponible</span></div>
+            <p class="cdesc">Une nouvelle version du moteur Hermes est disponible. Hermes s'occupe de sa
+            propre mise à jour — sauvegarde complète incluse. Voici ce qui change&nbsp;:</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn primary">Mettre Hermes à jour</button>
+          </div>
+        </div>
+        <p class="alerte" role="alert">
+          <span aria-hidden="true">⚠</span>
+          <span>Cette mise à jour touche des éléments utilisés par l'interface (liaison, protocole).
+          Un contrôle automatique suivra la mise à jour&nbsp;: si quelque chose casse, le retour
+          arrière sera proposé.</span>
+        </p>
+        <div class="changes">
+          <pre>## 1.3.1
+- gateway : nouveau point /api/model/options (liste complète, include_unconfigured)
+- correctif : fuite mémoire du pool websocket lors des reconnexions
+- protocole : champs additionnels dans hello (mode, providers)
+- dashboard : rafraîchissement des métriques en continu</pre>
+        </div>
+        <div class="ch-foot">
+          <button type="button" class="linkish">Toute la liste
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <a class="alink" href="#" onclick="return false">Voir sur GitHub</a>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">Version installée</span><b class="v">v1.2.8</b></div>
+          <div class="row"><span class="k">Dernière version publiée</span><b class="v acc">v1.3.1</b></div>
+        </div>
+        <p class="note">Pendant la mise à jour, la version actuelle (v1.2.8) est gardée en
+        mémoire&nbsp;: vous pourrez revenir en arrière à tout moment.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ SCÈNE C ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">C</span>
+      <h2>Mise à jour de l'interface en cours</h2>
+      <p class="why">Le mécanisme v0.3.3 est conservé, recadré dans le groupe «&nbsp;interface&nbsp;»&nbsp;:
+      le lanceur raconte chaque étape dans son journal, relayé en direct — vous voyez le déroulé au
+      lieu de croiser les doigts.</p>
+    </div>
+
+    <div class="grp">L'interface <span class="grpsub">— cette application (hermes_ui)</span></div>
+    <div class="stack">
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Mise à jour de l'interface <span class="st busy"><i></i>Mise à jour en cours…</span></div>
+            <p class="cdesc">Le lanceur s'occupe de tout — le déroulé apparaît ci-dessous, rien à faire.</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn primary" disabled>Mise à jour en cours…</button>
+          </div>
+        </div>
+        <div class="jalons" role="status">
+          <span class="jal done"><i>✓</i>Vérifiée</span>
+          <span class="jsep done"></span>
+          <span class="jal now"><i></i>Téléchargée</span>
+          <span class="jsep"></span>
+          <span class="jal todo"><i></i>Installée</span>
+        </div>
+        <div class="journal">
+          <pre>[14:35:12] Demande déposée depuis l'interface — attente du lanceur (cycle de surveillance ≤ 15 s)…
+[14:35:19] MAJ DEBUT - demande ramassée par le lanceur
+[14:35:19] services arrêtés — mise à jour GitHub puis relance…
+[14:35:21] consultation de GitHub…
+[14:35:24] mise à jour appliquée : 34 fichier(s) récupéré(s)
+[14:35:24] code de l'interface modifié — reconstruction (1 à 3 minutes)…</pre>
+          <p class="jstat">Mise à jour en cours — les étapes apparaissent ici en direct (1 à 2 min,
+          davantage si reconstruction).</p>
+        </div>
+      </div>
+
+      <div class="card soft">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Filet de sécurité — interface <span class="st off"><i></i>retour manuel</span></div>
+            <p class="cdesc">La révision actuelle <b class="mono">b08e432</b> restera connue après la
+            mise à jour — le retour manuel («&nbsp;git checkout b08e432&nbsp;», puis relancez
+            Hermes-Web) restera possible.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ SCÈNE D ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">D</span>
+      <h2>Problème détecté après la mise à jour du moteur</h2>
+      <p class="why">Le contrôle automatique («&nbsp;l'interface arrive-t-elle toujours à parler au
+      moteur&nbsp;?&nbsp;») a échoué après une mise à jour récente&nbsp;: la carte passe au rouge, dit
+      ce qui est intact, propose le retour arrière et prépare un message à transmettre.</p>
+    </div>
+
+    <div class="grp">Le moteur <span class="grpsub">— le programme Hermes</span></div>
+    <div class="stack">
+      <div class="card">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Moteur Hermes <span class="st err"><i></i>Problème détecté</span></div>
+            <p class="cdesc">Depuis la mise à jour, l'interface n'arrive plus à parler au moteur (la
+            gateway répond mal, code 502 · version lue&nbsp;: 1.3.1). <b>Vos documents et
+            conversations sont intacts.</b> Un retour arrière est proposé ci-dessous.</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn primary">Revenir à Hermes v1.2.8</button>
+            <button type="button" class="btn ghost">Revérifier</button>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">Version installée</span><b class="v">v1.3.1</b></div>
+        </div>
+        <details class="fold" open>
+          <summary>Voir le message à transmettre
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </summary>
+          <div class="msg">
+            <pre>Message préparé pour la personne qui adapte l'interface :
+— moteur Hermes : 1.3.1 (mise à jour récente vue par l'interface)
+— liaison gateway : en échec
+— liste des modèles : en échec
+— détail : la gateway répond mal (code 502) · version lue : 1.3.1
+— retour arrière vers 1.2.8 : disponible</pre>
+            <button type="button" class="copy" onclick="copierMessage(this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span>Copier le message</span>
+            </button>
+          </div>
+        </details>
+      </div>
+
+      <div class="card soft">
+        <div class="chead">
+          <div class="cbody">
+            <div class="ctitle">Filet de sécurité — moteur <span class="st ok"><i></i>prêt</span></div>
+            <p class="cdesc">La version <b class="mono">v1.2.8</b> est gardée en mémoire. Si la nouvelle
+            version ne convient pas, revenez en arrière en un clic — et re-tentez la mise à jour plus
+            tard si vous voulez.</p>
+          </div>
+          <div class="cactions">
+            <button type="button" class="btn ghost">Revenir à Hermes v1.2.8</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ SCÈNE E ══════════ -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">E</span>
+      <h2>La confirmation du retour arrière</h2>
+      <p class="why">Trois promesses avant d'agir — version d'avant, données intactes, re-test
+      automatique — puis le déroulé officiel raconté étape par étape&nbsp;: arrêt de la gateway,
+      retour aux fichiers, contrôle.</p>
+    </div>
+
+    <div class="backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Confirmer le retour arrière">
+        <h3>Revenir à Hermes v1.2.8&nbsp;?</h3>
+        <ul class="promises">
+          <li><span class="mdot" aria-hidden="true"></span><span>Hermes revient à la version
+          <b>v1.2.8</b>, celle d'avant la mise à jour. Le problème disparaît.</span></li>
+          <li><span class="mdot" aria-hidden="true"></span><span>Vos fichiers, vos conversations et vos
+          réglages <b>ne sont pas touchés</b>.</span></li>
+          <li><span class="mdot" aria-hidden="true"></span><span>L'interface se re-teste toute seule à
+          la fin (jusqu'à 2&nbsp;minutes). Vous pourrez re-tenter la mise à jour plus tard.</span></li>
+        </ul>
+        <p class="mfoot">Le retour utilise la procédure officielle de Hermes. L'interface demande et
+        vérifie — Hermes agit.</p>
+        <div class="macts">
+          <button type="button" class="btn ghost">Annuler</button>
+          <button type="button" class="btn primary">Oui, revenir à Hermes v1.2.8</button>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Fenêtre modale — présentée ici dans son cadre de démonstration&nbsp;;
+    dans l'application, elle recouvre le volet.</p>
+
+    <div class="jalons" role="status" style="padding-left:38px">
+      <span class="jal done"><i>✓</i>Arrêt de la gateway</span>
+      <span class="jsep done"></span>
+      <span class="jal now"><i></i>Retour aux fichiers</span>
+      <span class="jsep"></span>
+      <span class="jal todo"><i></i>Contrôle</span>
+    </div>
+  </section>
+
+  <p class="page-foot">Maquette de validation — rien n'est implémenté avant votre feu vert.<br>
+  Palette, rayons et échelles officiels du projet (globals.css).</p>
+
+</div>
+
+<script>
+  // Démo « Copier le message » — retour visuel seulement (maquette hors ligne).
+  function copierMessage(btn) {
+    var label = btn.querySelector("span");
+    if (label) {
+      label.textContent = "Copié";
+      setTimeout(function () { label.textContent = "Copier le message"; }, 2000);
+    }
+  }
+</script>
+</body>
+</html>
