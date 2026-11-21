@@ -311,7 +311,12 @@ export function SettingsPanel({
                     onClick={() => setSection(id)}
                     aria-current={active ? "true" : undefined}
                     className={cn(
-                      "flex flex-none cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                      // justify-start : le socle Button shadcn centre son
+                      // contenu (justify-center) — sans override, le rail
+                      // finissait avec des entrées centrées (et les libellés
+                      // courts, type « Hermes » / « Profils », paraissaient
+                      // indentés). La maquette .rn aligne à gauche.
+                      "flex flex-none cursor-pointer items-center justify-start gap-2.5 rounded-md px-2.5 py-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes",
                       // Maquette .rn.on : l'entrée active est TEINTÉE hermès
                       // (--hermes-soft + hermes-text, 4,50/4,91:1 mesurés) —
