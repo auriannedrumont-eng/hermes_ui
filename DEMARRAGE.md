@@ -37,6 +37,7 @@ mini-service). `.env` racine : `HERMES_SERVICE_TOKEN` (généré par le lanceur)
 | `design/` | Maquettes HTML validées avant implémentation — `maquette-parametres-v5.html` **fait foi** pour les Paramètres | Rendu lourd : ne pas donner à lire à un LLM |
 | `scripts/` | ~90 scripts de test/QA manuels (`test-*-flow.ts`) | À ne lire que si la tâche le demande |
 | `desktop/` | Lanceur Windows (`hermes-ui.ps1`) | Hors périmètre sauf demande |
+| **`llm-review/`** | Bundles de code prêts à envoyer à un LLM pour review (`bundle_chat.txt`, `bundle_settings.txt`, `bundle_full.txt`, `review_prompt.md`) | **Mis à jour à chaque push sur `main`** : l'agent LLM régénère le bundle pour refléter le `src/` du dernier commit |
 
 ## Conventions (résumé de FORK.md §5 — la version longue y fait foi)
 
