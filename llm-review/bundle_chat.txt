@@ -2,10 +2,10 @@
  BUNDLE DE REVIEW — hermes_ui/chat
 ==============================================================
 Repo    : https://github.com/auriannedrumont-eng/hermes_ui
-Commit  : 4e4d656ca05ff78e10173a6d888d3ea3e8d018e2
+Commit  : cf1487ede170c0f19d74102da2e62319e518933e
 Périmètre: interface de chat complète (composants, hooks, lib, app router, contrat gateway, design tokens de la maquette v5)
 Exclus  : bun.lock, FORK.md, scripts de test, design archivé, desktop/,
-          examples/, primitives shadcn/ui standard (16 fichiers).
+          examples/, primitives shadcn/ui standard (21 fichiers).
 
 Structure de chaque fichier : séparateur " FILE: <chemin> ".
 
@@ -124,6 +124,7 @@ mini-service). `.env` racine : `HERMES_SERVICE_TOKEN` (généré par le lanceur)
 | `design/` | Maquettes HTML validées avant implémentation — `maquette-parametres-v5.html` **fait foi** pour les Paramètres | Rendu lourd : ne pas donner à lire à un LLM |
 | `scripts/` | ~90 scripts de test/QA manuels (`test-*-flow.ts`) | À ne lire que si la tâche le demande |
 | `desktop/` | Lanceur Windows (`hermes-ui.ps1`) | Hors périmètre sauf demande |
+| **`llm-review/`** | Bundles de code prêts à envoyer à un LLM pour review (`bundle_chat.txt`, `bundle_settings.txt`, `bundle_full.txt`, `review_prompt.md`) | **Mis à jour à chaque push sur `main`** : l'agent LLM régénère le bundle pour refléter le `src/` du dernier commit |
 
 ## Conventions (résumé de FORK.md §5 — la version longue y fait foi)
 
@@ -1659,11 +1660,13 @@ process.on("SIGINT", () => shutdown("SIGINT"));
     "@radix-ui/react-collapsible": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
+    "@radix-ui/react-label": "^2.1.17",
     "@radix-ui/react-popover": "^1.1.14",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slider": "^1.3.5",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.5",
+    "@radix-ui/react-tabs": "^1.2.1",
     "@radix-ui/react-toast": "^1.2.14",
     "@radix-ui/react-tooltip": "^1.2.7",
     "class-variance-authority": "^0.7.1",
@@ -3799,6 +3802,7 @@ import {
   Loader2,
   Terminal,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { ToolEvent } from "@/lib/chat-types";
 
 function heure(iso: string): string {
@@ -3865,16 +3869,17 @@ export function ArtifactTerminal({
 
   return (
     <div className="shrink-0 border-t border-border/60">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => {
           setRepliManuel(true);
           setOpen((o) => !o);
         }}
-        className="flex h-8 w-full items-center gap-2 bg-muted/30 px-3 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted/50"
+        className="flex h-8 w-full items-center gap-2 bg-muted/30 px-3 text-[12.5px] font-normal text-muted-foreground transition-colors hover:bg-muted/50 hover:text-muted-foreground"
         aria-expanded={open}
         title={open ? "Replier le terminal" : "Déplier le terminal"}
       >
-        <Terminal className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
+        <Terminal className="size-3.5 shrink-0 text-hermes-text" />
         <span>Terminal</span>
         {live ? (
           <span
@@ -3887,11 +3892,11 @@ export function ArtifactTerminal({
           </span>
         )}
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${
+          className={`ml-auto size-3.5 shrink-0 transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
-      </button>
+      </Button>
       {open ? (
         <div ref={scrollRef} className="max-h-44 overflow-y-auto bg-[#0d1117]">
           {events.length === 0 ? (
@@ -6396,6 +6401,8 @@ export function ConversationItem({
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Copy, RefreshCw, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { getSocket } from "@/lib/socket";
 import { FILES_PORT, serviceFetchInit, serviceUrl } from "@/lib/service";
 
@@ -6573,20 +6580,22 @@ export function DebugBridge() {
         <p className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
           Pont de dépannage — {connected ? "service joint" : "service NON joint"}
         </p>
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setExpanded((v) => !v)}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          className="h-auto rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground"
           aria-label={expanded ? "Replier" : "Déplier"}
         >
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-        </button>
-        <button
+          {expanded ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+        </Button>
+        <Button
+          variant="ghost"
           onClick={close}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          className="h-auto rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground"
           aria-label="Fermer le pont de dépannage"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          <X className="size-3.5" />
+        </Button>
       </div>
       {expanded ? (
         <div className="max-h-72 overflow-auto px-3 py-2">
@@ -6607,29 +6616,30 @@ export function DebugBridge() {
         </div>
       ) : null}
       <div className="flex items-center gap-1.5 border-t px-3 py-2">
-        <button
+        <Button
+          variant="outline"
           onClick={copyReport}
           disabled={busy}
           className="inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium hover:bg-muted disabled:opacity-50"
         >
           {busy ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            <RefreshCw className="size-3.5 animate-spin" />
           ) : (
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="size-3.5" />
           )}
           Copier le diagnostic
-        </button>
+        </Button>
         {copied ? (
           <span className="text-[12.5px] text-emerald-600">copié ✓ collez-le à l&apos;agent</span>
         ) : null}
       </div>
       {report && !copied ? (
         <div className="max-h-40 overflow-auto border-t px-3 py-2">
-          <textarea
+          <Textarea
             readOnly
             value={report}
             onFocus={(e) => e.currentTarget.select()}
-            className="h-28 w-full resize-y rounded-md border bg-muted/50 p-2 font-mono text-[11px]"
+            className="h-28 w-full resize-y rounded-md border bg-muted/50 p-2 font-mono text-[11px] md:text-[11px]"
           />
         </div>
       ) : null}
@@ -6696,6 +6706,7 @@ import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   useHighlightedCode,
   CODE_CONTAINER_STYLE,
@@ -6729,14 +6740,15 @@ function CodeBlock({
         <span className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
           {lang ?? "texte"}
         </span>
-        <button
+        <Button
+          variant="ghost"
           onClick={copy}
-          className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-zinc-400 transition-colors hover:bg-zinc-700/50 hover:text-zinc-200"
+          className="flex h-auto items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-normal text-zinc-400 transition-colors hover:bg-zinc-700/50 hover:text-zinc-200"
           aria-label="Copier le code"
         >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
           {copied ? "Copié" : "Copier"}
-        </button>
+        </Button>
       </div>
       {/* `plain` (streaming) : texte brut, jamais shiki — le bloc croît à
           chaque rafraîchissement, le coloriser coûterait quadratiquement.
@@ -8305,6 +8317,7 @@ export function modeFlowSummary(mode: ConversationMode, rows: ModeFlowRow[]): st
 
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, Cpu, Info, Minus, Plus, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { readClientSetting } from "@/lib/settings";
@@ -8361,28 +8374,30 @@ function Stepper({
 }) {
   return (
     <span className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-card">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={value <= min}
         aria-label={`Moins — ${ariaLabel}`}
-        className="flex h-6.5 w-6.5 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+        className="flex h-6.5 w-6.5 items-center justify-center p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
-        <Minus className="h-3 w-3" />
-      </button>
+        <Minus className="size-3" />
+      </Button>
       <span className="flex h-6.5 min-w-[64px] items-center justify-center gap-1 border-x border-border text-[11px] font-bold tabular-nums">
         {value}
         <small className="font-medium text-[11px] text-muted-foreground">/ {maxLabel}</small>
       </span>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
         aria-label={`Plus — ${ariaLabel}`}
-        className="flex h-6.5 w-6.5 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+        className="flex h-6.5 w-6.5 items-center justify-center p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
-        <Plus className="h-3 w-3" />
-      </button>
+        <Plus className="size-3" />
+      </Button>
     </span>
   );
 }
@@ -8397,7 +8412,8 @@ function SwitchMini({
   ariaLabel: string;
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       role="switch"
       aria-checked={on}
@@ -8405,7 +8421,9 @@ function SwitchMini({
       onClick={onToggle}
       className={cn(
         "relative h-[18px] w-8 flex-none rounded-full transition-colors",
-        on ? "bg-hermes-strong" : "bg-border"
+        on
+          ? "bg-hermes-strong hover:bg-hermes-strong"
+          : "bg-border hover:bg-border"
       )}
     >
       <span
@@ -8414,7 +8432,7 @@ function SwitchMini({
           on ? "translate-x-[16px]" : "translate-x-0.5"
         )}
       />
-    </button>
+    </Button>
   );
 }
 
@@ -8596,7 +8614,8 @@ export function ModePicker({
       }}
     >
       <PopoverTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
           type="button"
           disabled={disabled}
           aria-label={`Mode de la conversation : ${def.label} — cliquez pour changer`}
@@ -8606,10 +8625,10 @@ export function ModePicker({
             on ? "bg-hermes/15 text-hermes-text hover:bg-hermes/25" : "text-muted-foreground"
           )}
         >
-          <def.icon className="h-3.5 w-3.5 flex-none" />
+          <def.icon className="size-3.5 flex-none" />
           <span className="truncate">{modePillLabel(mode, config)}</span>
-          <ChevronDown className="h-3 w-3 flex-none opacity-70" />
-        </button>
+          <ChevronDown className="size-3 flex-none opacity-70" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
@@ -8629,25 +8648,26 @@ export function ModePicker({
           {MODES.map((m) => {
             const sel = m.id === mode;
             return (
-              <button
+              <Button
                 key={m.id}
+                variant="ghost"
                 type="button"
                 role="option"
                 aria-selected={sel}
                 onClick={() => switchTo(m.id)}
                 className={cn(
-                  "flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
+                  "flex h-auto w-full items-start gap-2.5 whitespace-normal rounded-lg px-2 py-2 text-left font-normal transition-colors",
                   sel ? "bg-muted" : "hover:bg-muted/60"
                 )}
               >
                 <span className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center">
                   {sel ? (
-                    <Check className="h-4 w-4 text-hermes-text" strokeWidth={2.5} />
+                    <Check className="size-4 text-hermes-text" strokeWidth={2.5} />
                   ) : null}
                 </span>
                 <m.icon
                   className={cn(
-                    "mt-0.5 h-4 w-4 flex-none",
+                    "mt-0.5 size-4 flex-none",
                     sel ? "text-hermes-text" : "text-muted-foreground"
                   )}
                 />
@@ -8659,7 +8679,7 @@ export function ModePicker({
                     {m.desc}
                   </span>
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -8747,14 +8767,15 @@ export function ModePicker({
                     "Modèle du mode — celui de la conversation"
                   )}
                 </span>
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => setModelOpen((v) => !v)}
                   aria-expanded={modelOpen}
-                  className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
+                  className="h-auto flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
                 >
                   {modelOpen ? "Fermer" : "Choisir"}
-                </button>
+                </Button>
               </div>
               {modelOpen ? (
                 <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border bg-card p-1">
@@ -8776,17 +8797,18 @@ export function ModePicker({
             <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11px] text-muted-foreground">
               <Users className="h-3.5 w-3.5 flex-none text-hermes-text" />
               <span className="min-w-0 truncate">{whoTextFor(voices, modelByVoice)}</span>
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => {
                   setVoicesOpen((v) => !v);
                   setOpenVoice(null);
                 }}
                 aria-expanded={voicesOpen}
-                className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
+                className="h-auto flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 {voicesOpen ? "Fermer" : "Voir"}
-              </button>
+              </Button>
             </div>
           ) : null}
           {def.hasVoices && voicesOpen ? (
@@ -8801,14 +8823,15 @@ export function ModePicker({
                       <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
                         {v.role}
                       </span>
-                      <button
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={() => setOpenVoice(expanded ? null : v.id)}
                         className={cn(
-                          "inline-flex max-w-[175px] flex-none items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                          "inline-flex h-auto max-w-[175px] flex-none items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors",
                           mid
-                            ? "border-hermes/35 bg-hermes/10 text-hermes-text"
-                            : "border-border bg-card text-foreground hover:bg-muted"
+                            ? "border-hermes/35 bg-hermes/10 text-hermes-text hover:bg-hermes/10 hover:text-hermes-text"
+                            : "border-border bg-card text-foreground hover:bg-muted hover:text-foreground"
                         )}
                         aria-expanded={expanded}
                         aria-label={`Modèle de ${v.name}`}
@@ -8816,8 +8839,8 @@ export function ModePicker({
                         <span className="truncate">
                           {mid ? modelLabelOf(mid, models) : "Modèle de la conversation"}
                         </span>
-                        <ChevronDown className="h-2.5 w-2.5 flex-none" />
-                      </button>
+                        <ChevronDown className="size-2.5 flex-none" />
+                      </Button>
                     </div>
                     {expanded ? (
                       <div className="max-h-44 overflow-y-auto border-t border-dashed border-border bg-card p-1">
@@ -8871,6 +8894,7 @@ import { Check, ChevronDown, Globe, Search, Star, Zap } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -8971,14 +8995,15 @@ function ExpertPanel({
           les mots « déplier/replier » redondants sont tombés (épuration).
           L'InfoTip est hors du bouton (jamais de bouton dans un bouton). */}
       <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-        <button
+        <Button
+          variant="ghost"
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-foreground"
+          className="flex h-auto cursor-pointer items-center gap-1.5 text-[11px] font-semibold transition-colors hover:bg-transparent hover:text-foreground"
         >
           <ChevronDown
-            className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+            className={`size-3 transition-transform ${expanded ? "rotate-180" : ""}`}
           />
           Mode expert
           {activeCount > 0 ? (
@@ -8986,7 +9011,7 @@ function ExpertPanel({
               {activeCount} actif{activeCount > 1 ? "s" : ""}
             </span>
           ) : null}
-        </button>
+        </Button>
         <InfoTip>
           Température, plafond de jetons et graine — champs vides = valeurs par
           défaut du fournisseur. Envoyés dans{" "}
@@ -9022,7 +9047,7 @@ function ExpertPanel({
             <span className="text-[11px] text-muted-foreground">
               Plafond de jetons
             </span>
-            <input
+            <Input
               type="number"
               min={1}
               max={8192}
@@ -9032,19 +9057,19 @@ function ExpertPanel({
                 onExpertChange({ maxTokens: expertClamp("maxTokens", e.target.value) })
               }
               aria-label="Plafond de jetons de la réponse"
-              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
+              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60 md:text-[11px]"
             />
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] text-muted-foreground">Graine</span>
-            <input
+            <Input
               type="number"
               min={0}
               placeholder="—"
               value={expert.seed ?? ""}
               onChange={(e) => onExpertChange({ seed: expertClamp("seed", e.target.value) })}
               aria-label="Graine de reproductibilité"
-              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
+              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60 md:text-[11px]"
             />
           </div>
         </div>
@@ -9218,7 +9243,8 @@ export function ModelPicker({
         {/* Étoile favori : révélée au survol / sélection / focus, pleine si
             favorite. Clic et Entrée/Espace isolés de cmdk (sinon la ligne
             serait sélectionnée en même temps que l'étoile basculée). */}
-        <button
+        <Button
+          variant="ghost"
           type="button"
           aria-label={
             isFavorite
@@ -9234,17 +9260,17 @@ export function ModelPicker({
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") e.stopPropagation();
           }}
-          className={`mt-px flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-opacity ${
+          className={`mt-px flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm p-0 transition-opacity ${
             isFavorite
-              ? "text-warning opacity-100 hover:bg-warning/10"
+              ? "text-warning opacity-100 hover:bg-warning/10 hover:text-warning"
               : "text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/item:opacity-100 group-data-[selected=true]/item:opacity-100"
           }`}
         >
           <Star
-            className={`h-3.5 w-3.5 ${isFavorite ? "fill-warning" : ""}`}
+            className={`size-3.5 ${isFavorite ? "fill-warning" : ""}`}
             strokeWidth={2}
           />
-        </button>
+        </Button>
       </CommandItem>
     );
   };
@@ -10457,6 +10483,7 @@ export function Sidebar({
 // Échap ferme le menu sans modifier le texte.
 "use client";
 
+import { Button } from "@/components/ui/button";
 import type { PromptTemplate } from "@/lib/prompt-library";
 
 export function SlashMenu({
@@ -10473,11 +10500,12 @@ export function SlashMenu({
       <ul className="max-h-60 overflow-y-auto p-1">
         {matches.map((tpl, i) => (
           <li key={tpl.slash}>
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onPick(tpl)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+              className={`flex h-auto w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left font-normal leading-normal transition-colors ${
                 i === slashIndex ? "bg-muted/70" : "hover:bg-muted/50"
               }`}
             >
@@ -10490,7 +10518,7 @@ export function SlashMenu({
                   {tpl.description}
                 </span>
               </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -10509,6 +10537,7 @@ export function SlashMenu({
 
 import { memo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { estimateTokens } from "@/lib/tokens";
 import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
 import { useModelPricing } from "@/hooks/use-pricing";
@@ -10551,18 +10580,19 @@ export const UsageRow = memo(function UsageRow({ message }: { message: ChatMessa
 
   return (
     <div className="pt-0.5 text-[11px] text-muted-foreground">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:text-foreground"
+        className="-ml-1 flex h-auto items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-normal transition-colors hover:text-foreground"
       >
         <ChevronDown
-          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
         <span className="tabular-nums">{summary}</span>
-      </button>
+      </Button>
       {open ? (
         <div className="ml-4 mt-1.5 grid max-w-[420px] gap-1 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 leading-relaxed">
           <div className="flex justify-between gap-6">
@@ -11024,13 +11054,17 @@ export function ConfirmDestructiveDialog({
 }
 
 ================= FILE: src/components/shared/info-tip.tsx =================
-// Tooltip « ? » des réglages (design maquette v3 — design/maquette-parametres-v3.html).
-// Bouton focusable : survol / focus clavier ouvrent le popover, tap = bascule sur
-// mobile (un seul popover ouvert à la fois). Le contenu vient de la `description`
-// du registre (FORK.md §6) — 2-3 phrases max, jamais de note inline dans la ligne.
+// Tooltip « ? » des réglages (design maquette v3 — design/maquette-parametres-v3.html),
+// désormais monté sur la primitive Tooltip de Radix (shadcn) : positionnement et
+// détection de collision du content par Radix (Portal), survol / focus clavier
+// natifs. Comportements historiques conservés : bouton focusable, tap = bascule
+// sur mobile avec un seul tooltip ouvert à la fois, Échap capturé pour ne pas
+// refermer le sheet parent. Le contenu vient de la `description` du registre
+// (FORK.md §6) — 2-3 phrases max, jamais de note inline dans la ligne.
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /** Referme le tooltip actuellement ouvert en mode « tap » (un seul à la fois). */
@@ -11045,68 +11079,59 @@ interface InfoTipProps {
 
 export function InfoTip({ children, below = false, className }: InfoTipProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLButtonElement>(null);
 
-  // Mode « tap » (mobile) : referme au clic extérieur ou à Échap.
+  // Mode « tap » (mobile) : referme à Échap — en capture, pour que le sheet
+  // (Radix) ne se referme pas avec le tooltip. La fermeture au clic extérieur
+  // et à la perte de focus vient de Radix (onOpenChange).
   useEffect(() => {
     if (!open) return undefined;
     const close = () => setOpen(false);
     closeOpenTip = close;
-    const onDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      // Capture : le sheet (Radix) ne doit pas se refermer avec le tooltip.
       e.stopPropagation();
       setOpen(false);
     };
-    window.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey, true);
     return () => {
       if (closeOpenTip === close) closeOpenTip = null;
-      window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
 
   return (
-    <button
-      ref={ref}
-      type="button"
-      aria-label="Plus d'informations"
-      className={cn(
-        "group relative inline-flex h-4 w-4 shrink-0 cursor-help select-none items-center justify-center rounded-full border border-border bg-card align-middle text-[11px] font-bold leading-none text-muted-foreground transition-colors",
-        "hover:border-hermes hover:text-hermes-text focus-visible:border-hermes focus-visible:text-hermes-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hermes",
-        open && "border-hermes text-hermes-text",
-        className
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (open) {
-          setOpen(false);
-        } else {
-          closeOpenTip?.(); // un seul popover ouvert à la fois
-          setOpen(true);
-        }
-      }}
-      onBlur={() => setOpen(false)}
-    >
-      ?
-      <span
-        role="tooltip"
-        className={cn(
-          "pointer-events-none absolute left-1/2 z-[70] w-max max-w-[250px] -translate-x-1/2 rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] font-normal leading-relaxed text-background opacity-0 shadow-lg transition-[opacity,transform] duration-150",
-          "after:absolute after:left-1/2 after:-translate-x-1/2 after:border-5 after:border-transparent after:content-['']",
-          below
-            ? "after:bottom-full after:border-b-foreground top-[calc(100%+9px)] -translate-y-1 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-            : "after:top-full after:border-t-foreground bottom-[calc(100%+9px)] translate-y-1 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:opacity-100",
-          open && "pointer-events-auto translate-y-0 opacity-100"
-        )}
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label="Plus d'informations"
+          className={cn(
+            "group relative inline-flex h-4 w-4 shrink-0 cursor-help select-none items-center justify-center rounded-full border border-border bg-card align-middle text-[11px] font-bold leading-none text-muted-foreground transition-colors",
+            "hover:border-hermes hover:text-hermes-text focus-visible:border-hermes focus-visible:text-hermes-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hermes",
+            open && "border-hermes text-hermes-text",
+            className
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (open) {
+              setOpen(false);
+            } else {
+              closeOpenTip?.(); // un seul popover ouvert à la fois
+              setOpen(true);
+            }
+          }}
+        >
+          ?
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side={below ? "bottom" : "top"}
+        sideOffset={9}
+        className="w-max max-w-[250px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] font-normal leading-relaxed text-background shadow-lg [&>svg]:fill-foreground"
       >
         {children}
-      </span>
-    </button>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -11118,6 +11143,7 @@ export function InfoTip({ children, below = false, className }: InfoTipProps) {
 // est absent de la liste (indisponible), jamais proposé pour échouer après.
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ModelOption } from "@/lib/chat-types";
 
@@ -11157,16 +11183,17 @@ function Option({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       role="option"
       aria-selected={selected}
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] hover:bg-muted/60"
+      className="flex w-full items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-[11px] font-normal h-auto hover:bg-muted/60"
     >
       <Dot on={selected} />
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -11220,7 +11247,7 @@ export function ModelChoiceList({
 ================= FILE: src/components/shared/segmented.tsx =================
 "use client";
 
-import { useRef } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 export interface SegmentedOption {
@@ -11238,11 +11265,14 @@ type SegmentedProps = {
   classNameItem?: string;
 };
 
-/* Le segmenté unique du repo (audit passe 2 C1.3) : un radiogroup accessible —
-   flèches ←↑↓→ pour naviguer (sélection au déplacement, comme un vrai radio),
-   une seule tabulation pour entrer dans le groupe (tabindex roving), pilule
-   active en relief avec le libellé d'accent AA. Le focus vient de la règle
-   globale *:focus-visible de globals.css — aucune exception locale. */
+/* Le segmenté unique du repo (audit passe 2 C1.3), désormais monté sur la
+   primitive Tabs de Radix (shadcn) : navigation clavier native — flèches
+   ←→ et Home/End, sélection au déplacement, une seule tabulation pour
+   entrer dans le groupe (tabindex roving géré par Radix). Pilule active
+   en relief avec le libellé d'accent AA, classes historiques conservées.
+   L'API (ariaLabel, value nullable, classNameItem) ne change pas pour
+   les usages existants du repo. Le focus vient de la règle globale
+   *:focus-visible de globals.css — aucune exception locale. */
 export function Segmented({
   ariaLabel,
   options,
@@ -11251,55 +11281,36 @@ export function Segmented({
   className,
   classNameItem,
 }: SegmentedProps) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const selectedIdx = options.findIndex((o) => o.value === value);
-  const tabbableIdx = selectedIdx >= 0 ? selectedIdx : 0;
-
-  const move = (next: number) => {
-    const i = (next + options.length) % options.length;
-    refs.current[i]?.focus();
-    onChange(options[i].value);
-  };
-
   return (
-    <div
-      role="radiogroup"
-      aria-label={ariaLabel}
-      className={cn("flex flex-none gap-0.5 rounded-md bg-muted p-0.5", className)}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-          e.preventDefault();
-          move(tabbableIdx === selectedIdx ? selectedIdx + 1 : tabbableIdx);
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-          e.preventDefault();
-          move(tabbableIdx === selectedIdx ? selectedIdx - 1 : tabbableIdx - 1);
-        }
-      }}
+    <Tabs
+      /* Toujours contrôlé : la valeur vide ne correspond à aucune option, donc
+         rien de coché — la 1re option reçoit le tab stop (roving Radix). */
+      value={value ?? ""}
+      onValueChange={onChange}
+      className="flex-none gap-0"
     >
-      {options.map((o, i) => {
-        const selected = o.value === value;
-        return (
-          <button
+      <TabsList
+        aria-label={ariaLabel}
+        className={cn(
+          "inline-flex h-auto flex-none justify-start gap-0.5 rounded-md bg-muted p-0.5",
+          className
+        )}
+      >
+        {options.map((o) => (
+          <TabsTrigger
             key={o.value}
-            ref={(el) => {
-              refs.current[i] = el;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            tabIndex={i === tabbableIdx ? 0 : -1}
-            onClick={() => onChange(o.value)}
+            value={o.value}
             className={cn(
-              "cursor-pointer rounded-sm px-2 py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-              selected && "bg-card font-semibold text-hermes-text shadow-sm",
+              "h-auto flex-none cursor-pointer rounded-sm px-2 py-[5px] text-[11px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
+              "data-[state=active]:bg-card data-[state=active]:font-semibold data-[state=active]:text-hermes-text data-[state=active]:shadow-sm",
               classNameItem
             )}
           >
             {o.label}
-          </button>
-        );
-      })}
-    </div>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -11315,6 +11326,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, FileText, Share2 } from "lucide-react";
 import { MarkdownContent } from "@/components/chat/markdown-content";
+import { Button } from "@/components/ui/button";
 import { serviceUrl } from "@/lib/service";
 import type { SharedConversationData } from "@/lib/chat-types";
 
@@ -11461,9 +11473,10 @@ export function SharedConversationView({ token }: { token: string }) {
           <Link href="/" className="font-semibold text-hermes-text hover:underline">
             Hermes Web
           </Link>
-          <button
+          <Button
             type="button"
-            className="ml-3 inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
+            variant="outline"
+            className="ml-3 inline-flex h-auto cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground"
             onClick={() => {
               const url = serviceUrl(`/share/${encodeURIComponent(token)}/image.png`);
               window.open(url, "_blank", "noopener");
@@ -11471,7 +11484,7 @@ export function SharedConversationView({ token }: { token: string }) {
           >
             <Share2 className="size-[11px]" strokeWidth={2} />
             Exporter en image (PNG)
-          </button>
+          </Button>
         </footer>
       </article>
     </Shell>

@@ -2,10 +2,10 @@
  BUNDLE DE REVIEW — hermes_ui/settings
 ==============================================================
 Repo    : https://github.com/auriannedrumont-eng/hermes_ui
-Commit  : 4e4d656ca05ff78e10173a6d888d3ea3e8d018e2
-Périmètre: panneaux de paramètres (18 composants + hooks/lib associés, design tokens)
+Commit  : cf1487ede170c0f19d74102da2e62319e518933e
+Périmètre: panneaux de paramètres (composants + hooks/lib associés, design tokens)
 Exclus  : bun.lock, FORK.md, scripts de test, design archivé, desktop/,
-          examples/, primitives shadcn/ui standard (16 fichiers).
+          examples/, primitives shadcn/ui standard (21 fichiers).
 
 Structure de chaque fichier : séparateur " FILE: <chemin> ".
 
@@ -92,6 +92,7 @@ mini-service). `.env` racine : `HERMES_SERVICE_TOKEN` (généré par le lanceur)
 | `design/` | Maquettes HTML validées avant implémentation — `maquette-parametres-v5.html` **fait foi** pour les Paramètres | Rendu lourd : ne pas donner à lire à un LLM |
 | `scripts/` | ~90 scripts de test/QA manuels (`test-*-flow.ts`) | À ne lire que si la tâche le demande |
 | `desktop/` | Lanceur Windows (`hermes-ui.ps1`) | Hors périmètre sauf demande |
+| **`llm-review/`** | Bundles de code prêts à envoyer à un LLM pour review (`bundle_chat.txt`, `bundle_settings.txt`, `bundle_full.txt`, `review_prompt.md`) | **Mis à jour à chaque push sur `main`** : l'agent LLM régénère le bundle pour refléter le `src/` du dernier commit |
 
 ## Conventions (résumé de FORK.md §5 — la version longue y fait foi)
 
@@ -384,11 +385,13 @@ uploads, livrables) n'est versionnée (`.gitignore`).
     "@radix-ui/react-collapsible": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
+    "@radix-ui/react-label": "^2.1.17",
     "@radix-ui/react-popover": "^1.1.14",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slider": "^1.3.5",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.5",
+    "@radix-ui/react-tabs": "^1.2.1",
     "@radix-ui/react-toast": "^1.2.14",
     "@radix-ui/react-tooltip": "^1.2.7",
     "class-variance-authority": "^0.7.1",
@@ -434,6 +437,8 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function AddAnything({
   api,
@@ -486,7 +491,7 @@ export function AddAnything({
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -501,15 +506,16 @@ export function AddAnything({
           spellCheck={false}
           className="h-9 min-w-[200px] flex-1 rounded-md border border-border bg-background px-3 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
         />
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={() => void install()}
           disabled={!value.trim() || busy}
           className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? <Loader2 className="size-[12px] animate-spin" strokeWidth={2} /> : null}
           {busy ? "Recherche…" : "Ajouter"}
-        </button>
+        </Button>
       </div>
       {hint ? (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>
@@ -568,6 +574,8 @@ import {
   useTick,
   verdictMotor,
 } from "@/components/settings/fil-live";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSocket } from "@/lib/socket";
 import type {
   AgentRelease,
@@ -850,33 +858,36 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
           <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
             max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
             {pbDetecte && previous ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => setConfirmOpen(true)}
                 className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Revenir à la version d&apos;avant
-              </button>
+              </Button>
             ) : release && !op ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={requestUpdate}
                 className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Mettre Hermes à jour
-              </button>
+              </Button>
             ) : null}
             {/* v0.5.1 : « Revérifier » de retour quand Hermes n'est pas
                 détecté (le fil y renvoie) — régression v0.5.0. */}
             {pbDetecte || (!op && (installed || !connected || (stateConnu && !installed))) ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={requestCheck}
                 disabled={!!op}
                 className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Revérifier
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -907,20 +918,21 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 {notesReste > 0 || release.url ? (
                   <div className="mt-1.5 flex flex-wrap items-center gap-3">
                     {notesReste > 0 ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="link"
                         onClick={() => setNotesOpen((v) => !v)}
-                        className="text-[12px] font-semibold text-hermes-text hover:underline"
+                        className="h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
                       >
                         {notesOpen ? "Réduire la liste" : `Toute la liste (+${notesReste})`}
-                      </button>
+                      </Button>
                     ) : null}
                     {release.url ? (
                       <a
                         href={release.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[12px] font-semibold text-hermes-text hover:underline"
+                        className="h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
                       >
                         Voir sur GitHub →
                       </a>
@@ -960,27 +972,29 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
             <p className="text-[12px] leading-relaxed text-muted-foreground">
               Si vous préférez décrire le problème à la personne qui maintient
               l&apos;application&nbsp;:{" "}
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => setDiagOpen((v) => !v)}
-                className="cursor-pointer font-semibold text-hermes-text hover:underline"
+                className="h-auto cursor-pointer px-0 py-0 font-semibold text-hermes-text hover:underline"
               >
                 préparer un message prêt à copier
-              </button>.
+              </Button>.
             </p>
             {diagOpen ? (
               <div className="mt-2">
                 <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
                   {messageATransmettre}
                 </pre>
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={copierMessage}
-                  className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-semibold text-hermes-text hover:underline"
+                  className="mt-1.5 inline-flex h-auto cursor-pointer items-center gap-1.5 px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
                 >
                   {copied ? <Check className="size-[13px]" strokeWidth={2.5} /> : <Copy className="size-[13px]" strokeWidth={2.5} />}
                   {copied ? "Copié" : "Copier le message"}
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
@@ -1035,8 +1049,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
             plus de formulaire fantôme : rien n'est envoyé sans validation). */}
         {!op && !pbDetecte ? (
           <>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setAdvOpen((v) => !v)}
               aria-expanded={advOpen}
               className="mt-2 inline-flex cursor-pointer items-center gap-1.5 py-1 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
@@ -1046,7 +1061,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 strokeWidth={3}
               />
               Hermes est installé sur un autre poste
-            </button>
+            </Button>
             {advOpen ? (
               <div className="mt-1.5 rounded-[10px] border border-dashed border-border px-4 py-3.5">
                 <p className="text-[13px] font-bold">Le relier à cette application</p>
@@ -1057,7 +1072,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </p>
                 <label className="mt-2.5 block">
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Adresse du moteur</span>
-                  <input
+                  <Input
                     type="text"
                     placeholder="https://adresse-du-poste"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
@@ -1065,7 +1080,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </label>
                 <label className="mt-2.5 block">
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Code d&apos;accès</span>
-                  <input
+                  <Input
                     type="password"
                     placeholder="••••••••"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
@@ -1119,13 +1134,14 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
         {/* Lien documents générés : un lien du fil, pas un bouton en pied
             de carte (v3 : les détails sont des liens, pas des panneaux). */}
         {onNavigateStorage && installed ? (
-          <button
+          <Button
             type="button"
+            variant="link"
             onClick={onNavigateStorage}
-            className="mt-1 text-[12px] font-semibold text-hermes-text hover:underline"
+            className="mt-1 h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
           >
             Documents générés par Hermes →
-          </button>
+          </Button>
         ) : null}
       </section>
 
@@ -1163,21 +1179,23 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
               demande et vérifie — Hermes agit.
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 autoFocus
                 onClick={() => setConfirmOpen(false)}
                 className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60"
               >
                 Annuler
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
                 onClick={requestRollback}
                 className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Oui, revenir à Hermes {previous}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1193,6 +1211,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
 "use client";
 
 import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type PastilleTone = "ok" | "warn" | "err" | "off" | "busy";
@@ -1248,17 +1267,18 @@ export function AddLine({
   className?: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
       className={cn(
-        "inline-flex cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
+        "inline-flex h-auto cursor-pointer items-center justify-start gap-2 px-0 py-0 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:bg-transparent hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
         className
       )}
     >
       <Plus className="size-[13px]" strokeWidth={2.5} />
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -1281,6 +1301,7 @@ import {
 import type { ProvidersApi } from "@/hooks/use-providers";
 import type { ExtensionCommit, ExtensionView } from "@/lib/chat-types";
 import { Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -1405,8 +1426,9 @@ export function ExtensionRow({
       {/* En-tête : une zone d'ouverture dédiée, le Switch HORS du bouton —
           plus de double annonce, une seule tabulation par fonction. */}
       <div className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
@@ -1435,7 +1457,7 @@ export function ExtensionRow({
             )}
             strokeWidth={2}
           />
-        </button>
+        </Button>
         <Switch
           checked={ext.enabled}
           onCheckedChange={(v) => void handleToggle(v)}
@@ -1448,8 +1470,9 @@ export function ExtensionRow({
         <div className="border-t border-border px-4 pt-2.5 pb-3.5">
           <div className="flex flex-wrap items-center gap-2">
             {isRepo && ext.updateAvailable ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleUpdate}
                 disabled={busy !== null}
                 className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
@@ -1458,11 +1481,12 @@ export function ExtensionRow({
                   <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                 ) : null}
                 Mettre à jour
-              </button>
+              </Button>
             ) : null}
             {isRepo ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={handleCheck}
                 disabled={busy !== null || ext.pinned}
                 title={ext.pinned ? "Version épinglée — détachez-la pour vérifier" : undefined}
@@ -1472,11 +1496,12 @@ export function ExtensionRow({
                   <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                 ) : null}
                 Vérifier
-              </button>
+              </Button>
             ) : null}
             {isRepo ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={handlePin}
                 className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] font-medium transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes"
               >
@@ -1486,16 +1511,17 @@ export function ExtensionRow({
                   <Pin className="size-[12px]" strokeWidth={2} />
                 )}
                 {ext.pinned ? "Retirer l'épingle" : "Épingler"}
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={handleRemove}
               className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
             >
               <Trash2 className="size-[12px]" strokeWidth={2} />
               Retirer
-            </button>
+            </Button>
           </div>
 
           {/* Dernières modifications (dépôts) */}
@@ -1826,8 +1852,11 @@ export function jalonsHtml(labels: string[], cur: number): React.ReactNode[] {
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, MessagesSquare, Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { MemoryCard } from "@/components/settings/memory-card";
@@ -1873,14 +1902,14 @@ function PresetEditor({
 
   return (
     <div className="mt-2 rounded-lg border border-hermes/30 bg-hermes/5 p-3">
-      <input
+      <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Nom du preset"
         aria-label="Nom du preset"
         className="h-8 w-full rounded-md border border-border bg-background px-2.5 text-[12.5px] font-semibold outline-none focus-visible:border-hermes/60"
       />
-      <textarea
+      <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Instructions du preset…"
@@ -1889,22 +1918,24 @@ function PresetEditor({
         className="mt-2 min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12.5px] leading-relaxed outline-none focus-visible:border-hermes/60"
       />
       <div className="mt-2 flex items-center justify-end gap-2">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onCancel}
           className="inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           Annuler
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="primary"
           onClick={() => onSubmit(title.trim(), content.trim())}
           disabled={!title.trim() || !content.trim()}
           className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-3.5" strokeWidth={2.5} />
           {initial ? "Enregistrer" : "Créer"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -2111,7 +2142,7 @@ export function HermesSection({
             className="flex-none"
           />
         </div>
-        <textarea
+        <Textarea
           value={instructionsValue}
           onChange={(e) => setDraft(e.target.value)}
           aria-label="Instructions personnalisées"
@@ -2130,15 +2161,16 @@ export function HermesSection({
             {instructionsValue.length.toLocaleString("fr-FR")} /{" "}
             {customMaxChars.toLocaleString("fr-FR")}
           </span>
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={() => void saveInstructions()}
             disabled={!instructionsDirty || remaining < 0 || saving}
             className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Check className="size-[13px]" strokeWidth={2.5} />
             Enregistrer · prochain tour
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -2211,8 +2243,9 @@ export function HermesSection({
                     </div>
                   </div>
                   <div className="flex flex-none items-center gap-1">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       title="Modifier ce preset"
                       aria-label={`Modifier ${p.title}`}
                       onClick={() => (isOpen ? closeEditor() : openEditor(p))}
@@ -2222,16 +2255,17 @@ export function HermesSection({
                       )}
                     >
                       <Pencil className="size-[13px]" strokeWidth={2} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="ghost"
                       title="Supprimer ce preset"
                       aria-label={`Supprimer ${p.title}`}
                       onClick={() => void onDeletePreset(p.id)}
                       className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                     >
                       <Trash2 className="size-[13px]" strokeWidth={2} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {isOpen ? (
@@ -2474,7 +2508,10 @@ import { useState } from "react";
 import { Brain, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import type { MemoryState } from "@/lib/chat-types";
 
@@ -2563,7 +2600,7 @@ export function MemoryCard({
       </div>
 
       {/* Apprentissage automatique : réglage moteur (gateway), honnête en local */}
-      <label
+      <Label
         htmlFor="memory-auto-learn"
         className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
       >
@@ -2583,9 +2620,9 @@ export function MemoryCard({
           onCheckedChange={(v) => void onSetAuto(v)}
           aria-label="Apprentissage automatique"
         />
-      </label>
+      </Label>
 
-      <textarea
+      <Textarea
         value={notesValue}
         onChange={(e) => setDraft(e.target.value)}
         aria-label="Contenu de la mémoire"
@@ -2598,14 +2635,15 @@ export function MemoryCard({
         <div className="flex items-center gap-2">
           <ConfirmDestructiveDialog
             trigger={
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 disabled={!enabled || !notesValue.trim() || saving}
                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-destructive"
               >
                 <Trash2 className="size-[13px]" strokeWidth={2} />
                 Effacer
-              </button>
+              </Button>
             }
             title="Effacer tout le contenu de la mémoire ?"
             description="Toutes les notes mémorisées seront supprimées définitivement."
@@ -2622,15 +2660,16 @@ export function MemoryCard({
             {maxChars.toLocaleString("fr-FR")}
           </span>
         </div>
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={() => void saveNotes()}
           disabled={!enabled || !dirty || remaining < 0 || saving}
           className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-[13px]" strokeWidth={2.5} />
           Enregistrer · prochain tour
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -2644,6 +2683,9 @@ export function MemoryCard({
 
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -2813,8 +2855,8 @@ export function ModelesPane({
               ))}
             </SelectContent>
           </Select>
-          <label className="sr-only" htmlFor="tarif-input">Tarif entrée ($/M jetons)</label>
-          <input
+          <Label className="sr-only" htmlFor="tarif-input">Tarif entrée ($/M jetons)</Label>
+          <Input
             id="tarif-input"
             inputMode="decimal"
             placeholder="entrée $/M"
@@ -2822,8 +2864,8 @@ export function ModelesPane({
             onChange={(e) => setTarifInput(e.target.value)}
             className="h-8 w-[110px] rounded-md border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
           />
-          <label className="sr-only" htmlFor="tarif-output">Tarif sortie ($/M jetons)</label>
-          <input
+          <Label className="sr-only" htmlFor="tarif-output">Tarif sortie ($/M jetons)</Label>
+          <Input
             id="tarif-output"
             inputMode="decimal"
             placeholder="sortie $/M"
@@ -2831,14 +2873,15 @@ export function ModelesPane({
             onChange={(e) => setTarifOutput(e.target.value)}
             className="h-8 w-[110px] rounded-md border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
           />
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={addTarif}
             disabled={!canAdd}
             className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             Ajouter
-          </button>
+          </Button>
         </div>
         {Object.keys(pricing).length > 0 ? (
           <ul className="mt-2.5 grid gap-1">
@@ -2851,8 +2894,9 @@ export function ModelesPane({
                 <span className="flex-none tabular-nums text-muted-foreground">
                   entrée {p.input.toLocaleString("fr-FR")} · sortie {p.output.toLocaleString("fr-FR")} $/M
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   aria-label={`Retirer le tarif de ${labelOf(id)}`}
                   onClick={() => {
                     const next = { ...pricing };
@@ -2862,7 +2906,7 @@ export function ModelesPane({
                   className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -2909,6 +2953,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/shared/info-tip";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -2917,6 +2962,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { getSocket } from "@/lib/socket";
 import {
   onSettingsChanged,
@@ -3110,28 +3156,30 @@ function Stepper({
     Math.min(max, Math.max(min, Math.round(v / step) * step));
   return (
     <span className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-card">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onChange(clampStep(value - step))}
         disabled={value <= min}
         aria-label={`Moins — ${ariaLabel}`}
         className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
         −
-      </button>
+      </Button>
       <span className="flex h-7 min-w-[68px] items-center justify-center gap-1 border-x border-border text-[12.5px] font-bold tabular-nums">
         {value}
         <small className="text-[11px] font-medium text-muted-foreground">/ {maxLabel}</small>
       </span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onChange(clampStep(value + step))}
         disabled={value >= max}
         aria-label={`Plus — ${ariaLabel}`}
         className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
         +
-      </button>
+      </Button>
     </span>
   );
 }
@@ -3158,8 +3206,9 @@ function VoiceRow({
       <div className="flex items-center gap-2 py-2">
         <span className="flex-none text-[12.5px] font-bold">{name}</span>
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{role}</span>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           className={cn(
@@ -3171,7 +3220,7 @@ function VoiceRow({
         >
           <span className="truncate">{model ? label : "Modèle de la conversation"}</span>
           <ChevronDown className="h-2.5 w-2.5 flex-none" />
-        </button>
+        </Button>
       </div>
       {open ? (
         <div className="mb-1.5 max-h-52 overflow-y-auto rounded-xl border border-dashed border-border bg-background p-1">
@@ -3203,8 +3252,9 @@ function ModeModelRow({
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
@@ -3218,7 +3268,7 @@ function ModeModelRow({
           {model ? modelLabelOf(model, models) : "Modèle de la conversation"}
         </span>
         <ChevronDown className="h-2.5 w-2.5 flex-none" />
-      </button>
+      </Button>
       {open ? (
         <div className="mt-1.5 max-h-52 overflow-y-auto rounded-xl border border-dashed border-border bg-background p-1">
           <ModelChoiceList
@@ -3281,7 +3331,7 @@ function PromptCard({
         <div className="text-[12.5px] font-semibold">{meta.title}</div>
         <div className="mt-px text-[11px] text-muted-foreground">{meta.used}</div>
       </div>
-      <textarea
+      <Textarea
         ref={taRef}
         value={value}
         rows={3}
@@ -3298,9 +3348,10 @@ function PromptCard({
       />
       <div className="mt-1.5 flex items-center gap-1.5">
         {chips.map((c) => (
-          <button
+          <Button
             key={c.key}
             type="button"
+            variant="ghost"
             title={c.title}
             aria-label={c.title}
             onClick={() => {
@@ -3317,19 +3368,20 @@ function PromptCard({
             className="rounded-md border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:bg-muted"
           >
             {c.key}
-          </button>
+          </Button>
         ))}
         <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
           {value.length.toLocaleString("fr-FR")} / {MAX_MODE_PROMPT_CHARS.toLocaleString("fr-FR")}
         </span>
         {dirty ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onReset}
             className="rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground hover:bg-muted"
           >
             Réinitialiser
-          </button>
+          </Button>
         ) : null}
       </div>
       {hint ? (
@@ -3959,6 +4011,7 @@ import { ExtensionRow } from "@/components/settings/extensions-section";
 import { AddAnything } from "@/components/settings/add-anything";
 import { Pastille } from "@/components/settings/bits";
 import type { PastilleTone } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
 import type { ExtensionCommit } from "@/lib/chat-types";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { cn } from "@/lib/utils";
@@ -3993,13 +4046,14 @@ function ToolRowLine({
         <div className="mt-px text-[11px] leading-snug text-muted-foreground">{it.desc}</div>
       </div>
       {it.action ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => onNavigate(it.action!.section)}
           className="flex-none cursor-pointer rounded-sm px-2 py-1 text-[11px] font-semibold text-hermes-text transition-colors hover:bg-hermes/10"
         >
           {it.action.label}
-        </button>
+        </Button>
       ) : null}
       <Pastille tone={it.tone} label={it.status} className="flex-none" />
     </div>
@@ -4112,6 +4166,8 @@ import { useEffect, useState } from "react";
 import { Check, Copy, PlusCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSocket } from "@/lib/socket";
 import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { useChatProfiles } from "@/hooks/use-profiles";
@@ -4226,7 +4282,7 @@ export function ProfilesSection() {
       {creating ? (
         <div className="mt-2.5 rounded-lg border border-hermes/30 bg-hermes/5 p-3">
           <div className="flex items-center gap-2">
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
@@ -4254,8 +4310,9 @@ export function ProfilesSection() {
               Sera capturé : {profileSummary({ id: "", name: "", createdAt: "", values: captureCurrentValues() })}
             </span>
             <div className="flex flex-none items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setCreating(false);
                   setName("");
@@ -4263,16 +4320,17 @@ export function ProfilesSection() {
                 className="inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Annuler
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
                 onClick={create}
                 disabled={!name.trim()}
                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <PlusCircle className="size-3.5" strokeWidth={2.5} />
                 Créer
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -4309,32 +4367,35 @@ export function ProfilesSection() {
                   </div>
                 </div>
                 <div className="flex flex-none items-center gap-1">
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
                     onClick={() => apply(p)}
                     title="Appliquer ce profil maintenant"
                     className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-sm bg-hermes-strong px-2.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90"
                   >
                     Appliquer
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     title="Dupliquer"
                     aria-label={`Dupliquer ${p.name}`}
                     onClick={() => duplicate(p)}
                     className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Copy className="size-[13px]" strokeWidth={2} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     title="Supprimer"
                     aria-label={`Supprimer ${p.name}`}
                     onClick={() => remove(p)}
                     className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                   >
                     <Trash2 className="size-[13px]" strokeWidth={2} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -4383,6 +4444,9 @@ import type { ProviderKind, ProviderStrategy, ProviderView } from "@/lib/chat-ty
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { AddAnything } from "@/components/settings/add-anything";
 import { Segmented } from "@/components/shared/segmented";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -4593,15 +4657,16 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 : `${keyCount} clé${keyCount > 1 ? "s" : ""}`}
           </span>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           title={`Retirer ${provider.name}`}
           aria-label={`Retirer ${provider.name}`}
           onClick={handleRemoveProvider}
           className="flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
         >
           <Trash2 className="size-[13px]" strokeWidth={2} />
-        </button>
+        </Button>
       </div>
 
       {/* Porte-clés */}
@@ -4626,8 +4691,9 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   {k.masked}
                 </code>
                 <Pastille tone={tone} label={label ?? undefined} />
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => handleTest(k.id)}
                   disabled={testing.has(k.id)}
                   className="flex h-6 flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-border px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
@@ -4636,16 +4702,17 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                     <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                   ) : null}
                   {testing.has(k.id) ? "Test…" : "Tester"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   title={`Supprimer la clé « ${k.label} »`}
                   aria-label={`Supprimer la clé « ${k.label} »`}
                   onClick={() => handleRemoveKey(k.id, k.label)}
                   className="flex size-[24px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
                 >
                   <Trash2 className="size-[12px]" strokeWidth={2} />
-                </button>
+                </Button>
               </div>
             );
           })}
@@ -4661,14 +4728,14 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
           {showAddKey ? (
             <div className="mt-2">
               <div className="flex flex-wrap items-center gap-2">
-                <input
+                <Input
                   value={keyLabel}
                   onChange={(e) => setKeyLabel(e.target.value)}
                   placeholder="Étiquette (ex. Perso)"
                   aria-label="Étiquette de la clé"
                   className="h-8 w-[150px] rounded-md border border-border bg-background px-2.5 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
-                <input
+                <Input
                   type="password"
                   value={keySecret}
                   onChange={(e) => setKeySecret(e.target.value)}
@@ -4679,20 +4746,21 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   aria-label="Valeur de la clé"
                   className="h-8 min-w-[160px] flex-1 rounded-md border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={handleAddKey}
                   disabled={!keySecret.trim() || addingKey}
                   className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {addingKey ? "Ajout…" : "Ajouter"}
-                </button>
+                </Button>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="flex-none text-[11px] font-semibold text-muted-foreground">
                   Adresse
                 </span>
-                <input
+                <Input
                   value={keyEndpoint}
                   onChange={(e) => setKeyEndpoint(e.target.value)}
                   placeholder="https://…"
@@ -4710,17 +4778,18 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       ) : null}
 
       {/* Réglages avancés : endpoint + ordre d'utilisation des clés */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setShowAdv((v) => !v)}
-        className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+        className="mt-2.5 inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
       >
         <ChevronDown
           className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
           strokeWidth={2}
         />
         Réglages avancés
-      </button>
+      </Button>
       {showAdv ? (
         <div className="mt-2 rounded-md bg-muted/60 px-3 py-2.5">
           {/* Endpoint éditable */}
@@ -4732,7 +4801,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
               </span>
             </span>
             <div className="flex items-center gap-1.5">
-              <input
+              <Input
                 value={advEndpoint}
                 onChange={(e) => setAdvEndpoint(e.target.value)}
                 onKeyDown={(e) => {
@@ -4743,17 +4812,19 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 spellCheck={false}
                 className="h-8 w-[min(300px,100%)] rounded-md border border-border bg-background px-2.5 font-mono text-[11px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
               />
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleSaveAdvEndpoint}
                 disabled={savingBase || !advEndpoint.trim() || advEndpoint.trim() === endpoint}
                 className="h-8 cursor-pointer rounded-md bg-hermes px-2.5 text-[11px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {savingBase ? "…" : "Enregistrer"}
-              </button>
+              </Button>
               {hasDefault && provider.baseUrl ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={handleResetEndpoint}
                   disabled={savingBase}
                   title="Revenir à l'adresse par défaut"
@@ -4761,7 +4832,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   className="flex size-[30px] cursor-pointer items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
                 >
                   <RotateCcw className="size-[13px]" strokeWidth={2} />
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
@@ -4868,12 +4939,12 @@ function AddProviderPanel({
 
   return (
     <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
-      <label
+      <Label
         htmlFor="add-provider-select"
         className="block text-[11px] font-semibold text-muted-foreground"
       >
         {kind === "llm" ? "Fournisseur" : "Service"}
-      </label>
+      </Label>
       <select
         id="add-provider-select"
         value={presetValue}
@@ -4907,13 +4978,13 @@ function AddProviderPanel({
         </p>
       ) : null}
 
-      <label
+      <Label
         htmlFor="add-provider-endpoint"
         className="mt-2.5 block text-[11px] font-semibold text-muted-foreground"
       >
         {isCustom ? "Adresse du fournisseur" : "Adresse"}
-      </label>
-      <input
+      </Label>
+      <Input
         id="add-provider-endpoint"
         value={endpoint}
         onChange={(e) => setEndpoint(e.target.value)}
@@ -4932,21 +5003,23 @@ function AddProviderPanel({
       ) : null}
 
       <div className="mt-2.5 flex justify-end gap-2">
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={onClose}
           className="h-8 cursor-pointer rounded-md border border-border px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           Annuler
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="primary"
           onClick={handleAdd}
           disabled={adding || (isCustom && !/^https?:\/\//i.test(endpoint.trim()))}
           className="h-8 cursor-pointer rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {adding ? "Ajout…" : "Ajouter"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -5049,6 +5122,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -5360,9 +5434,10 @@ export function SettingsPanel({
               {SECTIONS.map(({ id, icon: Icon, label }) => {
                 const active = id === section;
                 return (
-                  <button
+                  <Button
                     key={id}
                     type="button"
+                    variant="ghost"
                     onClick={() => setSection(id)}
                     aria-current={active ? "true" : undefined}
                     className={cn(
@@ -5388,7 +5463,7 @@ export function SettingsPanel({
                     aria-label="Mise à jour de l'application disponible"
                   />
                 ) : null}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -5468,6 +5543,8 @@ export function SettingsPanel({
 //   F4 — filtre type conservé même si la dernière ligne du type part.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pin, Search, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getSocket } from "@/lib/socket";
 import {
@@ -5866,7 +5943,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 pt-2.5">
           <div className="flex min-w-[170px] flex-1 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-muted-foreground focus-within:border-hermes/60">
             <Search className="size-[13px] flex-none" strokeWidth={2} />
-            <input
+            <Input
               ref={inputRef}
               type="search"
               value={recherche}
@@ -5877,20 +5954,21 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               }}
               placeholder="Rechercher un fichier…"
               aria-label="Rechercher un fichier par nom"
-              className="min-w-0 flex-1 bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[12.5px] text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 md:text-[12.5px]"
             />
             {recherche !== "" ? (
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => {
                   setRecherche("");
                   if (type === "Tous") setProjetOuvert(null);
                   inputRef.current?.focus();
                 }}
-                className="flex-none text-[11.5px] font-semibold text-hermes-text hover:underline"
+                className="h-auto flex-none px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
               >
                 effacer
-              </button>
+              </Button>
             ) : null}
           </div>
           <select
@@ -5905,9 +5983,10 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
           </select>
           <div role="group" aria-label="Filtrer par type" className="flex w-full flex-wrap gap-1 pb-2.5 pt-1">
             {types.map((t) => (
-              <button
+              <Button
                 key={t}
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setType(t);
                   // Fin de filtrage par retour au type « Tous » (§4.2).
@@ -5922,7 +6001,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 )}
               >
                 {t}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -5945,13 +6024,14 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 ) : (
                   <span>Aucun fichier ne correspond</span>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={() => finFiltrage(document.activeElement as HTMLElement | null)}
-                  className="font-semibold text-hermes-text hover:underline"
+                  className="h-auto px-0 py-0 font-semibold text-hermes-text hover:underline"
                 >
                   effacer les filtres
-                </button>
+                </Button>
               </div>
             );
           })()
@@ -5971,13 +6051,14 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               <div className="mx-auto mt-1.5 max-w-[420px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {error} Rien n&apos;est mis en cache : réessayez quand le service répond.
               </div>
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => fetchEntries()}
                 className="mt-4 inline-flex h-8 cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Réessayer
-              </button>
+              </Button>
             </div>
           ) : (
             <div>
@@ -6036,8 +6117,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                         {g.entries.length}
                         {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
                       </span>
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={(e) => {
                           // « Nettoyer » ne déplie JAMAIS le groupe (§2.2).
                           e.stopPropagation();
@@ -6047,7 +6129,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                         className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {busy === g.id ? "Nettoyage…" : "Nettoyer"}
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Lignes du groupe — déroulé dérivé (animation : rangées
@@ -6084,8 +6166,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                                 <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
                                   {formatArtifactBytes(e.size)} · {df.format(parseDate(e.createdAt))}
                                 </span>
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
                                   onClick={() => deleteVersion(e)}
                                   disabled={bloquee}
                                   title={
@@ -6101,7 +6184,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                                   className="grid size-6 flex-none place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                                 >
                                   <Trash2 className="size-[13px]" strokeWidth={2} />
-                                </button>
+                                </Button>
                               </div>
                             );
                           })}
@@ -6147,13 +6230,14 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               <div className="text-[11.5px] leading-snug text-muted-foreground">{t.description}</div>
             </div>
             {t.undo ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => void undo(t.undo!.token, t.undo!.bytes, t.undo!.n)}
                 className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
               >
                 Annuler
-              </button>
+              </Button>
             ) : null}
           </div>
         ))}
@@ -6172,7 +6256,10 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, FileText, Sparkle, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ConversationPrompt, SystemPromptPreset } from "@/lib/chat-types";
 
@@ -6351,9 +6438,10 @@ function PromptPanelBody({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {presets.map((p) => (
-                    <button
+                    <Button
                       key={p.id}
                       type="button"
+                      variant="ghost"
                       title={p.content.slice(0, 120)}
                       onClick={() => applyPreset(p)}
                       className={cn(
@@ -6364,7 +6452,7 @@ function PromptPanelBody({
                       )}
                     >
                       {p.title}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -6372,7 +6460,7 @@ function PromptPanelBody({
 
             {/* Zone d'édition */}
             <div className="flex min-h-[220px] flex-1 flex-col">
-              <textarea
+              <Textarea
                 ref={textareaRef}
                 value={draft}
                 onChange={(e) => {
@@ -6413,7 +6501,7 @@ function PromptPanelBody({
             {/* Enregistrer comme preset */}
             {creating ? (
               <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
-                <input
+                <Input
                   value={newPresetName}
                   onChange={(e) => setNewPresetName(e.target.value)}
                   placeholder="Nom du preset"
@@ -6424,42 +6512,46 @@ function PromptPanelBody({
                     if (e.key === "Escape") setCreating(false);
                   }}
                 />
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => void saveAsPreset()}
                   disabled={!newPresetName.trim() || !draft.trim()}
                   className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Check className="size-3.5" strokeWidth={2.5} />
                   Créer
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setCreating(false)}
                   className="size-8 cursor-pointer rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label="Annuler la création"
                 >
                   <X className="size-3.5 mx-auto" strokeWidth={2} />
-                </button>
+                </Button>
               </div>
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setCreating(true)}
                 disabled={!draft.trim()}
                 className="inline-flex w-fit cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:opacity-75 disabled:opacity-40"
               >
                 <FileText className="size-[13px]" strokeWidth={2} />
                 Enregistrer dans la bibliothèque…
-              </button>
+              </Button>
             )}
           </div>
 
           {/* ── Pied : sauvegarde explicite ─────────────────────────── */}
           <div className="flex flex-none items-center justify-between gap-3 border-t border-border bg-background px-5 py-3 min-[640px]:px-6">
             {prompt ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   onClear();
                   setDraft("");
@@ -6470,7 +6562,7 @@ function PromptPanelBody({
               >
                 <Trash2 className="size-[13px]" strokeWidth={2} />
                 Retirer
-              </button>
+              </Button>
             ) : (
               <span className="text-[11px] text-muted-foreground">
                 {prompt === null ? "Aucun prompt actif" : ""}
@@ -6482,15 +6574,16 @@ function PromptPanelBody({
                   Non enregistré
                 </span>
               ) : null}
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={save}
                 disabled={!canSave}
                 className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-hermes-strong px-4 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Check className="size-[14px]" strokeWidth={2.5} />
                 Enregistrer · prochain tour
-              </button>
+              </Button>
             </div>
           </div>
     </div>
@@ -6549,6 +6642,7 @@ import {
   useTick,
   verdictApp,
 } from "@/components/settings/fil-live";
+import { Button } from "@/components/ui/button";
 import { getSocket } from "@/lib/socket";
 
 interface SystemSectionProps {
@@ -6874,46 +6968,51 @@ export function SystemSection({
             <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
               max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
               {majDone === "ok" ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => window.location.reload()}
                   className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
                 >
                   Recharger la page
-                </button>
+                </Button>
               ) : majActif ? null : majEtat === "disponible" ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={updateNow}
                   disabled={updating}
                   className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {updating ? "Envoi…" : "Mettre à jour"}
-                </button>
+                </Button>
               ) : majEtat === "erreur" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => prodeMajCheck()}
                   className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
                 >
                   Réessayer
-                </button>
+                </Button>
               ) : majEtat === "ajour" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => prodeMajCheck()}
                   className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
                 >
                   Vérifier maintenant
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   disabled
                   className="h-8 cursor-not-allowed rounded-lg bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground opacity-40"
                 >
                   Vérification…
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -7026,6 +7125,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSocket } from "@/lib/socket";
 
 interface SiteStatus {
@@ -7233,36 +7334,39 @@ export function WebchatSection() {
           )}
         </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={() => openBrowser(null)}
             disabled={opening !== null}
             className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ExternalLink className="size-[13px]" strokeWidth={2} />
             {opening !== null ? "Ouverture…" : "Ouvrir le navigateur"}
-          </button>
+          </Button>
           {browserUp ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={closeBrowser}
               className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X className="size-[13px]" strokeWidth={2} />
               Fermer
-            </button>
+            </Button>
           ) : null}
           <div className="flex flex-wrap gap-1.5">
             {(status?.sites ?? []).filter((s) => s.verifie).map((s) => (
-              <button
+              <Button
                 key={s.id}
                 type="button"
+                variant="outline"
                 onClick={() => openBrowser(s.id)}
                 disabled={opening !== null}
                 className="inline-flex h-9 cursor-pointer items-center rounded-md border border-border px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Ouvrir {s.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -7270,29 +7374,31 @@ export function WebchatSection() {
 
       {/* ── Réglages avancés — repliés par défaut (v2.6) ──────────────── */}
       <div className="mt-4">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setShowAdv((v) => !v)}
-          className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+          className="inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           <ChevronDown
             className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
             strokeWidth={2}
           />
           Réglages avancés
-        </button>
+        </Button>
         {showAdv ? (
           <div className="mt-2 rounded-xl border border-border px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[12.5px] font-semibold">Pilotes du navigateur</div>
               {draftDirty ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => void saveAll()}
                   className="inline-flex h-8 cursor-pointer items-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
                 >
                   Enregistrer
-                </button>
+                </Button>
               ) : (
                 <Pastille tone="off" label="à jour" className="flex-none" />
               )}
@@ -7311,7 +7417,7 @@ export function WebchatSection() {
             <div className="mt-2.5 grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Port de débogage</span>
-            <input
+            <Input
               type="number"
               min={1024}
               max={65535}
@@ -7325,7 +7431,7 @@ export function WebchatSection() {
           </label>
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Plafond de génération (s)</span>
-            <input
+            <Input
               type="number"
               min={30}
               max={1800}
@@ -7339,7 +7445,7 @@ export function WebchatSection() {
           </label>
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Veilleur (min d&apos;inactivité)</span>
-            <input
+            <Input
               type="number"
               min={1}
               max={60}
@@ -7355,7 +7461,7 @@ export function WebchatSection() {
             <span className="text-[11px] text-muted-foreground">
               Dossier de sortie du mode « Fichiers » (vide = défaut du service)
             </span>
-            <input
+            <Input
               type="text"
               value={outDir}
               placeholder="défaut : db/webchat-out du service"
@@ -7370,7 +7476,7 @@ export function WebchatSection() {
             <span className="text-[11px] text-muted-foreground">
               Chemin du navigateur (vide = détection automatique Chromium/Brave)
             </span>
-            <input
+            <Input
               type="text"
               value={browserPath}
               placeholder="défaut : détection automatique"

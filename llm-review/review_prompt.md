@@ -35,8 +35,8 @@ Code : voir bundle joint (fichiers séparés par « FILE: <chemin> »).
   suggestion), et une recommandation d'action concrète.
 - Terminez par le top 5 des actions prioritaires.
 
-## Chiffres du bundle (commit 4e4d656ca)
-- bundle_full.txt : 254,829 tokens — interface complète.
-- Contexte limité : bundle_chat.txt (171,941 tok) puis
-  bundle_settings.txt (105,958 tok) en deux passes.
+## Chiffres du bundle (commit cf1487ede1)
+- bundle_full.txt : 255 791 tokens — interface complète.
+- Contexte limité : bundle_chat.txt (172 102 tok) puis
+  bundle_settings.txt (106 866 tok) en deux passes.
 - Tokeniseur d'estimation : tiktoken cl100k_base (comptage réel).
