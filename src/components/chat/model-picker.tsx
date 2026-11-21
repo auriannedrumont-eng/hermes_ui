@@ -17,6 +17,7 @@ import { Check, ChevronDown, Globe, Search, Star, Zap } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Segmented } from "@/components/shared/segmented";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -117,14 +118,15 @@ function ExpertPanel({
           les mots « déplier/replier » redondants sont tombés (épuration).
           L'InfoTip est hors du bouton (jamais de bouton dans un bouton). */}
       <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-        <button
+        <Button
+          variant="ghost"
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-foreground"
+          className="flex h-auto cursor-pointer items-center gap-1.5 text-[11px] font-semibold transition-colors hover:bg-transparent hover:text-foreground"
         >
           <ChevronDown
-            className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+            className={`size-3 transition-transform ${expanded ? "rotate-180" : ""}`}
           />
           Mode expert
           {activeCount > 0 ? (
@@ -132,7 +134,7 @@ function ExpertPanel({
               {activeCount} actif{activeCount > 1 ? "s" : ""}
             </span>
           ) : null}
-        </button>
+        </Button>
         <InfoTip>
           Température, plafond de jetons et graine — champs vides = valeurs par
           défaut du fournisseur. Envoyés dans{" "}
@@ -168,7 +170,7 @@ function ExpertPanel({
             <span className="text-[11px] text-muted-foreground">
               Plafond de jetons
             </span>
-            <input
+            <Input
               type="number"
               min={1}
               max={8192}
@@ -178,19 +180,19 @@ function ExpertPanel({
                 onExpertChange({ maxTokens: expertClamp("maxTokens", e.target.value) })
               }
               aria-label="Plafond de jetons de la réponse"
-              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
+              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60 md:text-[11px]"
             />
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] text-muted-foreground">Graine</span>
-            <input
+            <Input
               type="number"
               min={0}
               placeholder="—"
               value={expert.seed ?? ""}
               onChange={(e) => onExpertChange({ seed: expertClamp("seed", e.target.value) })}
               aria-label="Graine de reproductibilité"
-              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60"
+              className="h-7 w-24 rounded-sm border border-border bg-background px-2 text-right text-[11px] tabular-nums outline-none focus-visible:border-hermes/60 md:text-[11px]"
             />
           </div>
         </div>
@@ -364,7 +366,8 @@ export function ModelPicker({
         {/* Étoile favori : révélée au survol / sélection / focus, pleine si
             favorite. Clic et Entrée/Espace isolés de cmdk (sinon la ligne
             serait sélectionnée en même temps que l'étoile basculée). */}
-        <button
+        <Button
+          variant="ghost"
           type="button"
           aria-label={
             isFavorite
@@ -380,17 +383,17 @@ export function ModelPicker({
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") e.stopPropagation();
           }}
-          className={`mt-px flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-opacity ${
+          className={`mt-px flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm p-0 transition-opacity ${
             isFavorite
-              ? "text-warning opacity-100 hover:bg-warning/10"
+              ? "text-warning opacity-100 hover:bg-warning/10 hover:text-warning"
               : "text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/item:opacity-100 group-data-[selected=true]/item:opacity-100"
           }`}
         >
           <Star
-            className={`h-3.5 w-3.5 ${isFavorite ? "fill-warning" : ""}`}
+            className={`size-3.5 ${isFavorite ? "fill-warning" : ""}`}
             strokeWidth={2}
           />
-        </button>
+        </Button>
       </CommandItem>
     );
   };

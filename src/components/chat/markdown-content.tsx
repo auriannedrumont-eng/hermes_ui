@@ -16,6 +16,7 @@ import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   useHighlightedCode,
   CODE_CONTAINER_STYLE,
@@ -49,14 +50,15 @@ function CodeBlock({
         <span className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
           {lang ?? "texte"}
         </span>
-        <button
+        <Button
+          variant="ghost"
           onClick={copy}
-          className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-zinc-400 transition-colors hover:bg-zinc-700/50 hover:text-zinc-200"
+          className="flex h-auto items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-normal text-zinc-400 transition-colors hover:bg-zinc-700/50 hover:text-zinc-200"
           aria-label="Copier le code"
         >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
           {copied ? "Copié" : "Copier"}
-        </button>
+        </Button>
       </div>
       {/* `plain` (streaming) : texte brut, jamais shiki — le bloc croît à
           chaque rafraîchissement, le coloriser coûterait quadratiquement.

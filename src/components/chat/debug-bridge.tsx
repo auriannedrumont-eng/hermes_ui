@@ -14,6 +14,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Copy, RefreshCw, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { getSocket } from "@/lib/socket";
 import { FILES_PORT, serviceFetchInit, serviceUrl } from "@/lib/service";
 
@@ -191,20 +193,22 @@ export function DebugBridge() {
         <p className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
           Pont de dépannage — {connected ? "service joint" : "service NON joint"}
         </p>
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setExpanded((v) => !v)}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          className="h-auto rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground"
           aria-label={expanded ? "Replier" : "Déplier"}
         >
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-        </button>
-        <button
+          {expanded ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+        </Button>
+        <Button
+          variant="ghost"
           onClick={close}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          className="h-auto rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground"
           aria-label="Fermer le pont de dépannage"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          <X className="size-3.5" />
+        </Button>
       </div>
       {expanded ? (
         <div className="max-h-72 overflow-auto px-3 py-2">
@@ -225,29 +229,30 @@ export function DebugBridge() {
         </div>
       ) : null}
       <div className="flex items-center gap-1.5 border-t px-3 py-2">
-        <button
+        <Button
+          variant="outline"
           onClick={copyReport}
           disabled={busy}
           className="inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-medium hover:bg-muted disabled:opacity-50"
         >
           {busy ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            <RefreshCw className="size-3.5 animate-spin" />
           ) : (
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="size-3.5" />
           )}
           Copier le diagnostic
-        </button>
+        </Button>
         {copied ? (
           <span className="text-[12.5px] text-emerald-600">copié ✓ collez-le à l&apos;agent</span>
         ) : null}
       </div>
       {report && !copied ? (
         <div className="max-h-40 overflow-auto border-t px-3 py-2">
-          <textarea
+          <Textarea
             readOnly
             value={report}
             onFocus={(e) => e.currentTarget.select()}
-            className="h-28 w-full resize-y rounded-md border bg-muted/50 p-2 font-mono text-[11px]"
+            className="h-28 w-full resize-y rounded-md border bg-muted/50 p-2 font-mono text-[11px] md:text-[11px]"
           />
         </div>
       ) : null}

@@ -4,6 +4,7 @@
 // Échap ferme le menu sans modifier le texte.
 "use client";
 
+import { Button } from "@/components/ui/button";
 import type { PromptTemplate } from "@/lib/prompt-library";
 
 export function SlashMenu({
@@ -20,11 +21,12 @@ export function SlashMenu({
       <ul className="max-h-60 overflow-y-auto p-1">
         {matches.map((tpl, i) => (
           <li key={tpl.slash}>
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onPick(tpl)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+              className={`flex h-auto w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left font-normal leading-normal transition-colors ${
                 i === slashIndex ? "bg-muted/70" : "hover:bg-muted/50"
               }`}
             >
@@ -37,7 +39,7 @@ export function SlashMenu({
                   {tpl.description}
                 </span>
               </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

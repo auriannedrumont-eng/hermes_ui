@@ -11,6 +11,7 @@ import {
   Loader2,
   Terminal,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { ToolEvent } from "@/lib/chat-types";
 
 function heure(iso: string): string {
@@ -77,16 +78,17 @@ export function ArtifactTerminal({
 
   return (
     <div className="shrink-0 border-t border-border/60">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => {
           setRepliManuel(true);
           setOpen((o) => !o);
         }}
-        className="flex h-8 w-full items-center gap-2 bg-muted/30 px-3 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted/50"
+        className="flex h-8 w-full items-center gap-2 bg-muted/30 px-3 text-[12.5px] font-normal text-muted-foreground transition-colors hover:bg-muted/50 hover:text-muted-foreground"
         aria-expanded={open}
         title={open ? "Replier le terminal" : "Déplier le terminal"}
       >
-        <Terminal className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
+        <Terminal className="size-3.5 shrink-0 text-hermes-text" />
         <span>Terminal</span>
         {live ? (
           <span
@@ -99,11 +101,11 @@ export function ArtifactTerminal({
           </span>
         )}
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${
+          className={`ml-auto size-3.5 shrink-0 transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
-      </button>
+      </Button>
       {open ? (
         <div ref={scrollRef} className="max-h-44 overflow-y-auto bg-[#0d1117]">
           {events.length === 0 ? (

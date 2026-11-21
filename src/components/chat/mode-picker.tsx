@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, Cpu, Info, Minus, Plus, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { readClientSetting } from "@/lib/settings";
@@ -68,28 +69,30 @@ function Stepper({
 }) {
   return (
     <span className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-card">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={value <= min}
         aria-label={`Moins — ${ariaLabel}`}
-        className="flex h-6.5 w-6.5 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+        className="flex h-6.5 w-6.5 items-center justify-center p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
-        <Minus className="h-3 w-3" />
-      </button>
+        <Minus className="size-3" />
+      </Button>
       <span className="flex h-6.5 min-w-[64px] items-center justify-center gap-1 border-x border-border text-[11px] font-bold tabular-nums">
         {value}
         <small className="font-medium text-[11px] text-muted-foreground">/ {maxLabel}</small>
       </span>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
         aria-label={`Plus — ${ariaLabel}`}
-        className="flex h-6.5 w-6.5 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+        className="flex h-6.5 w-6.5 items-center justify-center p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
-        <Plus className="h-3 w-3" />
-      </button>
+        <Plus className="size-3" />
+      </Button>
     </span>
   );
 }
@@ -104,7 +107,8 @@ function SwitchMini({
   ariaLabel: string;
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       role="switch"
       aria-checked={on}
@@ -112,7 +116,9 @@ function SwitchMini({
       onClick={onToggle}
       className={cn(
         "relative h-[18px] w-8 flex-none rounded-full transition-colors",
-        on ? "bg-hermes-strong" : "bg-border"
+        on
+          ? "bg-hermes-strong hover:bg-hermes-strong"
+          : "bg-border hover:bg-border"
       )}
     >
       <span
@@ -121,7 +127,7 @@ function SwitchMini({
           on ? "translate-x-[16px]" : "translate-x-0.5"
         )}
       />
-    </button>
+    </Button>
   );
 }
 
@@ -303,7 +309,8 @@ export function ModePicker({
       }}
     >
       <PopoverTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
           type="button"
           disabled={disabled}
           aria-label={`Mode de la conversation : ${def.label} — cliquez pour changer`}
@@ -313,10 +320,10 @@ export function ModePicker({
             on ? "bg-hermes/15 text-hermes-text hover:bg-hermes/25" : "text-muted-foreground"
           )}
         >
-          <def.icon className="h-3.5 w-3.5 flex-none" />
+          <def.icon className="size-3.5 flex-none" />
           <span className="truncate">{modePillLabel(mode, config)}</span>
-          <ChevronDown className="h-3 w-3 flex-none opacity-70" />
-        </button>
+          <ChevronDown className="size-3 flex-none opacity-70" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
@@ -336,25 +343,26 @@ export function ModePicker({
           {MODES.map((m) => {
             const sel = m.id === mode;
             return (
-              <button
+              <Button
                 key={m.id}
+                variant="ghost"
                 type="button"
                 role="option"
                 aria-selected={sel}
                 onClick={() => switchTo(m.id)}
                 className={cn(
-                  "flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
+                  "flex h-auto w-full items-start gap-2.5 whitespace-normal rounded-lg px-2 py-2 text-left font-normal transition-colors",
                   sel ? "bg-muted" : "hover:bg-muted/60"
                 )}
               >
                 <span className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center">
                   {sel ? (
-                    <Check className="h-4 w-4 text-hermes-text" strokeWidth={2.5} />
+                    <Check className="size-4 text-hermes-text" strokeWidth={2.5} />
                   ) : null}
                 </span>
                 <m.icon
                   className={cn(
-                    "mt-0.5 h-4 w-4 flex-none",
+                    "mt-0.5 size-4 flex-none",
                     sel ? "text-hermes-text" : "text-muted-foreground"
                   )}
                 />
@@ -366,7 +374,7 @@ export function ModePicker({
                     {m.desc}
                   </span>
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -454,14 +462,15 @@ export function ModePicker({
                     "Modèle du mode — celui de la conversation"
                   )}
                 </span>
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => setModelOpen((v) => !v)}
                   aria-expanded={modelOpen}
-                  className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
+                  className="h-auto flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
                 >
                   {modelOpen ? "Fermer" : "Choisir"}
-                </button>
+                </Button>
               </div>
               {modelOpen ? (
                 <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border bg-card p-1">
@@ -483,17 +492,18 @@ export function ModePicker({
             <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-hermes/40 px-2.5 py-2 text-[11px] text-muted-foreground">
               <Users className="h-3.5 w-3.5 flex-none text-hermes-text" />
               <span className="min-w-0 truncate">{whoTextFor(voices, modelByVoice)}</span>
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => {
                   setVoicesOpen((v) => !v);
                   setOpenVoice(null);
                 }}
                 aria-expanded={voicesOpen}
-                className="flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
+                className="h-auto flex-none rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 {voicesOpen ? "Fermer" : "Voir"}
-              </button>
+              </Button>
             </div>
           ) : null}
           {def.hasVoices && voicesOpen ? (
@@ -508,14 +518,15 @@ export function ModePicker({
                       <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
                         {v.role}
                       </span>
-                      <button
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={() => setOpenVoice(expanded ? null : v.id)}
                         className={cn(
-                          "inline-flex max-w-[175px] flex-none items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                          "inline-flex h-auto max-w-[175px] flex-none items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors",
                           mid
-                            ? "border-hermes/35 bg-hermes/10 text-hermes-text"
-                            : "border-border bg-card text-foreground hover:bg-muted"
+                            ? "border-hermes/35 bg-hermes/10 text-hermes-text hover:bg-hermes/10 hover:text-hermes-text"
+                            : "border-border bg-card text-foreground hover:bg-muted hover:text-foreground"
                         )}
                         aria-expanded={expanded}
                         aria-label={`Modèle de ${v.name}`}
@@ -523,8 +534,8 @@ export function ModePicker({
                         <span className="truncate">
                           {mid ? modelLabelOf(mid, models) : "Modèle de la conversation"}
                         </span>
-                        <ChevronDown className="h-2.5 w-2.5 flex-none" />
-                      </button>
+                        <ChevronDown className="size-2.5 flex-none" />
+                      </Button>
                     </div>
                     {expanded ? (
                       <div className="max-h-44 overflow-y-auto border-t border-dashed border-border bg-card p-1">

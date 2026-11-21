@@ -8,6 +8,7 @@
 
 import { memo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { estimateTokens } from "@/lib/tokens";
 import { estimateCost, formatTokens, formatUsd, parseModelLabel } from "@/lib/pricing";
 import { useModelPricing } from "@/hooks/use-pricing";
@@ -50,18 +51,19 @@ export const UsageRow = memo(function UsageRow({ message }: { message: ChatMessa
 
   return (
     <div className="pt-0.5 text-[11px] text-muted-foreground">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:text-foreground"
+        className="-ml-1 flex h-auto items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-normal transition-colors hover:text-foreground"
       >
         <ChevronDown
-          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
         <span className="tabular-nums">{summary}</span>
-      </button>
+      </Button>
       {open ? (
         <div className="ml-4 mt-1.5 grid max-w-[420px] gap-1 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 leading-relaxed">
           <div className="flex justify-between gap-6">
