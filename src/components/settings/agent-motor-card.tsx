@@ -1,6 +1,6 @@
 "use client";
 
-// Carte « Hermes » (v3 — v0.5.0), maquette validée
+// Carte « Hermes » (v3 — v0.5.1), maquette validée
 // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire
 // que la carte application (system-section.tsx). Ce qui change par
 // rapport à la v0.4.1 : plus de lignes techniques en tableau (version
@@ -11,6 +11,18 @@
 // moments du fil ; le repli « autre poste » reste un lien discret qui
 // ouvre l'étape guidée.
 //
+// v0.5.1 (revue) : la mécanique du fil vient de fil-live.tsx (partagée
+// avec la carte application — plus de duplication). Quatre correctifs :
+// (1) le battement lastSeen/onAny est RETIRÉ — il re-rendait la carte à
+// chaque événement socket pour une valeur qui n'était plus affichée ;
+// (2) garde de fraîcheur 10 min au montage : un verdict d'hier ne
+// ressuscite plus le fil « Terminé » (même garde que la carte
+// application, sauf opération en cours connue du service) ;
+// (3) le bouton « Revérifier » est de nouveau présent quand Hermes
+// n'est pas détecté (le fil y renvoie — régression v0.5.0) ;
+// (4) les liens du fil sont de vrais éléments actionnables au clavier
+// (des <a href> avec preventDefault, focusables — plus de <a> muets).
+//
 // Ce que la v3 conserve précieusement du v0.4 : le contrôle des sens,
 // la détection « problème depuis la mise à jour » (rouge + retour
 // arrière), le message prêt à copier, la fenêtre de confirmation 3
@@ -18,12 +30,23 @@
 // commandes officielles de Hermes. L'interface demande, raconte et
 // vérifie — Hermes agit.
 //
-// Types du fil : référentiel partagé front ↔ back (B-4) via
-// shared/chat-protocol.ts, réexporté par src/lib/chat-types.ts.
+// NB : l'étape guidée « autre poste » affiche adresse + code d'accès
+// mais ne câble pas encore l'action de liaison (aucun envoi sans
+// validation — comportement inchangé depuis v0.4.1, le branchement
+// gateway:set reste à faire, cf. FORK.md §9).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
+import {
+  type FilLigne,
+  heureVersMs,
+  jalonsHtml,
+  parseFil,
+  traduireLigneMotor,
+  useTick,
+  verdictMotor,
+} from "@/components/settings/fil-live";
 import { getSocket } from "@/lib/socket";
 import type {
   AgentRelease,
@@ -42,109 +65,8 @@ export interface AgentMotorCardProps {
 const hf = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const df = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-/** Verdict du journal d'opération : dernière ligne QUI PORTE un marqueur
- *  terminal (A-1) — robuste même si une ligne suit le verdict. */
-function logVerdict(text: string): null | "ok" | "erreur" {
-  const lines = text.split("\n").filter((l) => l.trim().length > 0);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/RETOUR ERREUR|MOTEUR MAJ ERREUR/.test(lines[i])) return "erreur";
-    if (/RETOUR OK|RETOUR EFFECTUÉ|MOTEUR MAJ OK|CONTRÔLE OK/.test(lines[i])) return "ok";
-  }
-  return null;
-}
-
-// ── Fil de l'opération moteur : journal → phrases humaines ────────────────
-// Mêmes idiomes que la carte application (une grammaire unique) : jalon
-// courant dérivé des lignes, âge vivant, verdict à marqueur.
-
-interface FilLigne {
-  heure: string | null;
-  texte: string;
-  /** 0 demande · 1 sauvegarde · 2 mise à jour · 3 contrôle (-1 = info). */
-  jalon: number;
-  classe: "cur" | "ok" | "ko" | "";
-}
-
-/** Traduction d'une ligne du journal moteur (phrases réelles de
- *  agent-motor.ts, vérifiées au moment de la v3). */
-function traduireLigne(brute: string): FilLigne {
-  const m = brute.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
-  const heure = m?.[1] ?? null;
-  const texte = m?.[2] ?? brute;
-  const t = texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  if (texte.includes("MOTEUR MAJ OK")) {
-    return { heure, texte: "Hermes a installé la nouvelle version — contrôle de la liaison en cours (jusqu'à 2 minutes)…", jalon: 3, classe: "" };
-  }
-  if (texte.includes("MOTEUR MAJ ERREUR")) {
-    return { heure, texte: "La mise à jour de Hermes n'a pas abouti. Rien n'a changé — la version installée continue de tourner.", jalon: -1, classe: "ko" };
-  }
-  if (/RETOUR OK|RETOUR EFFECTU/.test(texte)) {
-    return { heure, texte: "Le retour arrière est terminé — Hermes est revenu à la version d'avant.", jalon: 3, classe: "ok" };
-  }
-  if (texte.includes("RETOUR ERREUR")) {
-    return { heure, texte: "Le retour arrière n'a pas abouti — rien n'a été cassé, l'état actuel est conservé.", jalon: -1, classe: "ko" };
-  }
-  if (texte.includes("CONTRÔLE OK")) {
-    return { heure, texte: "Contrôle réussi — l'application parle bien à Hermes.", jalon: 3, classe: "ok" };
-  }
-  if (texte.includes("CONTRÔLE ÉCHOUÉ") || t.includes("controle echoue")) {
-    return { heure, texte: "Le contrôle a échoué — un retour arrière est proposé dans la carte.", jalon: 3, classe: "ko" };
-  }
-  if (t.includes("mise a jour du moteur hermes demandee")) {
-    return { heure, texte: "Mise à jour demandée — la version actuelle est d'abord mise de côté (sauvegarde complète).", jalon: 0, classe: "" };
-  }
-  if (t.includes("retour arriere demande")) {
-    return { heure, texte: "Retour arrière demandé — procédure officielle de Hermes, étape par étape.", jalon: 0, classe: "" };
-  }
-  if (t.includes("etape 1/3")) {
-    return { heure, texte: "Arrêt en douceur de Hermes (ses travaux sont sauvegardés)…", jalon: 1, classe: "" };
-  }
-  if (t.includes("etape 2/3")) {
-    return { heure, texte: "Retour aux fichiers de la version précédente…", jalon: 2, classe: "" };
-  }
-  if (t.includes("etape 3/3")) {
-    return { heure, texte: "Relancez Hermes comme d'habitude — le contrôle suivra tout seul (jusqu'à 2 minutes).", jalon: 3, classe: "" };
-  }
-  if (t.startsWith("$ ")) {
-    // Ligne de commande : le détail technique, discret mais présent.
-    return { heure, texte, jalon: -1, classe: "" };
-  }
-  if (t.includes("commande introuvable") || t.includes("arrete :")) {
-    return { heure, texte, jalon: -1, classe: "ko" };
-  }
-  return { heure, texte, jalon: -1, classe: "" };
-}
-
-function parseJournal(text: string): FilLigne[] {
-  const lignes = text
-    .split("\n")
-    .filter((l) => l.trim().length > 0)
-    .map(traduireLigne);
-  let max = -1;
-  return lignes.map((l) => {
-    if (l.jalon > max) max = l.jalon;
-    return { ...l, jalon: l.jalon >= 0 ? max : l.jalon };
-  });
-}
-
-function useTick(actif: boolean): number {
-  const [, setN] = useState(0);
-  useEffect(() => {
-    if (!actif) return;
-    const id = setInterval(() => setN((v) => v + 1), 1000);
-    return () => clearInterval(id);
-  }, [actif]);
-  return Date.now();
-}
-
-function heureVersMs(heure: string): number {
-  const [h, m, s] = heure.split(":").map(Number);
-  const now = new Date();
-  const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s).getTime();
-  if (ts > now.getTime() + 30_000) return ts - 86_400_000;
-  return ts;
-}
+const JALONS_MAJ = ["Demande envoyée", "Sauvegarde", "Mise à jour", "Contrôle"];
+const JALONS_RETOUR = ["Demande envoyée", "Arrêt", "Retour aux fichiers", "Contrôle"];
 
 export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMotorCardProps) {
   const [state, setState] = useState<MotorState | null>(null);
@@ -156,53 +78,47 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  /** Dernier événement socket reçu (battement de vie — la pastille en
-   *  dérive sa fraîcheur ; v3 : plus affiché en ligne dédiée). */
-  const [lastSeen, setLastSeen] = useState<number>(Date.now());
 
-  // Liaison : battement de tout événement socket — garde la pastille et le
-  // fil « Reconnexion en cours » pilotés par le prop `connected` du panneau
-  // (le battement existe côté hook global ; ici la pastille suit le flux).
-  useEffect(() => {
-    const onAny = () => setLastSeen(Date.now());
-    const socket = getSocket();
-    socket.onAny(onAny);
-    return () => {
-      socket.offAny(onAny);
-    };
-  }, []);
-
-  const fetchLog = useCallback(() => {
-    getSocket().emit(
-      "agent:update-log",
-      (res: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
-        if (!res?.exists || typeof res.text !== "string" || !res.text.trim()) return;
-        setLog(res.text);
-        if (typeof res.mtimeMs === "number") setLogAt(res.mtimeMs);
-      }
-    );
+  /** Applique un snapshot du journal d'opération (toujours réel — appelé
+   *  par le relais en direct ou après une demande explicite). */
+  const appliqueLog = useCallback((snap: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
+    if (!snap?.exists || typeof snap.text !== "string" || !snap.text.trim()) return;
+    setLog(snap.text);
+    if (typeof snap.mtimeMs === "number" && snap.mtimeMs > 0) setLogAt(snap.mtimeMs);
   }, []);
 
   useEffect(() => {
     const socket = getSocket();
     socket.emit(
       "agent:motor-state",
-      (res: { installed?: string | null; journal?: JournalWire[] } = {}) => {
-        setState(res as MotorState);
+      (res: (MotorState & { journal?: JournalWire[] }) | { installed?: string | null; journal?: JournalWire[] } = {}) => {
+        const st = res as MotorState;
+        setState(st);
         setJournal(res.journal ?? []);
+        // Le fil de l'opération au (re)montage : vécu si une opération est
+        // EN COURS (le service la connaît en mémoire) ou si le journal est
+        // frais (< 10 min) — sinon un verdict d'hier ne doit pas
+        // ressusciter « Terminé » (v0.5.1, même garde que la carte
+        // application ; l'âge porte sur mtimeMs, horloge du service A-2).
+        socket.emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
+          if (!r?.exists || typeof r.text !== "string" || !r.text.trim()) return;
+          const frais =
+            typeof r.mtimeMs === "number" &&
+            Date.now() - r.mtimeMs < 10 * 60_000;
+          if (st.op || frais) appliqueLog(r);
+        });
       }
     );
-    fetchLog();
     const onState = (s: MotorState) => {
       setState(s);
       socket.emit("agent:journal", (r: { journal?: JournalWire[] } = {}) =>
         setJournal(r.journal ?? [])
       );
     };
+    // Le relais ne diffuse que sur changement réel (signature service) :
+    // toute ligne reçue ici est vivante.
     const onLog = (snap: { text?: string; mtimeMs?: number } = {}) => {
-      if (typeof snap?.text !== "string") return;
-      setLog(snap.text);
-      if (typeof snap.mtimeMs === "number") setLogAt(snap.mtimeMs);
+      appliqueLog({ exists: true, ...snap });
     };
     socket.on("agent:motor-changed", onState);
     socket.on("agent:update-log:changed", onLog);
@@ -210,7 +126,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
       socket.off("agent:motor-changed", onState);
       socket.off("agent:update-log:changed", onLog);
     };
-  }, [fetchLog]);
+  }, [appliqueLog]);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -227,6 +143,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
   const previous = state?.previousVersion ?? null;
   const control = state?.lastControl ?? null;
   const checkedAt = state?.checkedAt ? hf.format(new Date(state.checkedAt)) : null;
+  /** État moteur reçu au moins une fois — distingue « chargement » de
+   *  « Hermes non détecté » (v0.5.1 : le bouton Revérifier suit). */
+  const stateConnu = state !== null;
 
   /** Mise à jour récente (< 24 h) vue par l'interface : distingue « Hermes
    *  n'est pas lancé » (neutre) de « ça a cassé depuis la mise à jour »
@@ -273,7 +192,10 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
       "agent:update-request",
       (res: { ok?: boolean; error?: string } = {}) => {
         if (!res?.ok && res?.error) window.alert(res.error);
-        fetchLog();
+        // L'opération vient d'être demandée : son journal est vivant.
+        getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
+          appliqueLog(r)
+        );
       }
     );
   };
@@ -283,7 +205,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
       "agent:rollback-request",
       (res: { ok?: boolean; error?: string } = {}) => {
         if (!res?.ok && res?.error) window.alert(res.error);
-        fetchLog();
+        getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
+          appliqueLog(r)
+        );
       }
     );
   };
@@ -313,10 +237,8 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
   };
 
   // ── Fil de l'opération en cours ─────────────────────────────────────
-  const verdict = log !== null ? logVerdict(log) : null;
-  const fil = useMemo(() => (log !== null ? parseJournal(log) : []), [log]);
-  const JALONS_MAJ = ["Demande envoyée", "Sauvegarde", "Mise à jour", "Contrôle"];
-  const JALONS_RETOUR = ["Demande envoyée", "Arrêt", "Retour aux fichiers", "Contrôle"];
+  const verdict = log !== null ? verdictMotor(log) : null;
+  const fil = useMemo(() => (log !== null ? parseFil(log, traduireLigneMotor) : []), [log]);
   const jalonCourant = useMemo(() => {
     if (verdict === "ok") return -1;
     let max = 0;
@@ -329,44 +251,6 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
     if (!l.heure) return null;
     const age = Math.max(1, Math.round((tick - heureVersMs(l.heure)) / 1000));
     return `il y a ${age} s`;
-  };
-
-  const jalonsHtml = (labels: string[], cur: number) => {
-    const elts: React.ReactNode[] = [];
-    labels.forEach((label, i) => {
-      const done = cur === -1 || i < cur;
-      const now = i === cur;
-      if (i > 0) {
-        elts.push(
-          <span
-            key={`sep-${i}`}
-            aria-hidden
-            className={"h-0.5 flex-none rounded " + (done ? "w-[22px] bg-success" : "w-[22px] bg-border")}
-          />
-        );
-      }
-      elts.push(
-        <span
-          key={`jalon-${i}`}
-          className={
-            "inline-flex items-center gap-1.5 text-[11.5px] font-semibold " +
-            (done ? "text-foreground" : now ? "text-hermes-text" : "text-muted-foreground")
-          }
-        >
-          <i
-            aria-hidden
-            className={
-              "grid size-[17px] flex-none place-items-center rounded-full border-2 text-[9px] font-bold text-white " +
-              (done ? "border-success bg-success" : now ? "animate-pulse border-hermes" : "border-border")
-            }
-          >
-            {done ? "✓" : ""}
-          </i>
-          {label}
-        </span>
-      );
-    });
-    return elts;
   };
 
   // Notes de version : les 3 premières entrées (aperçu borné maquette),
@@ -390,8 +274,8 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
               Hermes <Pastille tone={tone} label={etatLabel} />
             </h2>
 
-            {/* LE fil : une phrase par état — la version n vit qu'ici. */}
-            <p className="fil mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground [&_a]:font-semibold [&_a]:text-hermes-text [&_a]:cursor-pointer [&_b]:font-semibold [&_b]:text-foreground">
+            {/* LE fil : une phrase par état — la version ne vit qu'ici. */}
+            <p className="fil mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
               {!connected ? (
                 <>Le programme Hermes n&apos;est plus joignable. Rien n&apos;est perdu — la reconnexion est automatique.</>
               ) : op?.kind === "update" ? (
@@ -415,14 +299,28 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                   {previous ? (
                     <>
                       {" "}La version d&apos;avant (<b>{previous}</b>) reste en réserve&nbsp;:{" "}
-                      <a onClick={() => setConfirmOpen(true)}>revenir en arrière</a> si besoin.
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setConfirmOpen(true);
+                        }}
+                      >
+                        revenir en arrière
+                      </a> si besoin.
                     </>
                   ) : null}
                 </>
               ) : (
                 <>
                   Hermes n&apos;est pas détecté sur ce poste. Lancez-le puis «&nbsp;Revérifier&nbsp;» —
-                  ou <a onClick={() => setAdvOpen(true)}>il est installé sur un autre poste</a>.
+                  ou <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setAdvOpen(true);
+                    }}
+                  >il est installé sur un autre poste</a>.
                 </>
               )}
             </p>
@@ -447,7 +345,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 Mettre Hermes à jour
               </button>
             ) : null}
-            {pbDetecte || (!op && (installed || !connected)) ? (
+            {/* v0.5.1 : « Revérifier » de retour quand Hermes n'est pas
+                détecté (le fil y renvoie) — régression v0.5.0. */}
+            {pbDetecte || (!op && (installed || !connected || (stateConnu && !installed))) ? (
               <button
                 type="button"
                 onClick={requestCheck}
@@ -539,9 +439,13 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
             <p className="text-[12px] leading-relaxed text-muted-foreground">
               Si vous préférez décrire le problème à la personne qui maintient
               l&apos;application&nbsp;:{" "}
-              <a onClick={() => setDiagOpen((v) => !v)} className="cursor-pointer font-semibold text-hermes-text">
+              <button
+                type="button"
+                onClick={() => setDiagOpen((v) => !v)}
+                className="cursor-pointer font-semibold text-hermes-text hover:underline"
+              >
                 préparer un message prêt à copier
-              </a>.
+              </button>.
             </p>
             {diagOpen ? (
               <div className="mt-2">
@@ -634,7 +538,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Adresse du moteur</span>
                   <input
                     type="text"
-                    placeholder="http://127.0.0.1:8765"
+                    placeholder="https://adresse-du-poste"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
                   />
                 </label>
