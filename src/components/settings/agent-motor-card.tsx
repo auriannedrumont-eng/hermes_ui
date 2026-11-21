@@ -1,34 +1,32 @@
 "use client";
 
-// Carte « Moteur Hermes » (v0.4.1) — maquette validée
-// design/maquette-systeme-v2.html : LA carte du moteur, fusion des
-// anciennes cartes « Agent Hermes » (v0.3.3 : liaison) et « Moteur
-// Hermes » (v0.4.0 : maintenance) — c'est le même programme, un seul
-// nom désormais. Porte donc : pastille d'état (connecté / mise à jour
-// disponible / problème / opération), lignes de liaison (dernier
-// contact, liaison) ET de version, mise à jour avec liste des
-// changements et marqueur « touche l'interface », contrôle automatique
-// (test des sens), repli « Moteur sur un autre poste », bouton
-// « Documents générés → ». Suivent le filet de sécurité (retour
-// arrière vers la version précédente, fenêtre de confirmation) et le
-// carnet de bord (chaque étape notée, prête à transmettre).
+// Carte « Hermes » (v3 — v0.5.0), maquette validée
+// design/maquette-systeme-v3.html : LA carte du moteur, même grammaire
+// que la carte application (system-section.tsx). Ce qui change par
+// rapport à la v0.4.1 : plus de lignes techniques en tableau (version
+// installée / dernière release / dernier contact / liaison) — la version
+// ne vit plus que dans le fil, en une phrase ; l'historique (ex carnet
+// de bord) devient un repli de LA carte ; le « filet de sécurité » et
+// la « liste des changements » ne sont plus des panneaux, ils sont des
+// moments du fil ; le repli « autre poste » reste un lien discret qui
+// ouvre l'étape guidée.
 //
-// SURCOUCHE : la mise à jour et le retour utilisent les commandes
-// officielles de Hermes (hermes update --backup ; arrêt gateway + retour
-// aux fichiers). L'interface demande, raconte et vérifie — Hermes agit.
-// Types du fil en miroir du service (agent-motor.ts) sans l'importer
-// (module serveur : node:child_process).
+// Ce que la v3 conserve précieusement du v0.4 : le contrôle des sens,
+// la détection « problème depuis la mise à jour » (rouge + retour
+// arrière), le message prêt à copier, la fenêtre de confirmation 3
+// promesses, et la SURCOUCHE — mise à jour et retour utilisent les
+// commandes officielles de Hermes. L'interface demande, raconte et
+// vérifie — Hermes agit.
+//
+// Types du fil : référentiel partagé front ↔ back (B-4) via
+// shared/chat-protocol.ts, réexporté par src/lib/chat-types.ts.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
 import { getSocket } from "@/lib/socket";
-// Types du fil : référentiel partagé front ↔ back (B-4, audit v3) — fini
-// le miroir à la main, la divergence entre les deux versions des interfaces
-// sera visible dans UN fichier (shared/chat-protocol.ts).
 import type {
   AgentRelease,
-  MotorControl,
   MotorState,
   MotorJournalEntry as JournalWire,
 } from "@/lib/chat-types";
@@ -44,10 +42,8 @@ export interface AgentMotorCardProps {
 const hf = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const df = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-/** Verdict du journal d'opération (marqueurs terminaux écrits par le
- *  service). A-1 (audit v3) : dernière ligne QUI PORTE UN MARQUEUR, pas
- *  dernière ligne tout court — robuste même si une ligne d'information
- *  suivait le verdict. */
+/** Verdict du journal d'opération : dernière ligne QUI PORTE un marqueur
+ *  terminal (A-1) — robuste même si une ligne suit le verdict. */
 function logVerdict(text: string): null | "ok" | "erreur" {
   const lines = text.split("\n").filter((l) => l.trim().length > 0);
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -57,20 +53,116 @@ function logVerdict(text: string): null | "ok" | "erreur" {
   return null;
 }
 
+// ── Fil de l'opération moteur : journal → phrases humaines ────────────────
+// Mêmes idiomes que la carte application (une grammaire unique) : jalon
+// courant dérivé des lignes, âge vivant, verdict à marqueur.
+
+interface FilLigne {
+  heure: string | null;
+  texte: string;
+  /** 0 demande · 1 sauvegarde · 2 mise à jour · 3 contrôle (-1 = info). */
+  jalon: number;
+  classe: "cur" | "ok" | "ko" | "";
+}
+
+/** Traduction d'une ligne du journal moteur (phrases réelles de
+ *  agent-motor.ts, vérifiées au moment de la v3). */
+function traduireLigne(brute: string): FilLigne {
+  const m = brute.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+  const heure = m?.[1] ?? null;
+  const texte = m?.[2] ?? brute;
+  const t = texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  if (texte.includes("MOTEUR MAJ OK")) {
+    return { heure, texte: "Hermes a installé la nouvelle version — contrôle de la liaison en cours (jusqu'à 2 minutes)…", jalon: 3, classe: "" };
+  }
+  if (texte.includes("MOTEUR MAJ ERREUR")) {
+    return { heure, texte: "La mise à jour de Hermes n'a pas abouti. Rien n'a changé — la version installée continue de tourner.", jalon: -1, classe: "ko" };
+  }
+  if (/RETOUR OK|RETOUR EFFECTU/.test(texte)) {
+    return { heure, texte: "Le retour arrière est terminé — Hermes est revenu à la version d'avant.", jalon: 3, classe: "ok" };
+  }
+  if (texte.includes("RETOUR ERREUR")) {
+    return { heure, texte: "Le retour arrière n'a pas abouti — rien n'a été cassé, l'état actuel est conservé.", jalon: -1, classe: "ko" };
+  }
+  if (texte.includes("CONTRÔLE OK")) {
+    return { heure, texte: "Contrôle réussi — l'application parle bien à Hermes.", jalon: 3, classe: "ok" };
+  }
+  if (texte.includes("CONTRÔLE ÉCHOUÉ") || t.includes("controle echoue")) {
+    return { heure, texte: "Le contrôle a échoué — un retour arrière est proposé dans la carte.", jalon: 3, classe: "ko" };
+  }
+  if (t.includes("mise a jour du moteur hermes demandee")) {
+    return { heure, texte: "Mise à jour demandée — la version actuelle est d'abord mise de côté (sauvegarde complète).", jalon: 0, classe: "" };
+  }
+  if (t.includes("retour arriere demande")) {
+    return { heure, texte: "Retour arrière demandé — procédure officielle de Hermes, étape par étape.", jalon: 0, classe: "" };
+  }
+  if (t.includes("etape 1/3")) {
+    return { heure, texte: "Arrêt en douceur de Hermes (ses travaux sont sauvegardés)…", jalon: 1, classe: "" };
+  }
+  if (t.includes("etape 2/3")) {
+    return { heure, texte: "Retour aux fichiers de la version précédente…", jalon: 2, classe: "" };
+  }
+  if (t.includes("etape 3/3")) {
+    return { heure, texte: "Relancez Hermes comme d'habitude — le contrôle suivra tout seul (jusqu'à 2 minutes).", jalon: 3, classe: "" };
+  }
+  if (t.startsWith("$ ")) {
+    // Ligne de commande : le détail technique, discret mais présent.
+    return { heure, texte, jalon: -1, classe: "" };
+  }
+  if (t.includes("commande introuvable") || t.includes("arrete :")) {
+    return { heure, texte, jalon: -1, classe: "ko" };
+  }
+  return { heure, texte, jalon: -1, classe: "" };
+}
+
+function parseJournal(text: string): FilLigne[] {
+  const lignes = text
+    .split("\n")
+    .filter((l) => l.trim().length > 0)
+    .map(traduireLigne);
+  let max = -1;
+  return lignes.map((l) => {
+    if (l.jalon > max) max = l.jalon;
+    return { ...l, jalon: l.jalon >= 0 ? max : l.jalon };
+  });
+}
+
+function useTick(actif: boolean): number {
+  const [, setN] = useState(0);
+  useEffect(() => {
+    if (!actif) return;
+    const id = setInterval(() => setN((v) => v + 1), 1000);
+    return () => clearInterval(id);
+  }, [actif]);
+  return Date.now();
+}
+
+function heureVersMs(heure: string): number {
+  const [h, m, s] = heure.split(":").map(Number);
+  const now = new Date();
+  const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s).getTime();
+  if (ts > now.getTime() + 30_000) return ts - 86_400_000;
+  return ts;
+}
+
 export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMotorCardProps) {
   const [state, setState] = useState<MotorState | null>(null);
   const [journal, setJournal] = useState<JournalWire[]>([]);
   const [log, setLog] = useState<string | null>(null);
+  const [logAt, setLogAt] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [advOpen, setAdvOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const logRef = useRef<HTMLPreElement | null>(null);
-
-  // ── Liaison (ex carte « Agent Hermes » v0.3.3, §3.2) : sonde réelle
-  //    unique — le battement de TOUT événement socket rafraîchit
-  //    « dernier contact », le canal est la socket elle-même. */
+  /** Dernier événement socket reçu (battement de vie — la pastille en
+   *  dérive sa fraîcheur ; v3 : plus affiché en ligne dédiée). */
   const [lastSeen, setLastSeen] = useState<number>(Date.now());
+
+  // Liaison : battement de tout événement socket — garde la pastille et le
+  // fil « Reconnexion en cours » pilotés par le prop `connected` du panneau
+  // (le battement existe côté hook global ; ici la pastille suit le flux).
   useEffect(() => {
     const onAny = () => setLastSeen(Date.now());
     const socket = getSocket();
@@ -80,16 +172,13 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
     };
   }, []);
 
-  // « Moteur sur un autre poste » (ex « Agent sur un autre poste ») :
-  // replié par défaut, les champs restent locaux à la session.
-  const [advOpen, setAdvOpen] = useState(false);
-
   const fetchLog = useCallback(() => {
     getSocket().emit(
       "agent:update-log",
       (res: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
         if (!res?.exists || typeof res.text !== "string" || !res.text.trim()) return;
         setLog(res.text);
+        if (typeof res.mtimeMs === "number") setLogAt(res.mtimeMs);
       }
     );
   }, []);
@@ -110,8 +199,10 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
         setJournal(r.journal ?? [])
       );
     };
-    const onLog = (snap: { text?: string } = {}) => {
-      if (typeof snap?.text === "string") setLog(snap.text);
+    const onLog = (snap: { text?: string; mtimeMs?: number } = {}) => {
+      if (typeof snap?.text !== "string") return;
+      setLog(snap.text);
+      if (typeof snap.mtimeMs === "number") setLogAt(snap.mtimeMs);
     };
     socket.on("agent:motor-changed", onState);
     socket.on("agent:update-log:changed", onLog);
@@ -120,11 +211,6 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
       socket.off("agent:update-log:changed", onLog);
     };
   }, [fetchLog]);
-
-  useEffect(() => {
-    const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [log]);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -137,13 +223,14 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
 
   const op = state?.op ?? null;
   const installed = state?.installed ?? null;
-  const release = state?.release ?? null;
+  const release: AgentRelease | null = state?.release ?? null;
   const previous = state?.previousVersion ?? null;
   const control = state?.lastControl ?? null;
   const checkedAt = state?.checkedAt ? hf.format(new Date(state.checkedAt)) : null;
-  /** Une mise à jour récente (< 24 h) vue par l'interface : sert à distinguer
-   *  « l'agent n'est pas lancé » (neutre) de « ça a cassé depuis la mise à
-   *  jour » (rouge + retour arrière) — le carnet fait foi. */
+
+  /** Mise à jour récente (< 24 h) vue par l'interface : distingue « Hermes
+   *  n'est pas lancé » (neutre) de « ça a cassé depuis la mise à jour »
+   *  (rouge + retour arrière) — le carnet fait foi. */
   const majRecente = journal.some(
     (e) =>
       e.type === "maj" &&
@@ -152,14 +239,8 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
   );
   const pbDetecte =
     !!control && !control.ok && !!control.versionLue && majRecente && !op;
-  const agentAbsent = !!control && !control.ok && !control.versionLue && !op;
 
-  // ── État d'affichage de la carte moteur fusionnée (maquette v2 :
-  //    calme → dispo → en cours → ok | problème → retour ; la liaison
-  //    coupée passe devant — sans moteur joignable, pas de maintenance).
-  //    NB : « connecté » dit si l'INTERFACE parle au service local, qui
-  //    relaie vers le moteur — c'est la liaison qu'on montre, pas un
-  //    état du moteur en lui-même (honnêteté v0.4.0).
+  // ── Pastille (liaison coupée > opération > problème > dispo > état) ──
   const tone: "ok" | "warn" | "err" | "off" | "busy" =
     !connected
       ? "off"
@@ -180,12 +261,12 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
         : op?.kind === "rollback"
           ? "Retour en cours…"
           : pbDetecte
-            ? "Problème détecté"
+            ? "Hermes ne répond plus"
             : release
               ? "Mise à jour disponible"
               : installed
                 ? "À jour"
-                : "Moteur non détecté";
+                : "Hermes non détecté";
 
   const requestUpdate = () => {
     getSocket().emit(
@@ -231,298 +312,246 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
     }
   };
 
-  // Jalons d'après le journal (op en cours) — mêmes idiomes que la carte
-  // Mise à jour de l'application.
-  const logLines = (log ?? "").split("\n").filter((l) => l.trim());
-  const jalon = (done: boolean, now: boolean, label: string) => (
-    <span
-      className={
-        "inline-flex items-center gap-1.5 text-[12px] font-semibold " +
-        (done ? "text-foreground" : now ? "text-hermes-text" : "text-muted-foreground")
+  // ── Fil de l'opération en cours ─────────────────────────────────────
+  const verdict = log !== null ? logVerdict(log) : null;
+  const fil = useMemo(() => (log !== null ? parseJournal(log) : []), [log]);
+  const JALONS_MAJ = ["Demande envoyée", "Sauvegarde", "Mise à jour", "Contrôle"];
+  const JALONS_RETOUR = ["Demande envoyée", "Arrêt", "Retour aux fichiers", "Contrôle"];
+  const jalonCourant = useMemo(() => {
+    if (verdict === "ok") return -1;
+    let max = 0;
+    for (const l of fil) if (l.jalon > max) max = l.jalon;
+    return max;
+  }, [fil, verdict]);
+
+  const tick = useTick(!!op);
+  const ageLigne = (l: FilLigne): string | null => {
+    if (!l.heure) return null;
+    const age = Math.max(1, Math.round((tick - heureVersMs(l.heure)) / 1000));
+    return `il y a ${age} s`;
+  };
+
+  const jalonsHtml = (labels: string[], cur: number) => {
+    const elts: React.ReactNode[] = [];
+    labels.forEach((label, i) => {
+      const done = cur === -1 || i < cur;
+      const now = i === cur;
+      if (i > 0) {
+        elts.push(
+          <span
+            key={`sep-${i}`}
+            aria-hidden
+            className={"h-0.5 flex-none rounded " + (done ? "w-[22px] bg-success" : "w-[22px] bg-border")}
+          />
+        );
       }
-    >
-      <i
-        aria-hidden
-        className={
-          "grid size-[17px] flex-none place-items-center rounded-full border-2 text-[9px] text-white " +
-          (done ? "border-success bg-success" : now ? "border-hermes" : "border-border")
-        }
-      >
-        {done ? "✓" : ""}
-      </i>
-      {label}
-    </span>
-  );
-  const sepJalon = (done: boolean) => (
-    <span aria-hidden className={"h-0.5 w-[26px] flex-none rounded " + (done ? "bg-success" : "bg-border")} />
-  );
-  const majJalons = () => {
-    const fin = logVerdict(log ?? "") !== null;
-    const controle = logLines.some((l) => /contrôle/i.test(l));
-    const relance = logLines.some((l) => /MOTEUR MAJ OK/i.test(l));
-    return (
-      <>
-        {jalon(true, false, "Demande déposée")}
-        {sepJalon(true)}
-        {jalon(relance, !relance && !fin, "Mise à jour")}
-        {sepJalon(relance)}
-        {jalon(fin && !!logVerdict(log ?? ""), controle, "Contrôle")}
-      </>
-    );
-  };
-  const retourJalons = () => {
-    const fin = logVerdict(log ?? "") !== null;
-    const fichiers = logLines.some((l) => /étape 2\/3/i.test(l));
-    const relance = logLines.some((l) => /étape 3\/3/i.test(l));
-    return (
-      <>
-        {jalon(fichiers, !fichiers, "Arrêt de la gateway")}
-        {sepJalon(fichiers)}
-        {jalon(relance, fichiers && !relance, "Retour aux fichiers")}
-        {sepJalon(relance)}
-        {jalon(fin, relance && !fin, "Contrôle")}
-      </>
-    );
+      elts.push(
+        <span
+          key={`jalon-${i}`}
+          className={
+            "inline-flex items-center gap-1.5 text-[11.5px] font-semibold " +
+            (done ? "text-foreground" : now ? "text-hermes-text" : "text-muted-foreground")
+          }
+        >
+          <i
+            aria-hidden
+            className={
+              "grid size-[17px] flex-none place-items-center rounded-full border-2 text-[9px] font-bold text-white " +
+              (done ? "border-success bg-success" : now ? "animate-pulse border-hermes" : "border-border")
+            }
+          >
+            {done ? "✓" : ""}
+          </i>
+          {label}
+        </span>
+      );
+    });
+    return elts;
   };
 
-  const badge = (r: JournalWire["resultat"]) =>
-    r === "ok"
-      ? "bg-success/10 text-success"
-      : r === "echec"
-        ? "bg-destructive/10 text-destructive"
-        : "bg-muted text-muted-foreground";
-  const badgeLabel = (r: JournalWire["resultat"]) =>
-    r === "ok" ? "réussi" : r === "echec" ? "en échec" : "noté";
-
-  const notesLines = (release?.notes ?? "")
+  // Notes de version : les 3 premières entrées (aperçu borné maquette),
+  // tout le reste au repli — jamais un mur.
+  const notesToutes = (release?.notes ?? "")
     .split("\n")
-    .filter((l) => l.trim().length > 0)
-    .slice(0, notesOpen ? 40 : 5);
+    .filter((l) => l.trim().length > 0);
+  const notesApercu = notesToutes.slice(0, 3);
+  const notesReste = notesToutes.length - notesApercu.length;
 
   return (
     <>
-      {/* ── Carte Moteur Hermes — fusion v0.4.1 : liaison + version,
-          mise à jour, contrôle, repli « autre poste » (maquette v2) ── */}
-      <div className="rounded-xl border border-border bg-card px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
-              Moteur Hermes <Pastille tone={tone} label={etatLabel} />
-            </div>
-            <div className="mt-0.5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
+      {/* ══ CARTE 2 — HERMES ═══════════════════════════════════════════ */}
+      <section
+        aria-labelledby="t-motor"
+        className="rounded-xl border border-border bg-card px-4 py-4"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-x-3.5 gap-y-2 max-[560px]:flex-col max-[560px]:items-stretch">
+          <div className="min-w-[200px] flex-1">
+            <h2 id="t-motor" className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
+              Hermes <Pastille tone={tone} label={etatLabel} />
+            </h2>
+
+            {/* LE fil : une phrase par état — la version n vit qu'ici. */}
+            <p className="fil mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground [&_a]:font-semibold [&_a]:text-hermes-text [&_a]:cursor-pointer [&_b]:font-semibold [&_b]:text-foreground">
               {!connected ? (
-                <>
-                  Le programme Hermes n&apos;est plus joignable. Rien n&apos;est perdu —
-                  la reconnexion est automatique et silencieuse.
-                </>
+                <>Le programme Hermes n&apos;est plus joignable. Rien n&apos;est perdu — la reconnexion est automatique.</>
               ) : op?.kind === "update" ? (
-                <>Hermes s&apos;occupe de sa propre mise à jour — le déroulé apparaît ci-dessous, rien à faire.</>
+                <>Hermes s&apos;occupe de sa propre mise à jour — le déroulé vit ci-dessous, rien à faire.</>
               ) : op?.kind === "rollback" ? (
-                <>Retour vers la version {previous ?? "précédente"} — procédure officielle de Hermes, déroulé ci-dessous.</>
+                <>Retour vers la version d&apos;avant — procédure officielle de Hermes, déroulé ci-dessous.</>
               ) : pbDetecte ? (
                 <>
-                  Depuis la mise à jour, l&apos;interface n&apos;arrive plus à parler au moteur
-                  ({control?.detail ?? "liaison en échec"}). Vos documents et conversations
-                  sont intacts. Un retour arrière est proposé ci-dessous.
+                  Depuis la mise à jour, l&apos;application n&apos;arrive plus à joindre Hermes.
+                  <b>Vos conversations et vos documents sont intacts.</b>
                 </>
               ) : release ? (
                 <>
-                  Une nouvelle version du moteur Hermes est disponible. Voici ce qui
-                  change&nbsp;:
+                  Hermes <b>{release.tag}</b> est disponible (vous avez la <b>{installed ?? "version actuelle"}</b>).
+                  La version actuelle est mise de côté avant tout changement&nbsp;: le retour
+                  arrière restera possible.
                 </>
               ) : installed ? (
                 <>
-                  Le programme Hermes qui tourne sur votre machine&nbsp;: il répond à vos
-                  questions, exécute les outils et enregistre les documents que vous
-                  générez. {checkedAt ? `Dernière vérification à ${checkedAt}.` : ""}
+                  Version <b>{installed}</b>{checkedAt ? `, vérifiée aujourd'hui à ${checkedAt}` : ""}.
+                  {previous ? (
+                    <>
+                      {" "}La version d&apos;avant (<b>{previous}</b>) reste en réserve&nbsp;:{" "}
+                      <a onClick={() => setConfirmOpen(true)}>revenir en arrière</a> si besoin.
+                    </>
+                  ) : null}
                 </>
               ) : (
                 <>
-                  Le moteur Hermes n&apos;est pas détecté sur ce poste. Installez ou lancez
-                  le moteur Hermes, puis «&nbsp;Revérifier&nbsp;».
+                  Hermes n&apos;est pas détecté sur ce poste. Lancez-le puis «&nbsp;Revérifier&nbsp;» —
+                  ou <a onClick={() => setAdvOpen(true)}>il est installé sur un autre poste</a>.
                 </>
               )}
-            </div>
+            </p>
           </div>
-          <div className="flex flex-none flex-wrap items-center gap-2">
-            {release && !op ? (
+
+          <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
+            max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
+            {pbDetecte && previous ? (
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
+              >
+                Revenir à la version d&apos;avant
+              </button>
+            ) : release && !op ? (
               <button
                 type="button"
                 onClick={requestUpdate}
-                className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
+                className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Mettre Hermes à jour
               </button>
             ) : null}
-            {pbDetecte || agentAbsent || (!op && installed) ? (
+            {pbDetecte || (!op && (installed || !connected)) ? (
               <button
                 type="button"
                 onClick={requestCheck}
                 disabled={!!op}
-                className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Revérifier
               </button>
             ) : null}
-            {onNavigateStorage ? (
-              <button
-                type="button"
-                onClick={onNavigateStorage}
-                className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
-              >
-                Documents générés →
-              </button>
-            ) : null}
           </div>
         </div>
 
-        {/* Lignes : version installée / dernière release / liaison (fusion
-            v0.4.1 — ex lignes de la carte Agent, sonde réelle unique : le
-            battement du flux websocket, le canal est la socket elle-même). */}
-        <div className="mt-1 text-[12.5px]">
-          <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-            <span className="text-muted-foreground">Version installée</span>
-            <b className="font-mono text-[11.5px] font-semibold tabular-nums">
-              {installed ? `v${installed}` : "—"}
-            </b>
-          </div>
-          {release ? (
-            <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-              <span className="text-muted-foreground">Dernière version publiée</span>
-              <b className="font-mono text-[11.5px] font-semibold tabular-words text-hermes-text">
-                v{release.tag}
-              </b>
-            </div>
-          ) : null}
-          <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-            <span className="text-muted-foreground">Dernier contact</span>
-            <b className="font-mono text-[11.5px] font-semibold tabular-nums">
-              {connected ? `à ${hf.format(lastSeen)}` : "—"}
-            </b>
-          </div>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <span className="text-muted-foreground">Liaison</span>
-            <b className="font-mono text-[11.5px] font-semibold">
-              {connected ? "locale, en continu" : "perdue, reconnexion…"}
-            </b>
-          </div>
-        </div>
-
-        {/* « Moteur sur un autre poste » (ex « Agent sur un autre poste »,
-            v0.3.3) : replié par défaut, les champs restent locaux à la
-            session — aucune donnée n'est envoyée sans action explicite. */}
-        <button
-          type="button"
-          onClick={() => setAdvOpen((v) => !v)}
-          aria-expanded={advOpen}
-          className="mt-1 inline-flex cursor-pointer items-center gap-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronDown
-            className={"size-[12px] transition-transform " + (advOpen ? "rotate-180" : "")}
-            strokeWidth={2.5}
-          />
-          Moteur sur un autre poste
-        </button>
-        {advOpen ? (
-          <div className="mt-1.5">
-            <label className="mt-2.5 block">
-              <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Adresse du moteur</span>
-              <input
-                type="text"
-                placeholder="http://127.0.0.1:8765"
-                className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
-              />
-            </label>
-            <label className="mt-2.5 block">
-              <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Code d&apos;accès</span>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="h-9 w-full rounded-md border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
-              />
-            </label>
-            <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-              Si le moteur Hermes est installé sur un autre ordinateur que celui-ci&nbsp;:
-              indiquez ici son adresse et son code d&apos;accès. Rien ne change avant que vous validiez.
-            </p>
-          </div>
-        ) : null}
-
-        {/* Liste des changements (état « disponible ») + marqueur interface */}
+        {/* Aperçu des changements (état disponible) : 3 lignes + repli +
+            marqueur « touche l'interface ». Arbitrage v3 : cet aperçu
+            n'existe que pour Hermes — l'application n'a pas de notes de
+            version publiées (elle se compare en révisions brutes). */}
         {release && !op ? (
-          <div className="mt-2.5">
+          <div className="mt-3">
             {release.touchesInterface ? (
-              <p className="mb-2 flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-[11.5px] font-medium text-warning" role="alert">
+              <p
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12px] font-medium text-warning"
+                role="alert"
+              >
                 <span aria-hidden>⚠</span>
-                <span>
-                  Cette mise à jour touche des éléments utilisés par l&apos;interface
-                  (liaison, protocole). Un contrôle automatique suivra la mise à jour&nbsp;:
-                  si quelque chose casse, le retour arrière sera proposé.
-                </span>
+                <span>Cette version touche la liaison avec l&apos;application — un contrôle automatique suivra la mise à jour.</span>
               </p>
             ) : null}
-            <div className="rounded-md border border-border">
-              <pre className="max-h-44 overflow-y-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                {notesLines.join("\n") || "(pas de liste publiée)"}
-              </pre>
-            </div>
-            <div className="mt-1.5 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setNotesOpen((v) => !v)}
-                className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ChevronDown className={"size-[12px] transition-transform " + (notesOpen ? "rotate-180" : "")} strokeWidth={2.5} />
-                {notesOpen ? "Réduire la liste" : "Toute la liste"}
-              </button>
-              {release.url ? (
-                <a
-                  href={release.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] font-semibold text-hermes-text hover:underline"
-                >
-                  Voir sur GitHub
-                </a>
-              ) : null}
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-              Pendant la mise à jour, la version actuelle
-              {installed ? ` (v${installed})` : ""} est gardée en mémoire&nbsp;: vous pourrez
-              revenir en arrière à tout moment.
-            </p>
+            {notesApercu.length > 0 ? (
+              <div className="max-h-[132px] overflow-hidden rounded-lg border border-border px-3 py-2.5 text-[12px] text-muted-foreground">
+                <p className="mb-1.5 text-[12.5px] font-semibold text-foreground">
+                  Ce qui change dans {release.name ?? release.tag}
+                </p>
+                {notesApercu.map((l, i) => (
+                  <p key={i} className="mb-1 truncate">· {l}</p>
+                ))}
+                {notesReste > 0 || release.url ? (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                    {notesReste > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setNotesOpen((v) => !v)}
+                        className="text-[12px] font-semibold text-hermes-text hover:underline"
+                      >
+                        {notesOpen ? "Réduire la liste" : `Toute la liste (+${notesReste})`}
+                      </button>
+                    ) : null}
+                    {release.url ? (
+                      <a
+                        href={release.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[12px] font-semibold text-hermes-text hover:underline"
+                      >
+                        Voir sur GitHub →
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
+                {notesOpen ? (
+                  <div className="mt-1.5 max-h-40 overflow-y-auto border-t border-border pt-1.5">
+                    {notesToutes.slice(3).map((l, i) => (
+                      <p key={i} className="mb-1 truncate">· {l}</p>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-[11.5px] text-muted-foreground">(pas de liste publiée)</p>
+            )}
           </div>
         ) : null}
 
-        {/* Problème détecté : retour arrière + message à transmettre */}
+        {/* Scénario problème : deux façons de s'en sortir (maquette) —
+            retour arrière d'abord (procédure officielle), message prêt
+            à copier ensuite. */}
         {pbDetecte && !op ? (
-          <div className="mt-2.5">
-            {previous ? (
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(true)}
-                className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
-              >
-                Revenir à Hermes {previous ? `v${previous}` : ""}
-              </button>
+          <div className="mt-3 rounded-lg border border-border px-3.5 py-3">
+            <p className="text-[13px] font-bold">Deux façons de s&apos;en sortir</p>
+            <p className="mt-0.5 mb-2 text-[12px] leading-relaxed text-muted-foreground">
+              La plus simple d&apos;abord — le retour arrière utilise la procédure
+              officielle de Hermes et ne touche à rien d&apos;autre.
+            </p>
+            {!previous ? (
+              <p className="text-[12px] text-muted-foreground">
+                (La version d&apos;avant n&apos;est plus en réserve — «&nbsp;Revérifier&nbsp;»
+                pour retenter la liaison.)
+              </p>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setDiagOpen((v) => !v)}
-              className="ml-2 inline-flex cursor-pointer items-center gap-1 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ChevronDown className={"size-[12px] transition-transform " + (diagOpen ? "rotate-180" : "")} strokeWidth={2.5} />
-              Voir le message à transmettre
-            </button>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              Si vous préférez décrire le problème à la personne qui maintient
+              l&apos;application&nbsp;:{" "}
+              <a onClick={() => setDiagOpen((v) => !v)} className="cursor-pointer font-semibold text-hermes-text">
+                préparer un message prêt à copier
+              </a>.
+            </p>
             {diagOpen ? (
-              <div className="mt-1.5">
-                <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+              <div className="mt-2">
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
                   {messageATransmettre}
                 </pre>
                 <button
                   type="button"
                   onClick={copierMessage}
-                  className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-hermes-text hover:underline"
+                  className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-semibold text-hermes-text hover:underline"
                 >
                   {copied ? <Check className="size-[13px]" strokeWidth={2.5} /> : <Copy className="size-[13px]" strokeWidth={2.5} />}
                   {copied ? "Copié" : "Copier le message"}
@@ -532,107 +561,150 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
           </div>
         ) : null}
 
-        {/* Opération en cours : jalons + journal en direct */}
-        {op && log !== null ? (
-          <div className="mt-2.5">
-            <div className="flex flex-wrap items-center gap-2.5" role="status">
-              {op.kind === "update" ? majJalons() : retourJalons()}
+        {/* Opération en cours (ou verdict frais) : le fil live. */}
+        {(op || (log !== null && verdict !== null)) && log !== null ? (
+          <div className="mt-3 overflow-hidden rounded-[10px] border border-border">
+            {op ? (
+              <div className="flex flex-wrap items-center gap-2.5 px-3.5 pb-0.5 pt-2.5">
+                {jalonsHtml(op.kind === "update" ? JALONS_MAJ : JALONS_RETOUR, jalonCourant)}
+              </div>
+            ) : null}
+            <div className="mt-2 border-t border-border bg-background px-3.5 pb-3 pt-2.5">
+              <div className="flex flex-col gap-1">
+                {fil.slice(-6).map((l, i, arr) => (
+                  <p
+                    key={i}
+                    className={
+                      "flex items-baseline gap-2.5 text-[12.5px] " +
+                      (l.classe === "cur" || (l.classe === "" && i === arr.length - 1 && op)
+                        ? "text-foreground before:inline-block before:size-[6px] before:flex-none before:rounded-full before:bg-hermes before:align-[1px] before:animate-pulse before:content-['']"
+                        : l.classe === "ok"
+                          ? "text-foreground before:mr-0 before:font-bold before:text-success before:content-['✓']"
+                          : l.classe === "ko"
+                            ? "text-foreground before:mr-0 before:font-bold before:text-destructive before:content-['✕']"
+                            : "text-muted-foreground")
+                    }
+                  >
+                    {l.heure ? (
+                      <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground opacity-80">
+                        {l.heure}
+                      </span>
+                    ) : null}
+                    <span className="min-w-0 flex-1">{l.texte}</span>
+                    {op && i === arr.length - 1 && l.heure ? (
+                      <span className="flex-none text-[11px] text-muted-foreground">{ageLigne(l)}</span>
+                    ) : null}
+                  </p>
+                ))}
+              </div>
+              {!op && verdict === "ok" ? (
+                <p className="mt-2 text-[11.5px] text-muted-foreground">
+                  Terminé — l&apos;historique ci-dessous garde la trace complète.
+                </p>
+              ) : null}
             </div>
-            <pre
-              ref={logRef}
-              aria-label="Journal de l'opération en direct"
-              className="mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
-            >
-              {log}
-            </pre>
           </div>
         ) : null}
-        {/* Après opération : journal conservé tant que le verdict est frais */}
-        {!op && log !== null && logVerdict(log) !== null ? (
-          <div className="mt-2.5">
-            <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              {log}
-            </pre>
-          </div>
-        ) : null}
-      </div>
 
-      {/* ── Carte 4 : Filet de sécurité — retour arrière ───────────────── */}
-      <div className="rounded-xl border border-border bg-muted px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
-              Filet de sécurité{" "}
-              {op ? (
-                <Pastille tone="busy" label={op.kind === "update" ? "Sauvegarde en cours…" : "Retour en cours…"} />
-              ) : previous ? (
-                <Pastille tone="ok" label="prêt" />
-              ) : (
-                <Pastille tone="off" label="veille" />
-              )}
-            </div>
-            <div className="mt-0.5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-              {op?.kind === "rollback" ? (
-                <>Quelques dizaines de secondes. Vos fichiers et vos réglages ne sont pas touchés.</>
-              ) : op?.kind === "update" ? (
-                <>La version actuelle est en train d&apos;être mise de côté par Hermes (sauvegarde complète avant la mise à jour).</>
-              ) : previous ? (
-                <>
-                  La version <b className="text-foreground">v{previous}</b> est gardée en mémoire. Si la
-                  nouvelle version ne convient pas, revenez en arrière en un clic&nbsp;— et
-                  re-tentez la mise à jour plus tard si vous voulez.
-                </>
-              ) : (
-                <>
-                  À la prochaine mise à jour vue par l&apos;interface, la version précédente
-                  sera gardée en mémoire pour permettre un retour arrière.
-                </>
-              )}
-            </div>
-          </div>
-          {previous && !op ? (
+        {/* Le repli « autre poste » : lien discret, étape guidée (v3 —
+            plus de formulaire fantôme : rien n'est envoyé sans validation). */}
+        {!op && !pbDetecte ? (
+          <>
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
-              className="h-8 flex-none cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+              onClick={() => setAdvOpen((v) => !v)}
+              aria-expanded={advOpen}
+              className="mt-2 inline-flex cursor-pointer items-center gap-1.5 py-1 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
-              Revenir à Hermes v{previous}
+              <ChevronDown
+                className={"size-[11px] transition-transform " + (advOpen ? "rotate-180" : "")}
+                strokeWidth={3}
+              />
+              Hermes est installé sur un autre poste
             </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* ── Carte 5 : Carnet de bord ───────────────────────────────────── */}
-      <div className="rounded-xl border border-border bg-card px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
-          Carnet de bord
-        </div>
-        <p className="mt-0.5 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground">
-          L&apos;interface note chaque étape&nbsp;: version repérée, mise à jour, contrôle,
-          retour arrière. Le jour où quelque chose casse, l&apos;histoire complète est là,
-          prête à transmettre.
-        </p>
-        <div className="mt-1 text-[12.5px]">
-          {journal.length === 0 ? (
-            <p className="py-2 text-muted-foreground">Rien pour l&apos;instant — le carnet se remplit à la première vérification.</p>
-          ) : (
-            journal.slice(0, 8).map((e) => (
-              <div key={e.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border py-2 last:border-b-0">
-                <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{df.format(new Date(e.at))}</span>
-                <span className="min-w-0 flex-1">
-                  {e.label}
-                  {e.version ? <b className="ml-1.5 font-mono text-[11px] tabular-nums">v{e.version}</b> : null}
-                </span>
-                <span className={"rounded-full px-2.5 py-0.5 text-[10.5px] font-bold " + badge(e.resultat)}>
-                  {badgeLabel(e.resultat)}
-                </span>
+            {advOpen ? (
+              <div className="mt-1.5 rounded-[10px] border border-dashed border-border px-4 py-3.5">
+                <p className="text-[13px] font-bold">Le relier à cette application</p>
+                <p className="mb-3 mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                  Si Hermes tourne sur un autre ordinateur que celui-ci, indiquez
+                  ici son adresse et son code d&apos;accès. Rien ne change avant que
+                  vous validiez.
+                </p>
+                <label className="mt-2.5 block">
+                  <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Adresse du moteur</span>
+                  <input
+                    type="text"
+                    placeholder="http://127.0.0.1:8765"
+                    className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
+                  />
+                </label>
+                <label className="mt-2.5 block">
+                  <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Code d&apos;accès</span>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
+                  />
+                </label>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            ) : null}
+          </>
+        ) : null}
 
-      {/* ── Fenêtre de confirmation du retour arrière ─────────────────── */}
+        {/* Historique (ex carnet de bord) : repli de LA carte — plus de
+            carte séparée, plus de redite. <details> natif : l'état ouvert
+            vit dans le DOM, pas dans React. */}
+        <details className="mt-2 group">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 py-1 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="size-[11px] transition-transform group-open:rotate-180" strokeWidth={3} />
+            Historique · {journal.length} étape{journal.length > 1 ? "s" : ""}
+          </summary>
+          <div className="mt-1.5 rounded-[10px] border border-dashed border-border px-4 py-2">
+            {journal.length === 0 ? (
+              <p className="py-1 text-[12.5px] text-muted-foreground">
+                Rien pour l&apos;instant — l&apos;historique se remplit à la première vérification.
+              </p>
+            ) : (
+              journal.slice(0, 8).map((e) => (
+                <div
+                  key={e.id}
+                  className="flex flex-wrap items-baseline justify-between gap-x-3.5 gap-y-0.5 border-b border-border py-1.5 last:border-b-0"
+                >
+                  <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                    {df.format(new Date(e.at))}
+                  </span>
+                  <span className="min-w-0 flex-1 text-[12.5px]">
+                    {e.label}
+                    {e.version ? <b className="ml-1.5 font-mono text-[11px] tabular-nums">v{e.version}</b> : null}
+                  </span>
+                  <span
+                    className={
+                      "flex-none text-[11px] font-semibold " +
+                      (e.resultat === "ok" ? "text-success" : e.resultat === "echec" ? "text-destructive" : "text-muted-foreground")
+                    }
+                  >
+                    {e.resultat === "ok" ? "✓" : e.resultat === "echec" ? "✕" : "·"}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </details>
+
+        {/* Lien documents générés : un lien du fil, pas un bouton en pied
+            de carte (v3 : les détails sont des liens, pas des panneaux). */}
+        {onNavigateStorage && installed ? (
+          <button
+            type="button"
+            onClick={onNavigateStorage}
+            className="mt-1 text-[12px] font-semibold text-hermes-text hover:underline"
+          >
+            Documents générés par Hermes →
+          </button>
+        ) : null}
+      </section>
+
+      {/* Fenêtre de confirmation du retour arrière (3 promesses, v0.4). */}
       {confirmOpen && previous ? (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -645,12 +717,12 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
         >
           <div className="w-full max-w-[460px] rounded-xl border border-border bg-card p-5 shadow-xl">
             <p className="text-[15.5px] font-bold tracking-tight">
-              Revenir à Hermes v{previous}&nbsp;?
+              Revenir à Hermes {previous}&nbsp;?
             </p>
             <ul className="mt-3.5 flex list-none flex-col gap-2.5">
               <li className="flex items-start gap-2.5 text-[12.5px] leading-relaxed">
                 <span aria-hidden className="mt-1 inline-block size-[7px] flex-none rounded-full bg-hermes" />
-                Hermes revient à la version <b>v{previous}</b>, celle d&apos;avant la mise à jour. Le problème disparaît.
+                Hermes revient à la version <b>{previous}</b>, celle d&apos;avant la mise à jour. Le problème disparaît.
               </li>
               <li className="flex items-start gap-2.5 text-[12.5px] leading-relaxed">
                 <span aria-hidden className="mt-1 inline-block size-[7px] flex-none rounded-full bg-hermes" />
@@ -662,24 +734,24 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
               </li>
             </ul>
             <p className="mt-3.5 border-t border-border pt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-              Le retour utilise la procédure officielle de Hermes. L&apos;interface demande
-              et vérifie — Hermes agit.
+              Le retour utilise la procédure officielle de Hermes. L&apos;interface
+              demande et vérifie — Hermes agit.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 autoFocus
                 onClick={() => setConfirmOpen(false)}
-                className="h-8 cursor-pointer rounded-md border border-border bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60"
+                className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60"
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={requestRollback}
-                className="h-8 cursor-pointer rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
+                className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
-                Oui, revenir à Hermes v{previous}
+                Oui, revenir à Hermes {previous}
               </button>
             </div>
           </div>
