@@ -27,6 +27,16 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFil
 import { join } from "node:path";
 import type { Store } from "./store";
 import type { HermesConnector } from "./hermes-connector";
+// Types du fil : référentiel partagé front ↔ back (B-4, audit v3) — ce
+// module les ré-exporte pour ses consommateurs internes et les tests ;
+// la carte cliente les importe directement du shared.
+import type {
+  AgentRelease,
+  MotorControl,
+  MotorOp,
+  MotorState,
+  MotorJournalEntry,
+} from "./shared/chat-protocol";
 
 // Lu à l'USAGE (pas à l'import) : les tests posent leurs stubs d'env après
 // le chargement du module — les valeurs restent ainsi toujours fraîches.
@@ -43,6 +53,11 @@ const motorLogPath = () =>
   process.env.HERMES_MOTOR_LOG ??
   join(import.meta.dir, "..", "..", "db", "agent-motor.log");
 
+/** Plafond de lecture du journal (64 Ko, queue) — même garde que le relais
+ *  du journal interface (index.ts) : un journal qui gonfle à chaque maj ne
+ *  doit jamais alourdir un message socket (B-5, audit v3). */
+const MOTOR_LOG_CAP = 65_536;
+
 // ── Réglages persistés (registre : src/lib/settings.ts, §Système) ─────────
 export const AGENT_JOURNAL_KEY = "fork.agent.journal";
 export const AGENT_PREVIOUS_KEY = "fork.agent.previousVersion";
@@ -50,50 +65,11 @@ export const AGENT_INSTALLED_KEY = "fork.agent.installedVersion";
 export const AGENT_AUTOCHECK_KEY = "fork.agent.update.autoCheck";
 
 // ── Types du fil (carte « Moteur Hermes » du volet Système) ───────────────
-export interface AgentReleaseInfo {
-  tag: string;
-  name: string | null;
-  /** Notes de version (markdown brut, tronquées pour le fil). */
-  notes: string;
-  url: string | null;
-  publishedAt: string | null;
-  /** Vrai si les notes mentionnent un point de contact de l'interface
-   *  (gateway, protocole, API). Alerte honnête — pas une promesse. */
-  touchesInterface: boolean;
-}
-
-export interface MotorControl {
-  at: string;
-  ok: boolean;
-  liaison: "ok" | "echec";
-  modeles: "ok" | "echec";
-  versionLue: string | null;
-  detail: string;
-}
-
-export type MotorOp = { kind: "update" | "rollback"; startedAt: string } | null;
-
-export interface MotorState {
-  installed: string | null;
-  release: AgentReleaseInfo | null;
-  checkedAt: string | null;
-  error: string | null;
-  op: MotorOp;
-  lastControl: MotorControl | null;
-  previousVersion: string | null;
-  agentDir: string | null;
-  gatewayUrl: string | null;
-}
-
-export interface JournalEntry {
-  id: string;
-  at: string;
-  type: "version" | "maj" | "controle" | "retour";
-  label: string;
-  version?: string | null;
-  resultat: "ok" | "echec" | "info";
-  detail?: string;
-}
+// Déclarés dans shared/chat-protocol.ts (référentiel unique) — ré-exportés
+// ici pour les tests et les imports internes du service.
+export type { AgentRelease, MotorControl, MotorOp, MotorState, MotorJournalEntry };
+/** Alias historique (tests et handlers) — le fil s'appelle JournalEntry. */
+export type JournalEntry = MotorJournalEntry;
 
 interface MotorDeps {
   store: Store;
@@ -126,7 +102,14 @@ function setState(patch: Partial<MotorState>, deps?: MotorDeps) {
 // ── Journal d'opération (lignes horodatées, marqueurs terminaux) ──────────
 export function motorLogRead(): { exists: boolean; text: string; mtimeMs: number } {
   try {
-    const text = readFileSync(motorLogPath(), "utf-8");
+    const buf = readFileSync(motorLogPath());
+    // Plafond 64 Ko (queue) : un journal qui grossit à chaque maj ne doit
+    // jamais gonfler un message socket (B-5, audit v3 — même garde que le
+    // relais du journal interface dans index.ts).
+    const text =
+      buf.length > MOTOR_LOG_CAP
+        ? buf.subarray(buf.length - MOTOR_LOG_CAP).toString("utf-8")
+        : buf.toString("utf-8");
     return { exists: true, text, mtimeMs: statSync(motorLogPath()).mtimeMs };
   } catch {
     return { exists: false, text: "", mtimeMs: 0 };
@@ -294,12 +277,12 @@ export function resolveAgentDir(): string | null {
 }
 
 /** Dernière release publiée (GitHub public) — null si injoignable. */
-let releaseCache: { value: AgentReleaseInfo | null; at: number } | null = null;
-export async function fetchLatestRelease(force = false): Promise<AgentReleaseInfo | null> {
+let releaseCache: { value: AgentRelease | null; at: number } | null = null;
+export async function fetchLatestRelease(force = false): Promise<AgentRelease | null> {
   if (!force && releaseCache && Date.now() - releaseCache.at < 15 * 60_000) {
     return releaseCache.value;
   }
-  let value: AgentReleaseInfo | null = null;
+  let value: AgentRelease | null = null;
   try {
     const res = await fetch(releasesUrl(), {
       headers: { Accept: "application/vnd.github+json" },

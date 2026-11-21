@@ -23,6 +23,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
 import { getSocket } from "@/lib/socket";
+// Types du fil : référentiel partagé front ↔ back (B-4, audit v3) — fini
+// le miroir à la main, la divergence entre les deux versions des interfaces
+// sera visible dans UN fichier (shared/chat-protocol.ts).
+import type {
+  AgentRelease,
+  MotorControl,
+  MotorState,
+  MotorJournalEntry as JournalWire,
+} from "@/lib/chat-types";
 
 export interface AgentMotorCardProps {
   /** État RÉEL de la socket vers le service — la pastille « connecté »
@@ -32,56 +41,24 @@ export interface AgentMotorCardProps {
   onNavigateStorage?: () => void;
 }
 
-interface AgentRelease {
-  tag: string;
-  name: string | null;
-  notes: string;
-  url: string | null;
-  publishedAt: string | null;
-  touchesInterface: boolean;
-}
-interface MotorControl {
-  at: string;
-  ok: boolean;
-  liaison: "ok" | "echec";
-  modeles: "ok" | "echec";
-  versionLue: string | null;
-  detail: string;
-}
-interface MotorStateWire {
-  installed: string | null;
-  release: AgentRelease | null;
-  checkedAt: string | null;
-  error: string | null;
-  op: { kind: "update" | "rollback"; startedAt: string } | null;
-  lastControl: MotorControl | null;
-  previousVersion: string | null;
-  agentDir: string | null;
-}
-interface JournalWire {
-  id: string;
-  at: string;
-  type: "version" | "maj" | "controle" | "retour";
-  label: string;
-  version?: string | null;
-  resultat: "ok" | "echec" | "info";
-  detail?: string;
-}
-
 const hf = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const df = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-/** Verdict du journal d'opération (marqueurs terminaux écrits par le service). */
+/** Verdict du journal d'opération (marqueurs terminaux écrits par le
+ *  service). A-1 (audit v3) : dernière ligne QUI PORTE UN MARQUEUR, pas
+ *  dernière ligne tout court — robuste même si une ligne d'information
+ *  suivait le verdict. */
 function logVerdict(text: string): null | "ok" | "erreur" {
   const lines = text.split("\n").filter((l) => l.trim().length > 0);
-  const last = lines[lines.length - 1] ?? "";
-  if (/RETOUR ERREUR|MOTEUR MAJ ERREUR/.test(last)) return "erreur";
-  if (/RETOUR OK|RETOUR EFFECTUÉ|MOTEUR MAJ OK|CONTRÔLE OK/.test(last)) return "ok";
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/RETOUR ERREUR|MOTEUR MAJ ERREUR/.test(lines[i])) return "erreur";
+    if (/RETOUR OK|RETOUR EFFECTUÉ|MOTEUR MAJ OK|CONTRÔLE OK/.test(lines[i])) return "ok";
+  }
   return null;
 }
 
 export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMotorCardProps) {
-  const [state, setState] = useState<MotorStateWire | null>(null);
+  const [state, setState] = useState<MotorState | null>(null);
   const [journal, setJournal] = useState<JournalWire[]>([]);
   const [log, setLog] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -122,12 +99,12 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
     socket.emit(
       "agent:motor-state",
       (res: { installed?: string | null; journal?: JournalWire[] } = {}) => {
-        setState(res as MotorStateWire);
+        setState(res as MotorState);
         setJournal(res.journal ?? []);
       }
     );
     fetchLog();
-    const onState = (s: MotorStateWire) => {
+    const onState = (s: MotorState) => {
       setState(s);
       socket.emit("agent:journal", (r: { journal?: JournalWire[] } = {}) =>
         setJournal(r.journal ?? [])

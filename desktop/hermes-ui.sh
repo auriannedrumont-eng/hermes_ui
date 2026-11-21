@@ -48,6 +48,11 @@ MAJ_FLAG="$RUNTIME_DIR/maj-demandee.flag"
 # Journal live de la mise à jour : le lanceur y raconte chaque étape
 # (marqueurs terminaux « MAJ OK » / « MAJ ERREUR »), le mini-service le relit
 # et le diffuse à l'interface (Paramètres → Système — console en direct).
+# CONTRAT (audit v3, A-1) : l'interface lit le verdict comme la DERNIÈRE
+# ligne du journal qui porte un marqueur « MAJ OK » / « MAJ ERREUR ».
+# N'écrire AUCUNE ligne informative APRÈS le marqueur final — si une
+# remarque doit suivre (ex. lanceur lui-même mis à jour), elle passe
+# AVANT le verdict.
 MAJ_LOG="$RUNTIME_DIR/maj.log"
 MAJ_ENCOURS=0
 mkdir -p "$RUNTIME_DIR" "$LOG_DIR" 2>/dev/null || true

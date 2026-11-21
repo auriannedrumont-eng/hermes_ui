@@ -255,6 +255,68 @@ export interface WebSource {
   snippet: string;
 }
 
+// ── Moteur Hermes (v0.4.0) : carte du volet Système ─────────────────────
+// Types du fil moteur — vivaient en miroir à la main dans la carte client
+// (agent-motor-card.tsx) et dans agent-motor.ts (audit v3, B-4) : ils sont
+// déplacés ICI, référentiel unique. agent-motor.ts les ré-exporte (ses
+// consommateurs internes ne changent pas) ; la carte cliente les importe
+// via src/lib/chat-types.ts. Le module agent-motor.ts (node:child_process)
+// reste non importable côté client — c'est précisément pour ça que les
+// TYPES vivent ici et pas là-bas.
+
+/** Dernière release publiée du moteur Hermes (GitHub public). */
+export interface AgentRelease {
+  tag: string;
+  name: string | null;
+  /** Notes de version (markdown brut, tronquées pour le fil). */
+  notes: string;
+  url: string | null;
+  publishedAt: string | null;
+  /** Vrai si les notes mentionnent un point de contact de l'interface
+   *  (gateway, protocole, API). Alerte honnête — pas une promesse. */
+  touchesInterface: boolean;
+}
+
+/** Contrôle des sens (agent:check-request) : l'interface vérifie SES
+ *  points de contact avec le moteur — elle ne juge pas Hermes, elle
+ *  constate qu'elle arrive toujours à lui parler. */
+export interface MotorControl {
+  at: string;
+  ok: boolean;
+  liaison: "ok" | "echec";
+  modeles: "ok" | "echec";
+  versionLue: string | null;
+  detail: string;
+}
+
+/** Opération en cours sur le moteur (maj / retour) — null au repos. */
+export type MotorOp = { kind: "update" | "rollback"; startedAt: string } | null;
+
+/** État du moteur (agent:motor-state / agent:motor-changed). */
+export interface MotorState {
+  installed: string | null;
+  release: AgentRelease | null;
+  checkedAt: string | null;
+  error: string | null;
+  op: MotorOp;
+  lastControl: MotorControl | null;
+  /** Filet de sécurité : version d'avant la dernière maj (retour arrière). */
+  previousVersion: string | null;
+  agentDir: string | null;
+  gatewayUrl: string | null;
+}
+
+/** Carnet de bord du moteur (fork.agent.journal — liste bornée, 100). */
+export interface MotorJournalEntry {
+  id: string;
+  at: string;
+  type: "version" | "maj" | "controle" | "retour";
+  label: string;
+  version?: string | null;
+  resultat: "ok" | "echec" | "info";
+  detail?: string;
+}
+
 // ── Hello : statut réel du service (carte honnête) ──────────────────────
 
 export type GatewayMode = "gateway" | "local";

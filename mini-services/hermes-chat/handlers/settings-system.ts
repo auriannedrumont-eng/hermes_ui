@@ -4,7 +4,7 @@
 // partagé handlers/context.ts — câblé une fois par index.ts.
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // ── Vérification de mise à jour (carte Système — v0.3.0) ─────────────────
@@ -296,6 +296,16 @@ socket.on("system:update-request", (cb?: (data: unknown) => void) => {
     if (typeof cb === "function") cb(res);
   };
   try {
+    // B-2 (audit v3) : une demande déjà en vol (drapeau posé, pas encore
+    // ramassé par le lanceur — cycle ≤ 15 s) ne doit PAS reprendre d'une
+    // page blanche : un second clic, un second client, un double-clic —
+    // le journal en cours raconte déjà une mise à jour, on ne l'écrase pas.
+    // On répond « déjà en cours » : l'interface affiche le journal existant
+    // au lieu d'un faux départ.
+    if (existsSync(ctx.majFlag)) {
+      done({ ok: true, alreadyRunning: true });
+      return;
+    }
     mkdirSync(join(ctx.majFlag, ".."), { recursive: true });
     writeFileSync(ctx.majFlag, String(Date.now()), "utf-8");
     // Le journal démarre ICI : une demande neuve repart d'une page blanche,

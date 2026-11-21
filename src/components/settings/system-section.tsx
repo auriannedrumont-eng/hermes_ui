@@ -35,13 +35,18 @@ interface SystemSectionProps {
   onNavigateStorage?: () => void;
 }
 
-/** Verdict de la mise à jour = marqueur terminal de la DERNIÈRE ligne non
- *  vide du journal (les lanceurs écrivent « MAJ OK » / « MAJ ERREUR »). */
+/** Verdict de la mise à jour : marqueur terminal « MAJ OK » / « MAJ ERREUR »
+ *  du journal. A-1 (audit v3) : on cherche la dernière ligne QUI PORTE UN
+ *  MARQUEUR, pas la dernière ligne tout court — le contrat « le verdict est
+ *  la dernière ligne » n'est garanti par aucun des trois writers (service +
+ *  deux lanceurs) ; cette lecture reste correcte même si une ligne
+ *  d'information suivait le verdict. */
 function majVerdict(text: string): null | "ok" | "erreur" {
   const lines = text.split("\n").filter((l) => l.trim().length > 0);
-  const last = lines[lines.length - 1] ?? "";
-  if (last.includes("MAJ ERREUR")) return "erreur";
-  if (last.includes("MAJ OK")) return "ok";
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].includes("MAJ ERREUR")) return "erreur";
+    if (lines[i].includes("MAJ OK")) return "ok";
+  }
   return null;
 }
 
@@ -149,9 +154,12 @@ export function SystemSection({
     setMajDone(null);
     getSocket().emit(
       "system:update-request",
-      (res: { ok?: boolean; error?: string } = {}) => {
+      (res: { ok?: boolean; alreadyRunning?: boolean; error?: string } = {}) => {
         setUpdating(false);
         if (res?.ok) {
+          // B-2 (audit v3) : une demande était déjà en vol (autre client,
+          // double-clic) — le journal existant raconte cette mise à jour,
+          // on le suit au lieu de repartir d'une page blanche.
           majFetch();
         } else {
           setUpdateError(res?.error ?? "Échec du dépôt de la demande de mise à jour");
@@ -159,6 +167,37 @@ export function SystemSection({
       }
     );
   };
+
+  // B-6 (audit v3) : verdict « MAJ OK » reçu → re-vérification silencieuse.
+  // Le service ne re-sonde GitHub qu'au démarrage puis toutes les 6 h :
+  // sans ce coup de sonde, la carte resterait « Mise à jour disponible »
+  // (badge orange compris) jusqu'à la prochaine sonde — après une maj
+  // réussie, la nouvelle révision est installée et l'état doit retomber
+  // sur « À jour » tout seul, sans action.
+  // NB : majInstallee est déclarée juste au-dessus (la règle
+  // react-hooks/immutability exige la déclaration AVANT l'effet qui l'écrit).
+  /** Révision installée, lue à la vérification (filet de sécurité —
+   *  c'est la révision que « git checkout » restaurera si besoin). */
+  const [majInstallee, setMajInstallee] = useState<string | null>(null);
+  const majDoneRef = useRef<null | "ok" | "erreur">(null);
+  useEffect(() => {
+    if (majDone === "ok" && majDoneRef.current !== "ok") {
+      getSocket().emit(
+        "system:update-check",
+        (res: { installed?: string | null; available?: string | null; checkedAt?: string | null; error?: string } = {}) => {
+          if (res?.error) return; // silencieux : la carte maj reste sur son verdict
+          setMajVerifie(
+            res.checkedAt
+              ? new Date(res.checkedAt).toLocaleTimeString("fr-FR")
+              : new Date().toLocaleTimeString("fr-FR")
+          );
+          setMajEtat(res.available && res.available !== (res.installed ?? undefined) ? "disponible" : "ajour");
+          if (res.installed) setMajInstallee(res.installed);
+        }
+      );
+    }
+    majDoneRef.current = majDone;
+  }, [majDone]);
 
   // Suivi live pendant une mise à jour : relais du journal + reprise après
   // la coupure + détection d'un lanceur muet (trop ancien : aucune étape).
@@ -211,18 +250,6 @@ export function SystemSection({
     const el = consoleRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [majLog]);
-
-  /** Révision installée, lue à la vérification (filet de sécurité —
-   *  c'est la révision que « git checkout » restaurera si besoin). */
-  const [majInstallee, setMajInstallee] = useState<string | null>(null);
-  useEffect(() => {
-    getSocket().emit(
-      "system:update-check",
-      (res: { installed?: string | null } = {}) => {
-        if (res?.installed) setMajInstallee(res.installed);
-      }
-    );
-  }, []);
 
   return (
     <section aria-label="Système" className="mx-auto w-full max-w-[880px]">

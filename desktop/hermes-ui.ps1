@@ -66,6 +66,11 @@ $MajFlag    = Join-Path $RuntimeDir 'maj-demandee.flag'
 # Journal live de la mise a jour : le lanceur y raconte chaque etape
 # (marqueurs terminaux « MAJ OK » / « MAJ ERREUR »), le mini-service le relit
 # et le diffuse a l'interface (Parametres → Systeme — console en direct).
+# CONTRAT (audit v3, A-1) : l'interface lit le verdict comme la DERNIERE
+# ligne du journal qui porte un marqueur « MAJ OK » / « MAJ ERREUR ».
+# N'ecrire AUCUNE ligne informative APRES le marqueur final — si une
+# remarque doit suivre (ex. lanceur lui-meme mis a jour), elle passe
+# AVANT le verdict.
 $MajLog     = Join-Path $RuntimeDir 'maj.log'
 New-Item -ItemType Directory -Force -Path $RuntimeDir, $LogDir | Out-Null
 
