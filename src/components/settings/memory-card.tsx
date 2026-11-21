@@ -9,7 +9,10 @@ import { useState } from "react";
 import { Brain, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
 import type { MemoryState } from "@/lib/chat-types";
 
@@ -98,7 +101,7 @@ export function MemoryCard({
       </div>
 
       {/* Apprentissage automatique : réglage moteur (gateway), honnête en local */}
-      <label
+      <Label
         htmlFor="memory-auto-learn"
         className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
       >
@@ -118,9 +121,9 @@ export function MemoryCard({
           onCheckedChange={(v) => void onSetAuto(v)}
           aria-label="Apprentissage automatique"
         />
-      </label>
+      </Label>
 
-      <textarea
+      <Textarea
         value={notesValue}
         onChange={(e) => setDraft(e.target.value)}
         aria-label="Contenu de la mémoire"
@@ -133,14 +136,15 @@ export function MemoryCard({
         <div className="flex items-center gap-2">
           <ConfirmDestructiveDialog
             trigger={
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 disabled={!enabled || !notesValue.trim() || saving}
                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-destructive"
               >
                 <Trash2 className="size-[13px]" strokeWidth={2} />
                 Effacer
-              </button>
+              </Button>
             }
             title="Effacer tout le contenu de la mémoire ?"
             description="Toutes les notes mémorisées seront supprimées définitivement."
@@ -157,15 +161,16 @@ export function MemoryCard({
             {maxChars.toLocaleString("fr-FR")}
           </span>
         </div>
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={() => void saveNotes()}
           disabled={!enabled || !dirty || remaining < 0 || saving}
           className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-[13px]" strokeWidth={2.5} />
           Enregistrer · prochain tour
-        </button>
+        </Button>
       </div>
     </div>
   );

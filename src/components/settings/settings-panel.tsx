@@ -35,6 +35,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -346,9 +347,10 @@ export function SettingsPanel({
               {SECTIONS.map(({ id, icon: Icon, label }) => {
                 const active = id === section;
                 return (
-                  <button
+                  <Button
                     key={id}
                     type="button"
+                    variant="ghost"
                     onClick={() => setSection(id)}
                     aria-current={active ? "true" : undefined}
                     className={cn(
@@ -374,7 +376,7 @@ export function SettingsPanel({
                     aria-label="Mise à jour de l'application disponible"
                   />
                 ) : null}
-                  </button>
+                  </Button>
                 );
               })}
             </div>

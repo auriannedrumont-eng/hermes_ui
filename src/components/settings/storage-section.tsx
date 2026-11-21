@@ -14,6 +14,8 @@
 //   F4 — filtre type conservé même si la dernière ligne du type part.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pin, Search, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getSocket } from "@/lib/socket";
 import {
@@ -412,7 +414,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 pt-2.5">
           <div className="flex min-w-[170px] flex-1 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-muted-foreground focus-within:border-hermes/60">
             <Search className="size-[13px] flex-none" strokeWidth={2} />
-            <input
+            <Input
               ref={inputRef}
               type="search"
               value={recherche}
@@ -423,20 +425,21 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               }}
               placeholder="Rechercher un fichier…"
               aria-label="Rechercher un fichier par nom"
-              className="min-w-0 flex-1 bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[12.5px] text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 md:text-[12.5px]"
             />
             {recherche !== "" ? (
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => {
                   setRecherche("");
                   if (type === "Tous") setProjetOuvert(null);
                   inputRef.current?.focus();
                 }}
-                className="flex-none text-[11.5px] font-semibold text-hermes-text hover:underline"
+                className="h-auto flex-none px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
               >
                 effacer
-              </button>
+              </Button>
             ) : null}
           </div>
           <select
@@ -451,9 +454,10 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
           </select>
           <div role="group" aria-label="Filtrer par type" className="flex w-full flex-wrap gap-1 pb-2.5 pt-1">
             {types.map((t) => (
-              <button
+              <Button
                 key={t}
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setType(t);
                   // Fin de filtrage par retour au type « Tous » (§4.2).
@@ -468,7 +472,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 )}
               >
                 {t}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -491,13 +495,14 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                 ) : (
                   <span>Aucun fichier ne correspond</span>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={() => finFiltrage(document.activeElement as HTMLElement | null)}
-                  className="font-semibold text-hermes-text hover:underline"
+                  className="h-auto px-0 py-0 font-semibold text-hermes-text hover:underline"
                 >
                   effacer les filtres
-                </button>
+                </Button>
               </div>
             );
           })()
@@ -517,13 +522,14 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               <div className="mx-auto mt-1.5 max-w-[420px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {error} Rien n&apos;est mis en cache : réessayez quand le service répond.
               </div>
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => fetchEntries()}
                 className="mt-4 inline-flex h-8 cursor-pointer items-center justify-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Réessayer
-              </button>
+              </Button>
             </div>
           ) : (
             <div>
@@ -582,8 +588,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                         {g.entries.length}
                         {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
                       </span>
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={(e) => {
                           // « Nettoyer » ne déplie JAMAIS le groupe (§2.2).
                           e.stopPropagation();
@@ -593,7 +600,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                         className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {busy === g.id ? "Nettoyage…" : "Nettoyer"}
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Lignes du groupe — déroulé dérivé (animation : rangées
@@ -630,8 +637,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                                 <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
                                   {formatArtifactBytes(e.size)} · {df.format(parseDate(e.createdAt))}
                                 </span>
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
                                   onClick={() => deleteVersion(e)}
                                   disabled={bloquee}
                                   title={
@@ -647,7 +655,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                                   className="grid size-6 flex-none place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                                 >
                                   <Trash2 className="size-[13px]" strokeWidth={2} />
-                                </button>
+                                </Button>
                               </div>
                             );
                           })}
@@ -693,13 +701,14 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
               <div className="text-[11.5px] leading-snug text-muted-foreground">{t.description}</div>
             </div>
             {t.undo ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => void undo(t.undo!.token, t.undo!.bytes, t.undo!.n)}
                 className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
               >
                 Annuler
-              </button>
+              </Button>
             ) : null}
           </div>
         ))}

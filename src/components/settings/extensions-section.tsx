@@ -16,6 +16,7 @@ import {
 import type { ProvidersApi } from "@/hooks/use-providers";
 import type { ExtensionCommit, ExtensionView } from "@/lib/chat-types";
 import { Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -140,8 +141,9 @@ export function ExtensionRow({
       {/* En-tête : une zone d'ouverture dédiée, le Switch HORS du bouton —
           plus de double annonce, une seule tabulation par fonction. */}
       <div className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
@@ -170,7 +172,7 @@ export function ExtensionRow({
             )}
             strokeWidth={2}
           />
-        </button>
+        </Button>
         <Switch
           checked={ext.enabled}
           onCheckedChange={(v) => void handleToggle(v)}
@@ -183,8 +185,9 @@ export function ExtensionRow({
         <div className="border-t border-border px-4 pt-2.5 pb-3.5">
           <div className="flex flex-wrap items-center gap-2">
             {isRepo && ext.updateAvailable ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleUpdate}
                 disabled={busy !== null}
                 className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
@@ -193,11 +196,12 @@ export function ExtensionRow({
                   <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                 ) : null}
                 Mettre à jour
-              </button>
+              </Button>
             ) : null}
             {isRepo ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={handleCheck}
                 disabled={busy !== null || ext.pinned}
                 title={ext.pinned ? "Version épinglée — détachez-la pour vérifier" : undefined}
@@ -207,11 +211,12 @@ export function ExtensionRow({
                   <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                 ) : null}
                 Vérifier
-              </button>
+              </Button>
             ) : null}
             {isRepo ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={handlePin}
                 className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] font-medium transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes"
               >
@@ -221,16 +226,17 @@ export function ExtensionRow({
                   <Pin className="size-[12px]" strokeWidth={2} />
                 )}
                 {ext.pinned ? "Retirer l'épingle" : "Épingler"}
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={handleRemove}
               className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
             >
               <Trash2 className="size-[12px]" strokeWidth={2} />
               Retirer
-            </button>
+            </Button>
           </div>
 
           {/* Dernières modifications (dépôts) */}

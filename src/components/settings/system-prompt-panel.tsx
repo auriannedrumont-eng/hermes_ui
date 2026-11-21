@@ -7,7 +7,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, FileText, Sparkle, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ConversationPrompt, SystemPromptPreset } from "@/lib/chat-types";
 
@@ -186,9 +189,10 @@ function PromptPanelBody({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {presets.map((p) => (
-                    <button
+                    <Button
                       key={p.id}
                       type="button"
+                      variant="ghost"
                       title={p.content.slice(0, 120)}
                       onClick={() => applyPreset(p)}
                       className={cn(
@@ -199,7 +203,7 @@ function PromptPanelBody({
                       )}
                     >
                       {p.title}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -207,7 +211,7 @@ function PromptPanelBody({
 
             {/* Zone d'édition */}
             <div className="flex min-h-[220px] flex-1 flex-col">
-              <textarea
+              <Textarea
                 ref={textareaRef}
                 value={draft}
                 onChange={(e) => {
@@ -248,7 +252,7 @@ function PromptPanelBody({
             {/* Enregistrer comme preset */}
             {creating ? (
               <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
-                <input
+                <Input
                   value={newPresetName}
                   onChange={(e) => setNewPresetName(e.target.value)}
                   placeholder="Nom du preset"
@@ -259,42 +263,46 @@ function PromptPanelBody({
                     if (e.key === "Escape") setCreating(false);
                   }}
                 />
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => void saveAsPreset()}
                   disabled={!newPresetName.trim() || !draft.trim()}
                   className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Check className="size-3.5" strokeWidth={2.5} />
                   Créer
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setCreating(false)}
                   className="size-8 cursor-pointer rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label="Annuler la création"
                 >
                   <X className="size-3.5 mx-auto" strokeWidth={2} />
-                </button>
+                </Button>
               </div>
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setCreating(true)}
                 disabled={!draft.trim()}
                 className="inline-flex w-fit cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:opacity-75 disabled:opacity-40"
               >
                 <FileText className="size-[13px]" strokeWidth={2} />
                 Enregistrer dans la bibliothèque…
-              </button>
+              </Button>
             )}
           </div>
 
           {/* ── Pied : sauvegarde explicite ─────────────────────────── */}
           <div className="flex flex-none items-center justify-between gap-3 border-t border-border bg-background px-5 py-3 min-[640px]:px-6">
             {prompt ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   onClear();
                   setDraft("");
@@ -305,7 +313,7 @@ function PromptPanelBody({
               >
                 <Trash2 className="size-[13px]" strokeWidth={2} />
                 Retirer
-              </button>
+              </Button>
             ) : (
               <span className="text-[11px] text-muted-foreground">
                 {prompt === null ? "Aucun prompt actif" : ""}
@@ -317,15 +325,16 @@ function PromptPanelBody({
                   Non enregistré
                 </span>
               ) : null}
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={save}
                 disabled={!canSave}
                 className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-hermes-strong px-4 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Check className="size-[14px]" strokeWidth={2.5} />
                 Enregistrer · prochain tour
-              </button>
+              </Button>
             </div>
           </div>
     </div>

@@ -49,6 +49,7 @@ import {
   useTick,
   verdictApp,
 } from "@/components/settings/fil-live";
+import { Button } from "@/components/ui/button";
 import { getSocket } from "@/lib/socket";
 
 interface SystemSectionProps {
@@ -374,46 +375,51 @@ export function SystemSection({
             <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
               max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
               {majDone === "ok" ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => window.location.reload()}
                   className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
                 >
                   Recharger la page
-                </button>
+                </Button>
               ) : majActif ? null : majEtat === "disponible" ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={updateNow}
                   disabled={updating}
                   className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {updating ? "Envoi…" : "Mettre à jour"}
-                </button>
+                </Button>
               ) : majEtat === "erreur" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => prodeMajCheck()}
                   className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
                 >
                   Réessayer
-                </button>
+                </Button>
               ) : majEtat === "ajour" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => prodeMajCheck()}
                   className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
                 >
                   Vérifier maintenant
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   disabled
                   className="h-8 cursor-not-allowed rounded-lg bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground opacity-40"
                 >
                   Vérification…
-                </button>
+                </Button>
               )}
             </div>
           </div>

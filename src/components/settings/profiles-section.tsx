@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import { Check, Copy, PlusCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSocket } from "@/lib/socket";
 import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { useChatProfiles } from "@/hooks/use-profiles";
@@ -123,7 +125,7 @@ export function ProfilesSection() {
       {creating ? (
         <div className="mt-2.5 rounded-lg border border-hermes/30 bg-hermes/5 p-3">
           <div className="flex items-center gap-2">
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
@@ -151,8 +153,9 @@ export function ProfilesSection() {
               Sera capturé : {profileSummary({ id: "", name: "", createdAt: "", values: captureCurrentValues() })}
             </span>
             <div className="flex flex-none items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setCreating(false);
                   setName("");
@@ -160,16 +163,17 @@ export function ProfilesSection() {
                 className="inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Annuler
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
                 onClick={create}
                 disabled={!name.trim()}
                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <PlusCircle className="size-3.5" strokeWidth={2.5} />
                 Créer
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -206,32 +210,35 @@ export function ProfilesSection() {
                   </div>
                 </div>
                 <div className="flex flex-none items-center gap-1">
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
                     onClick={() => apply(p)}
                     title="Appliquer ce profil maintenant"
                     className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-sm bg-hermes-strong px-2.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90"
                   >
                     Appliquer
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     title="Dupliquer"
                     aria-label={`Dupliquer ${p.name}`}
                     onClick={() => duplicate(p)}
                     className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Copy className="size-[13px]" strokeWidth={2} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     title="Supprimer"
                     aria-label={`Supprimer ${p.name}`}
                     onClick={() => remove(p)}
                     className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                   >
                     <Trash2 className="size-[13px]" strokeWidth={2} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>

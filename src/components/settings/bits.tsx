@@ -4,6 +4,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type PastilleTone = "ok" | "warn" | "err" | "off" | "busy";
@@ -59,16 +60,17 @@ export function AddLine({
   className?: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
       className={cn(
-        "inline-flex cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
+        "inline-flex h-auto cursor-pointer items-center justify-start gap-2 px-0 py-0 text-[12.5px] font-semibold text-hermes-text transition-opacity hover:bg-transparent hover:opacity-75 focus-visible:outline-2 focus-visible:outline-hermes",
         className
       )}
     >
       <Plus className="size-[13px]" strokeWidth={2.5} />
       {children}
-    </button>
+    </Button>
   );
 }

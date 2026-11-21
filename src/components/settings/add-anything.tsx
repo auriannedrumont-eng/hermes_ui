@@ -9,6 +9,8 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function AddAnything({
   api,
@@ -61,7 +63,7 @@ export function AddAnything({
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -76,15 +78,16 @@ export function AddAnything({
           spellCheck={false}
           className="h-9 min-w-[200px] flex-1 rounded-md border border-border bg-background px-3 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
         />
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={() => void install()}
           disabled={!value.trim() || busy}
           className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? <Loader2 className="size-[12px] animate-spin" strokeWidth={2} /> : null}
           {busy ? "Recherche…" : "Ajouter"}
-        </button>
+        </Button>
       </div>
       {hint ? (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>

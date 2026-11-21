@@ -11,6 +11,7 @@ import { ExtensionRow } from "@/components/settings/extensions-section";
 import { AddAnything } from "@/components/settings/add-anything";
 import { Pastille } from "@/components/settings/bits";
 import type { PastilleTone } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
 import type { ExtensionCommit } from "@/lib/chat-types";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { cn } from "@/lib/utils";
@@ -45,13 +46,14 @@ function ToolRowLine({
         <div className="mt-px text-[11px] leading-snug text-muted-foreground">{it.desc}</div>
       </div>
       {it.action ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => onNavigate(it.action!.section)}
           className="flex-none cursor-pointer rounded-sm px-2 py-1 text-[11px] font-semibold text-hermes-text transition-colors hover:bg-hermes/10"
         >
           {it.action.label}
-        </button>
+        </Button>
       ) : null}
       <Pastille tone={it.tone} label={it.status} className="flex-none" />
     </div>

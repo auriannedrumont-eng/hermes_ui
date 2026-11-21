@@ -5,6 +5,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -174,8 +177,8 @@ export function ModelesPane({
               ))}
             </SelectContent>
           </Select>
-          <label className="sr-only" htmlFor="tarif-input">Tarif entrée ($/M jetons)</label>
-          <input
+          <Label className="sr-only" htmlFor="tarif-input">Tarif entrée ($/M jetons)</Label>
+          <Input
             id="tarif-input"
             inputMode="decimal"
             placeholder="entrée $/M"
@@ -183,8 +186,8 @@ export function ModelesPane({
             onChange={(e) => setTarifInput(e.target.value)}
             className="h-8 w-[110px] rounded-md border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
           />
-          <label className="sr-only" htmlFor="tarif-output">Tarif sortie ($/M jetons)</label>
-          <input
+          <Label className="sr-only" htmlFor="tarif-output">Tarif sortie ($/M jetons)</Label>
+          <Input
             id="tarif-output"
             inputMode="decimal"
             placeholder="sortie $/M"
@@ -192,14 +195,15 @@ export function ModelesPane({
             onChange={(e) => setTarifOutput(e.target.value)}
             className="h-8 w-[110px] rounded-md border border-border bg-background px-2.5 text-right text-[12.5px] tabular-nums outline-none focus-visible:border-hermes"
           />
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={addTarif}
             disabled={!canAdd}
             className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             Ajouter
-          </button>
+          </Button>
         </div>
         {Object.keys(pricing).length > 0 ? (
           <ul className="mt-2.5 grid gap-1">
@@ -212,8 +216,9 @@ export function ModelesPane({
                 <span className="flex-none tabular-nums text-muted-foreground">
                   entrée {p.input.toLocaleString("fr-FR")} · sortie {p.output.toLocaleString("fr-FR")} $/M
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   aria-label={`Retirer le tarif de ${labelOf(id)}`}
                   onClick={() => {
                     const next = { ...pricing };
@@ -223,7 +228,7 @@ export function ModelesPane({
                   className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

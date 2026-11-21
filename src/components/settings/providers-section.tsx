@@ -35,6 +35,9 @@ import type { ProviderKind, ProviderStrategy, ProviderView } from "@/lib/chat-ty
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { AddAnything } from "@/components/settings/add-anything";
 import { Segmented } from "@/components/shared/segmented";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -245,15 +248,16 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 : `${keyCount} clé${keyCount > 1 ? "s" : ""}`}
           </span>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           title={`Retirer ${provider.name}`}
           aria-label={`Retirer ${provider.name}`}
           onClick={handleRemoveProvider}
           className="flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
         >
           <Trash2 className="size-[13px]" strokeWidth={2} />
-        </button>
+        </Button>
       </div>
 
       {/* Porte-clés */}
@@ -278,8 +282,9 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   {k.masked}
                 </code>
                 <Pastille tone={tone} label={label ?? undefined} />
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => handleTest(k.id)}
                   disabled={testing.has(k.id)}
                   className="flex h-6 flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-border px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
@@ -288,16 +293,17 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                     <Loader2 className="size-[12px] animate-spin" strokeWidth={2} />
                   ) : null}
                   {testing.has(k.id) ? "Test…" : "Tester"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   title={`Supprimer la clé « ${k.label} »`}
                   aria-label={`Supprimer la clé « ${k.label} »`}
                   onClick={() => handleRemoveKey(k.id, k.label)}
                   className="flex size-[24px] flex-none cursor-pointer items-center justify-center rounded-sm text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
                 >
                   <Trash2 className="size-[12px]" strokeWidth={2} />
-                </button>
+                </Button>
               </div>
             );
           })}
@@ -313,14 +319,14 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
           {showAddKey ? (
             <div className="mt-2">
               <div className="flex flex-wrap items-center gap-2">
-                <input
+                <Input
                   value={keyLabel}
                   onChange={(e) => setKeyLabel(e.target.value)}
                   placeholder="Étiquette (ex. Perso)"
                   aria-label="Étiquette de la clé"
                   className="h-8 w-[150px] rounded-md border border-border bg-background px-2.5 text-[12.5px] outline-none placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
-                <input
+                <Input
                   type="password"
                   value={keySecret}
                   onChange={(e) => setKeySecret(e.target.value)}
@@ -331,20 +337,21 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   aria-label="Valeur de la clé"
                   className="h-8 min-w-[160px] flex-1 rounded-md border border-border bg-background px-2.5 font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={handleAddKey}
                   disabled={!keySecret.trim() || addingKey}
                   className="h-8 cursor-pointer rounded-md bg-hermes px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {addingKey ? "Ajout…" : "Ajouter"}
-                </button>
+                </Button>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="flex-none text-[11px] font-semibold text-muted-foreground">
                   Adresse
                 </span>
-                <input
+                <Input
                   value={keyEndpoint}
                   onChange={(e) => setKeyEndpoint(e.target.value)}
                   placeholder="https://…"
@@ -362,17 +369,18 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
       ) : null}
 
       {/* Réglages avancés : endpoint + ordre d'utilisation des clés */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setShowAdv((v) => !v)}
-        className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+        className="mt-2.5 inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
       >
         <ChevronDown
           className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
           strokeWidth={2}
         />
         Réglages avancés
-      </button>
+      </Button>
       {showAdv ? (
         <div className="mt-2 rounded-md bg-muted/60 px-3 py-2.5">
           {/* Endpoint éditable */}
@@ -384,7 +392,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
               </span>
             </span>
             <div className="flex items-center gap-1.5">
-              <input
+              <Input
                 value={advEndpoint}
                 onChange={(e) => setAdvEndpoint(e.target.value)}
                 onKeyDown={(e) => {
@@ -395,17 +403,19 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                 spellCheck={false}
                 className="h-8 w-[min(300px,100%)] rounded-md border border-border bg-background px-2.5 font-mono text-[11px] outline-none placeholder:font-sans placeholder:text-muted-foreground/60 focus-visible:border-hermes"
               />
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleSaveAdvEndpoint}
                 disabled={savingBase || !advEndpoint.trim() || advEndpoint.trim() === endpoint}
                 className="h-8 cursor-pointer rounded-md bg-hermes px-2.5 text-[11px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {savingBase ? "…" : "Enregistrer"}
-              </button>
+              </Button>
               {hasDefault && provider.baseUrl ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={handleResetEndpoint}
                   disabled={savingBase}
                   title="Revenir à l'adresse par défaut"
@@ -413,7 +423,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
                   className="flex size-[30px] cursor-pointer items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-hermes hover:text-hermes-text focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-wait disabled:opacity-40"
                 >
                   <RotateCcw className="size-[13px]" strokeWidth={2} />
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
@@ -520,12 +530,12 @@ function AddProviderPanel({
 
   return (
     <div className="mt-2.5 rounded-xl border border-border bg-card px-4 py-3.5">
-      <label
+      <Label
         htmlFor="add-provider-select"
         className="block text-[11px] font-semibold text-muted-foreground"
       >
         {kind === "llm" ? "Fournisseur" : "Service"}
-      </label>
+      </Label>
       <select
         id="add-provider-select"
         value={presetValue}
@@ -559,13 +569,13 @@ function AddProviderPanel({
         </p>
       ) : null}
 
-      <label
+      <Label
         htmlFor="add-provider-endpoint"
         className="mt-2.5 block text-[11px] font-semibold text-muted-foreground"
       >
         {isCustom ? "Adresse du fournisseur" : "Adresse"}
-      </label>
-      <input
+      </Label>
+      <Input
         id="add-provider-endpoint"
         value={endpoint}
         onChange={(e) => setEndpoint(e.target.value)}
@@ -584,21 +594,23 @@ function AddProviderPanel({
       ) : null}
 
       <div className="mt-2.5 flex justify-end gap-2">
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={onClose}
           className="h-8 cursor-pointer rounded-md border border-border px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           Annuler
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="primary"
           onClick={handleAdd}
           disabled={adding || (isCustom && !/^https?:\/\//i.test(endpoint.trim()))}
           className="h-8 cursor-pointer rounded-md bg-hermes px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-hermes disabled:cursor-not-allowed disabled:opacity-40"
         >
           {adding ? "Ajout…" : "Ajouter"}
-        </button>
+        </Button>
       </div>
     </div>
   );

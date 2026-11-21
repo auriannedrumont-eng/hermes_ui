@@ -5,6 +5,7 @@
 // est absent de la liste (indisponible), jamais proposé pour échouer après.
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ModelOption } from "@/lib/chat-types";
 
@@ -44,16 +45,17 @@ function Option({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       role="option"
       aria-selected={selected}
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] hover:bg-muted/60"
+      className="flex w-full items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-[11px] font-normal h-auto hover:bg-muted/60"
     >
       <Dot on={selected} />
       {children}
-    </button>
+    </Button>
   );
 }
 

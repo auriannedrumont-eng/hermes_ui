@@ -13,6 +13,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pastille } from "@/components/settings/bits";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSocket } from "@/lib/socket";
 
 interface SiteStatus {
@@ -220,36 +222,39 @@ export function WebchatSection() {
           )}
         </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={() => openBrowser(null)}
             disabled={opening !== null}
             className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ExternalLink className="size-[13px]" strokeWidth={2} />
             {opening !== null ? "Ouverture…" : "Ouvrir le navigateur"}
-          </button>
+          </Button>
           {browserUp ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={closeBrowser}
               className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X className="size-[13px]" strokeWidth={2} />
               Fermer
-            </button>
+            </Button>
           ) : null}
           <div className="flex flex-wrap gap-1.5">
             {(status?.sites ?? []).filter((s) => s.verifie).map((s) => (
-              <button
+              <Button
                 key={s.id}
                 type="button"
+                variant="outline"
                 onClick={() => openBrowser(s.id)}
                 disabled={opening !== null}
                 className="inline-flex h-9 cursor-pointer items-center rounded-md border border-border px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Ouvrir {s.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -257,29 +262,31 @@ export function WebchatSection() {
 
       {/* ── Réglages avancés — repliés par défaut (v2.6) ──────────────── */}
       <div className="mt-4">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setShowAdv((v) => !v)}
-          className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+          className="inline-flex h-auto cursor-pointer items-center gap-1 px-0 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:outline-2 focus-visible:outline-hermes"
         >
           <ChevronDown
             className={cn("size-[12px] transition-transform", showAdv && "rotate-180")}
             strokeWidth={2}
           />
           Réglages avancés
-        </button>
+        </Button>
         {showAdv ? (
           <div className="mt-2 rounded-xl border border-border px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[12.5px] font-semibold">Pilotes du navigateur</div>
               {draftDirty ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => void saveAll()}
                   className="inline-flex h-8 cursor-pointer items-center rounded-md bg-hermes px-3 text-[12.5px] font-medium text-hermes-foreground transition-opacity hover:opacity-90"
                 >
                   Enregistrer
-                </button>
+                </Button>
               ) : (
                 <Pastille tone="off" label="à jour" className="flex-none" />
               )}
@@ -298,7 +305,7 @@ export function WebchatSection() {
             <div className="mt-2.5 grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Port de débogage</span>
-            <input
+            <Input
               type="number"
               min={1024}
               max={65535}
@@ -312,7 +319,7 @@ export function WebchatSection() {
           </label>
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Plafond de génération (s)</span>
-            <input
+            <Input
               type="number"
               min={30}
               max={1800}
@@ -326,7 +333,7 @@ export function WebchatSection() {
           </label>
           <label className="grid gap-1">
             <span className="text-[11px] text-muted-foreground">Veilleur (min d&apos;inactivité)</span>
-            <input
+            <Input
               type="number"
               min={1}
               max={60}
@@ -342,7 +349,7 @@ export function WebchatSection() {
             <span className="text-[11px] text-muted-foreground">
               Dossier de sortie du mode « Fichiers » (vide = défaut du service)
             </span>
-            <input
+            <Input
               type="text"
               value={outDir}
               placeholder="défaut : db/webchat-out du service"
@@ -357,7 +364,7 @@ export function WebchatSection() {
             <span className="text-[11px] text-muted-foreground">
               Chemin du navigateur (vide = détection automatique Chromium/Brave)
             </span>
-            <input
+            <Input
               type="text"
               value={browserPath}
               placeholder="défaut : détection automatique"

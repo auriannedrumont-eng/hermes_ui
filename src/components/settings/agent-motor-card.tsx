@@ -47,6 +47,8 @@ import {
   useTick,
   verdictMotor,
 } from "@/components/settings/fil-live";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSocket } from "@/lib/socket";
 import type {
   AgentRelease,
@@ -329,33 +331,36 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
           <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:stretch max-[560px]:*:
             max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
             {pbDetecte && previous ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => setConfirmOpen(true)}
                 className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Revenir à la version d&apos;avant
-              </button>
+              </Button>
             ) : release && !op ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={requestUpdate}
                 className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Mettre Hermes à jour
-              </button>
+              </Button>
             ) : null}
             {/* v0.5.1 : « Revérifier » de retour quand Hermes n'est pas
                 détecté (le fil y renvoie) — régression v0.5.0. */}
             {pbDetecte || (!op && (installed || !connected || (stateConnu && !installed))) ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={requestCheck}
                 disabled={!!op}
                 className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Revérifier
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -386,20 +391,21 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 {notesReste > 0 || release.url ? (
                   <div className="mt-1.5 flex flex-wrap items-center gap-3">
                     {notesReste > 0 ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="link"
                         onClick={() => setNotesOpen((v) => !v)}
-                        className="text-[12px] font-semibold text-hermes-text hover:underline"
+                        className="h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
                       >
                         {notesOpen ? "Réduire la liste" : `Toute la liste (+${notesReste})`}
-                      </button>
+                      </Button>
                     ) : null}
                     {release.url ? (
                       <a
                         href={release.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[12px] font-semibold text-hermes-text hover:underline"
+                        className="h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
                       >
                         Voir sur GitHub →
                       </a>
@@ -439,27 +445,29 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
             <p className="text-[12px] leading-relaxed text-muted-foreground">
               Si vous préférez décrire le problème à la personne qui maintient
               l&apos;application&nbsp;:{" "}
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => setDiagOpen((v) => !v)}
-                className="cursor-pointer font-semibold text-hermes-text hover:underline"
+                className="h-auto cursor-pointer px-0 py-0 font-semibold text-hermes-text hover:underline"
               >
                 préparer un message prêt à copier
-              </button>.
+              </Button>.
             </p>
             {diagOpen ? (
               <div className="mt-2">
                 <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
                   {messageATransmettre}
                 </pre>
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={copierMessage}
-                  className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-semibold text-hermes-text hover:underline"
+                  className="mt-1.5 inline-flex h-auto cursor-pointer items-center gap-1.5 px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
                 >
                   {copied ? <Check className="size-[13px]" strokeWidth={2.5} /> : <Copy className="size-[13px]" strokeWidth={2.5} />}
                   {copied ? "Copié" : "Copier le message"}
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
@@ -514,8 +522,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
             plus de formulaire fantôme : rien n'est envoyé sans validation). */}
         {!op && !pbDetecte ? (
           <>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setAdvOpen((v) => !v)}
               aria-expanded={advOpen}
               className="mt-2 inline-flex cursor-pointer items-center gap-1.5 py-1 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
@@ -525,7 +534,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 strokeWidth={3}
               />
               Hermes est installé sur un autre poste
-            </button>
+            </Button>
             {advOpen ? (
               <div className="mt-1.5 rounded-[10px] border border-dashed border-border px-4 py-3.5">
                 <p className="text-[13px] font-bold">Le relier à cette application</p>
@@ -536,7 +545,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </p>
                 <label className="mt-2.5 block">
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Adresse du moteur</span>
-                  <input
+                  <Input
                     type="text"
                     placeholder="https://adresse-du-poste"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
@@ -544,7 +553,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </label>
                 <label className="mt-2.5 block">
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Code d&apos;accès</span>
-                  <input
+                  <Input
                     type="password"
                     placeholder="••••••••"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
@@ -598,13 +607,14 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
         {/* Lien documents générés : un lien du fil, pas un bouton en pied
             de carte (v3 : les détails sont des liens, pas des panneaux). */}
         {onNavigateStorage && installed ? (
-          <button
+          <Button
             type="button"
+            variant="link"
             onClick={onNavigateStorage}
-            className="mt-1 text-[12px] font-semibold text-hermes-text hover:underline"
+            className="mt-1 h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
           >
             Documents générés par Hermes →
-          </button>
+          </Button>
         ) : null}
       </section>
 
@@ -642,21 +652,23 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
               demande et vérifie — Hermes agit.
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 autoFocus
                 onClick={() => setConfirmOpen(false)}
                 className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60"
               >
                 Annuler
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
                 onClick={requestRollback}
                 className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
               >
                 Oui, revenir à Hermes {previous}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -8,8 +8,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, MessagesSquare, Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AddLine, Pastille } from "@/components/settings/bits";
 import { MemoryCard } from "@/components/settings/memory-card";
@@ -55,14 +58,14 @@ function PresetEditor({
 
   return (
     <div className="mt-2 rounded-lg border border-hermes/30 bg-hermes/5 p-3">
-      <input
+      <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Nom du preset"
         aria-label="Nom du preset"
         className="h-8 w-full rounded-md border border-border bg-background px-2.5 text-[12.5px] font-semibold outline-none focus-visible:border-hermes/60"
       />
-      <textarea
+      <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Instructions du preset…"
@@ -71,22 +74,24 @@ function PresetEditor({
         className="mt-2 min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[12.5px] leading-relaxed outline-none focus-visible:border-hermes/60"
       />
       <div className="mt-2 flex items-center justify-end gap-2">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onCancel}
           className="inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           Annuler
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="primary"
           onClick={() => onSubmit(title.trim(), content.trim())}
           disabled={!title.trim() || !content.trim()}
           className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Check className="size-3.5" strokeWidth={2.5} />
           {initial ? "Enregistrer" : "Créer"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -293,7 +298,7 @@ export function HermesSection({
             className="flex-none"
           />
         </div>
-        <textarea
+        <Textarea
           value={instructionsValue}
           onChange={(e) => setDraft(e.target.value)}
           aria-label="Instructions personnalisées"
@@ -312,15 +317,16 @@ export function HermesSection({
             {instructionsValue.length.toLocaleString("fr-FR")} /{" "}
             {customMaxChars.toLocaleString("fr-FR")}
           </span>
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={() => void saveInstructions()}
             disabled={!instructionsDirty || remaining < 0 || saving}
             className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-hermes-strong px-3 text-[12.5px] font-semibold text-hermes-foreground shadow-sm transition-opacity hover:bg-hermes-strong/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Check className="size-[13px]" strokeWidth={2.5} />
             Enregistrer · prochain tour
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -393,8 +399,9 @@ export function HermesSection({
                     </div>
                   </div>
                   <div className="flex flex-none items-center gap-1">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       title="Modifier ce preset"
                       aria-label={`Modifier ${p.title}`}
                       onClick={() => (isOpen ? closeEditor() : openEditor(p))}
@@ -404,16 +411,17 @@ export function HermesSection({
                       )}
                     >
                       <Pencil className="size-[13px]" strokeWidth={2} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="ghost"
                       title="Supprimer ce preset"
                       aria-label={`Supprimer ${p.title}`}
                       onClick={() => void onDeletePreset(p.id)}
                       className="flex size-[28px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:text-destructive"
                     >
                       <Trash2 className="size-[13px]" strokeWidth={2} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {isOpen ? (

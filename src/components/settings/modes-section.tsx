@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InfoTip } from "@/components/shared/info-tip";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -36,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { getSocket } from "@/lib/socket";
 import {
   onSettingsChanged,
@@ -229,28 +231,30 @@ function Stepper({
     Math.min(max, Math.max(min, Math.round(v / step) * step));
   return (
     <span className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-card">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onChange(clampStep(value - step))}
         disabled={value <= min}
         aria-label={`Moins — ${ariaLabel}`}
         className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
         −
-      </button>
+      </Button>
       <span className="flex h-7 min-w-[68px] items-center justify-center gap-1 border-x border-border text-[12.5px] font-bold tabular-nums">
         {value}
         <small className="text-[11px] font-medium text-muted-foreground">/ {maxLabel}</small>
       </span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onChange(clampStep(value + step))}
         disabled={value >= max}
         aria-label={`Plus — ${ariaLabel}`}
         className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-35"
       >
         +
-      </button>
+      </Button>
     </span>
   );
 }
@@ -277,8 +281,9 @@ function VoiceRow({
       <div className="flex items-center gap-2 py-2">
         <span className="flex-none text-[12.5px] font-bold">{name}</span>
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{role}</span>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           className={cn(
@@ -290,7 +295,7 @@ function VoiceRow({
         >
           <span className="truncate">{model ? label : "Modèle de la conversation"}</span>
           <ChevronDown className="h-2.5 w-2.5 flex-none" />
-        </button>
+        </Button>
       </div>
       {open ? (
         <div className="mb-1.5 max-h-52 overflow-y-auto rounded-xl border border-dashed border-border bg-background p-1">
@@ -322,8 +327,9 @@ function ModeModelRow({
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
@@ -337,7 +343,7 @@ function ModeModelRow({
           {model ? modelLabelOf(model, models) : "Modèle de la conversation"}
         </span>
         <ChevronDown className="h-2.5 w-2.5 flex-none" />
-      </button>
+      </Button>
       {open ? (
         <div className="mt-1.5 max-h-52 overflow-y-auto rounded-xl border border-dashed border-border bg-background p-1">
           <ModelChoiceList
@@ -400,7 +406,7 @@ function PromptCard({
         <div className="text-[12.5px] font-semibold">{meta.title}</div>
         <div className="mt-px text-[11px] text-muted-foreground">{meta.used}</div>
       </div>
-      <textarea
+      <Textarea
         ref={taRef}
         value={value}
         rows={3}
@@ -417,9 +423,10 @@ function PromptCard({
       />
       <div className="mt-1.5 flex items-center gap-1.5">
         {chips.map((c) => (
-          <button
+          <Button
             key={c.key}
             type="button"
+            variant="ghost"
             title={c.title}
             aria-label={c.title}
             onClick={() => {
@@ -436,19 +443,20 @@ function PromptCard({
             className="rounded-md border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:bg-muted"
           >
             {c.key}
-          </button>
+          </Button>
         ))}
         <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
           {value.length.toLocaleString("fr-FR")} / {MAX_MODE_PROMPT_CHARS.toLocaleString("fr-FR")}
         </span>
         {dirty ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onReset}
             className="rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-semibold text-foreground hover:bg-muted"
           >
             Réinitialiser
-          </button>
+          </Button>
         ) : null}
       </div>
       {hint ? (

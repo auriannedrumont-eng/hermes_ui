@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, FileText, Share2 } from "lucide-react";
 import { MarkdownContent } from "@/components/chat/markdown-content";
+import { Button } from "@/components/ui/button";
 import { serviceUrl } from "@/lib/service";
 import type { SharedConversationData } from "@/lib/chat-types";
 
@@ -155,9 +156,10 @@ export function SharedConversationView({ token }: { token: string }) {
           <Link href="/" className="font-semibold text-hermes-text hover:underline">
             Hermes Web
           </Link>
-          <button
+          <Button
             type="button"
-            className="ml-3 inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
+            variant="outline"
+            className="ml-3 inline-flex h-auto cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground"
             onClick={() => {
               const url = serviceUrl(`/share/${encodeURIComponent(token)}/image.png`);
               window.open(url, "_blank", "noopener");
@@ -165,7 +167,7 @@ export function SharedConversationView({ token }: { token: string }) {
           >
             <Share2 className="size-[11px]" strokeWidth={2} />
             Exporter en image (PNG)
-          </button>
+          </Button>
         </footer>
       </article>
     </Shell>
