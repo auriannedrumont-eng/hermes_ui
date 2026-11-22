@@ -31,6 +31,8 @@ import { ArtifactPanel, ArtifactViewerDialog } from "@/components/chat/artifact-
 import { useHermesChat } from "@/hooks/use-hermes-chat";
 import { streamStore } from "@/lib/stream-store";
 import { exportJson, exportMarkdown, exportPdf } from "@/lib/export";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, X } from "lucide-react";
 import { flashTitle, playCompletionBeep, setGeneratingTitle } from "@/lib/notify";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import type { Artifact, ShareView, TurnTools } from "@/lib/chat-types";
@@ -419,6 +421,36 @@ export default function HermesWebPage() {
     // l'app tient sur la hauteur de son contenu (composer non ancré en bas,
     // bande vide sous la sidebar — constaté en QA 2026-11-14).
     <div className="h-app-full w-full bg-background text-foreground">
+      {/* §9 (61) — l'écran sait quand il est vieux : révision du bundle
+          (au build) != appRevision du hello du service. L'onglet ouvert
+          avant une mise à jour se reconnecte en silence et vit sinon
+          des heures sur l'ancien JavaScript sans rien voir. Bandeau tant
+          que la page n'est pas rechargée — JAMAIS de rechargement forcé,
+          l'utilisatrice choisit son moment (pas en plein tour). */}
+      {chat.screenOutdated ? (
+        <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 border-b border-amber-500/30 bg-background/95 px-4 py-2 text-sm text-foreground shadow-sm backdrop-blur">
+          <RefreshCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span className="truncate">
+            Hermes a été mis à jour — cette page affiche encore l'ancienne version.
+          </span>
+          <Button
+            size="sm"
+            className="h-7 shrink-0 px-2"
+            onClick={() => window.location.reload()}
+          >
+            Recharger la page
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 shrink-0 p-0"
+            aria-label="Masquer ce bandeau pour cette version"
+            onClick={chat.dismissScreenOutdated}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
       {/* Sidebar bureau — largeur fluide, mémorisée ; F-61 : masquable */}
       {!isMobile && !sidebarHidden ? (

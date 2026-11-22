@@ -9,7 +9,11 @@
 //      l'ack tardif de A écrase le fil de C) ;
 //   3. chaque handler stream:*/mode:flow/artifact:* porte la garde
 //      activeIdRef — les deltas d'une conversation en vol ne fuient pas dans
-//      celle qu'on vient d'ouvrir.
+//      celle qu'on vient d'ouvrir ;
+//   4. use-hermes-chat.ts : onHello compare appRevision du service à
+//      BUILD_REVISION (révision cuite au build) et exige les deux côtés
+//      présents — l'écran vieux affiche le bandeau « recharger » au lieu
+//      de vivre des heures sur l'ancienne interface (§9 (61)).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -94,6 +98,23 @@ async function main() {
     const body = target.slice(m.index, end > 0 ? end : m.index + 2000);
     check(`handler ${h} filtre par activeIdRef`, body.includes("activeIdRef.current"));
   }
+
+  console.log("[4] use-hermes-chat.ts : écran vieux — comparaison révision bundle ↔ service (§9 (61))");
+  const revLib = read("src/lib/build-revision.ts");
+  check("BUILD_REVISION est lu depuis NEXT_PUBLIC_BUILD_REVISION",
+    revLib.includes("NEXT_PUBLIC_BUILD_REVISION"));
+  const helloIdx = hook.indexOf("const onHello");
+  check("le hook traite le hello", helloIdx >= 0);
+  const helloWindow = hook.slice(helloIdx, helloIdx + 1800);
+  check("onHello compare appRevision à BUILD_REVISION",
+    helloWindow.includes("BUILD_REVISION") && helloWindow.includes("appRevision"));
+  check("la comparaison exige les deux révisions présentes (jamais de bandeau sur supposition)",
+    /if \(BUILD_REVISION && theirs\)/.test(helloWindow));
+  check("une révision fermée ne ressuscite pas le bandeau (rediffusion hello)",
+    helloWindow.includes("screenOutdatedDismissedRef.current !== theirs"));
+  const page = read("src/app/page.tsx");
+  check("page.tsx rend le bandeau quand screenOutdated est posé",
+    page.includes("chat.screenOutdated") && page.includes("window.location.reload()"));
 
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);

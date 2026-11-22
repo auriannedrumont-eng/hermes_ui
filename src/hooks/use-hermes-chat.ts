@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { streamStore } from "@/lib/stream-store";
+import { BUILD_REVISION } from "@/lib/build-revision";
 import { deleteClientSetting, onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
 import { useToast } from "@/hooks/use-toast";
@@ -94,6 +95,25 @@ export function useHermesChat() {
   // Toast de mise à jour : UNE fois par session de navigateur — un
   // rediffusion hello/update-state ne doit pas ressusciter le toast.
   const updateToastShownRef = useRef(false);
+  // §9 (61) — écran vieux : révision cuite dans ce bundle (BUILD_REVISION,
+  // au build) != appRevision du hello du service. Un onglet ouvert avant
+  // une mise à jour se reconnecte en silence (socket.io) et peut vivre
+  // des heures sur l'ancienne interface sans qu'on puisse le lui dire.
+  // Bandeau « Recharger la page » dans page.tsx — JAMAIS de rechargement
+  // forcé : l'utilisatrice choisit son moment (pas en plein tour).
+  const [screenOutdated, setScreenOutdated] = useState<string | null>(null);
+  // Miroir de screenOutdated (lecture par le dismiss sans dépendre du
+  // state) + révision pour laquelle le bandeau a été fermé : une simple
+  // rediffusion hello ne doit pas le ressusciter (même loi que le toast).
+  const screenOutdatedRef = useRef<string | null>(null);
+  const screenOutdatedDismissedRef = useRef<string | null>(null);
+  const dismissScreenOutdated = useCallback(() => {
+    if (screenOutdatedRef.current) {
+      screenOutdatedDismissedRef.current = screenOutdatedRef.current;
+    }
+    screenOutdatedRef.current = null;
+    setScreenOutdated(null);
+  }, []);
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   // Projets : hook dédié (découpage 2026-11, FORK.md §10).
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -458,6 +478,19 @@ export function useHermesChat() {
       setServerInfo(info);
       if (info && typeof info.update === "object" && info.update !== null) {
         setUpdateState(info.update);
+      }
+      // §9 (61) : comparaison révision bundle ↔ révision service. Un côté
+      // vide (build sans git, service sans dépôt) → pas de comparaison,
+      // jamais de bandeau sur une supposition. Divergence → bandeau tant
+      // que cette révision n'a pas été fermée ou la page rechargée ;
+      // ré-égalité (rechargement réussi) → le bandeau tombe.
+      const theirs = info?.appRevision ?? null;
+      if (BUILD_REVISION && theirs) {
+        const outdated =
+          theirs !== BUILD_REVISION &&
+          screenOutdatedDismissedRef.current !== theirs;
+        screenOutdatedRef.current = outdated ? theirs : null;
+        setScreenOutdated(outdated ? theirs : null);
       }
     };
 
@@ -1590,6 +1623,10 @@ export function useHermesChat() {
     updateState: updateState ?? null,
     // v2.4 (Paramètres → Système) — sondes réelles du hello.
     serverRevision: serverInfo?.appRevision ?? null,
+    // §9 (61) — révision du service != révision cuite dans ce bundle :
+    // l'écran affiche encore l'ancienne interface (bandeau page.tsx).
+    screenOutdated,
+    dismissScreenOutdated,
     chromeHeadless: serverInfo?.chromeHeadless ?? null,
     gatewayUrl: serverInfo?.gatewayUrl ?? null,
     /** F-02 : gateway réellement CONFIGURÉE (vs défaut automatique) — le
