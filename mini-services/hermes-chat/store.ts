@@ -142,7 +142,7 @@ export interface ProjectRow {
   parent_id?: string | null;
   /** F-59 (J5) : dossier du disque lié — null/absent = non lié. */
   disk_path?: string | null;
-  /** F-60 : 1 = archivé (Bibliothèque) — absent/0 = actif. */
+  /** F-60 : 1 = archivé (Archives) — absent/0 = actif. */
   archived?: number;
 }
 

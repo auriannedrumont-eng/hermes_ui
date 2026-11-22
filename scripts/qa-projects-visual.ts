@@ -50,17 +50,26 @@ async function main() {
   await page.waitForTimeout(800);
   await sidebar.screenshot({ path: join(OUT, "sidebar-sombre.jpg"), quality: 80, type: "jpeg" });
 
-  // F-60 : archive le dossier, déplie la Bibliothèque, capture
+  // F-60 : archive le dossier, déplie les Archives, capture
   await page.locator('button[aria-label="Options pour Démarches"]').first().click();
   await page.waitForTimeout(400);
   await page.getByRole("menuitem", { name: "Archiver le dossier" }).click();
   await page.waitForTimeout(1000);
-  await page.locator('button[aria-label="Déplier la Bibliothèque"]').first().click();
+  await page.locator('button[aria-label="Déplier les Archives"]').first().click();
   await page.waitForTimeout(500);
-  await sidebar.screenshot({ path: join(OUT, "sidebar-bibliotheque.jpg"), quality: 80, type: "jpeg" });
+  await sidebar.screenshot({ path: join(OUT, "sidebar-archives.jpg"), quality: 80, type: "jpeg" });
   // Retour à l'état actif pour le nettoyage inchangé
   await page.locator('button[aria-label="Désarchiver le dossier Démarches"]').first().click();
   await page.waitForTimeout(800);
+
+  // F-61 : densité (indentations resserrées) puis masquage de la sidebar —
+  // la même icône d'en-tête la réaffiche.
+  await page.screenshot({ path: join(OUT, "page-densite.jpg"), quality: 70, type: "jpeg" });
+  await page.locator('button[aria-label="Masquer la sidebar"]').first().click();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: join(OUT, "page-sans-sidebar.jpg"), quality: 70, type: "jpeg" });
+  const restore = page.locator('button[aria-label="Afficher la sidebar"]');
+  if ((await restore.count()) >= 1) await restore.first().click();  await page.waitForTimeout(800);
 
   await browser.close();
 

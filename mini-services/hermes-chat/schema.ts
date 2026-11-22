@@ -133,7 +133,7 @@ export function applySchema(db: Database): void {
   // F-59 (J5) : lien « dossier du disque » (📁↓) — informatif, le contenu
   // du disque n'est jamais lu ni déplacé par le service.
   softAlter(db, "projects", "disk_path TEXT");
-  // F-60 : archivage d'un dossier (section « Bibliothèque ») — le dossier,
+  // F-60 : archivage d'un dossier (section « Archives ») — le dossier,
   // ses sous-dossiers et leurs conversations restent INTACTS, hors de la
   // liste active. Migration douce additive (R2).
   softAlter(db, "projects", "archived INTEGER NOT NULL DEFAULT 0");

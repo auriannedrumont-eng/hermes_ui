@@ -152,7 +152,7 @@ async function main() {
     const searchBody2 = await page.locator("body").innerText();
     check("recherche : message « aucun dossier »", searchBody2.includes("Aucun dossier ne correspond."));
 
-    // ── 8. Archivage (F-60) : menu → Bibliothèque → Désarchiver ────────
+    // ── 8. Archivage (F-60) : menu → Archives → Désarchiver ────────────
     // On vide la recherche pour revenir à l'arbre actif.
     await page.locator('input[aria-label="Rechercher dans les dossiers, les conversations et les messages"]').first().fill("");
     await page.waitForTimeout(900);
@@ -164,19 +164,29 @@ async function main() {
     await page.waitForTimeout(1000);
     check("dossier sorti de Mes dossiers", (await rootBtn.count()) === 0);
     const bodyArch = await page.locator("body").innerText();
-    check("section Bibliothèque visible avec compteur", /bibliothèque/i.test(bodyArch) && /1/.test(bodyArch));
+    check("section Archives visible avec compteur", /archives/i.test(bodyArch) && /1/.test(bodyArch));
     const restoreBtn = page.locator('button[aria-label="Désarchiver le dossier Contrats qa-f59"]');
     // Repliée par défaut : déplier si la ligne n'est pas encore visible.
     if ((await restoreBtn.count()) === 0) {
-      await page.locator('button[aria-label="Déplier la Bibliothèque"]').first().click();
+      await page.locator('button[aria-label="Déplier les Archives"]').first().click();
       await page.waitForTimeout(400);
     }
-    check("dossier archivé listé dans la Bibliothèque", (await restoreBtn.count()) >= 1);
+    check("dossier archivé listé dans les Archives", (await restoreBtn.count()) >= 1);
     await restoreBtn.first().click();
     await page.waitForTimeout(1000);
     check("désarchivage : retour dans Mes dossiers", (await rootBtn.count()) === 1);
     const bodyRestored = await page.locator("body").innerText();
-    check("Bibliothèque retirée une fois vide", !/bibliothèque/i.test(bodyRestored));
+    check("Archives retirées une fois vides", !/archives/i.test(bodyRestored));
+
+    // ── 9. Masquage de la sidebar (F-61) : icône d'en-tête ──────────────
+    const mesDossiers = page.getByText("Mes dossiers").first();
+    check("sidebar visible au départ", await mesDossiers.isVisible());
+    await page.locator('button[aria-label="Masquer la sidebar"]').first().click();
+    await page.waitForTimeout(800);
+    check("sidebar masquée par l'icône d'en-tête", !(await mesDossiers.isVisible()));
+    await page.locator('button[aria-label="Afficher la sidebar"]').first().click();
+    await page.waitForTimeout(800);
+    check("sidebar réaffichée par la même icône", await mesDossiers.isVisible());
   } catch (err) {
     check("scénario maquette complet", false, String(err).slice(0, 120));
   } finally {

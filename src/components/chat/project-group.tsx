@@ -114,7 +114,7 @@ export function ProjectGroup({
   onCancelProjectRename: () => void;
   onNewInProject: () => void;
   onDeleteProject: () => void;
-  /** F-60 : archive ce dossier (Bibliothèque) — sous-arbre côté service. */
+  /** F-60 : archive ce dossier (Archives) — sous-arbre côté service. */
   onArchiveProject: () => void;
   /** F-59 : crée un sous-dossier dans ce dossier (maquette v6). */
   onCreateSubfolder: (name: string) => Promise<Project | null>;
@@ -263,7 +263,7 @@ export function ProjectGroup({
                 Renommer
               </DropdownMenuItem>
               {/* F-60 : archive sans rien effacer — le dossier et son
-                  sous-arbre partent dans la Bibliothèque (repliée en bas). */}
+                  sous-arbre partent dans les Archives (repliées en bas). */}
               <DropdownMenuItem onClick={onArchiveProject}>
                 <Archive className="h-3.5 w-3.5" />
                 Archiver le dossier
@@ -280,7 +280,10 @@ export function ProjectGroup({
       {!collapsed ? (
         // Zone enfants : règle verticale comme la maquette v6 (kids) —
         // sous-dossiers d'abord, puis conversations, puis état vide.
-        <div className="mb-0.5 ml-8 border-l border-sidebar-border pl-1.5 sm:ml-[46px]">
+        // F-61 (densité) : alignée sous l'icône du dossier (30 px au lieu
+        // de 46) — l'arbre reste lisible, la largeur utile gagne ~16 px
+        // par niveau.
+        <div className="mb-0.5 ml-6 border-l border-sidebar-border pl-1.5 sm:ml-[30px]">
           {subs.map((s) => (
             <ProjectSubgroup
               key={s.id}

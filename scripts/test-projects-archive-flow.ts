@@ -1,4 +1,4 @@
-// Test E2E de l'archivage de dossiers (F-60 — Bibliothèque) : archive et
+// Test E2E de l'archivage de dossiers (F-60 — Archives) : archive et
 // désarchive via projects:setArchived, propagation au sous-arbre, conversations
 // INTACTES (ni déplacées ni supprimées — c'est la différence avec la
 // suppression), suppression d'un dossier archivé, validation du payload.

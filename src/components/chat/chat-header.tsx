@@ -12,6 +12,8 @@ import {
   Link2,
   Moon,
   PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   Sparkle,
   Sun,
   Unlink,
@@ -73,6 +75,10 @@ interface ChatHeaderProps {
   onShareRevoke: () => void;
   onExport: (format: ExportFormat) => void;
   onOpenSidebar: () => void;
+  /** F-61 : masquage de la sidebar bureau — fourni uniquement par le bureau ;
+   *  absent sur mobile (le bouton Sheet suffit). */
+  sidebarHidden?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function ChatHeader({
@@ -88,6 +94,8 @@ export function ChatHeader({
   onShareRevoke,
   onExport,
   onOpenSidebar,
+  sidebarHidden = false,
+  onToggleSidebar,
 }: ChatHeaderProps) {
   // Copie du lien : feedback inline « Lien copié » (toast inutile ici)
   const [copied, setCopied] = useState(false);
@@ -129,6 +137,24 @@ export function ChatHeader({
       >
         <PanelLeft className="h-4.5 w-4.5" />
       </Button>
+
+      {/* F-61 : masquage de la sidebar (bureau) — la même icône réaffiche ;
+          distinct du bouton mobile (Sheet) qui reste md:hidden. */}
+      {onToggleSidebar ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden h-9 w-9 rounded-xl md:flex"
+          onClick={onToggleSidebar}
+          aria-label={sidebarHidden ? "Afficher la sidebar" : "Masquer la sidebar"}
+        >
+          {sidebarHidden ? (
+            <PanelLeftOpen className="h-4.5 w-4.5" />
+          ) : (
+            <PanelLeftClose className="h-4.5 w-4.5" />
+          )}
+        </Button>
+      ) : null}
 
       {/* Titre de la conversation + fil d'Ariane (F-59) */}
       <div className="flex min-w-0 flex-1 items-center justify-center gap-2">

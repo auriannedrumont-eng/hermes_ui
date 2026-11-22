@@ -1,8 +1,9 @@
-// Section « Bibliothèque » (F-60) — les dossiers archivés. Repliée par
-// défaut (fork.bibliotheque.collapsed), compteur toujours visible ; chaque
-// ligne propose Désarchiver (repart dans « Mes dossiers ») et Supprimer
-// (même garde que les dossiers actifs). Rien n'est draggable ici : hors du
-// rangement actif. Fichier neuf (R1).
+// Section « Archives » (F-60, renommée « Bibliothèque » → « Archives » le
+// 22-11 à la demande de l'utilisatrice) — les dossiers archivés. Repliée par
+// défaut (fork.archives.collapsed), compteur toujours visible ; chaque ligne
+// propose Désarchiver (repart dans « Mes dossiers ») et Supprimer (même garde
+// que les dossiers actifs). Rien n'est draggable ici : hors du rangement
+// actif. Fichier neuf (R1).
 "use client";
 
 import {
@@ -25,7 +26,7 @@ import {
 import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
 import type { ConversationMeta, Project } from "@/lib/chat-types";
 
-export function SidebarBibliotheque({
+export function SidebarArchives({
   projects,
   allProjects,
   conversationsOf,
@@ -47,7 +48,7 @@ export function SidebarBibliotheque({
   return (
     <div className="mt-1">
       <SidebarSectionHeader
-        title="Bibliothèque"
+        title="Archives"
         actions={
           <>
             <span
@@ -62,7 +63,7 @@ export function SidebarBibliotheque({
               className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
               onClick={onToggle}
               aria-expanded={!collapsed}
-              aria-label={collapsed ? "Déplier la Bibliothèque" : "Replier la Bibliothèque"}
+              aria-label={collapsed ? "Déplier les Archives" : "Replier les Archives"}
             >
               {collapsed ? (
                 <ChevronRight className="h-3.5 w-3.5" />

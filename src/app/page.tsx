@@ -195,15 +195,34 @@ export default function HermesWebPage() {
     writeClientSetting(SIDEBAR_WIDTH_KEY, size);
   }, []);
 
+  // ── F-61 : masquage de la sidebar (bureau) — persisté (registre fork) ─
+  // L'icône d'en-tête (PanelLeftClose/PanelLeftOpen) bascule ; réglage
+  // `fork.sidebar.hidden`. La sidebar mobile (Sheet) n'est pas concernée.
+  const [sidebarHidden, setSidebarHidden] = useState<boolean>(
+    () => readClientSetting<boolean>("fork.sidebar.hidden") ?? false
+  );
+  const toggleDesktopSidebar = useCallback(() => {
+    setSidebarHidden((prev) => {
+      const next = !prev;
+      writeClientSetting("fork.sidebar.hidden", next);
+      return next;
+    });
+  }, []);
+
   // ── Largeur de sidebar : application immédiate depuis le sheet ────────
   // (le garde-fou évite la boucle : le panneau réémet sa taille à l'écriture)
   useEffect(() => {
     return onSettingsChanged(({ key, value }) => {
-      if (key !== SIDEBAR_WIDTH_KEY || typeof value !== "number") return;
-      const pct = Math.min(34, Math.max(12, value));
-      const cur = sidebarRef.current?.getSize();
-      if (cur == null || Math.abs(cur - pct) > 0.05) {
-        sidebarRef.current?.resize(pct);
+      if (key === SIDEBAR_WIDTH_KEY) {
+        if (typeof value !== "number") return;
+        const pct = Math.min(34, Math.max(12, value));
+        const cur = sidebarRef.current?.getSize();
+        if (cur == null || Math.abs(cur - pct) > 0.05) {
+          sidebarRef.current?.resize(pct);
+        }
+      } else if (key === "fork.sidebar.hidden") {
+        // F-61 : masquage de la sidebar appliqué en direct (volet Paramètres)
+        setSidebarHidden(typeof value === "boolean" ? value : false);
       }
     });
   }, []);
@@ -402,8 +421,8 @@ export default function HermesWebPage() {
     // bande vide sous la sidebar — constaté en QA 2026-11-14).
     <div className="h-app-full w-full bg-background text-foreground">
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-      {/* Sidebar bureau — largeur fluide, mémorisée */}
-      {!isMobile ? (
+      {/* Sidebar bureau — largeur fluide, mémorisée ; F-61 : masquable */}
+      {!isMobile && !sidebarHidden ? (
         <>
           <ResizablePanel
             ref={sidebarRef}
@@ -437,6 +456,8 @@ export default function HermesWebPage() {
             onShareRevoke={handleShareRevoke}
             onExport={handleExport}
             onOpenSidebar={() => setMobileOpen(true)}
+            sidebarHidden={sidebarHidden}
+            onToggleSidebar={toggleDesktopSidebar}
           />
           <MessageList
             messages={chat.messages}

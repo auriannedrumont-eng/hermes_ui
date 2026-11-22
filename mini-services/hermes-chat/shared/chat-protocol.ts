@@ -238,7 +238,7 @@ export interface Project {
   parentId?: string | null;
   /** F-59 (J5) : dossier du disque lié (informatif, jamais lu) — null = non lié. */
   diskPath?: string | null;
-  /** F-60 : dossier archivé (section « Bibliothèque » repliée) — false = actif. */
+  /** F-60 : dossier archivé (section « Archives » repliée) — false = actif. */
   archived?: boolean;
 }
 

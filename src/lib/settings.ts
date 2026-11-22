@@ -284,6 +284,17 @@ export const FORK_SETTINGS: SettingDef[] = [
     legacyKeys: ["hermes.sidebarSize"],
   },
   {
+    key: "fork.sidebar.hidden",
+    type: "boolean",
+    default: false,
+    label: "Sidebar masquée (bureau)",
+    description:
+      "F-61 : la sidebar est masquée — l'icône de panneau dans l'en-tête " +
+      "la réaffiche. Ne concerne pas la sidebar mobile.",
+    scope: "client",
+    category: "Interface",
+  },
+  {
     key: "fork.projects.sort",
     type: "enum",
     options: ["updated", "created", "title"],
@@ -305,12 +316,13 @@ export const FORK_SETTINGS: SettingDef[] = [
     category: "Projets",
   },
   {
-    key: "fork.bibliotheque.collapsed",
+    key: "fork.archives.collapsed",
+    legacyKeys: ["fork.bibliotheque.collapsed"],
     type: "boolean",
     default: true,
-    label: "Bibliothèque repliée",
+    label: "Archives repliées",
     description:
-      "Section « Bibliothèque » de la sidebar (dossiers archivés, F-60) : " +
+      "Section « Archives » de la sidebar (dossiers archivés, F-60) : " +
       "repliée par défaut, le compteur reste visible.",
     scope: "client",
     category: "Projets",

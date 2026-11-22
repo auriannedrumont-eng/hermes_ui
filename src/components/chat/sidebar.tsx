@@ -1,7 +1,7 @@
 // Sidebar : nouvelle conversation, dossiers (arbre à un niveau, sous-dossiers
 // repliables, drag & drop pour ranger et réordonner entre frères), recherche
 // (dossiers + titres + contenu des messages), historique groupé par date pour
-// « Sans dossier », conversations épinglées, Bibliothèque des dossiers
+// « Sans dossier », conversations épinglées, Archives des dossiers
 // archivés (F-60). F-59, maquette v6 validée.
 "use client";
 
@@ -41,7 +41,7 @@ import { ConversationItem, type ConvItemShared } from "@/components/chat/convers
 import { DropZone, ProjectGroup } from "@/components/chat/project-group";
 import { type SubControls } from "@/components/chat/project-subgroup";
 import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
-import { SidebarBibliotheque } from "@/components/chat/sidebar-bibliotheque";
+import { SidebarArchives } from "@/components/chat/sidebar-archives";
 import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
 import { buildProjectTree, subtreeIds, type ProjectNode } from "@/lib/project-tree";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
@@ -164,15 +164,15 @@ export function Sidebar({
   });
   const [sortMode, setSortMode] = useState<string>(() => readClientSetting<string>("fork.projects.sort"));
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
-  // F-60 : section « Bibliothèque » repliée par défaut (persisté).
-  const [biblioCollapsed, setBiblioCollapsed] = useState<boolean>(
-    () => readClientSetting<boolean>("fork.bibliotheque.collapsed") ?? true
+  // F-60 : section « Archives » repliée par défaut (persisté).
+  const [archivesCollapsed, setArchivesCollapsed] = useState<boolean>(
+    () => readClientSetting<boolean>("fork.archives.collapsed") ?? true
   );
 
-  const toggleBiblioCollapsed = () => {
-    setBiblioCollapsed((prev) => {
+  const toggleArchivesCollapsed = () => {
+    setArchivesCollapsed((prev) => {
       const next = !prev;
-      writeClientSetting("fork.bibliotheque.collapsed", next);
+      writeClientSetting("fork.archives.collapsed", next);
       return next;
     });
   };
@@ -199,8 +199,8 @@ export function Sidebar({
         } catch {
           setCollapsedProjects(new Set<string>());
         }
-      } else if (key === "fork.bibliotheque.collapsed") {
-        setBiblioCollapsed(typeof value === "boolean" ? value : true);
+      } else if (key === "fork.archives.collapsed") {
+        setArchivesCollapsed(typeof value === "boolean" ? value : true);
       }
     });
   }, []);
@@ -286,7 +286,7 @@ export function Sidebar({
   // Recherche : arbre filtré — un dossier est visible si son nom correspond
   // ou s'il contient (directement ou via un sous-dossier) des conversations
   // visibles ; tout est déplié (maquette v6). Les dossiers ARCHIVÉS (F-60)
-  // sont hors de la recherche : ils vivent dans la Bibliothèque.
+  // sont hors de la recherche : ils vivent dans les Archives.
   const searchTree = useMemo(() => {
     if (!isSearching || !hasProjects) return [];
     const ql = q.toLowerCase();
@@ -372,7 +372,7 @@ export function Sidebar({
 
   // ── F-59 : arbre des dossiers (racines → sous-dossiers, un niveau) ────
   // F-60 : les dossiers ARCHIVÉS sortent de l'arbre actif — ils vivent dans
-  // la Bibliothèque (section repliée en bas) ; leurs conversations restent
+  // les Archives (section repliée en bas) ; leurs conversations restent
   // « projetées » (conversationsByProject couvre tous les projets) : elles
   // n'apparaissent ni dans « Sans dossier » ni dans la recherche.
   const activeProjects = useMemo(() => projects.filter((p) => !p.archived), [projects]);
@@ -784,15 +784,15 @@ export function Sidebar({
                   ))
                 )}
               </DropZone>
-              {/* F-60 : Bibliothèque — les dossiers archivés, repliés par
+              {/* F-60 : Archives — les dossiers archivés, repliés par
                   défaut ; la section ne s'affiche que s'il y en a. */}
               {archivedProjects.length > 0 ? (
-                <SidebarBibliotheque
+                <SidebarArchives
                   projects={archivedProjects}
                   allProjects={projects}
                   conversationsOf={(id) => conversationsByProject.get(id) ?? []}
-                  collapsed={biblioCollapsed}
-                  onToggle={toggleBiblioCollapsed}
+                  collapsed={archivesCollapsed}
+                  onToggle={toggleArchivesCollapsed}
                   onRestore={(id) => onSetProjectArchived(id, false)}
                   onDelete={(p) => handleDeleteProject(p)}
                 />

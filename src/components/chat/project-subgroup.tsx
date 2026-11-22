@@ -233,7 +233,9 @@ export function ProjectSubgroup({
         </div>
       )}
       {!collapsed ? (
-        <div className="mb-0.5 ml-[22px] border-l border-sidebar-border pl-1.5 sm:ml-[26px]">
+        // F-61 (densité) : zone enfants resserrée (20 px au lieu de 26) —
+        // une conversation dans un sous-dossier gagne ~22 px au total.
+        <div className="mb-0.5 ml-[18px] border-l border-sidebar-border pl-1.5 sm:ml-[20px]">
           {conversations.length === 0 ? (
             <p className="px-2 py-1.5 text-[12px] italic text-muted-foreground">
               Aucune conversation.
