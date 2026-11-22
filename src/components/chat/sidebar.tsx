@@ -889,13 +889,16 @@ export function Sidebar({
               aria-hidden="true"
             />
             <p className="truncate text-[12.5px] font-medium leading-none">
+              {/* Dictionnaire (loi « tout simplement », 2026-11-22) : le sujet
+                  est toujours Hermes, en mots simples — plus de « moteur local ».
+                  Hermes éteint : l'application l'allume seule s'il est installé. */}
               {!connected
                 ? "Hors ligne"
                 : mode === "gateway"
-                  ? "Moteur Hermes connecté"
+                  ? "Hermes branché"
                   : poolActive
-                    ? "Moteur local · vos clés répondent"
-                    : "Moteur Hermes non détecté"}
+                    ? "Hermes éteint · vos clés répondent"
+                    : "Hermes est éteint"}
             </p>
             {/* Entrée unique des paramètres (décision v1 confirmée v3).
                 v0.3.3 : point orange tant qu'une mise à jour est

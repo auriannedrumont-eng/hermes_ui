@@ -26,7 +26,7 @@ import {
 } from "./auth";
 import { parseSnapshot, isValidShareToken, type SharedConversationData } from "./shares";
 import { readWebchatConfig } from "./webchat/engine";
-import { readPilotInfo, isBrowserUp } from "./webchat/browser";
+import { readPilotInfo, isBrowserUp, browserCandidates } from "./webchat/browser";
 import { resolveVoiceChars } from "./modes";
 import { traceDump, traceMeta } from "./trace";
 
@@ -164,6 +164,17 @@ async function handleDiagnostics(res: ServerResponse, deps: HttpDeps): Promise<v
   const config = readWebchatConfig(store);
   const pilot = readPilotInfo(config.profileDir);
   const up = await isBrowserUp(config.port);
+  // Loi « le diagnostic dit le présent » (2026-11-22) : le registre
+  // `hermes-pilot-browser.json` est le souvenir du DERNIER lancement, pas
+  // l'état courant — le 2026-11-22, un pid du 16/11 y faisait croire à un
+  // pilote vivant alors que le navigateur (conçu pour dormir après
+  // idleMin minutes) était couché et se serait réveillé tout seul au
+  // prochain tour. `pilot` n'est décrit que si le navigateur répond
+  // RÉELLEMENT ; sinon le registre part en `lastLaunch` et le binaire
+  // réellement disponible est montré (`browserFound`) — le rapport dit
+  // « couché, se réveillera au prochain tour », jamais « peut-être cassé ».
+  const browserFound =
+    browserCandidates(config.browserPath || undefined).find((p) => p && existsSync(p)) ?? "";
   const body = {
     service: {
       name: "hermes-chat",
@@ -180,7 +191,9 @@ async function handleDiagnostics(res: ServerResponse, deps: HttpDeps): Promise<v
     webchat: {
       port: config.port,
       browserUp: up,
-      pilot: pilot ? { pid: pilot.pid, startedAt: pilot.startedAt } : null,
+      pilot: up && pilot ? { pid: pilot.pid, startedAt: pilot.startedAt } : null,
+      lastLaunch: !up && pilot ? { pid: pilot.pid, startedAt: pilot.startedAt } : null,
+      browserFound: browserFound || null,
       timeoutS: config.timeoutS,
       idleMin: config.idleMin,
       profileDir: config.profileDir,

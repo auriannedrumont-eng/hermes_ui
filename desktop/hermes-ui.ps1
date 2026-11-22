@@ -72,6 +72,13 @@ $MajFlag    = Join-Path $RuntimeDir 'maj-demandee.flag'
 # remarque doit suivre (ex. lanceur lui-meme mis a jour), elle passe
 # AVANT le verdict.
 $MajLog     = Join-Path $RuntimeDir 'maj.log'
+# Drapeau « arret propre des tours en vol » (loi jamais bloque, 2026-11-22) :
+# depose par le lanceur AVANT chaque arret du mini-service (arret general,
+# mise a jour, relance de surveillance). Le service le lit (500 ms), clôt
+# chaque tour en vol (partiel persiste + evenement terminal par client),
+# supprime le drapeau — le lanceur attend au plus 8 s puis arrete. Les
+# ecrans clients recoivent leur fin de tour au lieu d'un mort dans l'oeuf.
+$DrainFlag  = Join-Path $RuntimeDir 'arret-propre.flag'
 New-Item -ItemType Directory -Force -Path $RuntimeDir, $LogDir | Out-Null
 
 $LauncherLog = Join-Path $LogDir 'launcher.log'
@@ -902,8 +909,24 @@ function Open-Browser([string]$url) {
 }
 
 # ── ARRET PROPRE ────────────────────────────────────────────────────────
+# Loi jamais bloque (2026-11-22) : demande au mini-service de clore ses
+# tours en vol AVANT l'arret — drapeau depose, le service le lit en 500 ms,
+# persiste les partiels et envoye un evenement terminal a chaque ecran.
+function Request-ChatDrain {
+    if ((State-Get 'CHAT_PID') -eq '') { return }   # service pas a nous : rien a vider
+    if (-not (Test-Path $DrainFlag)) {
+        try { New-Item -ItemType File -Path $DrainFlag -Force | Out-Null } catch { return }
+    }
+    Log "• cloture des tours en vol avant l'arret (arret-propre.flag)..."
+    for ($i = 0; $i -lt 8; $i++) {
+        if (-not (Test-Path $DrainFlag)) { Log "• tours clotures (le service a accuse)." ; return }
+        Start-Sleep -Seconds 1
+    }
+    Log "• pas d'accuse en 8 s (service deja muet ?) — arret force."
+}
 function Stop-All {
     Log "Arret demande..."
+    Request-ChatDrain
     Stop-Tree 'GW_PID'   $MGw
     Stop-Tree 'UI_PID'   $MUii
     Start-Sleep -Seconds 1
@@ -942,6 +965,7 @@ function Supervise-One([string]$name, $healthyFn, $startFn, [string]$pidVar, [st
     }
     $strikes.Value++
     Log "ATTENTION $name inaccessible -> redemarrage ($($strikes.Value)/$MaxRestarts)"
+    if ($pidVar -eq 'CHAT_PID') { Request-ChatDrain }
     Stop-Tree $pidVar $marker
     Wait-Gone $marker 5
     if ((State-Get 'UI_PORT') -and $pidVar -eq 'UI_PID') { Wait-PortFree ([int](State-Get 'UI_PORT')) 10 | Out-Null }

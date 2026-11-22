@@ -369,21 +369,22 @@ export function SettingsPanel({
                 poolActive ? (
                   <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
                     <span className="size-[7px] flex-none rounded-full bg-success" />
-                    <span className="truncate">Moteur local · vos clés</span>
+                    <span className="truncate">Hermes éteint · vos clés répondent</span>
                     <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                      Les réponses partent sur l&apos;API de vos fournisseurs
-                      (clés actives : {engineProviders!.join(", ")}). Ajoutez ou
+                      Hermes est éteint : les réponses partent sur l&apos;API de vos
+                      fournisseurs (clés actives : {engineProviders!.join(", ")}). Ajoutez ou
                       retirez des clés dans la section Fournisseurs.
                     </span>
                   </div>
                 ) : (
                 <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
                   <span className="size-[7px] flex-none rounded-full bg-muted-foreground/50" />
-                  <span className="truncate">Moteur Hermes non détecté</span>
+                  <span className="truncate">Hermes est éteint</span>
                   <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                    Lancez le moteur Hermes — la connexion est automatique.
-                    Ou ajoutez la clé d'un fournisseur (section Fournisseurs)
-                    pour répondre sans moteur.
+                    L&apos;application l&apos;allume toute seule si Hermes est installé ;
+                    sinon lancez-le comme d&apos;habitude — la connexion est automatique.
+                    Ou ajoutez la clé d&apos;un fournisseur (section Fournisseurs)
+                    pour répondre sans Hermes.
                   </span>
                 </div>
                 )

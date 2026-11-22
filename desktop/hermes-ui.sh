@@ -55,6 +55,13 @@ MAJ_FLAG="$RUNTIME_DIR/maj-demandee.flag"
 # AVANT le verdict.
 MAJ_LOG="$RUNTIME_DIR/maj.log"
 MAJ_ENCOURS=0
+# Drapeau « arrêt propre des tours en vol » (loi jamais bloqué, 2026-11-22) :
+# déposé par le lanceur AVANT chaque arrêt du mini-service (arrêt général,
+# mise à jour, Ctrl-C). Le service le lit (500 ms), clôt chaque tour en vol
+# (partiel persisté + événement terminal par écran), supprime le drapeau —
+# le lanceur attend au plus 8 s puis arrête. Les écrans clients reçoivent
+# leur fin de tour au lieu d'un mort dans l'œuf.
+DRAIN_FLAG="$RUNTIME_DIR/arret-propre.flag"
 mkdir -p "$RUNTIME_DIR" "$LOG_DIR" 2>/dev/null || true
 
 LAUNCHER_LOG="$LOG_DIR/launcher.log"
@@ -262,8 +269,24 @@ open_browser() {
 }
 
 # ── ARRÊT PROPRE ─────────────────────────────────────────────────────────
+# Loi jamais bloqué (2026-11-22) : demande au mini-service de clore ses
+# tours en vol AVANT l'arrêt — drapeau déposé, le service l'accuse en 500 ms
+# (partiels persistés, événement terminal par écran), le lanceur attend
+# au plus 8 s. Sans accusé (service déjà muet), on arrête sans attendre plus.
+request_chat_drain() {
+  [ -n "$(state_get CHAT_PID)" ] || return 0
+  [ -f "$DRAIN_FLAG" ] || : > "$DRAIN_FLAG" 2>/dev/null || return 0
+  log "• clôture des tours en vol avant l'arrêt (arret-propre.flag)…"
+  local i
+  for i in 1 2 3 4 5 6 7 8; do
+    [ -f "$DRAIN_FLAG" ] || { log "• tours clôturés (le service a accusé)."; return 0; }
+    sleep 1
+  done
+  log "• pas d'accusé en 8 s (service déjà muet ?) — arrêt forcé."
+}
 do_stop() {
   log "Arrêt demandé…"
+  request_chat_drain
   # 1. Ce qui reçoit le trafic d'abord : passerelle puis interface
   stop_tree GW_PID  "caddy run" TERM
   stop_tree UI_PID  "next dev|standalone/server\.js|next-server" TERM

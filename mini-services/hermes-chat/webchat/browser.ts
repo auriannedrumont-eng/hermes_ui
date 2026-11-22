@@ -46,10 +46,29 @@ export function browserCandidates(configuredPath?: string): string[] {
     process.env.HERMES_PILOT_BROWSER ?? null,
     process.env.HERMES_WEBCHAT_BROWSER ?? null,
   ].filter((p): p is string => !!p);
+  // Loi « jamais bloqué » (2026-11-22) : la liste connue ne couvrait que
+  // les installations machine (`C:\Program Files`) — un Chrome installé
+  // « par utilisateur » (le cas le plus courant sous Windows, dossier
+  // LOCALAPPDATA) restait invisible et le réveil automatique échouait avec
+  // « Aucun navigateur trouvé » alors que le navigateur personnel tournait
+  // sous nos yeux. Les chemins par utilisateur sont sondés en PREMIER :
+  // chers à résoudre à l'avance, ils n'existent que si LOCALAPPDATA existe.
+  const local = process.env.LOCALAPPDATA ?? "";
+  const perUser = IS_WIN && local
+    ? [
+        join(local, "Google", "Chrome", "Application", "chrome.exe"),
+        join(local, "Chromium", "Application", "chrome.exe"),
+        join(local, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        join(local, "Microsoft", "Edge", "Application", "msedge.exe"),
+      ]
+    : [];
   const known = IS_WIN
     ? [
+        ...perUser,
         "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
         "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
         "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
       ]
     : [

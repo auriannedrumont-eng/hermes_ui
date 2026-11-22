@@ -772,6 +772,19 @@ export function useHermesChat() {
     socket.on("models:changed", onModelsChanged);
     socket.on("mode:flow", onModeFlow);
     socket.on("conversations:mode", onConversationMode);
+    // Loi « jamais bloqué » (2026-11-22) : la pile prévient AVANT de
+    // s'arrêter (drapeau d'arrêt propre du lanceur) — chaque tour en vol
+    // reçoit sa clôture, l'écran annonce la relance au lieu de sembler
+    // mourir en silence. Les verrous clients se relâchent d'eux-mêmes
+    // (événements terminaux + vigie de silence en filet).
+    const onSystemStopping = (p: { reason?: string; at?: string }) => {
+      toast({
+        title: "Hermes est relancé",
+        description:
+          "Mise à jour ou redémarrage : les réponses en cours sont clôturées proprement, l'écran se débloque tout seul.",
+      });
+    };
+    socket.on("system:stopping", onSystemStopping);
 
     if (socket.connected) onConnect();
 
@@ -781,6 +794,7 @@ export function useHermesChat() {
       socket.off("disconnect", onDisconnect);
       socket.off("hello", onHello);
       socket.off("system:update-state", onUpdateState);
+      socket.off("system:stopping", onSystemStopping);
       socket.off("stream:start", onStreamStart);
       socket.off("stream:delta", onStreamDelta);
       socket.off("stream:reasoning", onStreamReasoning);
@@ -1090,8 +1104,28 @@ export function useHermesChat() {
   const sendMessage = useCallback(
     async (text: string, attachments: Attachment[] = []) => {
       const content = text.trim();
-      if ((!content && attachments.length === 0) || streaming || compactingRef.current)
+      if (!content && attachments.length === 0) return;
+      // Loi « jamais bloqué » (2026-11-22) : un envoi n'est JAMAIS avalé en
+      // silence — l'ancien garde unique `return` jetait l'envoi sans un mot
+      // quand un verrou (réponse en vol, résumé) restait collé : l'écran
+      // paraissait mort (cas réel du 2026-11-22). Chaque blocage dit
+      // pourquoi et donne l'issue en une phrase ; la vigie (use-chat-stream)
+      // relâche de toute façon un verrou muet depuis plus de 6 min.
+      if (compactingRef.current) {
+        toast({
+          title: "Résumé du contexte en cours",
+          description: "Quelques secondes — réenvoyez juste après.",
+        });
         return;
+      }
+      if (streaming) {
+        toast({
+          title: "Hermes finit une réponse précédente",
+          description:
+            "Attendez la fin — ou appuyez sur le bouton rond « Arrêter » si rien ne bouge, puis renvoyez.",
+        });
+        return;
+      }
 
       let conversationId = activeIdRef.current;
       if (!conversationId) {

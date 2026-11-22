@@ -51,6 +51,8 @@ import { registerSettingsSystemHandlers, startUpdateWatchdog, currentUpdateState
 import { registerAgentMotorHandlers } from "./handlers/agent-motor";
 import { startAgentMotorWatchdog } from "./agent-motor";
 import { registerStorageHandlers } from "./handlers/storage";
+import { startDrainWatchdog } from "./handlers/drain";
+import { startAgentGatewayIfDown } from "./agent-starter";
 import { HermesConnector } from "./hermes-connector";
 import { createLlmPool } from "./llm-pool";
 import {
@@ -465,6 +467,8 @@ const {
   runAssistantTurn,
   isRunning,
   abortRunning,
+  abortAllRunning,
+  hasLiveTurns,
   liveTurnsOf,
   validCompareIds,
   titleFrom,
@@ -510,6 +514,38 @@ setInterval(() => {
   majLogSig = sig;
   io.emit("system:update-log:changed", snap);
 }, 2000);
+
+// Arrêt propre des tours en vol (loi « jamais bloqué », 2026-11-22) : le
+// lanceur dépose `arret-propre.flag` avant toute relance ; le service clôt
+// alors chaque tour en vol (partiel persisté + événement terminal par
+// client) au lieu de mourir dans l'œuf — plus aucun écran laissé collé
+// sur « Envoi… » par une mise à jour qui coupait une génération.
+// Logique complète dans handlers/drain.ts (nouveau fichier, FORK.md R1).
+const drainFlag = join(import.meta.dir, "..", "..", "desktop", "runtime", "arret-propre.flag");
+startDrainWatchdog({
+  flagPath: drainFlag,
+  abortAllRunning,
+  trace,
+  emit: (event, payload) => io.emit(event, payload),
+});
+
+// Démarrage automatique de l'agent Hermes (loi « tout simplement », 2026-11-22) :
+// si la passerelle 9120 est éteinte et que l'installation amont officielle
+// est connue (resolveAgentDir), la lancer une fois au boot — le connecteur
+// re-sonde déjà à chaque tour et bascule en mode gateway sans aucune saisie.
+// Adoption si l'agent tourne déjà, jamais de kill, échec non bloquant
+// (l'interface garde son état honnête). Logique : agent-starter.ts.
+void startAgentGatewayIfDown().then((up) => {
+  if (!up) return;
+  // L'agent répond : sonde immédiate + hello rediffusé — la barre latérale
+  // et la carte Hermes passent à « branché » sans attendre le prochain message.
+  connector
+    .probeNow()
+    .then((ok) => {
+      if (ok) io.emit("hello", helloPayload());
+    })
+    .catch(() => {});
+});
 
 // Branchement des handlers (découpage 2026-11, FORK.md §10) : chaque domaine
 // pose ses socket.on(...) ; le contexte partagé (handlers/context.ts) est
@@ -674,7 +710,19 @@ io.on("connection", (socket) => {
     // La raison socket.io (« transport close », « ping timeout »,
     // « transport error »…) fait la différence entre un rechargement de
     // page et une connexion instable — demandée par le diagnostic client.
-    trace(`socket`, `client déconnecté (${reason}) — un tour en vol côté client restera sans réponse jusqu'au prochain essai`);
+    // Loi « le diagnostic dit le présent » (2026-11-22) : la phrase « tour
+    // en vol restera sans réponse » ne sort QUE s'il y a réellement un tour
+    // en vol — l'ancien message sortait à chaque déconnexion et faisait
+    // passer une simple coupure (ou un rechargement) pour une réponse
+    // perdue (cf. diagnostic du 2026-11-22). De plus, un tour en vol SURVIT
+    // à la déconnexion : il continue côté service, se persiste à la clôture
+    // et se resynchronise à la reconnexion (ré-attache liveTurnsOf).
+    trace(
+      "socket",
+      hasLiveTurns()
+        ? `client déconnecté (${reason}) — tour(s) en vol : ils continuent côté service et se resynchroniseront à la reconnexion`
+        : `client déconnecté (${reason}) — aucun tour en vol`
+    );
   });
 
   socket.on("error", (error) => {

@@ -273,6 +273,16 @@ export class HermesConnector {
     }
   }
 
+  /** Sonde IMMÉDIATE (loi « tout simplement », 2026-11-22) : après le
+   *  démarrage automatique de l'agent par agent-starter, l'interface apprend
+   *  TOUT DE SUITE que la gateway répond (hello rediffusé) — sans attendre
+   *  le prochain tour. Ignore le throttle de 10 s (c'est le but). */
+  async probeNow(): Promise<boolean> {
+    this.lastReprobe = 0;
+    await this.reprobeIfOffline();
+    return this.mode === "gateway";
+  }
+
   async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<TurnOutcome> {
     await this.reprobeIfOffline();
     if (this.mode === "gateway" && this.gatewayUrl) {

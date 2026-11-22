@@ -33,6 +33,12 @@ export interface StreamDeps {
   refreshConversations: () => void;
 }
 
+// Loi « jamais bloqué » (2026-11-22) : au-delà de ce silence TOTAL, un tour
+// encore affiché est déclaré mort par la vigie (effet de release plus bas).
+// Toutes les gardes service (120 s pool, ~300 s pilote webchat + dépassement)
+// sont expirées bien avant : plus aucun événement terminal ne peut arriver.
+const MAX_TURN_SILENCE_MS = 360_000;
+
 export function useChatStream({ activeIdRef, setMessages, refreshConversations }: StreamDeps) {
   // F-17 — comparaison : DEUX réponses streament en parallèle (variantes
   // a/b). L'état vit dans une map par messageId ; `streaming` (première
@@ -114,6 +120,42 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   useEffect(() => {
     streamStore.setStallNotice(derivedStallNotice);
   }, [derivedStallNotice]);
+
+  // Loi « jamais bloqué » — durée de vie des verrous : pendant un tour, si
+  // AUCUN signe de vie socket n'arrive pendant plus de MAX_TURN_SILENCE_MS,
+  // le verrou se relâche TOUT SEUL au lieu de rester collé jusqu'à un F5
+  // (cas réel du 2026-11-22 : service relancé par la mise à jour pendant une
+  // génération — plus aucun « tour en vol » côté service, mais l'écran
+  // gardait « Envoi… » pour toujours et jetait chaque envoi en silence).
+  // La réponse perdue est déclarée perdue avec une phrase honnête.
+  useEffect(() => {
+    if (turnState !== "streaming") return;
+    const release = () => {
+      const silentMs = Date.now() - lastActivityRef.current;
+      if (silentMs < MAX_TURN_SILENCE_MS) return;
+      const first = Object.values(streamStore.get().streamsRecord)[0];
+      // Lecture du silence puis vidage : synchrones, donc aucun stream:start
+      // ne peut s'intercaler (un nouveau tour aurait déjà remonté
+      // lastActivityRef via socket.onAny et court-circuité ce release).
+      streamStore.setStreamsRecord(() => ({}), { flush: true, reopen: true });
+      streamStore.setModeFlowLive(null);
+      streamStore.setStallNotice(null);
+      runningVoiceRef.current = null;
+      streamStore.setTurnError({
+        messageId: first?.messageId ?? "",
+        error:
+          `Réponse perdue : plus aucun signe de vie depuis ` +
+          `${Math.max(1, Math.round(silentMs / 60_000))} min — le service a ` +
+          `probablement été relancé en pleine génération. Réenvoyez votre ` +
+          `message : vos messages déjà envoyés sont bien enregistrés.`,
+      });
+      // Le tour mort a pu persister un partiel côté service : le fil (et les
+      // pastilles de conversations) se resynchronisent.
+      refreshConversations();
+    };
+    const timer = setInterval(release, 10_000);
+    return () => clearInterval(timer);
+  }, [turnState, refreshConversations]);
 
   /** Signe de vie (callback socket — système externe, setState autorisé). */
   const bumpActivity = useCallback(() => {

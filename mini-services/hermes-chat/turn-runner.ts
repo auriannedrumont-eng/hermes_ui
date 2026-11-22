@@ -88,6 +88,25 @@ function abortRunning(conversationId: string): void {
   running.get(`${conversationId}:b`)?.abort();
 }
 
+/** Interrompt TOUS les tours en vol, toutes conversations confondues.
+ *  Loi « jamais bloqué » (2026-11-22) : avant une relance (mise à jour,
+ *  redémarrage demandé), le lanceur dépose le drapeau d'arrêt propre —
+ *  le service clôt alors chaque tour EN VOL (partiel persisté + événement
+ *  terminal stream:done/stream:error) au lieu de mourir dans l'œuf et de
+ *  laisser l'écran du client collé sur « Envoi… » sans fin. */
+function abortAllRunning(): void {
+  for (const controller of running.values()) controller.abort();
+}
+
+/** Un tour quelconque est-il en vol (toutes conversations confondues) ?
+ *  Loi « le diagnostic dit le présent » (2026-11-22) : la phrase « un tour
+ *  en vol restera sans réponse » n'est tracée à la déconnexion que si c'est
+ *  VRAI — l'ancien message sortait à CHAQUE déconnexion et faisait passer
+ *  une simple coupure pour une réponse perdue (diagnostic du 2026-11-22). */
+function hasLiveTurns(): boolean {
+  return running.size > 0 || liveTurns.size > 0;
+}
+
 
 // Tours en vol pour la RÉ-ATTACHE : quand le client quitte une conversation
 // dont le tour continue puis y revient, son état de stream local est perdu
@@ -1066,6 +1085,8 @@ const runAssistantTurnGuarded = async (
     runAssistantTurn: runAssistantTurnGuarded,
     isRunning,
     abortRunning,
+    abortAllRunning,
+    hasLiveTurns,
     liveTurnsOf,
     validCompareIds,
     titleFrom,
