@@ -13,7 +13,12 @@
 //   4. use-hermes-chat.ts : onHello compare appRevision du service à
 //      BUILD_REVISION (révision cuite au build) et exige les deux côtés
 //      présents — l'écran vieux affiche le bandeau « recharger » au lieu
-//      de vivre des heures sur l'ancienne interface (§9 (61)).
+//      de vivre des heures sur l'ancienne interface (§9 (61)) ;
+//   5. les deux lanceurs INSTALLENT une copie fraîche officielle de l'agent
+//      dans <racine>/hermes-agent et ne déplacent JAMAIS l'hermes existant
+//      de l'utilisatrice — décision verrouillée (§9 (63)) : aucun
+//      robocopy/robocopy /MOVE côté ps1, plus aucun bloc de rangement
+//      (agent_src) côté sh, et l'appel à l'installeur est présent.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -115,6 +120,21 @@ async function main() {
   const page = read("src/app/page.tsx");
   check("page.tsx rend le bandeau quand screenOutdated est posé",
     page.includes("chat.screenOutdated") && page.includes("window.location.reload()"));
+
+  console.log("[5] lanceurs : copie fraîche de l'agent, jamais de déplacement de l'existant (§9 (63))");
+  const ps1 = read("desktop/hermes-ui.ps1");
+  const sh = read("desktop/hermes-ui.sh");
+  check("ps1 : l'installeur officiel est défini ET appelé au démarrage",
+    ps1.includes("function Install-AgentIntoHome") && ps1.includes("\n    Install-AgentIntoHome"));
+  check("ps1 : source officielle NousResearch/hermes-agent",
+    ps1.includes("https://github.com/NousResearch/hermes-agent"));
+  check("ps1 : aucun déplacement de l'hermes existant (robocopy banni)", !ps1.includes("robocopy"));
+  check("ps1 : le déplacement (62) est bien retiré", !ps1.includes("Move-AgentIntoHome"));
+  check("sh : l'installeur officiel est défini ET appelé au démarrage",
+    sh.includes("install_agent_fresh() {") && sh.includes("\n  install_agent_fresh"));
+  check("sh : source officielle NousResearch/hermes-agent",
+    sh.includes("https://github.com/NousResearch/hermes-agent"));
+  check("sh : aucun déplacement de l'agent existant (bloc agent_src supprimé)", !sh.includes("agent_src"));
 
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);

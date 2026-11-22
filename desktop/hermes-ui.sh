@@ -194,6 +194,56 @@ chat_healthy() {
 ui_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get UI_PORT)/" 6)" = "200" ]; }
 gw_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get GW_PORT)/" 4)" = "200" ]; }
 
+# §9 (63) — copie fraîche de l'agent dans le dossier de l'application.
+# L'interface installe SA copie de l'agent officiel (NousResearch/hermes-agent,
+# surcharge HERMES_AGENT_REPO_URL) dans <racine>/hermes-agent — le dossier que
+# le service consulte EN PREMIER. Les installations existantes (dossier frère
+# « hermes », ~/.hermes) ne sont JAMAIS lues, déplacées ni modifiées : elles
+# restent le secours si le clone échoue (résolution relative du service).
+# Idempotent ; au plus une tentative par heure (flag daté) — un réseau absent
+# ne doit pas rallonger chaque démarrage ; clone borné 10 min, dépendances
+# python 5 min (meilleur effort) ; jamais bloquant.
+install_agent_fresh() {
+  local maison="$ROOT/hermes-agent" flag="$RUNTIME_DIR/agent-install.flag" url
+  if [ -e "$maison/.git" ] || [ -f "$maison/gateway/run_api.py" ]; then
+    return 0
+  fi
+  if [ -f "$flag" ] && [ "$(( $(date +%s) - $(date -r "$flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+    log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (l'agent existant reste le secours)."
+    return 0
+  fi
+  touch "$flag" 2>/dev/null || true
+  if [ -d "$maison" ]; then
+    log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
+    rm -rf "$maison" 2>/dev/null || { log "  ATTENTION : nettoyage impossible — l'agent existant reste le secours."; return 0; }
+  fi
+  url="${HERMES_AGENT_REPO_URL:-https://github.com/NousResearch/hermes-agent}"
+  log "• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : $url)…"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 600 git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
+  else
+    git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
+  fi
+  if [ -f "$maison/gateway/run_api.py" ]; then
+    log "  copie fraîche installée — l'interface l'utilise en priorité ; vos installations existantes restent intactes."
+    if [ -f "$maison/requirements.txt" ]; then
+      log "  installation des dépendances python (meilleur effort, 5 min max)…"
+      if command -v timeout >/dev/null 2>&1; then
+        timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+          || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+          || log "  dépendances incomplètes — voir le journal ; au besoin, l'agent existant reste le secours."
+      else
+        pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+          || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+          || true
+      fi
+    fi
+  else
+    log "  ATTENTION : clone échoué — l'agent existant (ex. dossier voisin « hermes ») reste le secours."
+    rm -rf "$maison" 2>/dev/null || true
+  fi
+}
+
 # ── Démarrage des composants ─────────────────────────────────────────────
 # exec : le PID enregistré EST le processus (cmdline exploitable, pas un
 # sous-shell wrapper). nohup + </dev/null : survit à la fermeture du terminal.
@@ -453,33 +503,11 @@ do_start() {
     maj_log "GitHub injoignable — version locale conservée"
   fi
 
-  # Rangement de l'agent (§9 (62), demande : « les fichiers d'Hermes agent
-  # vivent dans le dossier qui héberge l'interface », sans chemin absolu) :
-  # l'agent trouvé ailleurs (dossier frère « hermes », ~/.hermes) est DÉPLACÉ
-  # dans <racine>/hermes-agent — un seul dossier = tout l'ensemble, déplaçable
-  # et renommable librement (le service le résout en relatif, même ordre).
-  # Garde-fous : déjà à la maison → rien (idempotent) ; gateway 9120 vivante
-  # → adoption, jamais de déplacement d'un agent en marche ; échec → l'agent
-  # reste trouvable sur place par le service, rien ne casse.
-  if [ ! -d "$ROOT/hermes-agent" ]; then
-    agent_src=""
-    for agent_cand in "$ROOT/../hermes" "$HOME/.hermes"; do
-      if [ -f "$agent_cand/gateway/run_api.py" ]; then agent_src="$agent_cand"; break; fi
-    done
-    if [ -n "$agent_src" ]; then
-      if port_open 9120; then
-        log "• agent Hermes vivant (9120) — rangement reporté : il sera adopté, puis rangé à un prochain démarrage."
-      else
-        log "• rangement de l'agent Hermes dans le dossier de l'application ($agent_src -> hermes-agent)…"
-        if mv "$agent_src" "$ROOT/hermes-agent" 2>>"$LAUNCHER_LOG" \
-           && [ -f "$ROOT/hermes-agent/gateway/run_api.py" ]; then
-          log "  agent rangé — tout vit désormais dans un seul dossier, déplaçable à volonté."
-        else
-          log "  ATTENTION : déplacement impossible — l'agent reste trouvable sur place par le service."
-        fi
-      fi
-    fi
-  fi
+  # Installation de l'agent dans le dossier de l'application (§9 (63),
+  # décision : « pas de déplacement de mon hermes actuel — l'interface
+  # installe une copie fraîche dans son dossier ») : clone officiel dans
+  # hermes-agent/, zéro contact avec les installations existantes.
+  install_agent_fresh
 
   # Pile déjà lancée par un lanceur précédent encore vivant ? — SAUF si le
   # lanceur en mémoire est périmé : le script sur disque a été modifié APRÈS

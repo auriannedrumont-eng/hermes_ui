@@ -691,7 +691,7 @@ function Ensure-PortableSetup {
     # de telechargement des outils ci-dessous sont celles du code le plus
     # recent, et dependances/build tiendront compte des fichiers recus) ──
     Update-FromGit
-    Move-AgentIntoHome
+    Install-AgentIntoHome
 
     # ── 1. Node.js (node + npm vivent dans le meme dossier) ──
     # tools\ d abord (dossier autonome), telechargement sinon, copie
@@ -909,48 +909,78 @@ function Open-Browser([string]$url) {
     Log "• navigateur : $url"
 }
 
-# ── RANGEMENT DE L'AGENT (§9 (62), demande : « les fichiers d'Hermes agent
-# vivent dans le dossier qui heberge l'interface », sans chemin absolu) ──
-# L'agent trouve ailleurs (dossier frere « hermes » a cote du dossier de
-# l'interface, %LOCALAPPDATA%\hermes, ~/.hermes) est DEPLACE dans
-# <racine>\hermes-agent au demarrage : un seul dossier = tout l'ensemble
-# (interface + agent), deplaçable et renommable librement — le service
-# (resolveAgentDir) resout tout en relatif, dans le meme ordre. Garde-fous :
-#   • deja a la maison → rien (idempotent) ;
-#   • gateway 9120 vivante → on ne deplace JAMAIS un agent en marche
-#     (adoption, loi « tout simplement ») — rangement reporte ;
-#   • deplacement echoue → l'agent reste trouvable sur place par le
-#     service (resolution de secours), rien ne casse.
-function Move-AgentIntoHome {
+# ── INSTALLATION DE L'AGENT DANS LE DOSSIER DE L'APPLICATION (§9 (63),
+# décision : « pas de déplacement de mon hermes actuel — l'interface
+# installe une copie fraiche dans son dossier ») ──────────────────────────
+# Une installation OFFICIELLE fraîche (git clone du dépôt amont
+# NousResearch/hermes-agent, surcharge HERMES_AGENT_REPO_URL) est posée
+# dans <racine>\hermes-agent — le dossier que resolveAgentDir consulte
+# EN PREMIER. Les installations EXISTANTES (dossier frère « hermes »,
+# %LOCALAPPDATA%\hermes, ~/.hermes) ne sont JAMAIS lues, déplacées ni
+# modifiées : elles vivent leur vie et restent le secours — si le clone
+# échoue, le service trouve l'agent sur place (résolution relative).
+# Garde-fous :
+#   • déjà à la maison avec une installation valide → rien (idempotent) ;
+#   • dossier sans installation valide (clone avorté) → nettoyé puis
+#     réinstallé — c'est le dossier géré par le lanceur ;
+#   • réessaie pas plus d'une fois par heure (flag daté) : un réseau
+#     absent ne doit pas rallonger chaque démarrage ;
+#   • clone et dépendances bornés (10 min / 5 min), jamais bloquants.
+function Install-AgentIntoHome {
     $homeDir = Join-Path $Root 'hermes-agent'
-    if (Test-Path $homeDir) { return }
-    $candidates = @()
-    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'hermes') }
-    if ($env:USERPROFILE)  { $candidates += (Join-Path $env:USERPROFILE '.hermes') }
-    # Le dossier frere « hermes » d'abord : c'est l'installation historique
-    # posee a cote du dossier de l'interface (meme parent, n'importe quel nom).
-    $candidates = @((Join-Path (Split-Path -Parent $Root) 'hermes')) + $candidates
-    foreach ($src in $candidates) {
-        if (-not $src) { continue }
+    if ((Test-Path (Join-Path $homeDir '.git')) -or
+        (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) { return }
+    $tryFlag = Join-Path $RuntimeDir 'agent-install.flag'
+    if (Test-Path $tryFlag) {
         try {
-            $srcResolved  = [System.IO.Path]::GetFullPath($src)
-            $rootResolved = [System.IO.Path]::GetFullPath($Root)
-            if ($srcResolved -eq $rootResolved -or
-                $srcResolved.StartsWith($rootResolved + [System.IO.Path]::DirectorySeparatorChar)) { continue }
-        } catch { continue }
-        if (-not (Test-Path (Join-Path $src 'gateway\run_api.py'))) { continue }
-        if (Test-PortBusy 9120) {
-            Log "• agent Hermes vivant (9120) — rangement reporte : il sera adopte, puis range a un prochain demarrage."
+            $last = [datetime]::Parse((Get-Content $tryFlag -Raw).Trim())
+            if (((Get-Date) - $last).TotalHours -lt 1) {
+                Log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (l'agent existant reste le secours)."
+                return
+            }
+        } catch { }  # flag illisible : on retente, on le réécrira
+    }
+    if (Test-Path $homeDir) {
+        Log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
+        try { Remove-Item -Recurse -Force $homeDir } catch {
+            Log "  ATTENTION : nettoyage impossible — l'agent existant reste le secours."
+            try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
             return
         }
-        Log ("• rangement de l'agent Hermes dans le dossier de l'application ({0} -> hermes-agent)..." -f $src)
-        robocopy $src $homeDir /E /MOVE /NFL /NDL /NJH /NJS | Out-Null
-        if ($LASTEXITCODE -lt 8 -and (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) {
-            Log "  agent range — tout vit desormais dans un seul dossier, deplaçable a volonte."
-        } else {
-            Log ("  ATTENTION : deplacement incomplet (robocopy code {0}) — l'agent reste trouvable sur place par le service." -f $LASTEXITCODE)
-        }
+    }
+    $repoUrl = if ($env:HERMES_AGENT_REPO_URL) { $env:HERMES_AGENT_REPO_URL } else { 'https://github.com/NousResearch/hermes-agent' }
+    Log ("• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : {0})..." -f $repoUrl)
+    try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
+    # Clone borné : un réseau lent ne doit pas bloquer le démarrage.
+    $cloneJob = Start-Job -ScriptBlock { param($u, $d) git clone $u $d 2>&1 } -ArgumentList $repoUrl, $homeDir
+    if (-not (Wait-Job $cloneJob -Timeout 600)) {
+        Stop-Job $cloneJob; Remove-Job $cloneJob -Force
+        Log "  ATTENTION : clone non terminé en 10 min — abandonné. L'agent existant (ex. dossier voisin « hermes ») reste le secours."
+        if (Test-Path $homeDir) { try { Remove-Item -Recurse -Force $homeDir } catch { } }
         return
+    }
+    $cloneOut = (Receive-Job $cloneJob 2>&1 | Out-String).Trim()
+    Remove-Job $cloneJob
+    if (-not (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) {
+        $derniere = ($cloneOut -split "`r?`n" | Select-Object -Last 1)
+        Log ("  ATTENTION : clone échoué ({0}) — l'agent existant reste le secours." -f $derniere)
+        return
+    }
+    Log "  copie fraîche installée — l'interface l'utilise en priorité ; vos installations existantes restent intactes."
+    # Dépendances python : meilleur effort, borné — sur un poste où l'agent
+    # officiel tourne déjà, elles existent déjà côté système.
+    $req = Join-Path $homeDir 'requirements.txt'
+    if (Test-Path $req) {
+        $pyCmd = $null; $pyPre = @()
+        if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') }
+        elseif (Test-Command 'python') { $pyCmd = 'python' }
+        if ($pyCmd) {
+            Log "  installation des dépendances python (meilleur effort, 5 min max)…"
+            $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1 } -ArgumentList $pyCmd, $pyPre, $req
+            if (Wait-Job $pipJob -Timeout 300) { Log "  étape dépendances terminée (si l'agent réclame un module, elle est relancée au prochain démarrage)." }
+            else { Stop-Job $pipJob; Log "  dépendances non terminées en 5 min — abandonnées ; l'agent existant reste le secours." }
+            Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
