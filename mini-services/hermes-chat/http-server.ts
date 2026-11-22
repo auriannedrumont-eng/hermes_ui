@@ -8,13 +8,13 @@
 // Les dépendances (store, rendu Chrome, statut webchat, pool) sont passées
 // en paramètre : ce module ne connaît rien au cycle de vie du service.
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
-import { createReadStream, readFileSync, writeFileSync, rmSync, existsSync, statSync, mkdirSync } from "node:fs";
+import { createReadStream, readFileSync, writeFileSync, rmSync, existsSync, statSync, mkdirSync, readdirSync, realpathSync, type Dirent } from "node:fs";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 const execFile = promisify(execFileCb);
 import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, basename } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, basename, dirname, sep } from "node:path";
 import type { Store } from "./store";
 import { resolveUploadFile } from "./uploads";
 import { artifactPdfPath, artifactThumbPath } from "./artifacts";
@@ -92,6 +92,15 @@ export function createFilesServer(deps: HttpDeps) {
     // motifs d'échec : le rapport peut circuler (collé dans une conversation d'agent).
     if (u.pathname === "/diagnostics") {
       void handleDiagnostics(res, deps);
+      return;
+    }
+
+    // GET /disk/list?path=… — liaison « dossier du disque » (F-59 J5) :
+    // liste les répertoires pour le dialogue 📁↓. Jeton requis (garde
+    // générale ci-dessus), chemin BORNÉ AU HOME, noms seuls — jamais de
+    // lecture du contenu du disque (plan D4, sémantique minimale).
+    if (u.pathname === "/disk/list") {
+      handleDiskList(u, res);
       return;
     }
 
@@ -188,6 +197,56 @@ async function handleDiagnostics(res: ServerResponse, deps: HttpDeps): Promise<v
     "Cache-Control": "no-store",
   });
   res.end(JSON.stringify(body, null, 2));
+}
+
+/** GET /disk/list?path=… — répertoires listables pour la liaison disque
+ *  (F-59 J5). Le chemin demandé (HOME par défaut) est résolu (realpath :
+ *  suit les liens symboliques AVANT la vérification) puis STRICTEMENT borné
+ *  au HOME — jamais de chemin arbitraire, jamais de contenu (noms seuls).
+ *  Réponse : { path, parent, home, dirs: [{ name, path }] }. */
+function handleDiskList(u: URL, res: ServerResponse): void {
+  const jsonError = (code: number, error: string) => {
+    res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error }));
+  };
+  const raw = u.searchParams.get("path")?.trim() || homedir();
+  let target: string;
+  let home: string;
+  try {
+    home = realpathSync(homedir());
+    target = realpathSync(raw);
+  } catch {
+    jsonError(400, "Chemin introuvable");
+    return;
+  }
+  if (target !== home && !target.startsWith(home + sep)) {
+    jsonError(403, "Hors du dossier utilisateur");
+    return;
+  }
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(target, { withFileTypes: true });
+  } catch {
+    jsonError(400, "Dossier illisible");
+    return;
+  }
+  const dirs = entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .slice(0, 200)
+    .map((e) => ({ name: e.name, path: join(target, e.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
+  res.end(
+    JSON.stringify({
+      path: target,
+      parent: target === home ? null : dirname(target),
+      home,
+      dirs,
+    })
+  );
 }
 
 /** Sert la source / les fichiers dérivés d'un artefact. */

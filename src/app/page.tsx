@@ -425,6 +425,7 @@ export default function HermesWebPage() {
         <main className="flex h-full min-w-0 flex-col">
           <ChatHeader
             activeConversation={activeConversation}
+            projects={chat.projects}
             mode={chat.mode}
             connected={chat.connected}
             hasMessages={chat.messages.length > 0}

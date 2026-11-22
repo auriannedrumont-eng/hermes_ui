@@ -123,6 +123,16 @@ export function applySchema(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id)"
   );
+  // ── F-59 : imbrication des projets (« dossiers », un seul niveau) ───
+  // parent_id pointe toujours sur un projet racine (la garde vit dans le
+  // store/handler) ; pas de clé étrangère, cohérent avec
+  // conversations.project_id — la promotion des enfants à la suppression
+  // se fait en code (deleteProject, transaction).
+  softAlter(db, "projects", "parent_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_projects_parent ON projects(parent_id)");
+  // F-59 (J5) : lien « dossier du disque » (📁↓) — informatif, le contenu
+  // du disque n'est jamais lu ni déplacé par le service.
+  softAlter(db, "projects", "disk_path TEXT");
   // ── Réglages serveur (persistés, cf. FORK.md §6) ─────────────────
   db.exec(`CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,

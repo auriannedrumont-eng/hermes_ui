@@ -1,7 +1,8 @@
-// En-tête : titre de conversation, export, partage public, statut, thème
+// En-tête : fil d'Ariane (dossier › sous-dossier › conversation, F-59),
+// export, partage public, statut, thème
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   Copy,
@@ -35,7 +36,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
-import type { ConversationMeta, GatewayMode, ShareView } from "@/lib/chat-types";
+import type { ConversationMeta, GatewayMode, Project, ShareView } from "@/lib/chat-types";
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -58,6 +59,8 @@ export type ExportFormat = "markdown" | "json" | "pdf";
 
 interface ChatHeaderProps {
   activeConversation: ConversationMeta | null;
+  /** F-59 : dossiers courants — fil d'Ariane (dossier › sous-dossier › conv). */
+  projects?: Project[];
   mode: GatewayMode | null;
   connected: boolean;
   hasMessages: boolean;
@@ -74,6 +77,7 @@ interface ChatHeaderProps {
 
 export function ChatHeader({
   activeConversation,
+  projects = [],
   mode,
   connected,
   hasMessages,
@@ -89,6 +93,19 @@ export function ChatHeader({
   const [copied, setCopied] = useState(false);
   // Garde de destruction (C5.1) : la révocation du lien public se confirme.
   const [revokeOpen, setRevokeOpen] = useState(false);
+
+  // F-59 : fil d'Ariane — le dossier (et son parent, un seul niveau) de la
+  // conversation affichée ; null = « Sans dossier ».
+  const crumb = useMemo(() => {
+    const pid = activeConversation?.projectId ?? null;
+    if (!pid) return null;
+    const folder = projects.find((p) => p.id === pid);
+    if (!folder) return null;
+    const parent = folder.parentId
+      ? projects.find((p) => p.id === folder.parentId) ?? null
+      : null;
+    return { parent, folder };
+  }, [activeConversation?.projectId, projects]);
   const copyLink = async () => {
     if (!share) return;
     try {
@@ -113,11 +130,39 @@ export function ChatHeader({
         <PanelLeft className="h-4.5 w-4.5" />
       </Button>
 
-      {/* Titre de la conversation */}
+      {/* Titre de la conversation + fil d'Ariane (F-59) */}
       <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-        <p className="truncate text-[14px] font-medium">
-          {activeConversation ? activeConversation.title : "Hermes"}
-        </p>
+        {activeConversation ? (
+          <p className="flex min-w-0 items-center gap-1 text-[14px]">
+            {crumb ? (
+              <>
+                {crumb.parent ? (
+                  <>
+                    <span className="hidden min-w-0 max-w-28 truncate text-[12px] text-muted-foreground min-[520px]:inline">
+                      {crumb.parent.name}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground" aria-hidden="true">
+                      ›
+                    </span>
+                  </>
+                ) : null}
+                <span className="hidden min-w-0 max-w-32 truncate text-[12px] text-muted-foreground min-[420px]:inline">
+                  {crumb.folder.name}
+                </span>
+                <span className="shrink-0 text-muted-foreground" aria-hidden="true">
+                  ›
+                </span>
+              </>
+            ) : (
+              <span className="hidden shrink-0 text-[12px] text-muted-foreground min-[420px]:inline">
+                Sans dossier ›
+              </span>
+            )}
+            <span className="truncate font-medium">{activeConversation.title}</span>
+          </p>
+        ) : (
+          <p className="truncate text-[14px] font-medium">Hermes</p>
+        )}
         {/* Prompt système (F-11) : la pastille est l'entrée unique de
             l'éditeur (C7 — le bouton d'en-tête jumeau est retiré). Tiera
             quand un prompt est actif, invite en pointillés sinon. */}

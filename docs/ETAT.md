@@ -1,4 +1,4 @@
-# ETAT.md — Synthèse de l'état du projet (2026-11-19)
+# ETAT.md — Synthèse de l'état du projet (2026-11-22)
 
 > Une page, à jour. Sources : `docs/ROADMAP_FRONT.md` (F-xx), `docs/ROADMAP-LOTS.md`
 > (chantiers), `docs/AUDIT-CONSOLIDE.md` (constats), FORK.md §9 (journal). Remplace
@@ -11,13 +11,15 @@
 | --- | --- |
 | Chat cœur | Streaming + Stop propre, régénération, erreurs persistantes (F-01/F-04) ✓ · Markdown + shiki (F-02) ✓ · Actions message (F-03) ✓ · Historique, recherche, épingle (F-05) ✓ · Composer v2 avec jauge de contexte (F-06) ✓ · Uploads + dictée/TTS (F-07/F-16) ✓ · Sélecteur de modèles cmdk (F-08) ✓ · Slash commands (F-10) ✓ · Raccourcis clavier (F-23) ✓ |
 | Artefacts | Panneau split view multi-rendus (F-15) ✓ · Cartes inline + versioning + diff ✓ · Journal de versions restaurable (F-26) ✓ · Onglet dédié `/view` bac à sable CSP (F-28) ✓ · Terminal du tour dans le panneau (F-29) ✓ |
-| Organisation | Projets/dossiers (F-20) ✓ · Édition avec branchement (F-14) ✓ · Partage public lecture seule + export image (F-13) ✓ |
+| Organisation | Dossiers imbriqués + liaison disque (F-59) ✓ · Projets/dossiers (F-20) ✓ · Édition avec branchement (F-14) ✓ · Partage public lecture seule + export image (F-13) ✓ |
 | Paramètres | Volet 860 px à rail, 10 sections réelles — phase 3 / v2.4 livrée (F-25) ✓ : Interface, Modèles, Fournisseurs (porte-clés multi-clés, test réel), Clés de services, Extensions (imports GitHub), Outils, Skills, Modes, Hermes (mémoire F-18 + instructions F-19 + prompts F-11), Profils, Système |
 | Modèles & coûts | Comparaison 2 modèles (F-17) ✓ · Compteur tokens/coût (F-21) ✓ · Mode expert (F-22) ✓ |
 | Modes (F-30/F-30b) | 7 modes livrés : chat · plan · code · comparer · débat · conseil · auto — orchestrateur, consignes éditables, « qui travaille », modèle ou **chat IA web** par voix (F-27 : pilotage navigateur z.ai / AI Studio / gemini-app) ✓ |
 | Retiré | Feedback 👍/👎 (F-24) — retiré le 2026-11-16 à la demande de l'utilisatrice |
 
 ## Chantiers récents (FORK.md §9, novembre)
+
+- **Dossiers imbriqués + liaison disque F-59 (11-22)** : la sidebar passe à l'arbre — « Mes dossiers » / « Sans dossier » avec actions sur les titres, sous-dossiers à un niveau (menu « Nouveau dossier », règle verticale, compteur direct, actif sans bordure), fil d'Ariane dans l'en-tête, recherche étendue aux noms (arbre filtré tout déplié), 📁↓ lie un vrai dossier du disque (endpoint HOME borné, rien n'est lu ni déplacé), suppression conservatrice avec promotion des sous-dossiers. Maquette v6 validée puis implémentée (ré-application après recyclage du bac à sable — règle de fin de chantier ajoutée FORK.md §10). QA : tsc ×3, eslint, suite 29/29, build OK, E2E 39/53 (échecs préexistants vérifiés par baseline), `qa-projects-dom.ts` 22/22, captures `download/qa-f59/`.
 
 - **Refonte shadcn 75 % (11-21)** : 30 fichiers migrés vers les primitives — `<button>`→`Button` (variantes mappées au style d'origine, rendu identique), `<input>`→`Input`, `<textarea>`→`Textarea` (nouvelle primitive), `<label>`→`Label` (nouvelle) ; `Segmented` remonté sur `Tabs` Radix et `InfoTip` sur `Tooltip` Radix (APIs inchangées, tap mobile/Échap/singleton conservés) ; custom assumé préservé (composer, bulles, dnd-kit, Pastille, marque terracotta AA). Frontière primitive ↔ custom documentée FORK.md §61. QA : tsc 0, eslint 0, build OK, zéro attribut perdu aux diffs.
 - **Système restructuré v0.4.1 (11-21)** : section Système en **deux groupes nommés** (« L'interface » / « Le moteur »), carte « Mise à jour de l'interface », **fusion des cartes « Agent » + « Moteur » en une carte Moteur Hermes unique** (liaison + version + maj + repli autre poste), suppression de la ligne « Version de Hermes » (elle montrait la version du mini-service), filet de sécurité interface (retour manuel documenté), textes « Agent Hermes » → « Moteur Hermes » partout (sidebar, volet). Maquette `design/maquette-systeme-v2.html` validée puis implémentée. QA : tsc 0, eslint 0, E2E moteur 34/34, navigateur sur pile réelle (captures `download/v0.4.1-systeme-*.png`).

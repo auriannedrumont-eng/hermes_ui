@@ -1,9 +1,11 @@
 // Item de conversation — extrait de sidebar.tsx (découpage 2026-11,
 // FORK.md §10) : titre, épinglage, renommage inline, menu contextuel
-// (déplacer vers un projet, épingler, renommer, supprimer), poignée de
-// drag & drop pour le rangement. Props partagées ConvItemShared.
+// (déplacer vers un dossier/sous-dossier F-59, épingler, renommer,
+// supprimer), poignée de drag & drop pour le rangement. Props partagées
+// ConvItemShared.
 "use client";
 
+import { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import {
   Check,
@@ -75,6 +77,29 @@ export function ConversationItem({
   const dragStyle = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
+
+  // F-59 : le menu « Déplacer vers… » liste l'arbre — racines d'abord, leurs
+  // sous-dossiers indentés sous chacune (« Parent › Sous-dossier »).
+  const moveTargets = useMemo(() => {
+    const roots = projects
+      .filter((p) => !p.parentId)
+      .sort((a, b) => a.position - b.position);
+    const out: { project: Project; label: string; nested: boolean }[] = [];
+    for (const r of roots) {
+      out.push({ project: r, label: r.name, nested: false });
+      for (const s of projects
+        .filter((p) => p.parentId === r.id)
+        .sort((a, b) => a.position - b.position)) {
+        out.push({ project: s, label: `${r.name} › ${s.name}`, nested: true });
+      }
+    }
+    // Projets orphelins (parent supprimé entre-temps) : listés à la fin.
+    const seen = new Set(out.map((x) => x.project.id));
+    for (const p of projects) {
+      if (!seen.has(p.id)) out.push({ project: p, label: p.name, nested: false });
+    }
+    return out;
+  }, [projects]);
 
   if (renaming) {
     return (
@@ -180,13 +205,17 @@ export function ConversationItem({
                 <DropdownMenuSubContent className="w-48">
                   <DropdownMenuItem onClick={() => onMove(c.id, null)}>
                     <Inbox className="h-3.5 w-3.5" />
-                    <span className="flex-1 truncate">Sans projet</span>
+                    <span className="flex-1 truncate">Sans dossier</span>
                     {!c.projectId ? <Check className="h-3.5 w-3.5 text-hermes-text" /> : null}
                   </DropdownMenuItem>
-                  {projects.map((p) => (
-                    <DropdownMenuItem key={p.id} onClick={() => onMove(c.id, p.id)}>
+                  {moveTargets.map(({ project: p, label, nested }) => (
+                    <DropdownMenuItem
+                      key={p.id}
+                      onClick={() => onMove(c.id, p.id)}
+                      className={nested ? "pl-7" : undefined}
+                    >
                       <Folder className="h-3.5 w-3.5" />
-                      <span className="flex-1 truncate">{p.name}</span>
+                      <span className="flex-1 truncate">{label}</span>
                       {c.projectId === p.id ? (
                         <Check className="h-3.5 w-3.5 text-hermes-text" />
                       ) : null}

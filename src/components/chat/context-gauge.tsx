@@ -302,7 +302,7 @@ export function ContextGauge({
             </AlertDialogTitle>
             <AlertDialogDescription>
               Le contexte repart à zéro : instructions système et pièces jointes sont
-              rechargées. La conversation actuelle reste dans l&apos;historique du projet.
+              rechargées. La conversation actuelle reste dans l&apos;historique du dossier.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -234,6 +234,10 @@ export interface Project {
   position: number;
   createdAt: string;
   updatedAt: string;
+  /** F-59 : projet parent (« dossiers », un seul niveau) — null = racine. */
+  parentId?: string | null;
+  /** F-59 (J5) : dossier du disque lié (informatif, jamais lu) — null = non lié. */
+  diskPath?: string | null;
 }
 
 /** Résultat de recherche dans les messages (recherche de la sidebar). */

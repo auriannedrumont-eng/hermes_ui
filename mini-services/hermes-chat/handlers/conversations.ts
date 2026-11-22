@@ -3,9 +3,28 @@
 // (ctx.store, ctx.io, ctx.connector, helpers du tour, vues wire) viennent du contexte
 // partagé handlers/context.ts — câblé une fois par index.ts.
 import type { Socket } from "socket.io";
+import { homedir } from "node:os";
+import { realpathSync, statSync } from "node:fs";
+import { sep } from "node:path";
 import { ctx } from "./context";
 import type { Attachment, TurnSettings } from "../types";
 import type { ModeConfig } from "../modes";
+
+/** F-59 (J5) : valide un chemin de liaison disque — dossier EXISTANT, borné
+ *  au HOME de l'utilisateur (realpath suit les liens symboliques AVANT la
+ *  vérification), jamais de chemin arbitraire (plan D4, sémantique minimale). */
+function validDiskPath(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const home = realpathSync(homedir());
+    const target = realpathSync(raw);
+    if (target !== home && !target.startsWith(home + sep)) return null;
+    if (!statSync(target).isDirectory()) return null;
+    return target;
+  } catch {
+    return null;
+  }
+}
 
 export function registerConversationsHandlers(socket: Socket) {
 
@@ -243,13 +262,44 @@ socket.on("projects:list", (cb?: (data: unknown) => void) => {
 
 socket.on(
   "projects:create",
-  (payload: { name?: string }, cb?: (data: unknown) => void) => {
+  (
+    payload: { name?: string; parentId?: string | null; diskPath?: string | null },
+    cb?: (data: unknown) => void
+  ) => {
     const name = (payload?.name ?? "").trim();
     if (!name) {
       if (typeof cb === "function") cb({ error: "name requis" });
       return;
     }
-    const project = ctx.store.createProject(name);
+    // F-59 : parenté explicite — le parent doit exister et être racine
+    // (un seul niveau d'imbrication, cas limite plan §6).
+    let parentId: string | null = null;
+    if (payload?.parentId) {
+      const parent = ctx.store.getProject(payload.parentId);
+      if (!parent) {
+        if (typeof cb === "function") cb({ error: "Dossier parent introuvable" });
+        return;
+      }
+      if (parent.parentId) {
+        if (typeof cb === "function") {
+          cb({ error: "Un sous-dossier ne peut pas contenir de dossier (un seul niveau)" });
+        }
+        return;
+      }
+      parentId = parent.id;
+    }
+    // F-59 (J5) : liaison disque optionnelle — validée côté service (HOME).
+    let diskPath: string | null = null;
+    if (payload?.diskPath) {
+      diskPath = validDiskPath(payload.diskPath);
+      if (!diskPath) {
+        if (typeof cb === "function") {
+          cb({ error: "Chemin de disque invalide (dossier utilisateur uniquement)" });
+        }
+        return;
+      }
+    }
+    const project = ctx.store.createProject(name, parentId, diskPath);
     if (typeof cb === "function") cb({ project });
     ctx.io.emit("projects:created", { project });
   }
@@ -276,16 +326,24 @@ socket.on(
 );
 
 
-// Supprime un projet : les conversations retombent dans « Sans projet »
+// Supprime un projet : les conversations (du dossier et de ses sous-dossiers,
+// F-59) retombent dans « Sans projet », les sous-dossiers sont promus racine.
+// Le broadcast emporte la liste complète à jour : le front remplace sa liste
+// en un seul événement (pas de cascade côté client).
 socket.on("projects:delete", (payload: { id?: string }, cb?: (data: unknown) => void) => {
   const id = payload?.id;
   if (!id) {
     if (typeof cb === "function") cb({ error: "id requis" });
     return;
   }
+  if (!ctx.store.getProject(id)) {
+    if (typeof cb === "function") cb({ error: "Dossier introuvable" });
+    return;
+  }
   ctx.store.deleteProject(id);
-  if (typeof cb === "function") cb({ ok: true, id });
-  ctx.io.emit("projects:deleted", { id });
+  const projects = ctx.store.listProjects();
+  if (typeof cb === "function") cb({ ok: true, id, projects });
+  ctx.io.emit("projects:deleted", { id, projects });
 });
 
 socket.on(

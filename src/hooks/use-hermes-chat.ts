@@ -80,6 +80,10 @@ export function useHermesChat() {
     deleteProject,
     reorderProjects,
   } = useProjects();
+  /** Miroir ref de `projects` (F-59) : les écouteurs socket (projects:deleted)
+   *  ont besoin des sous-dossiers courants sans dépendre du tableau de deps. */
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
   const [connected, setConnected] = useState(false);
   const [serverInfo, setServerInfo] = useState<ServerHello | null>(null);
   // v0.3.3 — état de mise à jour poussé par le service (vérifié au
@@ -649,12 +653,24 @@ export function useHermesChat() {
       setProjects((prev) => prev.map((x) => (x.id === project.id ? project : x)));
     };
 
-    const onProjectDeleted = (p: { id: string }) => {
-      setProjects((prev) => prev.filter((x) => x.id !== p.id));
-      // Les conversations du projet retombent dans « Sans projet »
-      setConversations((prev) =>
-        prev.map((c) => (c.projectId === p.id ? { ...c, projectId: null } : c))
+    const onProjectDeleted = (p: { id: string; projects?: Project[] }) => {
+      // F-59 : le dossier et ses sous-dossiers (un niveau) disparaissent —
+      // leurs conversations retombent dans « Sans projet ». Les ids affectés
+      // sont calculés AVANT le remplacement éventuel de la liste.
+      const children = new Set(
+        projectsRef.current.filter((x) => x.parentId === p.id).map((x) => x.id)
       );
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.projectId && (c.projectId === p.id || children.has(c.projectId))
+            ? { ...c, projectId: null }
+            : c
+        )
+      );
+      // Le broadcast emporte la liste complète à jour (sous-dossiers promus
+      // racine côté service) : on la remplace, sinon fallback filtrage.
+      if (Array.isArray(p.projects)) setProjects(p.projects);
+      else setProjects((prev) => prev.filter((x) => x.id !== p.id && !children.has(x.id)));
     };
 
     const onProjectsReordered = (p: { projects?: Project[] }) => {

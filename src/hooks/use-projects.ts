@@ -19,13 +19,19 @@ export function useProjects() {
     });
   }, []);
 
-  /** Crée un projet (rangement de conversations). */
+  /** Crée un projet (rangement de conversations) — F-59 : `parentId`
+   *  optionnel crée un sous-dossier (un seul niveau d'imbrication) ;
+   *  `diskPath` optionnel lie un dossier du disque (validé côté service). */
   const createProject = useCallback(
-    (name: string): Promise<Project | null> =>
+    (
+      name: string,
+      parentId?: string | null,
+      diskPath?: string | null
+    ): Promise<Project | null> =>
       new Promise((resolve) => {
         getSocket().emit(
           "projects:create",
-          { name },
+          { name, parentId: parentId ?? null, diskPath: diskPath ?? null },
           (res: { project?: Project; error?: string } = {}) => {
             resolve(res.project ?? null);
           }
@@ -46,13 +52,19 @@ export function useProjects() {
     );
   }, []);
 
-  /** Supprime un projet (les conversations passent dans « Sans projet »). */
+  /** Supprime un projet — F-59 : le broadcast `projects:deleted` emporte la
+   *  liste complète à jour (sous-dossiers promus racine côté service) ;
+   *  on la remplace si présente, sinon fallback filtrage local. */
   const deleteProject = useCallback((id: string) => {
-    getSocket().emit("projects:delete", { id }, (res: { ok?: boolean } = {}) => {
-      if (res.ok) {
-        setProjects((prev) => prev.filter((x) => x.id !== id));
+    getSocket().emit(
+      "projects:delete",
+      { id },
+      (res: { ok?: boolean; projects?: Project[] } = {}) => {
+        if (!res.ok) return;
+        if (Array.isArray(res.projects)) setProjects(res.projects);
+        else setProjects((prev) => prev.filter((x) => x.id !== id));
       }
-    });
+    );
   }, []);
 
   /** Réordonne les projets (liste complète d'ids). */

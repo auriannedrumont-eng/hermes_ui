@@ -1,6 +1,7 @@
-// Sidebar : nouvelle conversation, projets (groupes repliables, drag & drop
-// pour ranger et réordonner), recherche (titres + contenu des messages),
-// historique groupé par date pour « Sans projet », conversations épinglées.
+// Sidebar : nouvelle conversation, dossiers (arbre à un niveau, sous-dossiers
+// repliables, drag & drop pour ranger et réordonner entre frères), recherche
+// (dossiers + titres + contenu des messages), historique groupé par date pour
+// « Sans dossier », conversations épinglées. F-59, maquette v6 validée.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -18,25 +19,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderInput,
-  FolderPlus,
-  Inbox,
-  MessageSquare,
-  MoreHorizontal,
-  Pencil,
-  Pin,
-  PinOff,
-  Plus,
-  Search,
-  Settings,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Folder, FolderDown, MessageSquare, Plus, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -55,6 +38,10 @@ import {
 import { HermesLogo } from "@/components/chat/hermes-logo";
 import { ConversationItem, type ConvItemShared } from "@/components/chat/conversation-item";
 import { DropZone, ProjectGroup } from "@/components/chat/project-group";
+import { type SubControls } from "@/components/chat/project-subgroup";
+import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
+import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
+import { buildProjectTree, subtreeIds, type ProjectNode } from "@/lib/project-tree";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
 import type {
   ConversationMeta,
@@ -87,7 +74,13 @@ interface SidebarProps {
   onRename: (id: string, title: string) => void;
   onTogglePin: (id: string) => void;
   onSearchMessages: (query: string) => Promise<SearchHit[]>;
-  onCreateProject: (name: string) => Promise<Project | null>;
+  /** F-59 : `parentId` optionnel — crée un sous-dossier (un seul niveau) ;
+   *  `diskPath` optionnel — lie un dossier du disque (validé côté service). */
+  onCreateProject: (
+    name: string,
+    parentId?: string | null,
+    diskPath?: string | null
+  ) => Promise<Project | null>;
   onRenameProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
   onReorderProjects: (ids: string[]) => void;
@@ -110,6 +103,9 @@ function groupLabel(iso: string): string {
   if (diffDays <= 30) return "30 derniers jours";
   return "Plus ancien";
 }
+
+// Ensemble stable « rien de replié » pendant la recherche (identité fixe).
+const SEARCH_EMPTY_SET: Set<string> = new Set();
 
 export function Sidebar({
   conversations,
@@ -143,9 +139,11 @@ export function Sidebar({
   const [messageHits, setMessageHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // ── Projets : création / renommage inline, repliage persisté ────────
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
+  // ── Dossiers : renommage inline, repliage persisté, lien disque (F-59) ─
+  // La création d'un dossier vit dans les groupes (menu « Nouveau dossier »
+  // = sous-dossier) et dans le dialogue de liaison disque (📁↓) — plus de
+  // bouton de création racine (maquette v6).
+  const [attachDiskOpen, setAttachDiskOpen] = useState(false);
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
   const [projectRenameValue, setProjectRenameValue] = useState("");
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => {
@@ -219,7 +217,7 @@ export function Sidebar({
     return () => clearTimeout(t);
   }, [q, isSearching, onSearchMessages]);
 
-  // Tri des conversations à l'intérieur d'un projet (fork.projects.sort)
+  // Tri des conversations à l'intérieur d'un dossier (fork.projects.sort)
   const bySort = useMemo(() => {
     return (a: ConversationMeta, b: ConversationMeta) => {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
@@ -229,24 +227,7 @@ export function Sidebar({
     };
   }, [sortMode]);
 
-  // Recherche : résultats plats (titre/aperçu)
-  const searchGroups = useMemo(() => {
-    const ql = q.toLowerCase();
-    const pool = conversations.filter(
-      (c) =>
-        c.title.toLowerCase().includes(ql) ||
-        c.preview.toLowerCase().includes(ql)
-    );
-    const map = new Map<string, ConversationMeta[]>();
-    for (const c of pool) {
-      const label = groupLabel(c.updatedAt);
-      if (!map.has(label)) map.set(label, []);
-      map.get(label)!.push(c);
-    }
-    return Array.from(map.entries());
-  }, [conversations, q]);
-
-  // Conversations par projet + « Sans projet »
+  // Conversations par dossier + « Sans dossier »
   const conversationsByProject = useMemo(() => {
     const map = new Map<string, ConversationMeta[]>();
     for (const p of projects) {
@@ -263,7 +244,61 @@ export function Sidebar({
     [conversations, conversationsByProject]
   );
 
-  // Groupes par date (mode sans projet, ou section « Sans projet »)
+  // Recherche : groupes de dates des conversations « Sans dossier » (avec
+  // dossiers, l'arbre filtré ci-dessous porte les conversations rangées).
+  const searchGroups = useMemo(() => {
+    const ql = q.toLowerCase();
+    const pool = conversations.filter(
+      (c) =>
+        (c.title.toLowerCase().includes(ql) ||
+          c.preview.toLowerCase().includes(ql)) &&
+        (!hasProjects || !c.projectId || !conversationsByProject.has(c.projectId))
+    );
+    const map = new Map<string, ConversationMeta[]>();
+    for (const c of pool) {
+      const label = groupLabel(c.updatedAt);
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(c);
+    }
+    return Array.from(map.entries());
+  }, [conversations, q, hasProjects, conversationsByProject]);
+
+  // Recherche : arbre filtré — un dossier est visible si son nom correspond
+  // ou s'il contient (directement ou via un sous-dossier) des conversations
+  // visibles ; tout est déplié (maquette v6).
+  const searchTree = useMemo(() => {
+    if (!isSearching || !hasProjects) return [];
+    const ql = q.toLowerCase();
+    const matchConv = (c: ConversationMeta) =>
+      c.title.toLowerCase().includes(ql) || c.preview.toLowerCase().includes(ql);
+    const nodes: {
+      project: Project;
+      convs: ConversationMeta[];
+      subs: { project: Project; convs: ConversationMeta[] }[];
+    }[] = [];
+    const roots = projects
+      .filter((p) => !p.parentId)
+      .sort((a, b) => a.position - b.position);
+    for (const root of roots) {
+      const kids = projects
+        .filter((p) => p.parentId === root.id)
+        .sort((a, b) => a.position - b.position)
+        .map((s) => ({
+          project: s,
+          convs: (conversationsByProject.get(s.id) ?? []).filter(matchConv),
+        }))
+        .filter(
+          (s) => s.project.name.toLowerCase().includes(ql) || s.convs.length > 0
+        );
+      const convs = (conversationsByProject.get(root.id) ?? []).filter(matchConv);
+      if (root.name.toLowerCase().includes(ql) || convs.length > 0 || kids.length > 0) {
+        nodes.push({ project: root, convs, subs: kids });
+      }
+    }
+    return nodes;
+  }, [isSearching, hasProjects, q, projects, conversationsByProject]);
+
+  // Groupes par date (mode sans projet, ou section « Sans dossier »)
   const dateGroups = useMemo(() => {
     const map = new Map<string, ConversationMeta[]>();
     for (const c of unprojected) {
@@ -292,7 +327,7 @@ export function Sidebar({
     projects,
   };
 
-  // ── Projets : actions locales ─────────────────────────────────────
+  // ── Dossiers : actions locales ────────────────────────────────────
   const toggleProjectCollapsed = (id: string) => {
     setCollapsedProjects((prev) => {
       const next = new Set(prev);
@@ -301,15 +336,6 @@ export function Sidebar({
       writeClientSetting("fork.projects.collapsed", JSON.stringify([...next]));
       return next;
     });
-  };
-
-  const submitNewProject = async () => {
-    const name = newProjectName.trim();
-    setCreatingProject(false);
-    setNewProjectName("");
-    if (!name) return;
-    const p = await onCreateProject(name);
-    if (p) setRenamingId(null);
   };
 
   const commitProjectRename = () => {
@@ -321,6 +347,50 @@ export function Sidebar({
 
   const handleDeleteProject = (p: Project) => {
     setDeleteProjectTarget(p);
+  };
+
+  // ── F-59 : arbre des dossiers (racines → sous-dossiers, un niveau) ────
+  const projectTree = useMemo(() => buildProjectTree(projects), [projects]);
+
+  // Props transmises aux sous-dossiers (bundle unique via les groupes)
+  const subControls: SubControls = {
+    activeId,
+    shared,
+    renamingId,
+    renameValue,
+    setRenameValue,
+    setRenamingId,
+    collapsedSubs: collapsedProjects,
+    onToggleSubCollapse: toggleProjectCollapsed,
+    renamingProjectId,
+    projectRenameValue,
+    setProjectRenameValue,
+    onStartProjectRename: (id: string) => {
+      const p = projects.find((x) => x.id === id);
+      setRenamingProjectId(id);
+      setProjectRenameValue(p?.name ?? "");
+    },
+    onCommitProjectRename: commitProjectRename,
+    onCancelProjectRename: () => setRenamingProjectId(null),
+    onNewInProject: (projectId: string) => onNew(projectId),
+    onDeleteProject: (id: string) => {
+      const p = projects.find((x) => x.id === id);
+      if (p) handleDeleteProject(p);
+    },
+    conversationsOf: (projectId: string) => conversationsByProject.get(projectId) ?? [],
+  };
+  // Recherche : tout est déplié (maquette v6) — repliage neutralisé,
+  // conversations filtrées par la requête dans les sous-dossiers.
+  const searchSubControls: SubControls = {
+    ...subControls,
+    collapsedSubs: SEARCH_EMPTY_SET,
+    onToggleSubCollapse: () => {},
+    conversationsOf: (projectId: string) =>
+      (conversationsByProject.get(projectId) ?? []).filter(
+        (c) =>
+          c.title.toLowerCase().includes(q.toLowerCase()) ||
+          c.preview.toLowerCase().includes(q.toLowerCase())
+      ),
   };
 
   // ── Drag & drop ───────────────────────────────────────────────────
@@ -345,21 +415,55 @@ export function Sidebar({
     if (!a?.type || o?.type !== "dropzone") return;
 
     if (a.type === "conversation" && a.id) {
-      // Rangement : déplacer la conversation dans la zone visée
+      // Rangement : déplacer la conversation dans la zone visée (dossier,
+      // sous-dossier ou « Sans dossier »)
       const conv = conversations.find((c) => c.id === a.id);
       const current = conv?.projectId ?? null;
       const target = o.projectId ?? null;
       if (current !== target) onMoveConversation(a.id, target);
     } else if (a.type === "project" && a.id && o.projectId) {
-      // Réordonnancement : placer le projet avant le projet visé
-      if (o.projectId === a.id) return;
-      const ids = projects.map((p) => p.id);
-      const from = ids.indexOf(a.id);
-      if (from < 0) return;
-      ids.splice(from, 1);
-      const to = ids.indexOf(o.projectId);
-      ids.splice(to < 0 ? ids.length : to, 0, a.id);
-      onReorderProjects(ids);
+      // Réordonnancement : placer le projet avant le projet visé —
+      // F-59 : entre FRÈRES uniquement (cas limite plan §6.1) ; la liste
+      // plate envoyée au service est reconstruite depuis l'arbre courant
+      // (positions globales conservées pour tout ce qui n'a pas bougé).
+      const draggedId: string = a.id;
+      const targetId: string = o.projectId;
+      if (targetId === draggedId) return;
+      const dragged = projects.find((p) => p.id === draggedId);
+      const target = projects.find((p) => p.id === targetId);
+      if (!dragged || !target) return;
+      if ((dragged.parentId ?? null) !== (target.parentId ?? null)) return;
+      const parentId = dragged.parentId ?? null;
+      const reorderSegment = (list: Project[]) => {
+        const seg = list.map((p) => p.id);
+        const from = seg.indexOf(draggedId);
+        if (from < 0) return seg;
+        seg.splice(from, 1);
+        const to = seg.indexOf(targetId);
+        seg.splice(to < 0 ? seg.length : to, 0, draggedId);
+        return seg;
+      };
+      const roots = projects
+        .filter((p) => !p.parentId)
+        .sort((x, y) => x.position - y.position);
+      const rootIds =
+        parentId === null ? reorderSegment(roots) : roots.map((p) => p.id);
+      const childrenOrder = new Map<string, string[]>();
+      for (const r of roots) {
+        const kids = projects
+          .filter((p) => p.parentId === r.id)
+          .sort((x, y) => x.position - y.position);
+        childrenOrder.set(
+          r.id,
+          parentId === r.id ? reorderSegment(kids) : kids.map((p) => p.id)
+        );
+      }
+      const flat: string[] = [];
+      for (const rid of rootIds) {
+        flat.push(rid);
+        flat.push(...(childrenOrder.get(rid) ?? []));
+      }
+      onReorderProjects(flat);
     }
   };
 
@@ -388,8 +492,8 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Nouvelle conversation + nouveau projet */}
-      <div className="space-y-1.5 px-3 pb-2">
+      {/* Nouvelle conversation */}
+      <div className="px-3 pb-2">
         <Button
           onClick={() => onNew(null)}
           disabled={isBusy}
@@ -399,56 +503,6 @@ export function Sidebar({
           <Plus className="h-4 w-4" />
           Nouvelle conversation
         </Button>
-        {creatingProject ? (
-          <div className="flex items-center gap-1 rounded-xl bg-sidebar-accent px-2 py-1">
-            <FolderPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <Input
-              autoFocus
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void submitNewProject();
-                else if (e.key === "Escape") {
-                  setCreatingProject(false);
-                  setNewProjectName("");
-                }
-              }}
-              placeholder="Nom du projet…"
-              className="h-8 border-none bg-transparent text-[12.5px] focus-visible:ring-0"
-              aria-label="Nom du nouveau projet"
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={() => void submitNewProject()}
-              aria-label="Créer le projet"
-            >
-              <Check className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={() => {
-                setCreatingProject(false);
-                setNewProjectName("");
-              }}
-              aria-label="Annuler"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <Button
-            variant="ghost"
-            onClick={() => setCreatingProject(true)}
-            className="h-8 w-full justify-start gap-2 rounded-xl px-2 text-[12.5px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <FolderPlus className="h-4 w-4" />
-            Nouveau projet
-          </Button>
-        )}
       </div>
 
       {/* Recherche */}
@@ -459,7 +513,7 @@ export function Sidebar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher…"
-            aria-label="Rechercher dans les conversations et les messages"
+            aria-label="Rechercher dans les dossiers, les conversations et les messages"
             className="h-9 rounded-xl border-transparent bg-sidebar-accent pl-9 text-[12.5px] focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
@@ -479,9 +533,63 @@ export function Sidebar({
         >
           {isSearching ? (
             <>
-              <p className="px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Conversations ({searchGroups.reduce((n, [, items]) => n + items.length, 0)})
-              </p>
+              {hasProjects ? (
+                <>
+                  <SidebarSectionHeader title="Mes dossiers" />
+                  {searchTree.length === 0 ? (
+                    <p className="px-2 py-2 text-[12.5px] text-muted-foreground">
+                      Aucun dossier ne correspond.
+                    </p>
+                  ) : (
+                    searchTree.map((node) => (
+                      <ProjectGroup
+                        key={node.project.id}
+                        project={node.project}
+                        conversations={node.convs}
+                        subs={node.subs.map((s) => s.project)}
+                        subControls={searchSubControls}
+                        activeId={activeId}
+                        collapsed={false}
+                        onToggleCollapse={() => {}}
+                        shared={shared}
+                        renamingId={renamingId}
+                        renameValue={renameValue}
+                        setRenameValue={setRenameValue}
+                        setRenamingId={setRenamingId}
+                        onStartProjectRename={() => {
+                          setRenamingProjectId(node.project.id);
+                          setProjectRenameValue(node.project.name);
+                        }}
+                        renamingProject={renamingProjectId === node.project.id}
+                        projectRenameValue={projectRenameValue}
+                        setProjectRenameValue={setProjectRenameValue}
+                        onCommitProjectRename={commitProjectRename}
+                        onCancelProjectRename={() => setRenamingProjectId(null)}
+                        onNewInProject={() => onNew(node.project.id)}
+                        onDeleteProject={() => handleDeleteProject(node.project)}
+                        onCreateSubfolder={(name) =>
+                          onCreateProject(name, node.project.id)
+                        }
+                        dndEnabled={false}
+                      />
+                    ))
+                  )}
+                  <SidebarSectionHeader
+                    title="Sans dossier"
+                    actions={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
+                        onClick={() => onNew(null)}
+                        aria-label="Nouvelle conversation sans dossier"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    }
+                  />
+                </>
+              ) : null}
               {searchGroups.length === 0 ? (
                 <p className="px-2 py-2 text-[12.5px] text-muted-foreground">
                   Aucune conversation ne correspond.
@@ -540,39 +648,84 @@ export function Sidebar({
             </>
           ) : hasProjects ? (
             <>
-              {projects.map((p) => (
-                <DropZone key={p.id} zoneId={p.id} projectId={p.id}>
+              <SidebarSectionHeader
+                title="Mes dossiers"
+                actions={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
+                    onClick={() => setAttachDiskOpen(true)}
+                    aria-label="Ajouter un dossier de mon disque"
+                    title="Ajouter un dossier de mon disque"
+                  >
+                    <FolderDown className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              {projectTree.map((node: ProjectNode) => (
+                <DropZone
+                  key={node.project.id}
+                  zoneId={node.project.id}
+                  projectId={node.project.id}
+                >
                   <ProjectGroup
-                    project={p}
-                    conversations={conversationsByProject.get(p.id) ?? []}
+                    project={node.project}
+                    conversations={conversationsByProject.get(node.project.id) ?? []}
+                    subs={node.children}
+                    subControls={subControls}
                     activeId={activeId}
-                    collapsed={collapsedProjects.has(p.id)}
-                    onToggleCollapse={() => toggleProjectCollapsed(p.id)}
+                    collapsed={collapsedProjects.has(node.project.id)}
+                    onToggleCollapse={() => toggleProjectCollapsed(node.project.id)}
                     shared={shared}
                     renamingId={renamingId}
                     renameValue={renameValue}
                     setRenameValue={setRenameValue}
                     setRenamingId={setRenamingId}
                     onStartProjectRename={() => {
-                      setRenamingProjectId(p.id);
-                      setProjectRenameValue(p.name);
+                      setRenamingProjectId(node.project.id);
+                      setProjectRenameValue(node.project.name);
                     }}
-                    renamingProject={renamingProjectId === p.id}
+                    renamingProject={renamingProjectId === node.project.id}
                     projectRenameValue={projectRenameValue}
                     setProjectRenameValue={setProjectRenameValue}
                     onCommitProjectRename={commitProjectRename}
                     onCancelProjectRename={() => setRenamingProjectId(null)}
-                    onNewInProject={() => onNew(p.id)}
-                    onDeleteProject={() => handleDeleteProject(p)}
+                    onNewInProject={() => onNew(node.project.id)}
+                    onDeleteProject={() => handleDeleteProject(node.project)}
+                    onCreateSubfolder={(name) =>
+                      onCreateProject(name, node.project.id)
+                    }
                   />
                 </DropZone>
               ))}
-              {unprojected.length > 0 ? (
-                <DropZone zoneId="_none" projectId={null} className="mt-2">
-                  <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Sans projet
+              {projectTree.length === 0 ? (
+                <p className="px-2 py-2 text-[12.5px] text-muted-foreground/70">
+                  Aucun dossier — utilisez 📁↓ pour en lier un du disque.
+                </p>
+              ) : null}
+              <SidebarSectionHeader
+                title="Sans dossier"
+                actions={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
+                    onClick={() => onNew(null)}
+                    aria-label="Nouvelle conversation sans dossier"
+                    title="Nouvelle conversation"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
+              <DropZone zoneId="_none" projectId={null} className="mb-2">
+                {unprojected.length === 0 ? (
+                  <p className="px-2 py-2 text-[12.5px] text-muted-foreground/70">
+                    Aucune conversation hors dossier.
                   </p>
-                  {dateGroups.map(([label, items]) => (
+                ) : (
+                  dateGroups.map(([label, items]) => (
                     <div key={label} className="mb-1">
                       <p className="px-2 pt-1.5 pb-0.5 text-[11px] font-medium text-muted-foreground/80">
                         {label}
@@ -593,9 +746,9 @@ export function Sidebar({
                         ))}
                       </ul>
                     </div>
-                  ))}
-                </DropZone>
-              ) : null}
+                  ))
+                )}
+              </DropZone>
               {/* (audit 2026-11-21) ce bloc vit DANS la branche hasProjects :
                   !hasProjects y est toujours faux et le message ne s'affichait
                   jamais — projets existants + zéro conversation = zone vide. */}
@@ -604,6 +757,15 @@ export function Sidebar({
                   Pas encore de conversation.
                 </p>
               ) : null}
+              <AttachDiskDialog
+                open={attachDiskOpen}
+                onOpenChange={setAttachDiskOpen}
+                projects={projects}
+                onAttach={async (name, diskPath) => {
+                  const p = await onCreateProject(name, null, diskPath);
+                  return p;
+                }}
+              />
             </>
           ) : conversations.length === 0 ? (
             <p className="px-2 pt-6 text-center text-[12.5px] text-muted-foreground">
@@ -758,19 +920,31 @@ export function Sidebar({
         onOpenChange={(v) => {
           if (!v) setDeleteProjectTarget(null);
         }}
-        title={deleteProjectTarget ? `Supprimer le projet « ${deleteProjectTarget.name} » ?` : ""}
+        title={deleteProjectTarget ? `Supprimer le dossier « ${deleteProjectTarget.name} » ?` : ""}
         description={
           deleteProjectTarget
             ? (() => {
-                const count =
-                  conversationsByProject.get(deleteProjectTarget.id)?.length ?? 0;
-                return count > 0
-                  ? `Ses ${count} conversation${count > 1 ? "s" : ""} seront conservées et déplacées dans « Sans projet ».`
-                  : "Le projet sera supprimé. Ses conversations, s'il y en a, resteront dans « Sans projet ».";
+                // F-59 : la garde compte TOUTES les conversations (dossier +
+                // sous-dossiers, cas limite plan §6.4) ; les sous-dossiers
+                // sont promus au premier niveau, jamais supprimés.
+                const ids = subtreeIds(deleteProjectTarget.id, projects);
+                const count = conversations.filter(
+                  (c) => c.projectId && ids.has(c.projectId)
+                ).length;
+                const subs = projects.filter((p) => p.parentId === deleteProjectTarget!.id).length;
+                const convTxt =
+                  count > 0
+                    ? `Ses ${count} conversation${count > 1 ? "s" : ""} (dossier et sous-dossiers) seront conservées et déplacées dans « Sans dossier ». `
+                    : "Les conversations, s'il y en a, resteront dans « Sans dossier ». ";
+                const subTxt =
+                  subs > 0
+                    ? `Son${subs > 1 ? "s" : ""} ${subs} sous-dossier${subs > 1 ? "s" : ""} remonter${subs > 1 ? "nt" : ""} au premier niveau.`
+                    : "";
+                return `${convTxt}${subTxt}`;
               })()
             : undefined
         }
-        confirmLabel="Supprimer le projet"
+        confirmLabel="Supprimer le dossier"
         onConfirm={() => {
           if (deleteProjectTarget) onDeleteProject(deleteProjectTarget.id);
           setDeleteProjectTarget(null);

@@ -228,6 +228,16 @@
   animation: message-in 0.24s ease-out;
 }
 
+/* Flash de création d'un dossier/sous-dossier (F-59, maquette v6) :
+   bref halo hermes sur la ligne créée — aucune bordure persistante. */
+@keyframes hermes-flash {
+  0% { background: var(--sidebar-accent); box-shadow: inset 0 0 0 1px var(--hermes); }
+  100% { background: transparent; box-shadow: inset 0 0 0 1px transparent; }
+}
+.hermes-flash {
+  animation: hermes-flash 1.4s ease-out;
+}
+
 /* Perf 2026-11-19 — bulles hors écran : le navigateur saute le rendu
    (layout + paint) des messages non visibles du fil. contain-intrinsic-size
    donne une hauteur d'estimation au conteneur pour éviter les sauts de

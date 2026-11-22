@@ -14,9 +14,15 @@ import type { WebSource } from "./web-search";
 export interface StoreMessagesMethods {
   listProjects(): Project[];
   getProject(id: string): Project | null;
-  createProject(name: string): Project;
+  /** F-59 : `parentId` validé par le handler (parent existant et racine) ;
+   *  `diskPath` validé par le handler (dossier HOME existant, J5). */
+  createProject(name: string, parentId?: string | null, diskPath?: string | null): Project;
   renameProject(id: string, name: string): Project | null;
+  /** F-59 : sous-dossiers promus racine, conversations (en profondeur)
+   *  retournées dans « Sans projet » — le tout en une transaction. */
   deleteProject(id: string): void;
+  /** F-59 (J5) : lie (ou délie, path null) un projet à un dossier du disque. */
+  setProjectDiskPath(id: string, diskPath: string | null): Project | null;
   reorderProjects(ids: string[]): Project[];
   moveConversation(conversationId: string, projectId: string | null): ConversationMeta | null;
   listConversations(): ConversationMeta[];
@@ -118,18 +124,27 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       return r ? rowToProject(r) : null;
     },
 
-    createProject(name: string): Project {
+    createProject(name: string, parentId?: string | null, diskPath?: string | null): Project {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const r = this.db
         .query("SELECT MAX(position) AS p FROM projects")
         .get() as any;
       const position = (r?.p ?? -1) + 1;
+      // F-59 : garde défensive (le handler a déjà validé) — un parent doit
+      // exister et être racine (un seul niveau d'imbrication) ; sinon la
+      // création retombe sur un projet racine plutôt que d'insérer un
+      // parent fantôme. diskPath est validé par le handler (HOME, J5).
+      let parent: string | null = null;
+      if (parentId) {
+        const p = this.getProject(parentId);
+        if (p && !p.parentId) parent = p.id;
+      }
       this.db
         .query(
-          "INSERT INTO projects (id, name, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+          "INSERT INTO projects (id, name, position, created_at, updated_at, parent_id, disk_path) VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
-        .run(id, name.trim().slice(0, 80), position, now, now);
+        .run(id, name.trim().slice(0, 80), position, now, now, parent, diskPath ?? null);
       return this.getProject(id)!;
     },
 
@@ -141,10 +156,33 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       return this.getProject(id);
     },
 
-    /** Supprime un projet ; ses conversations retombent dans « Sans projet ». */
+    /** Supprime un projet : ses conversations — et celles de ses
+     *  sous-dossiers (F-59) — retombent dans « Sans projet », et ses
+     *  sous-dossiers sont promus au niveau racine (jamais de cascade de
+     *  suppression). Pas de clé étrangère : tout se fait en code, dans une
+     *  transaction (cas limite plan §6.3). */
     deleteProject(id: string): void {
-      this.db.query("UPDATE conversations SET project_id = NULL WHERE project_id = ?").run(id);
-      this.db.query("DELETE FROM projects WHERE id = ?").run(id);
+      this.db.transaction(() => {
+        this.db
+          .query(
+            "UPDATE conversations SET project_id = NULL WHERE project_id IN (SELECT id FROM projects WHERE id = ? OR parent_id = ?)"
+          )
+          .run(id, id);
+        this.db
+          .query("UPDATE projects SET parent_id = NULL WHERE parent_id = ?")
+          .run(id);
+        this.db.query("DELETE FROM projects WHERE id = ?").run(id);
+      })();
+    },
+
+    /** F-59 (J5) : lie (ou délie, path null) un projet à un dossier du
+     *  disque — champ informatif, le service ne lit jamais ce chemin. */
+    setProjectDiskPath(id: string, diskPath: string | null): Project | null {
+      if (!this.getProject(id)) return null;
+      this.db
+        .query("UPDATE projects SET disk_path = ?, updated_at = ? WHERE id = ?")
+        .run(diskPath, new Date().toISOString(), id);
+      return this.getProject(id);
     },
 
     /** Réordonne les projets selon la liste d'ids fournie (positions 0..n-1). */

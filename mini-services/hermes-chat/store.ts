@@ -138,6 +138,10 @@ export interface ProjectRow {
   position: number;
   created_at: string;
   updated_at: string;
+  /** F-59 : parent (« dossiers », un seul niveau) — null/absent = racine. */
+  parent_id?: string | null;
+  /** F-59 (J5) : dossier du disque lié — null/absent = non lié. */
+  disk_path?: string | null;
 }
 
 /** Ligne interne d'un fournisseur (LLM ou service d'API). */
@@ -193,6 +197,8 @@ export function rowToProject(r: ProjectRow): Project {
     position: r.position,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    parentId: r.parent_id ?? null,
+    diskPath: r.disk_path ?? null,
   };
 }
 
