@@ -35,6 +35,17 @@ async function main() {
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.waitForTimeout(2500);
 
+  // F-62 : le thème par défaut de l'app est sombre — force l'état annoncé
+  // avant chaque paire de captures (depuis F-59, les captures « clair »
+  // étaient sombres et réciproquement).
+  const themeToggle = page.locator('button[aria-label="Basculer entre thème clair et sombre"]');
+  const htmlIsDark = () =>
+    page.evaluate(() => document.documentElement.classList.contains("dark"));
+  if (await htmlIsDark()) {
+    await themeToggle.first().click();
+    await page.waitForTimeout(600);
+  }
+
   // Ouvre la conversation du sous-dossier (état actif + fil d'Ariane)
   await page.locator("text=Relire la section 3.2").first().click();
   await page.waitForTimeout(800);
@@ -42,11 +53,12 @@ async function main() {
   await sidebar.screenshot({ path: join(OUT, "sidebar-clair.jpg"), quality: 80, type: "jpeg" });
   await page.screenshot({ path: join(OUT, "page-claire.jpg"), quality: 70, type: "jpeg" });
 
-  // Sombre
+  // Sombre — même forçage déterministe (état réel du <html>)
   await page.emulateMedia({ colorScheme: "dark" });
   await page.waitForTimeout(600);
-  const toggles = page.locator('button[aria-label="Basculer entre thème clair et sombre"]');
-  if (await toggles.count()) await toggles.first().click();
+  if (!(await htmlIsDark())) {
+    if (await themeToggle.count()) await themeToggle.first().click();
+  }
   await page.waitForTimeout(800);
   await sidebar.screenshot({ path: join(OUT, "sidebar-sombre.jpg"), quality: 80, type: "jpeg" });
 

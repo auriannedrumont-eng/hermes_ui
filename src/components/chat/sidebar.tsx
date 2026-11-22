@@ -1,8 +1,9 @@
-// Sidebar : nouvelle conversation, dossiers (arbre à un niveau, sous-dossiers
-// repliables, drag & drop pour ranger et réordonner entre frères), recherche
+// Sidebar : dossiers (arbre à un niveau, sous-dossiers repliables,
+// drag & drop pour ranger et réordonner entre frères), recherche
 // (dossiers + titres + contenu des messages), historique groupé par date pour
 // « Sans dossier », conversations épinglées, Archives des dossiers
-// archivés (F-60). F-59, maquette v6 validée.
+// archivés (F-60). F-59, maquette v6 validée ; F-62 : le bouton « Nouvelle
+// conversation » pleine largeur est retiré (les « + » suffisent).
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -69,7 +70,6 @@ interface SidebarProps {
    *  orange sur l'engrenage, l'info vit sans ouvrir la page Système. */
   updateAvailable?: string | null;
   connected: boolean;
-  isBusy: boolean;
   onNew: (projectId?: string | null) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -121,7 +121,6 @@ export function Sidebar({
   engineProviders,
   updateAvailable = null,
   connected,
-  isBusy,
   onNew,
   onOpen,
   onDelete,
@@ -521,18 +520,10 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Nouvelle conversation */}
-      <div className="px-3 pb-2">
-        <Button
-          onClick={() => onNew(null)}
-          disabled={isBusy}
-          variant="outline"
-          className="h-10 w-full justify-start gap-2 rounded-xl border-sidebar-border bg-transparent text-[14px] font-medium hover:bg-sidebar-accent"
-        >
-          <Plus className="h-4 w-4" />
-          Nouvelle conversation
-        </Button>
-      </div>
+      {/* F-62 : le gros bouton « Nouvelle conversation » est retiré à la
+          demande de l'utilisatrice — la création reste accessible via les
+          « + » (section « Sans dossier », en-têtes de dossiers et de
+          sous-dossiers), présents même quand la liste est vide. */}
 
       {/* Recherche */}
       <div className="px-3 pb-3">

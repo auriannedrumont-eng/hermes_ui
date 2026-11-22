@@ -65,6 +65,10 @@ async function main() {
       "« + » sur le titre « Sans dossier »",
       (await page.locator('button[aria-label="Nouvelle conversation sans dossier"]').first().count()) === 1,
     );
+    check(
+      "F-62 : gros bouton « Nouvelle conversation » retiré",
+      (await page.getByRole("button", { name: "Nouvelle conversation", exact: true }).count()) === 0,
+    );
     const rootBtn = page.locator('button[aria-label="Replier le dossier Contrats qa-f59"]').first();
     check("dossier semé visible (déplié par défaut)", (await rootBtn.count()) === 1);
     check("compteur direct = 1", (await rootBtn.innerText()).trim().endsWith("1"));

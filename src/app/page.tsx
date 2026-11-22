@@ -394,7 +394,6 @@ export default function HermesWebPage() {
       engineProviders={chat.engineProviders}
       updateAvailable={chat.updateAvailable}
       connected={chat.connected}
-      isBusy={chat.isBusy}
       onNew={handleNew}
       onOpen={handleOpen}
       onDelete={chat.deleteConversation}
