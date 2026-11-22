@@ -874,21 +874,37 @@ export function Sidebar({
         </DragOverlay>
       </DndContext>
 
-      {/* Carte de statut du moteur */}
+      {/* Carte de statut du moteur — voyant d'état (§9 (62)) : une seule
+          question à l'écran — Hermes répond-il, et sinon que faire ? La
+          teinte de la carte PORTE l'état : vert = ça répond, terracotta =
+          vos clés travaillent, ambre pulsant = il faut allumer Hermes,
+          gris = hors ligne (reconnexion seule en cours). */}
       <div className="border-t border-sidebar-border p-3">
-        <div className="rounded-xl bg-sidebar-accent px-3 py-2.5">
+        <div
+          className={`rounded-xl px-3 py-2.5 ring-1 ring-inset transition-colors ${
+            !connected
+              ? "bg-sidebar-accent ring-sidebar-border"
+              : mode === "gateway"
+                ? "bg-success/10 ring-success/30"
+                : poolActive
+                  ? "bg-sidebar-accent ring-hermes/30"
+                  : "bg-warning/10 ring-warning/30"
+          }`}
+        >
           <div className="flex items-center gap-2">
             <span
-              className={`h-2 w-2 shrink-0 rounded-full ${
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                 !connected
                   ? "bg-muted-foreground/50"
-                  : mode === "gateway" || (mode === "local" && poolActive)
+                  : mode === "gateway"
                     ? "bg-success"
-                    : "bg-hermes"
+                    : poolActive
+                      ? "bg-hermes"
+                      : "bg-warning animate-pulse"
               }`}
               aria-hidden="true"
             />
-            <p className="truncate text-[12.5px] font-medium leading-none">
+            <p className="truncate text-[13px] font-semibold leading-none text-foreground">
               {/* Dictionnaire (loi « tout simplement », 2026-11-22) : le sujet
                   est toujours Hermes, en mots simples — plus de « moteur local ».
                   Hermes éteint : l'application l'allume seule s'il est installé. */}
@@ -935,8 +951,8 @@ export function Sidebar({
               </>
             ) : (
               <>
-                Lancez l&apos;agent Hermes — la connexion est automatique
-                (défaut ws://127.0.0.1:9120). Aucune réponse simulée.
+                L&apos;application allume Hermes toute seule dès qu&apos;il est
+                installé — aucune réponse simulée.
               </>
             )}
           </p>

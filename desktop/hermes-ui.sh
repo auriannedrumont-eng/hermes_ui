@@ -453,6 +453,34 @@ do_start() {
     maj_log "GitHub injoignable — version locale conservée"
   fi
 
+  # Rangement de l'agent (§9 (62), demande : « les fichiers d'Hermes agent
+  # vivent dans le dossier qui héberge l'interface », sans chemin absolu) :
+  # l'agent trouvé ailleurs (dossier frère « hermes », ~/.hermes) est DÉPLACÉ
+  # dans <racine>/hermes-agent — un seul dossier = tout l'ensemble, déplaçable
+  # et renommable librement (le service le résout en relatif, même ordre).
+  # Garde-fous : déjà à la maison → rien (idempotent) ; gateway 9120 vivante
+  # → adoption, jamais de déplacement d'un agent en marche ; échec → l'agent
+  # reste trouvable sur place par le service, rien ne casse.
+  if [ ! -d "$ROOT/hermes-agent" ]; then
+    agent_src=""
+    for agent_cand in "$ROOT/../hermes" "$HOME/.hermes"; do
+      if [ -f "$agent_cand/gateway/run_api.py" ]; then agent_src="$agent_cand"; break; fi
+    done
+    if [ -n "$agent_src" ]; then
+      if port_open 9120; then
+        log "• agent Hermes vivant (9120) — rangement reporté : il sera adopté, puis rangé à un prochain démarrage."
+      else
+        log "• rangement de l'agent Hermes dans le dossier de l'application ($agent_src -> hermes-agent)…"
+        if mv "$agent_src" "$ROOT/hermes-agent" 2>>"$LAUNCHER_LOG" \
+           && [ -f "$ROOT/hermes-agent/gateway/run_api.py" ]; then
+          log "  agent rangé — tout vit désormais dans un seul dossier, déplaçable à volonté."
+        else
+          log "  ATTENTION : déplacement impossible — l'agent reste trouvable sur place par le service."
+        fi
+      fi
+    fi
+  fi
+
   # Pile déjà lancée par un lanceur précédent encore vivant ? — SAUF si le
   # lanceur en mémoire est périmé : le script sur disque a été modifié APRÈS
   # son démarrage (mise à jour GitHub appliquée pendant qu'il tournait). Une

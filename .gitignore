@@ -65,3 +65,7 @@ desktop/logs/
 
 # installation portable auto-installee par Hermes-Web.bat (1er demarrage)
 tools/
+# agent Hermes rangé dans le dossier de l'application (§9 (62)) — contenu
+# local déplacé par le lanceur, jamais versionné par l'interface
+/hermes-agent/
+

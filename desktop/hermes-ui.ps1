@@ -691,6 +691,7 @@ function Ensure-PortableSetup {
     # de telechargement des outils ci-dessous sont celles du code le plus
     # recent, et dependances/build tiendront compte des fichiers recus) ──
     Update-FromGit
+    Move-AgentIntoHome
 
     # ── 1. Node.js (node + npm vivent dans le meme dossier) ──
     # tools\ d abord (dossier autonome), telechargement sinon, copie
@@ -906,6 +907,51 @@ function Start-Gateway {
 function Open-Browser([string]$url) {
     try { Start-Process $url } catch { Log "• impossible d'ouvrir le navigateur : $url" }
     Log "• navigateur : $url"
+}
+
+# ── RANGEMENT DE L'AGENT (§9 (62), demande : « les fichiers d'Hermes agent
+# vivent dans le dossier qui heberge l'interface », sans chemin absolu) ──
+# L'agent trouve ailleurs (dossier frere « hermes » a cote du dossier de
+# l'interface, %LOCALAPPDATA%\hermes, ~/.hermes) est DEPLACE dans
+# <racine>\hermes-agent au demarrage : un seul dossier = tout l'ensemble
+# (interface + agent), deplaçable et renommable librement — le service
+# (resolveAgentDir) resout tout en relatif, dans le meme ordre. Garde-fous :
+#   • deja a la maison → rien (idempotent) ;
+#   • gateway 9120 vivante → on ne deplace JAMAIS un agent en marche
+#     (adoption, loi « tout simplement ») — rangement reporte ;
+#   • deplacement echoue → l'agent reste trouvable sur place par le
+#     service (resolution de secours), rien ne casse.
+function Move-AgentIntoHome {
+    $homeDir = Join-Path $Root 'hermes-agent'
+    if (Test-Path $homeDir) { return }
+    $candidates = @()
+    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'hermes') }
+    if ($env:USERPROFILE)  { $candidates += (Join-Path $env:USERPROFILE '.hermes') }
+    # Le dossier frere « hermes » d'abord : c'est l'installation historique
+    # posee a cote du dossier de l'interface (meme parent, n'importe quel nom).
+    $candidates = @((Join-Path (Split-Path -Parent $Root) 'hermes')) + $candidates
+    foreach ($src in $candidates) {
+        if (-not $src) { continue }
+        try {
+            $srcResolved  = [System.IO.Path]::GetFullPath($src)
+            $rootResolved = [System.IO.Path]::GetFullPath($Root)
+            if ($srcResolved -eq $rootResolved -or
+                $srcResolved.StartsWith($rootResolved + [System.IO.Path]::DirectorySeparatorChar)) { continue }
+        } catch { continue }
+        if (-not (Test-Path (Join-Path $src 'gateway\run_api.py'))) { continue }
+        if (Test-PortBusy 9120) {
+            Log "• agent Hermes vivant (9120) — rangement reporte : il sera adopte, puis range a un prochain demarrage."
+            return
+        }
+        Log ("• rangement de l'agent Hermes dans le dossier de l'application ({0} -> hermes-agent)..." -f $src)
+        robocopy $src $homeDir /E /MOVE /NFL /NDL /NJH /NJS | Out-Null
+        if ($LASTEXITCODE -lt 8 -and (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) {
+            Log "  agent range — tout vit desormais dans un seul dossier, deplaçable a volonte."
+        } else {
+            Log ("  ATTENTION : deplacement incomplet (robocopy code {0}) — l'agent reste trouvable sur place par le service." -f $LASTEXITCODE)
+        }
+        return
+    }
 }
 
 # ── ARRET PROPRE ────────────────────────────────────────────────────────

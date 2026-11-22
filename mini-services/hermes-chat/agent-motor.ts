@@ -20,11 +20,14 @@
 // c'est vers elle que propose le retour arrière.
 //
 // Environnement (tests/bac à sable) : HERMES_AGENT_BIN (binaire, défaut
-// "hermes"), HERMES_AGENT_DIR (dossier d'installation, défaut ~/.hermes ou
-// %LOCALAPPDATA%/hermes), HERMES_AGENT_RELEASES_URL (JSON releases/latest).
+// "hermes"), HERMES_AGENT_DIR (dossier d'installation — surcharge explicite ;
+// sans elle, résolution RELATIVE uniquement, cf. resolveAgentDir : la maison
+// officielle est hermes-agent/ DANS le dossier de l'interface, puis le
+// dossier frère « hermes », puis %LOCALAPPDATA%/hermes, puis ~/.hermes),
+// HERMES_AGENT_RELEASES_URL (JSON releases/latest).
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Store } from "./store";
 import type { HermesConnector } from "./hermes-connector";
 // Types du fil : référentiel partagé front ↔ back (B-4, audit v3) — ce
@@ -259,19 +262,38 @@ export async function hermesVersion(force = false): Promise<string | null> {
 }
 
 /** Dossier d'installation de l'agent (checkout git) — null si introuvable. */
+/** Un dossier d'installation Hermes : checkout git (.git) OU la passerelle
+ *  qu'aurait l'interface à lancer (gateway/run_api.py) — tolérant aux
+ *  copies sans historique git (déplacement, archive décompressée). */
+function isAgentDir(dir: string): boolean {
+  try {
+    return existsSync(join(dir, ".git")) || existsSync(join(dir, "gateway", "run_api.py"));
+  } catch {
+    return false;
+  }
+}
+
 export function resolveAgentDir(): string | null {
   const candidates: string[] = [];
   if (process.env.HERMES_AGENT_DIR) candidates.push(process.env.HERMES_AGENT_DIR);
+  // §9 (62), demande de l'utilisatrice : les fichiers de l'agent vivent
+  // DANS le dossier de l'interface — renommer ou déplacer ce dossier doit
+  // tout emporter sans rien casser. Résolution donc 100 % RELATIVE, dans
+  // l'ordre : 1) HERMES_AGENT_DIR (surcharge explicite) ; 2) la maison
+  // officielle <racine interface>/hermes-agent (le lanceur y range l'agent
+  // trouvé ailleurs) ; 3) le dossier frère « hermes » à côté du dossier de
+  // l'interface (ex. interface dans F:\hermes_web, agent dans F:\hermes) ;
+  // 4) %LOCALAPPDATA%\hermes ; 5) ~/.hermes (installations historiques).
+  const repoRoot = join(import.meta.dir, "..", "..");
+  candidates.push(join(repoRoot, "hermes-agent"));
+  const sibling = resolve(join(repoRoot, "..", "hermes"));
+  if (sibling !== resolve(repoRoot)) candidates.push(sibling);
   if (process.platform === "win32" && process.env.LOCALAPPDATA) {
     candidates.push(join(process.env.LOCALAPPDATA, "hermes"));
   }
   candidates.push(join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".hermes"));
   for (const dir of candidates) {
-    try {
-      if (existsSync(join(dir, ".git"))) return dir;
-    } catch {
-      /* candidat suivant */
-    }
+    if (isAgentDir(dir)) return dir;
   }
   return null;
 }
@@ -545,7 +567,7 @@ export async function startAgentRollback(deps: MotorDeps): Promise<{ ok: boolean
   if (!dir) {
     logLine(
       deps,
-      `RETOUR ERREUR — installation de Hermes introuvable (cherchée : ~/.hermes). Procédure manuelle officielle : dans le dossier de Hermes, « git checkout v${previous} » puis relancez l'agent.`,
+      `RETOUR ERREUR — installation de Hermes introuvable (cherchée : hermes-agent dans le dossier de l'application, dossier voisin « hermes », %LOCALAPPDATA%\\hermes, ~/.hermes). Procédure manuelle officielle : dans le dossier de Hermes, « git checkout v${previous} » puis relancez l'agent.`,
     );
     setState({ op: null, error: "installation de Hermes introuvable" }, deps);
     journalAppend(deps.store, {
