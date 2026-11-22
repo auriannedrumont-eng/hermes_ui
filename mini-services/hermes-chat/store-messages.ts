@@ -23,6 +23,9 @@ export interface StoreMessagesMethods {
   deleteProject(id: string): void;
   /** F-59 (J5) : lie (ou délie, path null) un projet à un dossier du disque. */
   setProjectDiskPath(id: string, diskPath: string | null): Project | null;
+  /** F-60 : archive (ou désarchive) un dossier — propagé à ses sous-dossiers
+   *  (le dossier range tout son contenu) ; rien n'est supprimé. */
+  setProjectArchived(id: string, archived: boolean): Project | null;
   reorderProjects(ids: string[]): Project[];
   moveConversation(conversationId: string, projectId: string | null): ConversationMeta | null;
   listConversations(): ConversationMeta[];
@@ -182,6 +185,20 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       this.db
         .query("UPDATE projects SET disk_path = ?, updated_at = ? WHERE id = ?")
         .run(diskPath, new Date().toISOString(), id);
+      return this.getProject(id);
+    },
+
+    /** F-60 : archive (ou désarchive) un dossier — la propagation au
+     *  sous-arbre (id + ses sous-dossiers directs, un seul niveau) range
+     *  tout le contenu en un geste, comme une suppression ; ici RIEN n'est
+     *  supprimé : conversations et sous-dossiers restent en base. */
+    setProjectArchived(id: string, archived: boolean): Project | null {
+      if (!this.getProject(id)) return null;
+      this.db
+        .query(
+          "UPDATE projects SET archived = ?, updated_at = ? WHERE id = ? OR parent_id = ?"
+        )
+        .run(archived ? 1 : 0, new Date().toISOString(), id, id);
       return this.getProject(id);
     },
 

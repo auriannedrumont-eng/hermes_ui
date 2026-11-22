@@ -1,7 +1,8 @@
 // Sidebar : nouvelle conversation, dossiers (arbre à un niveau, sous-dossiers
 // repliables, drag & drop pour ranger et réordonner entre frères), recherche
 // (dossiers + titres + contenu des messages), historique groupé par date pour
-// « Sans dossier », conversations épinglées. F-59, maquette v6 validée.
+// « Sans dossier », conversations épinglées, Bibliothèque des dossiers
+// archivés (F-60). F-59, maquette v6 validée.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -40,6 +41,7 @@ import { ConversationItem, type ConvItemShared } from "@/components/chat/convers
 import { DropZone, ProjectGroup } from "@/components/chat/project-group";
 import { type SubControls } from "@/components/chat/project-subgroup";
 import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
+import { SidebarBibliotheque } from "@/components/chat/sidebar-bibliotheque";
 import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
 import { buildProjectTree, subtreeIds, type ProjectNode } from "@/lib/project-tree";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
@@ -83,6 +85,9 @@ interface SidebarProps {
   ) => Promise<Project | null>;
   onRenameProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
+  /** F-60 : archive (ou désarchive) un dossier — propagation au sous-arbre
+   *  côté service, liste complète diffusée en retour. */
+  onSetProjectArchived: (id: string, archived: boolean) => void;
   onReorderProjects: (ids: string[]) => void;
   onMoveConversation: (id: string, projectId: string | null) => void;
   /** Ouvre le sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
@@ -126,6 +131,7 @@ export function Sidebar({
   onCreateProject,
   onRenameProject,
   onDeleteProject,
+  onSetProjectArchived,
   onReorderProjects,
   onMoveConversation,
   onOpenSettings,
@@ -158,6 +164,18 @@ export function Sidebar({
   });
   const [sortMode, setSortMode] = useState<string>(() => readClientSetting<string>("fork.projects.sort"));
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
+  // F-60 : section « Bibliothèque » repliée par défaut (persisté).
+  const [biblioCollapsed, setBiblioCollapsed] = useState<boolean>(
+    () => readClientSetting<boolean>("fork.bibliotheque.collapsed") ?? true
+  );
+
+  const toggleBiblioCollapsed = () => {
+    setBiblioCollapsed((prev) => {
+      const next = !prev;
+      writeClientSetting("fork.bibliotheque.collapsed", next);
+      return next;
+    });
+  };
 
   // Carte de statut honnête (v2.4) : l'agent Hermes connecté, les clés
   // fournisseurs actives, ou un état « agent non détecté » clair — jamais
@@ -181,6 +199,8 @@ export function Sidebar({
         } catch {
           setCollapsedProjects(new Set<string>());
         }
+      } else if (key === "fork.bibliotheque.collapsed") {
+        setBiblioCollapsed(typeof value === "boolean" ? value : true);
       }
     });
   }, []);
@@ -265,7 +285,8 @@ export function Sidebar({
 
   // Recherche : arbre filtré — un dossier est visible si son nom correspond
   // ou s'il contient (directement ou via un sous-dossier) des conversations
-  // visibles ; tout est déplié (maquette v6).
+  // visibles ; tout est déplié (maquette v6). Les dossiers ARCHIVÉS (F-60)
+  // sont hors de la recherche : ils vivent dans la Bibliothèque.
   const searchTree = useMemo(() => {
     if (!isSearching || !hasProjects) return [];
     const ql = q.toLowerCase();
@@ -277,11 +298,11 @@ export function Sidebar({
       subs: { project: Project; convs: ConversationMeta[] }[];
     }[] = [];
     const roots = projects
-      .filter((p) => !p.parentId)
+      .filter((p) => !p.parentId && !p.archived)
       .sort((a, b) => a.position - b.position);
     for (const root of roots) {
       const kids = projects
-        .filter((p) => p.parentId === root.id)
+        .filter((p) => p.parentId === root.id && !p.archived)
         .sort((a, b) => a.position - b.position)
         .map((s) => ({
           project: s,
@@ -350,7 +371,13 @@ export function Sidebar({
   };
 
   // ── F-59 : arbre des dossiers (racines → sous-dossiers, un niveau) ────
-  const projectTree = useMemo(() => buildProjectTree(projects), [projects]);
+  // F-60 : les dossiers ARCHIVÉS sortent de l'arbre actif — ils vivent dans
+  // la Bibliothèque (section repliée en bas) ; leurs conversations restent
+  // « projetées » (conversationsByProject couvre tous les projets) : elles
+  // n'apparaissent ni dans « Sans dossier » ni dans la recherche.
+  const activeProjects = useMemo(() => projects.filter((p) => !p.archived), [projects]);
+  const archivedProjects = useMemo(() => projects.filter((p) => p.archived), [projects]);
+  const projectTree = useMemo(() => buildProjectTree(activeProjects), [activeProjects]);
 
   // Props transmises aux sous-dossiers (bundle unique via les groupes)
   const subControls: SubControls = {
@@ -377,6 +404,8 @@ export function Sidebar({
       const p = projects.find((x) => x.id === id);
       if (p) handleDeleteProject(p);
     },
+    onSetProjectArchived: (id: string, archived: boolean) =>
+      onSetProjectArchived(id, archived),
     conversationsOf: (projectId: string) => conversationsByProject.get(projectId) ?? [],
   };
   // Recherche : tout est déplié (maquette v6) — repliage neutralisé,
@@ -567,6 +596,9 @@ export function Sidebar({
                         onCancelProjectRename={() => setRenamingProjectId(null)}
                         onNewInProject={() => onNew(node.project.id)}
                         onDeleteProject={() => handleDeleteProject(node.project)}
+                        onArchiveProject={() =>
+                          onSetProjectArchived(node.project.id, true)
+                        }
                         onCreateSubfolder={(name) =>
                           onCreateProject(name, node.project.id)
                         }
@@ -693,6 +725,9 @@ export function Sidebar({
                     onCancelProjectRename={() => setRenamingProjectId(null)}
                     onNewInProject={() => onNew(node.project.id)}
                     onDeleteProject={() => handleDeleteProject(node.project)}
+                    onArchiveProject={() =>
+                      onSetProjectArchived(node.project.id, true)
+                    }
                     onCreateSubfolder={(name) =>
                       onCreateProject(name, node.project.id)
                     }
@@ -749,6 +784,19 @@ export function Sidebar({
                   ))
                 )}
               </DropZone>
+              {/* F-60 : Bibliothèque — les dossiers archivés, repliés par
+                  défaut ; la section ne s'affiche que s'il y en a. */}
+              {archivedProjects.length > 0 ? (
+                <SidebarBibliotheque
+                  projects={archivedProjects}
+                  allProjects={projects}
+                  conversationsOf={(id) => conversationsByProject.get(id) ?? []}
+                  collapsed={biblioCollapsed}
+                  onToggle={toggleBiblioCollapsed}
+                  onRestore={(id) => onSetProjectArchived(id, false)}
+                  onDelete={(p) => handleDeleteProject(p)}
+                />
+              ) : null}
               {/* (audit 2026-11-21) ce bloc vit DANS la branche hasProjects :
                   !hasProjects y est toujours faux et le message ne s'affichait
                   jamais — projets existants + zéro conversation = zone vide. */}

@@ -385,6 +385,7 @@ export default function HermesWebPage() {
       onCreateProject={chat.createProject}
       onRenameProject={chat.renameProject}
       onDeleteProject={chat.deleteProject}
+      onSetProjectArchived={chat.setProjectArchived}
       onReorderProjects={chat.reorderProjects}
       onMoveConversation={chat.moveConversation}
       onOpenSettings={() => {

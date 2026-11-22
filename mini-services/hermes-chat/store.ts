@@ -142,6 +142,8 @@ export interface ProjectRow {
   parent_id?: string | null;
   /** F-59 (J5) : dossier du disque lié — null/absent = non lié. */
   disk_path?: string | null;
+  /** F-60 : 1 = archivé (Bibliothèque) — absent/0 = actif. */
+  archived?: number;
 }
 
 /** Ligne interne d'un fournisseur (LLM ou service d'API). */
@@ -199,6 +201,7 @@ export function rowToProject(r: ProjectRow): Project {
     updatedAt: r.updated_at,
     parentId: r.parent_id ?? null,
     diskPath: r.disk_path ?? null,
+    archived: r.archived === 1,
   };
 }
 

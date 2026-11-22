@@ -67,6 +67,21 @@ export function useProjects() {
     );
   }, []);
 
+  /** F-60 : archive (ou désarchive) un dossier — le broadcast
+   *  `projects:updated` emporte la liste complète à jour (sous-dossiers
+   *  propagés côté service) ; on la remplace si présente. */
+  const setProjectArchived = useCallback((id: string, archived: boolean) => {
+    getSocket().emit(
+      "projects:setArchived",
+      { id, archived },
+      (res: { project?: Project; projects?: Project[] } = {}) => {
+        if (Array.isArray(res.projects)) setProjects(res.projects);
+        else if (res.project)
+          setProjects((prev) => prev.map((x) => (x.id === id ? res.project! : x)));
+      }
+    );
+  }, []);
+
   /** Réordonne les projets (liste complète d'ids). */
   const reorderProjects = useCallback((ids: string[]) => {
     getSocket().emit(
@@ -78,5 +93,5 @@ export function useProjects() {
     );
   }, []);
 
-  return { projects, setProjects, fetchProjects, createProject, renameProject, deleteProject, reorderProjects };
+  return { projects, setProjects, fetchProjects, createProject, renameProject, deleteProject, setProjectArchived, reorderProjects };
 }

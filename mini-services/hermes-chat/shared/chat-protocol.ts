@@ -238,6 +238,8 @@ export interface Project {
   parentId?: string | null;
   /** F-59 (J5) : dossier du disque lié (informatif, jamais lu) — null = non lié. */
   diskPath?: string | null;
+  /** F-60 : dossier archivé (section « Bibliothèque » repliée) — false = actif. */
+  archived?: boolean;
 }
 
 /** Résultat de recherche dans les messages (recherche de la sidebar). */

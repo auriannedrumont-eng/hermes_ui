@@ -325,6 +325,28 @@ socket.on(
   }
 );
 
+// F-60 : archive (ou désarchive) un dossier — la propagation au sous-arbre
+// vit dans le store ; le broadcast `projects:updated` porte le projet cible
+// (les sous-dossiers changent aussi : le front reçoit le drapeau via le
+// refetch des listes actives ou lit le projet retourné).
+socket.on(
+  "projects:setArchived",
+  (payload: { id?: string; archived?: boolean }, cb?: (data: unknown) => void) => {
+    const id = payload?.id;
+    if (!id || typeof payload?.archived !== "boolean") {
+      if (typeof cb === "function") cb({ error: "id et archived requis" });
+      return;
+    }
+    const project = ctx.store.setProjectArchived(id, payload.archived);
+    if (!project) {
+      if (typeof cb === "function") cb({ error: "Dossier introuvable" });
+      return;
+    }
+    if (typeof cb === "function") cb({ project, projects: ctx.store.listProjects() });
+    ctx.io.emit("projects:updated", { project, projects: ctx.store.listProjects() });
+  }
+);
+
 
 // Supprime un projet : les conversations (du dossier et de ses sous-dossiers,
 // F-59) retombent dans « Sans projet », les sous-dossiers sont promus racine.

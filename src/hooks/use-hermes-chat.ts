@@ -78,6 +78,7 @@ export function useHermesChat() {
     createProject,
     renameProject,
     deleteProject,
+    setProjectArchived,
     reorderProjects,
   } = useProjects();
   /** Miroir ref de `projects` (F-59) : les écouteurs socket (projects:deleted)
@@ -677,6 +678,13 @@ export function useHermesChat() {
       if (Array.isArray(p.projects)) setProjects(p.projects);
     };
 
+    // F-60 : un dossier a changé d'état (archivé/désarchivé) ici ou dans une
+    // autre session — le broadcast emporte la liste complète à jour
+    // (propagation aux sous-dossiers faite côté service).
+    const onProjectUpdated = (p: { projects?: Project[] }) => {
+      if (Array.isArray(p.projects)) setProjects(p.projects);
+    };
+
     const onConversationMoved = (p: { conversation?: ConversationMeta }) => {
       if (!p.conversation) return;
       const moved = p.conversation;
@@ -756,6 +764,7 @@ export function useHermesChat() {
     socket.on("projects:renamed", onProjectRenamed);
     socket.on("projects:deleted", onProjectDeleted);
     socket.on("projects:reordered", onProjectsReordered);
+    socket.on("projects:updated", onProjectUpdated);
     socket.on("conversations:moved", onConversationMoved);
     socket.on("artifact:created", onArtifactCreated);
     socket.on("artifact:delta", onArtifactDelta);
@@ -794,6 +803,7 @@ export function useHermesChat() {
       socket.off("projects:renamed", onProjectRenamed);
       socket.off("projects:deleted", onProjectDeleted);
       socket.off("projects:reordered", onProjectsReordered);
+      socket.off("projects:updated", onProjectUpdated);
       socket.off("conversations:moved", onConversationMoved);
       socket.off("artifact:created", onArtifactCreated);
       socket.off("artifact:delta", onArtifactDelta);
@@ -1615,6 +1625,7 @@ export function useHermesChat() {
     createProject,
     renameProject,
     deleteProject,
+    setProjectArchived,
     reorderProjects,
     moveConversation,
     // Artefacts

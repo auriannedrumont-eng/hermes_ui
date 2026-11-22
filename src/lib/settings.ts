@@ -305,6 +305,17 @@ export const FORK_SETTINGS: SettingDef[] = [
     category: "Projets",
   },
   {
+    key: "fork.bibliotheque.collapsed",
+    type: "boolean",
+    default: true,
+    label: "Bibliothèque repliée",
+    description:
+      "Section « Bibliothèque » de la sidebar (dossiers archivés, F-60) : " +
+      "repliée par défaut, le compteur reste visible.",
+    scope: "client",
+    category: "Projets",
+  },
+  {
     key: "fork.context.gauge",
     type: "boolean",
     default: true,

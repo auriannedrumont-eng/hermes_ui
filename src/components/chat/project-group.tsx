@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import {
+  Archive,
   Check,
   ChevronDown,
   ChevronRight,
@@ -88,6 +89,7 @@ export function ProjectGroup({
   onCancelProjectRename,
   onNewInProject,
   onDeleteProject,
+  onArchiveProject,
   onCreateSubfolder,
   dndEnabled = true,
 }: {
@@ -112,6 +114,8 @@ export function ProjectGroup({
   onCancelProjectRename: () => void;
   onNewInProject: () => void;
   onDeleteProject: () => void;
+  /** F-60 : archive ce dossier (Bibliothèque) — sous-arbre côté service. */
+  onArchiveProject: () => void;
   /** F-59 : crée un sous-dossier dans ce dossier (maquette v6). */
   onCreateSubfolder: (name: string) => Promise<Project | null>;
   /** Recherche : drag désactivé ( consultation seule). */
@@ -257,6 +261,12 @@ export function ProjectGroup({
               <DropdownMenuItem onClick={onStartProjectRename}>
                 <Pencil className="h-3.5 w-3.5" />
                 Renommer
+              </DropdownMenuItem>
+              {/* F-60 : archive sans rien effacer — le dossier et son
+                  sous-arbre partent dans la Bibliothèque (repliée en bas). */}
+              <DropdownMenuItem onClick={onArchiveProject}>
+                <Archive className="h-3.5 w-3.5" />
+                Archiver le dossier
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={onDeleteProject}>

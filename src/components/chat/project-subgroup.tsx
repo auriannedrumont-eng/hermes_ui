@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import {
+  Archive,
   Check,
   ChevronDown,
   ChevronRight,
@@ -54,6 +55,8 @@ export interface SubControls {
   // Actions
   onNewInProject: (projectId: string) => void;
   onDeleteProject: (id: string) => void;
+  /** F-60 : archive (ou désarchive) un dossier — sous-arbre côté service. */
+  onSetProjectArchived: (id: string, archived: boolean) => void;
   /** Conversations directes d'un sous-dossier (liste triée de la sidebar). */
   conversationsOf: (projectId: string) => ConversationMeta[];
 }
@@ -205,6 +208,12 @@ export function ProjectSubgroup({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                onClick={() => controls.onSetProjectArchived(project.id, true)}
+              >
+                <Archive className="h-3.5 w-3.5" />
+                Archiver
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => controls.onStartProjectRename(project.id)}
               >

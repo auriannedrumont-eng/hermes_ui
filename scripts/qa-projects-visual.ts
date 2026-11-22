@@ -50,6 +50,18 @@ async function main() {
   await page.waitForTimeout(800);
   await sidebar.screenshot({ path: join(OUT, "sidebar-sombre.jpg"), quality: 80, type: "jpeg" });
 
+  // F-60 : archive le dossier, déplie la Bibliothèque, capture
+  await page.locator('button[aria-label="Options pour Démarches"]').first().click();
+  await page.waitForTimeout(400);
+  await page.getByRole("menuitem", { name: "Archiver le dossier" }).click();
+  await page.waitForTimeout(1000);
+  await page.locator('button[aria-label="Déplier la Bibliothèque"]').first().click();
+  await page.waitForTimeout(500);
+  await sidebar.screenshot({ path: join(OUT, "sidebar-bibliotheque.jpg"), quality: 80, type: "jpeg" });
+  // Retour à l'état actif pour le nettoyage inchangé
+  await page.locator('button[aria-label="Désarchiver le dossier Démarches"]').first().click();
+  await page.waitForTimeout(800);
+
   await browser.close();
 
   // Nettoyage

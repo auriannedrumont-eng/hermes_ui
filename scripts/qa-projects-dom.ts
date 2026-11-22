@@ -151,6 +151,32 @@ async function main() {
     await page.waitForTimeout(900);
     const searchBody2 = await page.locator("body").innerText();
     check("recherche : message « aucun dossier »", searchBody2.includes("Aucun dossier ne correspond."));
+
+    // ── 8. Archivage (F-60) : menu → Bibliothèque → Désarchiver ────────
+    // On vide la recherche pour revenir à l'arbre actif.
+    await page.locator('input[aria-label="Rechercher dans les dossiers, les conversations et les messages"]').first().fill("");
+    await page.waitForTimeout(900);
+    await page.locator('button[aria-label="Options pour Contrats qa-f59"]').first().click();
+    await page.waitForTimeout(400);
+    const items2 = await page.getByRole("menuitem").allInnerTexts();
+    check("« Archiver le dossier » dans le menu", items2.some((t) => t.includes("Archiver le dossier")), items2.join(" | ").slice(0, 100));
+    await page.getByRole("menuitem", { name: "Archiver le dossier" }).click();
+    await page.waitForTimeout(1000);
+    check("dossier sorti de Mes dossiers", (await rootBtn.count()) === 0);
+    const bodyArch = await page.locator("body").innerText();
+    check("section Bibliothèque visible avec compteur", /bibliothèque/i.test(bodyArch) && /1/.test(bodyArch));
+    const restoreBtn = page.locator('button[aria-label="Désarchiver le dossier Contrats qa-f59"]');
+    // Repliée par défaut : déplier si la ligne n'est pas encore visible.
+    if ((await restoreBtn.count()) === 0) {
+      await page.locator('button[aria-label="Déplier la Bibliothèque"]').first().click();
+      await page.waitForTimeout(400);
+    }
+    check("dossier archivé listé dans la Bibliothèque", (await restoreBtn.count()) >= 1);
+    await restoreBtn.first().click();
+    await page.waitForTimeout(1000);
+    check("désarchivage : retour dans Mes dossiers", (await rootBtn.count()) === 1);
+    const bodyRestored = await page.locator("body").innerText();
+    check("Bibliothèque retirée une fois vide", !/bibliothèque/i.test(bodyRestored));
   } catch (err) {
     check("scénario maquette complet", false, String(err).slice(0, 120));
   } finally {
@@ -185,7 +211,7 @@ async function main() {
 
   console.log(
     failures === 0
-      ? "\nSUCCÈS — QA DOM dossiers F-59 validée"
+      ? "\nSUCCÈS — QA DOM dossiers F-59/F-60 validée"
       : `\n${failures} échec(s) — QA DOM dossiers incomplète`
   );
   process.exit(failures === 0 ? 0 : 1);
