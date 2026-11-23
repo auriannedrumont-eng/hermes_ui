@@ -1571,6 +1571,37 @@ function Start-AgentRuntime {
         Log ("  ATTENTION : l'agent n'a pas répondu en 45 s — {0} ; l'interface reste sur vos clés ce démarrage (détail : {1})." -f $cause, $alog)
     }
 }
+# ((90)) Autopsie de l'incident « processus terminé dès le départ (code ) »
+# (cas réel du 23/11 22:44, clos le 24/11) : l'agent sortait en ~2 s avec le
+# code 0 ET un message de REFUS, pas un crash — db\agent.log.out portait
+# « The host gateway already serves profile 'default' — nothing to start ».
+# Cause racine : l'installation principale Hermes (F:\hermes\data, profils
+# default+caums) tient la passerelle de l'hôte ; le même NOM de profil
+# « default » chez nous a déclenché le garde-fou amont « une seule passerelle
+# par hôte », qui refuse poliment et sort PROPREMENT (code 0). Le message du
+# lanceur (« processus terminé dès le départ (code ) » — code vide car sortie
+# 0) décrivait un symptôme, pas la cause. Deux lois confirmées par l'autopsie :
+# 1) la maison DANS le dossier ((89)) + le jeton webapp du dossier rendent le
+#    fork indépendant — mais le NOM de profil reste « default » des deux côtés :
+#    quand la passerelle principale VIT, notre agent ne peut pas démarrer et
+#    c'est HONNÊTE (elle sert déjà le profil) ; le badge dit alors la vérité et
+#    le mini-service retente à chaque tour.
+# 2) le refus amont sort code 0 : un jour où la cause est lue depuis
+#    db\agent.log.out, afficher ce texte AVEC l'explication du refus plutôt
+#    qu'un « code » vide qui ressemble à un crash (relecture du code amont :
+#    gateway/host_attach.py, attach_message()).
+# Incident connexe documenté (même soirée) : une instance hybride — NOTRE
+# python portable exécutant NOTRE code mais avec HERMES_HOME de la maison
+# principale (F:\hermes\data) — a enregistré la passerelle principale dans
+# gateway_state.json (argv = notre main.py) puis a fauché notre agent vivant
+# via le mécanisme de remplacement amont (orphelins SIGTERM) ; 9120 restait
+# muet. Autopsie prouvée par gateway.lock/gateway_state.json + journal
+# install ad2d8383c5d4c878 (23:42:10). Remède appliqué ce soir-là : instance
+# hybride arrêtée, passerelle principale relancée proprement (hermes gateway
+# start), notre boot repris — badge « détecté » capturé en preuve.
+# Leçon : ne JAMAIS lancer notre agent depuis une session où HERMES_HOME
+# pointe ailleurs (le lanceur ((89)) fixe la maison, mais un spawn manuel
+# depuis une console Hermes ne l'hérite pas).
 
 # ── ARRET PROPRE ────────────────────────────────────────────────────────
 # Loi jamais bloque (2026-11-22) : demande au mini-service de clore ses
