@@ -351,6 +351,30 @@ async function main() {
   check("stop utilisateur : partiel rendu sans repli (pas de travail relancé)",
     mrF.includes("signal.aborted") && runTurn.includes("cb.signal.aborted"));
 
+  console.log("[16] mise à jour du lanceur : relance automatique, jamais de boucle ((76))");
+  // Cas réel du 23/11 : la fenêtre tournait avec le lanceur d'AVANT la mise
+  // à jour (PowerShell/bash ne relisent jamais leur propre fichier) — les
+  // vieux messages restent affichés et l'installateur Python posé par la
+  // mise à jour semblait ne rien faire. La relance immédiate du lanceur
+  // mis à jour supprime ce retard d'un démarrage ; le marqueur (5 min côté
+  // Windows, variable d'environnement côté Unix, conservée par exec)
+  // interdit toute boucle de fenêtres.
+  const shU = read("desktop/hermes-ui.sh");
+  const psU = read("desktop/hermes-ui.ps1");
+  check("sh : relance par exec du lanceur mis à jour, garde anti-boucle",
+    shU.includes('exec bash "$0" start') &&
+      shU.includes("HERMES_RELANCE") &&
+      shU.includes("desktop/hermes-ui\\.sh$"));
+  check("ps1 : relance Start-Process du lanceur mis à jour, marqueur 5 min",
+    psU.includes("lanceur-relance.flag") &&
+      psU.includes("$PSCommandPath") &&
+      psU.includes("TotalMinutes -lt 5"));
+  check("relance seulement pour start/restart (status/stop : pas de fenêtre surprise)",
+    psU.includes("$Action -eq 'start' -or $Action -eq 'restart'"));
+  check("relance APRÈS l'invalidation du build (le nouveau passage reconstruira)",
+    psU.indexOf("Remove-Item -Recurse -Force (Join-Path $Root '.next')") < psU.indexOf("lanceur-relance.flag") &&
+      shU.indexOf("rm -rf \"$ROOT/.next\"") < shU.indexOf("HERMES_RELANCE"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

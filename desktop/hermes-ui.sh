@@ -904,6 +904,23 @@ do_start() {
               || { log "  ATTENTION : reconstruction échouée — mode développement au démarrage (voir logs/build.log)."; maj_log "ATTENTION - reconstruction échouée — mode développement au démarrage"; }
           fi
         fi
+        # Le lanceur lui-même a-t-il changé ? bash a déjà lu ce script en
+        # mémoire : sans relance, le vieux code resterait en service un
+        # démarrage de plus (cas réel du 23/11 côté Windows : « Python absent »
+        # affiché par le lanceur d'avant pendant que la mise à jour apportait
+        # l'installateur). exec remplace la session par le NOUVEAU lanceur,
+        # même fenêtre ; la variable d'environnement (conservée par exec)
+        # interdit toute boucle de relances.
+        if git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -q '^desktop/hermes-ui\.sh$'; then
+          if [ "${HERMES_RELANCE:-0}" != "1" ]; then
+            export HERMES_RELANCE=1
+            log "  le lanceur lui-même a été mis à jour : relance automatique avec la nouvelle version…"
+            log "  (la fenêtre se rouvre toute seule — rien d'autre à faire)"
+            maj_log "lanceur mis à jour — relance automatique avec la nouvelle version"
+            sleep 1
+            exec bash "$0" start
+          fi
+        fi
       else
         log "• ATTENTION : nouvelle version disponible mais non appliquée (fichiers locaux modifiés) — version locale conservée."
         maj_log "ATTENTION - nouvelle version disponible mais non appliquée — version locale conservée"

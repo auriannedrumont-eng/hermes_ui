@@ -529,6 +529,31 @@ function Update-FromGit {
             Log "  (marqueur de build echoue efface : le build de la nouvelle version sera retente)"
         }
     }
+    # Le lanceur lui-meme a-t-il change ? Une session PowerShell ne relit
+    # jamais son propre fichier : sans relance, le vieux code resterait en
+    # service un demarrage de plus (cas reel du 23/11 : « Python absent »
+    # affiche par le lanceur d avant, pendant que l installateur apporte par
+    # la mise a jour attendait une simple relance). On relance DONC tout de
+    # suite avec la nouvelle version — une seule fois : le marqueur (5 min)
+    # interdit toute boucle de fenetres. Les phases sont deja passees : rien
+    # n est demarre, la nouvelle session repart propre.
+    if (($Action -eq 'start' -or $Action -eq 'restart') -and
+        ($Script:UpdateChangedFiles -contains 'desktop/hermes-ui.ps1')) {
+        $reFlag = Join-Path $ToolsDir 'lanceur-relance.flag'
+        $recent = $false
+        try { if (Test-Path $reFlag) { $recent = (((Get-Date) - [datetime]::Parse((Get-Content $reFlag -Raw).Trim())).TotalMinutes -lt 5) } } catch { }
+        if (-not $recent) {
+            try { Set-Content $reFlag ((Get-Date).ToString('o')) } catch { }
+            Log "  le lanceur lui-meme a ete mis a jour : relance automatique avec la nouvelle version..."
+            Log "  cette fenetre va se fermer et se rouvrir toute seule - rien d autre a faire"
+            Write-MajLog "lanceur mis a jour - relance automatique avec la nouvelle version"
+            Start-Sleep -Seconds 2
+            Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, $Action) -WorkingDirectory $Root
+            exit 0
+        } else {
+            Log "  lanceur mis a jour mais une relance automatique vient deja de se produire - la nouvelle version sera utilisee au prochain demarrage"
+        }
+    }
 }
 
 # ── Installation portable automatique (tout dans <projet>\tools\) ───────
