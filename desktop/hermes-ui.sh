@@ -128,12 +128,16 @@ phase_prerequis() {
   local pycmd="" pyver="" pipok=1
   if command -v python3 >/dev/null 2>&1; then pycmd="python3"
   elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
-  if [ -n "$pycmd" ]; then pyver="$("$pycmd" --version 2>/dev/null || echo '')"; fi
+  if [ -n "$pycmd" ]; then pyver="$("$pycmd" --version 2>&1 || echo '')"; fi
+  # Le faux raccourci du Microsoft Store répond AUSSI à « python » : sa
+  # phrase « Python was not found » prouve qu'il n'y a AUCUN vrai python
+  # derrière (cas réel du 23/11 — la cause exacte affichée en Système).
+  case "$pyver" in *"was not found"*) pycmd=""; pyver="" ;; esac
   if [ -n "$pycmd" ]; then
     add_sante_prerequis "Python" 0 "$pyver"
     if "$pycmd" -m pip --version >/dev/null 2>&1; then pipok=0; fi
   else
-    add_sante_prerequis "Python" 1 "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés"
+    add_sante_prerequis "Python" 1 "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés. Sur Windows : installez Python depuis python.org en cochant « Add python.exe to PATH », ou désactivez les faux raccourcis (Paramètres > Applications > Alias d'exécution d'applications)"
   fi
   if [ "$pipok" = "0" ]; then
     add_sante_prerequis "pip (module python)" 0
@@ -340,10 +344,32 @@ gw_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get GW_PORT)/" 4)" = "20
 install_agent_fresh() {
   local maison="$ROOT/hermes-agent" flag="$RUNTIME_DIR/agent-install.flag" url
   local depsok="$RUNTIME_DIR/agent-deps.ok" depsflag="$RUNTIME_DIR/agent-deps.flag"
+  # Le code de l'agent a-t-il changé depuis les dernières dépendances ?
+  # (mise à jour → dépendances et certification refaites, sans attendre la
+  # limite d'1 h — ce n'est pas une ré-essai, c'est du neuf.) Vérifié AVANT
+  # toute sortie anticipée : c'est exactement ce que (69) avait raté — la
+  # vérification vivait APRÈS le « déjà fait, on sort » et ne tournait jamais.
+  local househead="" headavant="" agentchange=0
   if [ -e "$maison/.git" ] || [ -f "$maison/gateway/run_api.py" ]; then
-    # maison valide : rien SAUF si les dépendances n'ont jamais réussi
-    if [ -f "$depsok" ]; then return 0; fi
+    househead="$(git -C "$maison" rev-parse HEAD 2>/dev/null || echo '')"
+    if [ -n "$househead" ] && [ -f "$RUNTIME_DIR/agent-deps-head.txt" ]; then
+      headavant="$(cat "$RUNTIME_DIR/agent-deps-head.txt" 2>/dev/null || echo '')"
+    fi
+    if [ -n "$househead" ] && [ -n "$headavant" ] && [ "$househead" != "$headavant" ]; then
+      agentchange=1
+    fi
+  fi
+  if [ -e "$maison/.git" ] || [ -f "$maison/gateway/run_api.py" ]; then
+    # maison valide : rien SAUF si le code a changé (mise à jour) ou si les
+    # dépendances n'ont jamais réussi
+    if [ -f "$depsok" ] && [ "$agentchange" = "0" ]; then return 0; fi
+    if [ "$agentchange" = "1" ]; then
+      log "• le code de l'agent a changé (mise à jour) — dépendances et certification refaites pour la nouvelle version."
+      rm -f "$depsok" "$RUNTIME_DIR/agent-certifie.ok" "$depsflag" "$RUNTIME_DIR/agent-certif.flag" 2>/dev/null || true
+    fi
   else
+    # Installation fraîche : la base des dépendances repart de zéro.
+    rm -f "$RUNTIME_DIR/agent-deps-head.txt" 2>/dev/null || true
     if [ -f "$flag" ] && [ "$(( $(date +%s) - $(date -r "$flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
       log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
       return 0
@@ -362,6 +388,8 @@ install_agent_fresh() {
     fi
     if [ -f "$maison/gateway/run_api.py" ]; then
       log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
+      # La copie fraîche a un HEAD : c'est lui la base des dépendances.
+      househead="$(git -C "$maison" rev-parse HEAD 2>/dev/null || echo '')"
     else
       log "  ATTENTION : clone échoué — pas d'agent installé : l'installation retentera au prochain démarrage."
       rm -rf "$maison" 2>/dev/null || true
@@ -377,11 +405,17 @@ install_agent_fresh() {
     [ -f "$depsok" ] || touch "$depsok" 2>/dev/null || true
     return 0
   fi
-  local pycmd="" venvpy="" depsrecent=0
+  local pycmd="" pyver="" venvpy="" depsrecent=0
   if command -v python3 >/dev/null 2>&1; then pycmd="python3"
   elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
+  if [ -n "$pycmd" ]; then
+    # Le faux raccourci du Microsoft Store répond AUSSI à « python » (cas
+    # réel du 23/11) : sa phrase « was not found » disqualifie le candidat.
+    pyver="$("$pycmd" --version 2>&1 || echo '')"
+    case "$pyver" in *"was not found"*) pycmd="" ;; esac
+  fi
   if [ -z "$pycmd" ]; then
-    log "• ATTENTION : python introuvable sur ce poste — l'agent ne peut pas démarrer ; installez Python puis relancez."
+    log "• ATTENTION : aucun VRAI python sur ce poste (le raccourci du Microsoft Store ne compte pas) — l'agent ne peut pas démarrer. Remède : installez Python depuis python.org en cochant « Add python.exe to PATH », puis relancez ; si un vrai Python existe déjà, désactivez les alias (Paramètres > Applications > Alias d'exécution d'applications)."
     return 0
   fi
   if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
@@ -436,6 +470,8 @@ install_agent_fresh() {
       if [ -n "$venvpy" ]; then printf 'venv' > "$depsok" 2>/dev/null || touch "$depsok"
       else printf 'systeme' > "$depsok" 2>/dev/null || touch "$depsok"; fi
       log "  dépendances installées — l'agent peut démarrer."
+      # Le HEAD actuel devient la base des dépendances (réussies).
+      [ -n "$househead" ] && printf '%s' "$househead" > "$RUNTIME_DIR/agent-deps-head.txt" 2>/dev/null || true
     else
       log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
       return 0

@@ -231,6 +231,22 @@ async function main() {
   check("écran Système : la cause est affichée à la carte Hermes",
     read("src/components/settings/agent-motor-card.tsx").includes("Cause connue"));
 
+  console.log("[11] faux python du store + re-certification après mise à jour ((70))");
+  // Cas réel du 23/11 : le raccourci « python » du Microsoft Store répondait
+  // AUSSI à la commande — un faux python disqualifié partout, et un changement
+  // de version de l'agent qui refait dépendances + certification (vérifié
+  // AVANT la sortie anticipée « déjà fait, on sort » que (69) avait ratée).
+  const ps1F = read("desktop/hermes-ui.ps1");
+  const shF = read("desktop/hermes-ui.sh");
+  check("ps1 : le faux python est démasqué + remède exact (alias du store)",
+    ps1F.includes("was not found") && ps1F.includes("Alias d'exécution d'applications"));
+  check("sh : même détection du faux python + remède",
+    shF.includes("was not found") && shF.includes("Alias d'exécution d'applications"));
+  check("ps1 : la re-certification est vérifiée AVANT la sortie anticipée",
+    ps1F.includes("-not $agentChange") && ps1F.includes("agent-deps-head.txt"));
+  check("sh : la re-certification est vérifiée AVANT la sortie anticipée",
+    shF.includes('[ "$agentchange" = "0" ]') && shF.includes("agent-deps-head.txt"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

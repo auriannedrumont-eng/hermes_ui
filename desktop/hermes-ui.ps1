@@ -948,8 +948,37 @@ function Install-AgentIntoHome {
     $homeDir = Join-Path $Root 'hermes-agent'
     $depsOk = Join-Path $RuntimeDir 'agent-deps.ok'
     $valide = (Test-Path (Join-Path $homeDir '.git')) -or (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))
-    if ($valide -and (Test-Path $depsOk)) { return }
+    # Le code de l'agent a-t-il changé depuis les dernières dépendances ?
+    # (mise à jour → dépendances et certification refaites, sans attendre la
+    # limite d'1 h — ce n'est pas une ré-essai, c'est du neuf.) Vérifié AVANT
+    # toute sortie anticipée : c'est exactement ce que (69) avait raté — la
+    # vérification vivait APRÈS le « déjà fait, on sort » et ne tournait jamais.
+    $houseHead = ''
+    $agentChange = $false
+    if ($valide) {
+        try {
+            $h = & git -C $homeDir rev-parse HEAD 2>$null
+            if ($LASTEXITCODE -eq 0 -and $h) { $houseHead = [string]$h }
+        } catch { }
+        if ($houseHead) {
+            $headAvant = ''
+            try { $headAvant = (Get-Content (Join-Path $RuntimeDir 'agent-deps-head.txt') -Raw -ErrorAction SilentlyContinue).Trim() } catch { }
+            if ($headAvant -and ($houseHead -ne $headAvant)) { $agentChange = $true }
+        }
+    }
+    if ($valide -and (Test-Path $depsOk) -and -not $agentChange) { return }
+    if ($valide -and $agentChange) {
+        Log "• le code de l'agent a changé (mise à jour) — dépendances et certification refaites pour la nouvelle version."
+        try {
+            Remove-Item $depsOk -Force -ErrorAction SilentlyContinue
+            Remove-Item (Join-Path $RuntimeDir 'agent-certifie.ok') -Force -ErrorAction SilentlyContinue
+            Remove-Item (Join-Path $RuntimeDir 'agent-deps.flag') -Force -ErrorAction SilentlyContinue
+            Remove-Item (Join-Path $RuntimeDir 'agent-certif.flag') -Force -ErrorAction SilentlyContinue
+        } catch { }
+    }
     if (-not $valide) {
+        # Installation fraîche : la base des dépendances repart de zéro.
+        try { Remove-Item (Join-Path $RuntimeDir 'agent-deps-head.txt') -Force -ErrorAction SilentlyContinue } catch { }
         $tryFlag = Join-Path $RuntimeDir 'agent-install.flag'
         if (Test-Path $tryFlag) {
             try {
@@ -987,6 +1016,11 @@ function Install-AgentIntoHome {
             return
         }
         Log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
+        # La copie fraîche a un HEAD : c'est lui la base des dépendances.
+        try {
+            $h2 = & git -C $homeDir rev-parse HEAD 2>$null
+            if ($LASTEXITCODE -eq 0 -and $h2) { $houseHead = [string]$h2 }
+        } catch { }
     }
     # ── Environnement python DÉDIÉ (refonte (69) D1) + dépendances + certification (D2) ──
     # Le python système sert aussi à vos autres installations Hermes : leurs
@@ -1003,8 +1037,17 @@ function Install-AgentIntoHome {
     }
     $pyCmd = $null; $pyPre = @()
     if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
+    if ($pyCmd) {
+        # Le faux raccourci du Microsoft Store répond AUSSI à « python » —
+        # sa phrase « Python was not found » prouve qu'il n'y a AUCUN vrai
+        # python derrière (cas réel du 23/11, cause montrée en Système).
+        try {
+            $pyVerChk = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim()
+            if ($pyVerChk -match 'was not found') { $pyCmd = $null }
+        } catch { }
+    }
     if (-not $pyCmd) {
-        Log "• ATTENTION : python introuvable sur ce poste — l'agent ne peut pas démarrer ; installez Python puis relancez Hermes-Web."
+        Log "• ATTENTION : aucun VRAI python sur ce poste (le raccourci du Microsoft Store ne compte pas) — l'agent ne peut pas démarrer. Remède : installez Python depuis python.org en cochant « Add python.exe to PATH », puis relancez Hermes-Web. Si un vrai Python existe déjà : Paramètres > Applications > Alias d'exécution d'applications > désactivez les raccourcis python."
         return
     }
     $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
@@ -1063,6 +1106,8 @@ function Install-AgentIntoHome {
         if ($code -eq '0') {
             try { Set-Content $depsOk $(if ($venvOk) { 'venv' } else { 'systeme' }) } catch { }
             Log "  dépendances installées — l'agent peut démarrer."
+            # Le HEAD actuel devient la base des dépendances (réussies).
+            if ($houseHead) { try { Set-Content (Join-Path $RuntimeDir 'agent-deps-head.txt') $houseHead -Encoding ASCII } catch { } }
         } else {
             Log ("  ATTENTION : installation des dépendances échouée (code {0}) — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)." -f $code)
             return
@@ -1314,7 +1359,11 @@ function Phase-Prerequis {
     $pyCmd = $null; $pyPre = @(); $pyVer = ''
     if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
     if ($pyCmd) { try { $pyVer = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim() } catch { } }
-    Add-SantePrerequis 'Python' ($null -ne $pyCmd) $(if ($pyVer) { $pyVer } else { "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés" })
+    # Le faux raccourci du Microsoft Store répond AUSSI à « python » : sa
+    # phrase « Python was not found » prouve qu'il n'y a AUCUN vrai python
+    # derrière (cas réel du 23/11 — la cause exacte affichée en Système).
+    if ($pyVer -match 'was not found') { $pyCmd = $null; $pyVer = '' }
+    Add-SantePrerequis 'Python' ($null -ne $pyCmd) $(if ($pyVer) { $pyVer } else { "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés. Sur Windows : installez Python depuis python.org en cochant « Add python.exe to PATH », ou désactivez les faux raccourcis (Paramètres > Applications > Alias d'exécution d'applications)" })
     $pipOk = $false
     if ($pyCmd) { try { & $pyCmd @pyPre -m pip --version 2>&1 | Out-Null; $pipOk = ($LASTEXITCODE -eq 0) } catch { } }
     Add-SantePrerequis 'pip (module python)' $pipOk $(if ($pipOk) { '' } else { "installation des dépendances de l'agent impossible" })
