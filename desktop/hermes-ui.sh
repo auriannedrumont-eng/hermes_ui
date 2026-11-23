@@ -1015,9 +1015,49 @@ do_status() {
   tail -n 8 "$LAUNCHER_LOG" 2>/dev/null || echo "  (vide)"
 }
 
+# ((89)) Maison de l'agent déterministe, DANS le dossier : <racine>/data
+# toujours (choix tranché : tout vit dans le dossier, quel que soit le mode
+# de lancement). Premier boot utile : l'ancienne maison (HERMES_HOME de la
+# session, sinon ~/.hermes) est copiée ENTIÈRE vers <racine>/data —
+# config.yaml (webapp.enabled), jeton du webapp, clés suivent — puis c'est
+# la seule maison connue. Refus si l'agent tourne déjà (9120 occupé) :
+# jamais de maison à moitié copiée sous un agent vivant. HERMES_HOME est
+# exportée : agent et mini-service héritent. /data/ est hors git.
+set_agent_home() {
+  local dh="$ROOT/data"
+  if port_open 9120; then
+    log "• maison de l'agent : agent déjà en marche sur 9120 — maison non migrée ce boot (arrêtez tout, puis relancez, pour migrer)."
+    [ -n "${HERMES_HOME:-}" ] || export HERMES_HOME="$dh"
+    return 0
+  fi
+  if [ ! -e "$dh/config.yaml" ] && [ ! -e "$dh/.env" ] && [ ! -d "$dh/webapp" ]; then
+    local src
+    for src in "${HERMES_HOME:-}" "$HOME/.hermes"; do
+      [ -n "$src" ] || continue
+      [ "${src%/}" = "$dh" ] && continue
+      if [ -e "$src/config.yaml" ] || [ -e "$src/.env" ]; then
+        log "• maison de l'agent : migration de $src vers $dh (copie entière, une seule fois)…"
+        mkdir -p "$dh"
+        if cp -a "$src/." "$dh/" >/dev/null 2>&1; then
+          log "  OK maison migrée — webapp.enabled, jeton du webapp et clés suivent dans le dossier."
+        else
+          log "  ATTENTION : copie incomplète — la maison reste $dh."
+        fi
+        break
+      fi
+    done
+  fi
+  mkdir -p "$dh"
+  export HERMES_HOME="$dh"
+  log "• maison de l'agent : $dh (dans le dossier, (89)) — plus aucune dépendance à la console de lancement."
+}
+
 do_start() {
   ensure_service_token
   check_deps
+  # ((89)) Maison de l'agent : déterministe, dans le dossier — AVANT le
+  # moindre démarrage de composant (mini-service lit le jeton, agent hérite).
+  set_agent_home
   # Phase 0 (refonte (68)) : prérequis vérifiés et AFFICHÉS (✓/✗) + écrits
   # dans le manifeste — avant le moindre démarrage de composant.
   phase_prerequis

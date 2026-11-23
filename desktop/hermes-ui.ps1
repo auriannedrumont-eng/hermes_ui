@@ -931,6 +931,52 @@ function Ensure-Build([string]$nodeDir) {
     }
 }
 
+# ((89)) Maison de l'agent deterministe, DANS le dossier. Avant : la maison
+# suivait HERMES_HOME — presente dans la session PowerShell qui lance, absente
+# du double-clic → la maison changeait de place a chaque boot (jeton du webapp
+# ecrit dans F:\data a 17:14, cherche dans C:\Users\...\AppData a 22:41, agent
+# mort sur une maison fraiche vide). Desormais : <racine>\data TOUJOURS
+# (choix tranche — option A : tout vit dans F:). Premier boot utile :
+# l'ancienne maison (HERMES_HOME de la session, sinon defaut plateforme) est
+# copiee ENTIERE vers <racine>\data — config.yaml (webapp.enabled), jeton du
+# webapp, cles suivent — puis c'est la seule maison connue. Refus si l'agent
+# tourne deja (9120 occupe) : jamais de maison moitie copiee sous un agent
+# vivant. HERMES_HOME est fixee pour tout le processus : agent et mini-service
+# heritent. /data/ est hors git (.gitignore) : jeton et cles ne partent pas.
+function Set-AgentHome {
+    $DataHome = Join-Path $Root 'data'
+    if (Test-PortBusy 9120) {
+        Log "• maison de l'agent : agent deja en marche sur 9120 — maison non migree ce boot (arretez tout, puis relancez, pour migrer)."
+        if (-not $env:HERMES_HOME) { $env:HERMES_HOME = $DataHome }
+        return
+    }
+    $dejaUtilisee = (Test-Path (Join-Path $DataHome 'config.yaml')) -or (Test-Path (Join-Path $DataHome '.env')) -or (Test-Path (Join-Path $DataHome 'webapp'))
+    if (-not $dejaUtilisee) {
+        $cands = New-Object System.Collections.Generic.List[string]
+        if ($env:HERMES_HOME) { $cands.Add($env:HERMES_HOME.TrimEnd('\')) }
+        if ($env:LOCALAPPDATA) { $cands.Add((Join-Path $env:LOCALAPPDATA 'hermes')) }
+        $cands.Add((Join-Path $env:USERPROFILE '.hermes'))
+        $ancienne = $null
+        foreach ($c in $cands) {
+            if (-not $c) { continue }
+            if ($c.ToLower() -eq $DataHome.ToLower()) { continue }
+            if ((Test-Path (Join-Path $c 'config.yaml')) -or (Test-Path (Join-Path $c '.env'))) { $ancienne = $c; break }
+        }
+        if ($ancienne) {
+            Log "• maison de l'agent : migration de $ancienne vers $DataHome (copie entiere, une seule fois)..."
+            robocopy $ancienne $DataHome /E /NFL /NDL /NJH /NJS /NP | Out-Null
+            if ($LASTEXITCODE -ge 8) {
+                Log "  ATTENTION : robocopy code $LASTEXITCODE — migration incomplete ; la maison reste $DataHome."
+            } else {
+                Log "  OK maison migree — webapp.enabled, jeton du webapp et cles suivent dans le dossier."
+            }
+        }
+    }
+    if (-not (Test-Path $DataHome)) { New-Item -ItemType Directory -Path $DataHome -Force | Out-Null }
+    $env:HERMES_HOME = $DataHome
+    Log "• maison de l'agent : $DataHome (dans le dossier, (89)) — plus aucune dependance a la console de lancement."
+}
+
 # ── Demarrage des composants ────────────────────────────────────────────
 function Start-Chat {
     if (Test-ChatHealthy) { Log "• mini-service deja actif sur :$ChatPort (adopte)"; State-Set 'CHAT_OWNED' 0; return $true }
@@ -2001,6 +2047,11 @@ function Do-Start {
     # Installation portable automatique de tout ce qui manque (idempotente)
     Ensure-PortableSetup
     Initialize-JobObject
+
+    # ((89)) Maison de l'agent : deterministe, dans le dossier — AVANT le
+    # moindre demarrage de composant (mini-service lit le jeton, agent
+    # herite de HERMES_HOME).
+    Set-AgentHome
 
     # Phase 0 (refonte (68)) : prérequis vérifiés et AFFICHÉS (✓/✗) + écrits
     # dans le manifeste — avant le moindre démarrage de composant.
