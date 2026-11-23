@@ -437,6 +437,29 @@ async function main() {
   check("allumage honnête : cause écrite si l'agent ne répond pas (db/agent.log), jamais de Die",
     psN.includes("db\\agent.log") && shU.includes("db/agent.log"));
 
+  console.log("[79] le portable EMBEDDABLE voit le code de l'agent — le ._pth doit contenir sa racine");
+  // Cas réel du 23/11 12:03 : `ModuleNotFoundError: No module named
+  // 'hermes_cli'` avec LE PORTABLE (F:\...\python-portable\python.exe). Le
+  // « zip autonome » de python.org est l'embeddable : son ._pth force le
+  // mode isolé — ni le dossier courant ni PYTHONPATH ne sont cherchés, même
+  // en `python -m` avec le bon répertoire de travail. Le ps1 ouvrait déjà ce
+  // ._pth pour pip (Lib\site-packages + import site) mais jamais pour le
+  // code du dépôt. Corrigé : Add-AgentToPth inscrit la racine hermes-agent
+  // dans le ._pth (idempotent, fichier du dossier de l'interface), appelé
+  // AVANT l'essai de certification ET avant l'allumage ; le venv et les
+  // pythons système ignorent le ._pth (aucun effet de bord). sh : PYTHONPATH
+  // explicite par parité prudente.
+  check("ps1 : Add-AgentToPth existe, écrit dans python*._pth, idempotent",
+    psN.includes("function Add-AgentToPth") &&
+      psN.includes("Filter 'python*._pth'") &&
+      psN.includes("AppendAllText($pth.FullName") &&
+      psN.includes("-ieq $houseDir"));
+  check("ps1 : appelé AVANT l'essai de certification ET avant l'allumage",
+    /Add-AgentToPth \$homeDir\r?\n\s*try \{ \$env:PYTHONIOENCODING/.test(psU) &&
+      /Add-AgentToPth \$house\r?\n\s*try \{ \$env:PYTHONIOENCODING/.test(psU));
+  check("sh : PYTHONPATH explicite dans les deux lancements (certification + allumage)",
+    (shU.match(/PYTHONPATH="\$maison\$\{PYTHONPATH:\+:\$PYTHONPATH\}"/g) || []).length >= 2);
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

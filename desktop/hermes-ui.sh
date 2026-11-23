@@ -638,7 +638,10 @@ install_agent_fresh() {
   # run_api.py en fichier était doublement faux : package `gateway` non
   # importable depuis son dossier (ModuleNotFoundError, cas réel du 23/11)
   # et module qui exige un appelant ayant initialisé l'autorité de session.
-  ( cd "$maison" && PYTHONIOENCODING=utf-8 exec "$certpy" -m hermes_cli.main --profile default gateway run --quiet >>"$certlog" 2>&1 ) &
+  # ((79)) PYTHONPATH : parité avec le ps1 (Add-AgentToPth) — sous Unix les
+  # pythons normaux voient le cwd, on l'explicite quand même au cas où un
+  # python « isolé » traîne (l'embeddable Windows ne cherche JAMAIS le cwd).
+  ( cd "$maison" && PYTHONPATH="$maison${PYTHONPATH:+:$PYTHONPATH}" PYTHONIOENCODING=utf-8 exec "$certpy" -m hermes_cli.main --profile default gateway run --quiet >>"$certlog" 2>&1 ) &
   local trial=$! certup=0 i
   for i in $(seq 1 45); do
     sleep 2
@@ -776,7 +779,7 @@ start_agent_runtime() {
   # ((78)) Commande officielle amont (cf. l'essai de certification) : le
   # runtime supervise allume lui-même le listener 9120 (webapp_listener).
   mkdir -p "$ROOT/db"
-  ( cd "$maison" && PYTHONIOENCODING=utf-8 exec "$apy" -m hermes_cli.main --profile default gateway run --quiet >>"$ROOT/db/agent.log" 2>&1 ) &
+  ( cd "$maison" && PYTHONPATH="$maison${PYTHONPATH:+:$PYTHONPATH}" PYTHONIOENCODING=utf-8 exec "$apy" -m hermes_cli.main --profile default gateway run --quiet >>"$ROOT/db/agent.log" 2>&1 ) &
   state_set AGENT_PID "$!"
   for _ in $(seq 1 45); do
     if port_open 9120; then up=1; break; fi

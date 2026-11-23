@@ -1212,6 +1212,7 @@ function Install-AgentIntoHome {
     # `gateway` n'est pas importable depuis son dossier (ModuleNotFoundError,
     # cas reel du 23/11) et ce module exige un appelant qui a deja initialise
     # l'autorite de session — c'est le runtime qui fait tout cela.
+    Add-AgentToPth $homeDir
     try { $env:PYTHONIOENCODING = 'utf-8' } catch { }
     $certProc = Start-Process -FilePath $certPy -ArgumentList (@($certPre) + @('-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet')) -WorkingDirectory $homeDir -WindowStyle Hidden -RedirectStandardError $certLog -RedirectStandardOutput ($certLog + '.out') -PassThru
     $certUp = $false
@@ -1237,6 +1238,32 @@ function Install-AgentIntoHome {
     try {
         if (-not $certProc.HasExited) { taskkill /PID $certProc.Id /T /F 2>&1 | Out-Null }
     } catch { }
+}
+
+function Add-AgentToPth {
+    # ((79)) Le portable « zip autonome » est le python EMBEDDABLE de
+    # python.org : son fichier ._pth met l'interpréteur en mode isolé — le
+    # dossier courant et PYTHONPATH ne sont JAMAIS cherchés, même avec
+    # `python -m` et un répertoire de travail correct (cas réel du 23/11
+    # 12:03 : ModuleNotFoundError 'hermes_cli' alors que le dépôt est bien
+    # là). On inscrit la racine de l'agent dans ce ._pth : un fichier du
+    # dossier de l'interface, ajouté idempotemment avant chaque essai et
+    # chaque allumage, réversible en effaçant la ligne. Le venv et les
+    # pythons système ne lisent pas de ._pth : aucun effet de bord pour eux.
+    param([string]$houseDir)
+    if (-not $Script:PortablePython -or -not $houseDir) { return }
+    if (-not (Test-Path $houseDir)) { return }
+    $portDir = Split-Path -Parent $Script:PortablePython
+    $pth = Get-ChildItem $portDir -Filter 'python*._pth' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pth) { return }
+    $lines = @(Get-Content $pth.FullName -ErrorAction SilentlyContinue)
+    foreach ($l in $lines) { if ("$l".Trim() -ieq $houseDir) { return } }
+    try {
+        [System.IO.File]::AppendAllText($pth.FullName, "`r`n$houseDir", [System.Text.Encoding]::UTF8)
+        Log "• le python portable (mode isolé ._pth) voit désormais le code de l'agent : $houseDir inscrit dans son ._pth."
+    } catch {
+        Log "  ATTENTION : inscription de l'agent dans le ._pth du portable impossible ($($_.Exception.Message)) — ce python ne pourra pas importer l'agent."
+    }
 }
 
 function Start-AgentRuntime {
@@ -1275,6 +1302,7 @@ function Start-AgentRuntime {
     # plus haut) : `python -m hermes_cli.main gateway run`, cwd = racine de
     # l'agent — le runtime supervise allume lui-meme le listener 9120
     # (gateway/webapp_listener.py, DEFAULT_PORT = 9120).
+    Add-AgentToPth $house
     try { $env:PYTHONIOENCODING = 'utf-8' } catch { }
     $alog = Join-Path $Root 'db\agent.log'
     $ap = Start-Process -FilePath $apy -ArgumentList (@($aPre) + @('-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet')) -WorkingDirectory $house -WindowStyle Hidden -RedirectStandardError $alog -RedirectStandardOutput ($alog + '.out') -PassThru
