@@ -105,11 +105,17 @@ export function extractGatewayCause(text: string): string | null {
 }
 
 /** La cause du jour, lue dans le journal réel de l'agent (queue 64 Ko).
- *  Journal absent/vide → null : on n'invente rien. */
+ *  Journal absent/vide → null : on n'invente rien.
+ *  ((81)) La cause n'est cherchée que DEPUIS le dernier « lancement
+ *  automatique » : une erreur d'un essai précédent — corrigée depuis
+ *  (ex. le ModuleNotFoundError 'gateway' de run_api.py) — ne doit plus
+ *  passer pour la cause ACTUELLE affichée à l'utilisatrice. */
 export function gatewayLogCause(): string | null {
   try {
     if (statSync(gatewayLogPath()).size === 0) return null;
-    return extractGatewayCause(readFileSync(gatewayLogPath(), "utf8"));
+    const text = readFileSync(gatewayLogPath(), "utf8");
+    const dernier = text.lastIndexOf("lancement automatique");
+    return extractGatewayCause(dernier >= 0 ? text.slice(dernier) : text);
   } catch {
     return null;
   }

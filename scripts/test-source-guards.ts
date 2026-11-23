@@ -489,6 +489,32 @@ async function main() {
   check("sh : l'ancien early-return « requirements absent → rien installer » est parti",
     !/if \[ ! -f "\$maison\/requirements\.txt" \]; then\n\s*\[ -f "\$depsok" \] \|\| touch/.test(shU));
 
+  console.log("[81] le starter de l'INTERFACE lance la COMMANDE OFFICIELLE (plus de run_api.py)");
+  // Cas réel du 23/11 après-midi : la carte « Moteur Hermes » affichait
+  // « Cause connue, lue dans le journal : ModuleNotFoundError 'gateway' » —
+  // erreur corrigée au (78) CÔTÉ LANCEUR mais vivante dans le second chemin
+  // d'allumage : agent-starter.ts (mini-service) spawnait encore
+  // `gateway/run_api.py` en fichier (package non importable depuis son
+  // dossier, pas de __main__). Corrigé : même commande officielle que le
+  // (78), PYTHONPATH/env, garde hermes_cli/main.py ; et la cause affichée
+  // n'est lue que DEPUIS le dernier « lancement automatique » (une erreur
+  // périmée ne passe plus pour actuelle).
+  const starterUi = read("mini-services/hermes-chat/agent-starter.ts");
+  const motorUi = read("mini-services/hermes-chat/agent-motor.ts");
+  check("starter : plus AUCUN lancement de gateway/run_api.py",
+    !starterUi.includes('"gateway", "run_api.py"') &&
+      !starterUi.includes("join(agentDir, \"gateway\")"));
+  check("starter : la commande officielle amont littérale (comme le (78))",
+    starterUi.includes('"-m", "hermes_cli.main", "--profile", "default", "gateway", "run", "--quiet"'));
+  check("starter : garde hermes_cli/main.py + env PYTHONIOENCODING/PYTHONPATH",
+    starterUi.includes('"hermes_cli", "main.py"') &&
+      starterUi.includes("PYTHONIOENCODING") &&
+      starterUi.includes("PYTHONPATH"));
+  check("starter : marqueur « lancement automatique » écrit AVANT le spawn",
+    starterUi.indexOf("lancement automatique") < starterUi.indexOf("const child = spawn"));
+  check("motor : la cause ne lit que depuis le dernier lancement",
+    motorUi.includes('lastIndexOf("lancement automatique")'));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

@@ -1,7 +1,9 @@
 // Démarrage automatique de l'agent Hermes (loi « tout simplement », 2026-11-22).
 // Le défaut automatique du connecteur est ws://127.0.0.1:9120/api/ws — il
-// suffit de lancer la passerelle amont (`gateway/run_api.py` du checkout
-// officiel, cf. FORK.md §9 2026-11-16) pour que l'interface se branche seule
+// suffit de lancer la passerelle amont avec LA COMMANDE OFFICIELLE du projet
+// (`python -m hermes_cli.main --profile default gateway run`, celle que
+// hermes_cli/gateway_runtime_start.py construit lui-même — cf. lanceur (78))
+// pour que l'interface se branche seule
 // : le connecteur re-sonde à chaque tour et bascule en mode gateway sans
 // aucune saisie. Ce module fait ce lancement UNE FOIS par boot du service :
 //  - passerelle déjà répondante → ADOPTION (rien à faire, on ne touche pas
@@ -77,9 +79,17 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
     if (await gatewayPortOpen()) return true; // adoption : l'agent tourne déjà
     const agentDir = resolveAgentDir();
     if (!agentDir) return false; // pas d'installation connue : état honnête côté UI
-    const script = join(agentDir, "gateway", "run_api.py");
-    if (!existsSync(script)) {
-      trace("system", `agent non démarré automatiquement : ${script} introuvable`);
+    // ((81)) La COMMANDE OFFICIELLE du projet amont (le (78) côté lanceur) :
+    // `python -m hermes_cli.main --profile default gateway run` — le runtime
+    // supervise allume lui-même le listener 9120. L'ancien réflexe
+    // `python gateway/run_api.py` ne peut pas tourner : le package `gateway`
+    // n'est pas importable depuis son propre dossier et le module n'a pas de
+    // __main__ (ModuleNotFoundError 'gateway', cas réel du 23/11 — c'était
+    // la cause que la carte « Moteur Hermes » affichait, lue dans
+    // db/agent-gateway.log).
+    const cliMain = join(agentDir, "hermes_cli", "main.py");
+    if (!existsSync(cliMain)) {
+      trace("system", `agent non démarré automatiquement : ${cliMain} introuvable (installation officielle incomplète ?)`);
       return false;
     }
     let spawned = false;
@@ -95,13 +105,32 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
       logFd = null; // journal impossible : on lance quand même, sans capture
     }
     for (const py of pythonCandidates(agentDir)) {
+      // ((81)) Le marqueur de lancement est écrit AVANT le spawn : une cause
+      // éventuelle arrive APRÈS lui dans le journal — gatewayLogCause() ne
+      // lit que depuis le dernier marqueur (une erreur corrigée depuis ne
+      // passe plus pour actuelle).
+      try {
+        appendFileSync(
+          log,
+          `${new Date().toISOString()} lancement automatique : ${py.cmd} -m hermes_cli.main --profile default gateway run --quiet\n`
+        );
+      } catch {
+        /* journal best effort */
+      }
       // ENOENT (interpréteur absent) arrive via l'événement "error", pas au
       // lancement — chaque candidat est éprouvé 2 s : sans erreur, il vit.
       const ok = await new Promise<boolean>((resolve) => {
         let settled = false;
-        const child = spawn(py.cmd, [...py.args, script], {
+        const child = spawn(py.cmd, [...py.args, "-m", "hermes_cli.main", "--profile", "default", "gateway", "run", "--quiet"], {
           cwd: agentDir,
           detached: true,
+          env: {
+            ...process.env,
+            PYTHONIOENCODING: "utf-8",
+            PYTHONPATH: [agentDir, process.env.PYTHONPATH]
+              .filter(Boolean)
+              .join(process.platform === "win32" ? ";" : ":"),
+          },
           stdio: logFd !== null ? ["ignore", logFd, logFd] : ["ignore", "ignore", "ignore"],
           windowsHide: true,
         });
@@ -116,17 +145,6 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
         child.unref();
       });
       if (!ok) continue;
-      // Journal léger côté fork : une ligne par lancement (le journal
-      // complet de l'agent vit désormais juste au-dessus dans le même
-      // fichier, capturé par fd).
-      try {
-        appendFileSync(
-          log,
-          `${new Date().toISOString()} lancement automatique ${py.cmd} ${py.args.join(" ")}\n`
-        );
-      } catch {
-        /* journal best effort */
-      }
       spawned = true;
       break;
     }

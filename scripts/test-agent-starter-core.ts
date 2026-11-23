@@ -65,6 +65,17 @@ try {
     "2026-11-23 lancement automatique\n2026-11-23 ModuleNotFoundError: No module named 'uvicorn'\n"
   );
   check("cause lue depuis le journal réel", (gatewayLogCause() ?? "").includes("uvicorn"));
+  // ((81)) Une erreur PÉRIMÉE (avant le dernier lancement) n'est plus la
+  // cause actuelle : corrigée depuis, elle ne doit plus s'afficher comme
+  // actuelle — c'était le « Cause connue : ModuleNotFoundError 'gateway' »
+  // qui persistait alors que le (78) avait changé la commande depuis.
+  writeFileSync(
+    process.env.HERMES_AGENT_GATEWAY_LOG,
+    "2026-11-22 ModuleNotFoundError: No module named 'gateway'\n" +
+      "2026-11-23 lancement automatique : python -m hermes_cli.main gateway run\n" +
+      "2026-11-23 gateway en ligne, 9120 répond\n"
+  );
+  check("erreur corrigée depuis ≠ cause actuelle", gatewayLogCause() === "2026-11-23 gateway en ligne, 9120 répond");
   process.env.HERMES_AGENT_GATEWAY_LOG = join(tmp, "absent.log");
   check("journal absent → null (rien d'inventé)", gatewayLogCause() === null);
   delete process.env.HERMES_AGENT_GATEWAY_LOG;
