@@ -62,6 +62,13 @@ export function applySchema(db: Database): void {
   // Migration douce (F-30) : config du mode par conversation (JSON —
   // voix → modèles, membres du conseil, reprises de l'auto, débat préalable).
   softAlter(db, "conversations", "mode_config TEXT");
+  // Chantier sessions natives (74) : identifiant de la session moteur
+  // (hermes-agent) rattachée à la conversation, via l'API REST officielle
+  // du moteur (GET/POST /api/sessions, header X-Hermes-Session-Id).
+  // null tant que la bascule REST n'a pas lié la conversation au moteur ;
+  // la base locale reste la seule source de vérité (aucune écriture côté
+  // moteur dans ce tour de fondation).
+  softAlter(db, "conversations", "motor_session_id TEXT");
   // Migration douce (F-30) : étiquette du mode sur la réponse finale
   // (« Verdict · Débat — 3 tours ») et déroulé du tour multi-voix (JSON).
   softAlter(db, "messages", "mode_tag TEXT");

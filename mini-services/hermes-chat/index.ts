@@ -50,6 +50,8 @@ import { registerProvidersExtensionsHandlers } from "./handlers/providers-extens
 import { registerSettingsSystemHandlers, startUpdateWatchdog, currentUpdateState } from "./handlers/settings-system";
 import { registerAgentMotorHandlers } from "./handlers/agent-motor";
 import { startAgentMotorWatchdog } from "./agent-motor";
+import { probeMotorSessionsOnce } from "./motor-sessions";
+import { toHttpBase } from "./hermes-connector";
 import { registerStorageHandlers } from "./handlers/storage";
 import { startDrainWatchdog } from "./handlers/drain";
 import { startAgentGatewayIfDown } from "./agent-starter";
@@ -765,6 +767,10 @@ connector
         connector,
         emit: (event, payload) => io.emit(event, payload),
       });
+      // Chantier sessions natives (74) : sonde REST en lecture seule au
+      // démarrage — détecte la capacité /api/sessions du moteur installé,
+      // n'écrit rien côté moteur, ne bloque aucun chemin du service.
+      void probeMotorSessionsOnce(connector, toHttpBase);
       filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
         trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
@@ -800,6 +806,10 @@ connector
         connector,
         emit: (event, payload) => io.emit(event, payload),
       });
+      // Chantier sessions natives (74) : sonde REST en lecture seule au
+      // démarrage — détecte la capacité /api/sessions du moteur installé,
+      // n'écrit rien côté moteur, ne bloque aucun chemin du service.
+      void probeMotorSessionsOnce(connector, toHttpBase);
       filesServer.listen(FILES_PORT, HOST, () => {
         console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
         trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);

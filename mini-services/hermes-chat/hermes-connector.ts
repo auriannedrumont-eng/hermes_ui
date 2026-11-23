@@ -36,7 +36,9 @@ function toWsUrl(url: string): string {
   return clean.endsWith("/api/ws") ? clean : `${clean}/api/ws`;
 }
 
-function toHttpBase(url: string): string {
+// Exporté pour la sonde REST « sessions natives » (motor-sessions.ts) :
+// même base HTTP que la gateway du chat, déjà résolue ici.
+export function toHttpBase(url: string): string {
   let base = url.replace(/^ws/, "http");
   if (base.endsWith("/api/ws")) base = base.slice(0, -"/api/ws".length);
   return base.replace(/\/$/, "");

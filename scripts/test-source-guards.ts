@@ -302,6 +302,27 @@ async function main() {
   check("sh : le python portable suit la version exigée par l'agent (3.14, install_only)",
     shF.includes("cpython-3.14.10") && shF.includes("install_only"));
 
+  console.log("[14] sessions natives : fondation en lecture seule ((74))");
+  // Le WS natif du moteur est un protocole fermé (JSON-RPC + tickets,
+  // tui_gateway/ws.py) et `api_turn_v1` refuse toute clé inconnue
+  // (session_api_turn.py:60-65, sans session_id). Nommer une session
+  // passe donc par l'API REST OFFICIELLE du moteur (GET/POST
+  // /api/sessions, header X-Hermes-Session-Id annoncé dans les CORS).
+  // Ce tour ne pose que la fondation : la sonde LIT, jamais n'écrit
+  // côté moteur — la base locale reste la seule source de vérité tant
+  // que la bascule REST n'est pas construite et éprouvée.
+  const msF = read("mini-services/hermes-chat/motor-sessions.ts");
+  const schemaF = read("mini-services/hermes-chat/schema.ts");
+  check("sonde : GET /api/sessions seulement — aucune méthode d'écriture côté moteur",
+    msF.includes("/api/sessions") &&
+      msF.includes("method:") === false &&
+      msF.includes("\"POST\"") === false && msF.includes("'POST'") === false &&
+      msF.includes("\"PUT\"") === false && msF.includes("\"DELETE\"") === false);
+  check("sonde : non bloquante (aucun appelant n'attend son résultat)",
+    read("mini-services/hermes-chat/index.ts").includes("void probeMotorSessionsOnce(connector, toHttpBase)"));
+  check("schéma : la colonne de correspondance est une migration douce (base locale intacte)",
+    schemaF.includes('softAlter(db, "conversations", "motor_session_id TEXT")'));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }
