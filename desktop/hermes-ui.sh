@@ -733,6 +733,36 @@ start_chat() {
     die "les ports $CHAT_PORT/$FILES_PORT sont occupés par un autre programme alors que le service Hermes n'y répond pas. Libérez-les (ss -tlnp | grep -E '3003|3004')."
   fi
   log "• démarrage du mini-service (ports $CHAT_PORT/$FILES_PORT)…"
+  # (88) Jeton de session du webapp de l'agent : depuis hermes-agent 0.21.x
+  # avec webapp.enabled, la poignée de main /api/ws n'admet sur la boucle
+  # locale QUE le jeton de session en ?token= (web_server_chat.py lit
+  # ws.query_params.get("token")) ; l'en-tête Bearer reste pour le REST.
+  # Le connecteur du mini-service lit ce jeton via HERMES_GATEWAY_TOKEN.
+  # Maison qui porte le jeton (hermes_constants.get_hermes_home) :
+  # HERMES_HOME sinon la plateforme — linux : ~/.hermes (+ suffixe
+  # HERMES_DATA_DIR_SUFFIX). Écrit à la première utilisation du webapp
+  # (webapp_listener.py : browser_session_token, 43 caractères).
+  # Un HERMES_GATEWAY_TOKEN déjà réglé par l'utilisateur est respecté.
+  if [ -n "$HERMES_GATEWAY_TOKEN" ]; then
+    log "• jeton de session webapp : déjà réglé par l'environnement — respecté"
+  else
+    local gwf="" tok="" d
+    for d in "${HERMES_HOME:-}" "${HOME}/.hermes${HERMES_DATA_DIR_SUFFIX:-}"; do
+      [ -n "$d" ] || continue
+      if [ -f "$d/webapp/session-token" ]; then gwf="$d/webapp/session-token"; break; fi
+    done
+    if [ -n "$gwf" ]; then
+      tok="$(tr -d '\r\n' <"$gwf" 2>/dev/null)" || tok=""
+      if [ -n "$tok" ]; then
+        export HERMES_GATEWAY_TOKEN="$tok"
+        log "• jeton de session webapp : $gwf (${#tok} caractères)"
+      else
+        log "• jeton de session webapp : $gwf vide/illisible — mini-service en mode local"
+      fi
+    else
+      log "• jeton de session webapp ABSENT (cherché : ${HERMES_HOME:-$HOME/.hermes})/webapp/session-token — la gateway ne l'a pas encore écrit ; mini-service en mode local"
+    fi
+  fi
   ( cd "$ROOT/mini-services/hermes-chat" && exec nohup bun index.ts >>"$CHAT_LOG" 2>&1 </dev/null ) &
   state_set CHAT_PID "$!"
   state_set CHAT_OWNED 1

@@ -938,17 +938,48 @@ function Start-Chat {
         Die "les ports $ChatPort/$FilesPort sont occupes par un autre programme alors que le service Hermes n'y repond pas (netstat -ano | findstr ""$ChatPort $FilesPort"")."
     }
     Log "• demarrage du mini-service (ports $ChatPort/$FilesPort)..."
-    # (87) Jeton de session du webapp de l'agent : depuis hermes-agent 0.21.x
+    # (88) Jeton de session du webapp de l'agent : depuis hermes-agent 0.21.x
     # avec webapp.enabled, la poignee de main /api/ws n'admet sur la boucle
-    # locale QUE le jeton de session en `?token=` (la porte du webapp compare
-    # ce parametre — cf. amont hermes_cli/web_server_chat.py) ; l'en-tete
-    # Bearer reste pour le REST. Le connecteur du mini-service lit ce jeton
-    # via HERMES_GATEWAY_TOKEN. Le fichier est cree par l'agent au premier
-    # allumage du listener (gateway/webapp_listener.py, webapp/session-token).
-    $gwHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $env:USERPROFILE '.hermes' }
-    $gwTokenFile = Join-Path $gwHome 'webapp\session-token'
-    if (Test-Path $gwTokenFile) {
-        try { $env:HERMES_GATEWAY_TOKEN = (Get-Content $gwTokenFile -Raw).Trim() } catch { }
+    # locale QUE le jeton de session en `?token=` (web_server_chat.py lit
+    # ws.query_params.get("token")) ; l'en-tete Bearer reste pour le REST.
+    # Le connecteur du mini-service lit ce jeton via HERMES_GATEWAY_TOKEN.
+    # Maison qui porte le jeton (hermes_constants.get_hermes_home) :
+    # HERMES_HOME sinon la plateforme - win32 : %LOCALAPPDATA%\hermes
+    # (+ HERMES_DATA_DIR_SUFFIX), PAS ~/.hermes (lecon du cas reel du (87) :
+    # fichier introuvable a cet endroit sur Windows). Ecrit a la premiere
+    # utilisation du webapp (webapp_listener.py : browser_session_token,
+    # format 43 caracteres [A-Za-z0-9_-]). Un HERMES_GATEWAY_TOKEN deja
+    # regle par l'utilisateur est respecte.
+    if ($env:HERMES_GATEWAY_TOKEN) {
+        Log "• jeton de session webapp : deja regle par l'environnement - respecte"
+    } else {
+        $candidats = New-Object System.Collections.Generic.List[string]
+        if ($env:HERMES_HOME) { $candidats.Add($env:HERMES_HOME) }
+        if ($env:LOCALAPPDATA) {
+            if ($env:HERMES_DATA_DIR_SUFFIX) { $candidats.Add((Join-Path $env:LOCALAPPDATA ('hermes' + $env:HERMES_DATA_DIR_SUFFIX))) }
+            $candidats.Add((Join-Path $env:LOCALAPPDATA 'hermes'))
+        }
+        $candidats.Add((Join-Path $env:USERPROFILE '.hermes'))
+        $gwTokenFile = $null
+        foreach ($c in $candidats) {
+            $p = Join-Path $c 'webapp\session-token'
+            if (Test-Path $p) { $gwTokenFile = $p; break }
+        }
+        if ($gwTokenFile) {
+            try {
+                $jeton = (Get-Content $gwTokenFile -Raw).Trim()
+                if ($jeton) {
+                    $env:HERMES_GATEWAY_TOKEN = $jeton
+                    Log "• jeton de session webapp : $gwTokenFile ($($jeton.Length) caracteres)"
+                } else {
+                    Log "• jeton de session webapp : $gwTokenFile vide - mini-service en mode local"
+                }
+            } catch {
+                Log "• jeton de session webapp : $gwTokenFile present mais illisible - mini-service en mode local"
+            }
+        } else {
+            Log ("• jeton de session webapp ABSENT (cherches : " + ($candidats -join ' ; ') + ")webapp\session-token - la gateway ne l'a pas encore ecrit ; mini-service en mode local")
+        }
     }
     $chatScript = Join-Path $Root 'mini-services\hermes-chat\index.ts'   # chemin absolu : marque le processus comme nôtre
     $p = Start-Component 'bun' @($chatScript) (Join-Path $Root 'mini-services\hermes-chat') 'mini-service'
