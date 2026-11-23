@@ -1010,18 +1010,32 @@ do_start() {
   # jamais sur la branche suivie (@{u}), qui peut pointer une référence
   # morte pendant que GitHub avance (cas réel du 23/11 15:32 : « a jour »
   # éternellement vrai, aucune réparation ne pouvait jamais arriver).
-  local avant="" apres="" fork="" urlactuel="" branche=""
+  # ((86)) le test origin est NORMALISÉ (sans « .git » final, sans « / »
+  # traînant, casse unifiée) : un MÊME dépôt écrit différemment n'est pas
+  # « ailleurs » ; le fetch raté est retenté SANS identifiants enregistrés
+  # (un jeton périmé peut seul bloquer un dépôt public) et l'échec final
+  # affiche SA dernière ligne git — plus jamais muet (cas réel du 23/11
+  # 15:55 : 13 secondes, aucune cause dite).
+  local avant="" apres="" fork="" urlactuel="" branche="" okfetch=0 errf=""
   fork="${HERMES_FORK_URL:-https://github.com/auriannedrummont-eng/hermes_ui.git}"
   urlactuel="$(git -C "$ROOT" remote get-url origin 2>/dev/null || echo '')"
   if [ -z "$urlactuel" ]; then
     git -C "$ROOT" remote add origin "$fork" 2>/dev/null || true
-  elif [ "$urlactuel" != "$fork" ]; then
+  elif [ "$(printf '%s' "$urlactuel" | sed 's/\.git$//;s/\/$//' | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$fork" | sed 's/\.git$//;s/\/$//' | tr '[:upper:]' '[:lower:]')" ]; then
     log "• origin pointait ailleurs ($urlactuel) — réaligné sur le dépôt du projet."
     git -C "$ROOT" remote set-url origin "$fork" 2>/dev/null || true
   fi
   avant="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
   maj_log "consultation de GitHub…"
-  if [ -n "$avant" ] && git -C "$ROOT" fetch --quiet origin 2>/dev/null; then
+  errf="$RUNTIME_DIR/fetch-erreur.txt"; : >"$errf" 2>/dev/null || errf=/dev/null
+  if [ -n "$avant" ] && git -C "$ROOT" fetch --quiet origin 2>>"$errf"; then
+    okfetch=1
+  elif [ -n "$avant" ] && git -C "$ROOT" -c credential.helper= fetch --quiet origin 2>>"$errf"; then
+    okfetch=1
+    log "  téléchargement réussi SANS vos identifiants enregistrés — ils sont périmés et bloquent GitHub. Remède : Gestionnaire d'identifiants Windows > Identifiants Windows > supprimez l'entrée git:https://github.com (le dépôt du projet est public)."
+    maj_log "téléchargement réussi sans identifiants enregistrés — identifiants périmés à supprimer"
+  fi
+  if [ "$okfetch" = "1" ]; then
     apres="$(git -C "$ROOT" rev-parse 'origin/main' 2>/dev/null)"
     branche="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
     log "• vérifié : branche $branche · dossier ${avant:0:7} · dépôt ${apres:0:7}"
@@ -1065,6 +1079,11 @@ do_start() {
       maj_log "déjà à jour — aucune nouvelle version sur GitHub"
     fi
   else
+    # ((86)) l'échec final dit SA cause : la dernière ligne git réelle
+    local detailfetch=""
+    detailfetch="$(grep -v '^$' "$errf" 2>/dev/null | tail -n 1 || true)"
+    [ -n "$detailfetch" ] || detailfetch="(aucune sortie git)"
+    log "  pas de mise à jour récupérée (réseau ou connexion GitHub) — version locale conservée. Détail : $detailfetch"
     maj_log "GitHub injoignable — version locale conservée"
   fi
   # ── bloc maj (fin epreuve) ──

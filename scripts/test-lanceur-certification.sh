@@ -348,5 +348,31 @@ grep -q "mise à jour appliquée" "$T/L.out" \
   && echo "PREUVE : le dossier est bien sur la version v2 de main" \
   || { echo "ECHEC : VERSION.txt n'est pas v2"; exit 1; }
 
+echo "── CAS M : GitHub injoignable → l'échec affiche SA cause git ((86)) ──"
+# Cas réel du 23/11 15:55 : « pas de mise a jour recuperee (reseau ou
+# connexion GitHub) » en 13 secondes, AUCUNE cause affichée. Et un jeton
+# périmé enregistré dans le gestionnaire Windows peut seul bloquer un
+# dépôt public : le réessai anonyme le dit, l'échec final donne sa cause.
+export HERMES_FORK_URL="$T/manque.git"
+mkdir -p "$T/lroot3"
+git init -q -b main "$T/lroot3" 2>/dev/null
+( cd "$T/lroot3" \
+  && git config user.email epreuve@local && git config user.name epreuve \
+  && echo local > VERSION.txt && git add VERSION.txt && git commit -qm local \
+  && git remote add origin "$T/manque.git" ) >/dev/null 2>&1
+{ echo 'log(){ echo "LOG: $*"; }'; echo 'maj_log(){ echo "MAJLOG: $*"; }';
+  echo 'maj_epreuve(){'; cat "$T/fmaj.sh"; echo '}'; echo 'maj_epreuve'; } > "$T/runmaj3.sh"
+ROOT="$T/lroot3" RUNTIME_DIR="$T/lruntime" bash "$T/runmaj3.sh" > "$T/M.out" 2>&1
+grep -q "pas de mise à jour récupérée" "$T/M.out" \
+  && echo "PREUVE : l'échec de téléchargement est dit à voix haute" \
+  || { echo "ECHEC : l'échec du fetch est resté muet"; tail -6 "$T/M.out"; exit 1; }
+grep -q "Détail : " "$T/M.out" \
+  && echo "PREUVE : la cause git réelle est affichée (plus jamais muette)" \
+  || { echo "ECHEC : aucune cause git affichée"; tail -6 "$T/M.out"; exit 1; }
+grep -q "version locale conservée" "$T/M.out" \
+  && echo "PREUVE : version locale conservée, rien n'est cassé" \
+  || { echo "ECHEC : la version locale n'est pas conservée proprement"; tail -6 "$T/M.out"; exit 1; }
+unset HERMES_FORK_URL
+
 echo ""
-echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)+(84)+(85)) : succès"
+echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)+(84)+(85)+(86)) : succès"

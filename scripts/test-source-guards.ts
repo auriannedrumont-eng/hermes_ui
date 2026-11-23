@@ -601,6 +601,32 @@ async function main() {
   check("harnais : le CAS L couvre origin faussé + branche dérivée",
     harn85.includes("CAS L : origin faussé + branche dérivée"));
 
+  console.log("[86] la preuve dans le « déjà fait », un fetch qui dit sa cause");
+  // Cas réel du 23/11 15:55 : le ps1 (85) tournait enfin (origin
+  // autoréparé) MAIS toujours aucune ligne de la preuve permanente (84) :
+  // elle vivait APRÈS la sortie idempotente « maison valide → return » —
+  // la leçon (69), vue une troisième fois. Et le fetch échouait en 13 s
+  // sans jamais dire pourquoi (« réseau ou connexion », muet).
+  const ps186 = read("desktop/hermes-ui.ps1");
+  const sh86 = read("desktop/hermes-ui.sh");
+  const harn86 = read("scripts/test-lanceur-certification.sh");
+  check("ps1 : la preuve permanente vit DANS la sortie idempotente (bien plus haut que l'installation)",
+    ps186.indexOf("le marqueur des dépendances ment") >= 0
+    && ps186.indexOf("le marqueur des dépendances ment") < ps186.indexOf("Avec le portable, PAS de venv"));
+  check("ps1 : le fetch raté est retenté SANS identifiants et affiche son détail",
+    ps186.includes("credential.helper=") && ps186.includes("ils sont périmés") && ps186.includes("Détail : {0}"));
+  check("ps1 : comparaison origin NORMALISÉE (un même dépôt n'est pas « ailleurs »)",
+    ps186.includes("-replace '\\.git/?$',''"));
+  check("sh : la preuve permanente vit DANS la sortie idempotente",
+    sh86.indexOf("le marqueur des dépendances ment") >= 0
+    && sh86.indexOf("le marqueur des dépendances ment") < sh86.indexOf("création de l'environnement python dédié"));
+  check("sh : le fetch raté est retenté SANS identifiants et affiche son détail",
+    sh86.includes("credential.helper=") && sh86.includes("ils sont périmés") && sh86.includes("Détail : $detailfetch"));
+  check("sh : comparaison origin NORMALISÉE",
+    sh86.includes("sed 's/\\.git$//;s/\\/$//'"));
+  check("harnais : le CAS M couvre le fetch muet",
+    harn86.includes("CAS M : GitHub injoignable"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

@@ -417,7 +417,10 @@ function Update-FromGit {
         Log "• mise a jour auto : ce dossier n'a pas de depot distant — origin est aligne sur le depot du projet."
         $r = Invoke-Git @('remote', 'add', 'origin', $fork)
         if ($r.Code -ne 0) { Log "  ATTENTION : alignement du depot distant impossible — mise a jour ignoree"; return }
-    } elseif ($r.Text.Trim() -ne $fork) {
+    } elseif ((($r.Text.Trim() -replace '\.git/?$','').TrimEnd('/').ToLower()) -ne (($fork -replace '\.git/?$','').TrimEnd('/').ToLower())) {
+        # ((86)) le test est NORMALISÉ (sans « .git » final, sans « / »
+        # traînant, casse unifiée) : un MÊME dépôt écrit différemment n'est
+        # pas « ailleurs » — seule la vraie divergence réaligne l'origin.
         Log ("  origin pointait ailleurs ({0}) — realigne sur le depot du projet." -f $r.Text.Trim())
         $r = Invoke-Git @('remote', 'set-url', 'origin', $fork)
         if ($r.Code -ne 0) { Log "  ATTENTION : realignement du depot distant impossible — mise a jour ignoree"; return }
@@ -432,9 +435,22 @@ function Update-FromGit {
     Write-MajLog "consultation de GitHub..."
     $r = Invoke-Git @('fetch', '--quiet', 'origin')
     if ($r.Code -ne 0) {
-        Log "  pas de mise a jour recuperee (reseau ou connexion GitHub) — version locale conservee"
-        Write-MajLog "GitHub injoignable (reseau ou connexion) — version locale conservee"
-        return
+        # ((86)) Des identifiants GitHub ENREGISTRÉS mais périmés peuvent
+        # seuls faire échouer le téléchargement d'un dépôt PUBLIC (GitHub
+        # refuse l'authentifiée au lieu de retomber sur l'anonyme). Deuxième
+        # essai SANS aucun credential helper, et l'échec final affiche SES
+        # dernières lignes — plus jamais un « réseau ou connexion » muet
+        # (cas réel du 23/11 15:55 : 13 secondes, aucune cause dite).
+        $r = Invoke-Git @('fetch', '--quiet', '-c', 'credential.helper=', 'origin')
+        if ($r.Code -eq 0) {
+            Log "  téléchargement réussi SANS vos identifiants enregistrés — ils sont périmés et bloquent GitHub. Remède : Panneau de configuration > Gestionnaire d'identifiants > Identifiants Windows > supprimez l'entrée git:https://github.com (le dépôt du projet est public ; le lanceur s'en servira sans eux)."
+            Write-MajLog "téléchargement réussi sans identifiants enregistrés — identifiants périmés à supprimer"
+        } else {
+            $det = (($r.Text -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' · ')
+            Log ("  pas de mise a jour recuperee (reseau ou connexion GitHub) — version locale conservee. Détail : {0}" -f $det)
+            Write-MajLog "GitHub injoignable — version locale conservée"
+            return
+        }
     }
     # ((85)) La comparaison porte sur origin/main EN EXPLICITE — plus jamais
     # sur la branche suivie (@{u}), qui peut pointer une reference morte.
@@ -1042,7 +1058,34 @@ function Install-AgentIntoHome {
             if ($headAvant -and ($houseHead -ne $headAvant)) { $agentChange = $true }
         }
     }
-    if ($valide -and (Test-Path $depsOk) -and -not $agentChange) { return }
+    # ((86)) Le « rien » idempotent doit PROUVER avant de sortir : même dans
+    # le cas « déjà fait », l'import de ruamel.yaml est re-testé (< 1 s). La
+    # leçon (69)/(84), vue une TROISIÈME fois : la preuve ((84)) vivait plus
+    # bas, APRÈS cette sortie — donc JAMAIS atteinte : cas réel du 23/11
+    # 15:55, boot après boot : aucune ligne, marqueur mensonger debout,
+    # 'ruamel' au lancement. Échec de la preuve → le marqueur est invalidé
+    # et le code CONTINUE vers l'installation, dans le bon python.
+    if ($valide -and (Test-Path $depsOk) -and -not $agentChange) {
+        $proofPy2 = $null; $pyPre2 = @()
+        if ($Script:PortablePython -and (Test-Path $Script:PortablePython)) { $proofPy2 = $Script:PortablePython }
+        else {
+            $venvPy2 = Join-Path $homeDir '.venv\Scripts\python.exe'
+            if (Test-Path $venvPy2) { $proofPy2 = $venvPy2 }
+            elseif (Test-Command 'py') { $proofPy2 = 'py'; $pyPre2 = @('-3') }
+            elseif (Test-Command 'python') { $proofPy2 = 'python' }
+        }
+        if ($proofPy2) {
+            & $proofPy2 @pyPre2 -c "import ruamel.yaml" 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Log ("• le marqueur des dépendances ment : ruamel.yaml ne s'importe pas dans le python qui lance l'agent ({0}) — invalidation, réinstallation immédiate." -f $proofPy2)
+                try { Remove-Item $depsOk -Force -ErrorAction SilentlyContinue } catch { }
+            } else {
+                return
+            }
+        } else {
+            return
+        }
+    }
     if ($valide -and $agentChange) {
         Log "• le code de l'agent a changé (mise à jour) — dépendances et certification refaites pour la nouvelle version."
         try {
