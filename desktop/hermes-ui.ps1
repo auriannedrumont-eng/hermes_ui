@@ -977,6 +977,57 @@ function Set-AgentHome {
     Log "• maison de l'agent : $DataHome (dans le dossier, (89)) — plus aucune dependance a la console de lancement."
 }
 
+# ((91)) INDEPENDANCE TOTALE d'avec toute autre installation Hermes de la
+# machine (loi posee le 24/11 : F:\hermes_web n'emprunte RIEN a F:\hermes).
+# Cas reel du 23/11 23:42 : le lanceur etait parti d'une console d'une AUTRE
+# installation Hermes — ses variables (HOME, USERPROFILE, APPDATA, NODE_PATH,
+# PLAYWRIGHT_BROWSERS_PATH, PORTABLE_ROOT, HERMES_OPTIONAL_SKILLS…) ont ete
+# heritees par le mini-service, l'agent et l'interface : les caches et
+# ecritures annexes partaient dans le .cache de l'autre installation, et un
+# spawn manuel depuis cette console a pu creer une instance HYBRIDE (notre
+# code + la maison de l'autre) qui a fauche notre agent vivant. Desormais le
+# lanceur ASSAINIT l'environnement de son propre processus avant tout spawn :
+#  - les variables d'identite qui doivent vivre DANS le dossier sont
+#    reecrites vers F:\hermes_web (cache, appdata, home utilisateur) ;
+#  - les variables heritees qui citent une autre racine Hermes sont EFFACEES
+#    (le mini-service et l'agent n'en ont pas besoin pour vivre) ;
+#  - PATH : les entrees d'une autre racine Hermes sont retirees (le python
+#    du dossier et le python portable passent AVANT tout python herite).
+function Reset-OwnEnvironment {
+    $root = $Root
+    $cache = Join-Path $root '.cache'
+    # 1) Identite : tout vivre dans le dossier (rien chez l'autre, rien chez C:)
+    $env:HERMES_HOME      = Join-Path $root 'data'
+    $env:HOME             = Join-Path $cache 'home'
+    $env:USERPROFILE      = Join-Path $cache 'home'
+    $env:APPDATA          = Join-Path $cache 'appdata'
+    $env:LOCALAPPDATA     = Join-Path $cache 'localappdata'
+    $env:NODE_PATH        = Join-Path $root 'node_modules'
+    $env:NPM_CONFIG_PREFIX= Join-Path $cache 'npm-prefix'
+    $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $cache 'playwright'
+    $env:HERMES_OPTIONAL_SKILLS   = Join-Path $root 'optional-skills'
+    foreach ($k in @('PORTABLE_ROOT','CACHE_DIR','RUNTIME_DIR','SRC_DIR','UV_PYTHON','VIRTUAL_ENV','SSL_CERT_FILE','DSH_HOME','HERMES_REAL_HOME','AGENT_BROWSER_EXECUTABLE_PATH','PYTHONPATH')) {
+        Remove-Item ("Env:" + $k) -ErrorAction SilentlyContinue
+    }
+    # 2) PATH : retire les entrees d'une autre racine Hermes (F:\hermes\...
+    #    mais JAMAIS F:\hermes_web) pour que ni le python, ni node, ni un
+    #    binaire quelconque de l'autre installation ne puisse repondre.
+    $clean = New-Object System.Collections.Generic.List[string]
+    foreach ($e in ($env:PATH -split ';')) {
+        if (-not $e) { continue }
+        $lc = $e.ToLower()
+        if ($lc -match 'hermes' -and $lc -notmatch 'hermes_web') { continue }
+        $clean.Add($e)
+    }
+    # le python portable du dossier passe devant tout le reste
+    if ($Script:PortablePython) {
+        $portDir = Split-Path -Parent $Script:PortablePython
+        $clean.Insert(0, $portDir)
+    }
+    $env:PATH = ($clean -join ';')
+    Log "• environnement assaini (91) : identite reecrite dans le dossier, heritages d'une autre installation Hermes effaces."
+}
+
 # ── Demarrage des composants ────────────────────────────────────────────
 function Start-Chat {
     if (Test-ChatHealthy) { Log "• mini-service deja actif sur :$ChatPort (adopte)"; State-Set 'CHAT_OWNED' 0; return $true }
@@ -2090,6 +2141,11 @@ function Do-Start {
 
     # (77) Installation de l'agent — ICI et plus tôt (voir note à Update-FromGit).
     # Idempotente : déjà installée avec dépendances à jour, sortie immédiate.
+    # ((91)) Assainissement AVANT l'installation : les caches pip/npm de
+    # l'installation doivent vivre dans le dossier, pas dans le .cache d'une
+    # autre installation Hermes herite de la console de lancement.
+    Reset-OwnEnvironment
+
     Install-AgentIntoHome
 
     # Ticks du script APRES l'installation portable : Update-FromGit peut y
