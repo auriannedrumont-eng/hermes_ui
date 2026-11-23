@@ -1082,7 +1082,8 @@ function Install-AgentIntoHome {
     # Le python système sert aussi à vos autres installations Hermes : leurs
     # dépendances se marchent dessus (la panne du 23/11). La maison a donc
     # SON python (.venv, créé une fois), SES dépendances (installées dedans,
-    # tant que agent-deps.ok n'existe pas, au plus une fois par heure), et
+    # tant que agent-deps.ok n'existe pas — retentées À CHAQUE démarrage
+    # après un échec, ((83)) : plus aucun verrou horaire), et
     # doit PROUVER qu'elle s'allume : allumage d'essai borné (90 s) avec
     # sonde réelle du port 9120 → marqueur agent-certifie.ok. Échec de venv
     # → repli honnête sur le python système (comme (67)), cause dite.
@@ -1152,13 +1153,11 @@ function Install-AgentIntoHome {
         } catch { }
     }
     $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
-    $depsDejaTentees = $false
-    if (Test-Path $depsFlag) {
-        try {
-            $lastDeps = [datetime]::Parse((Get-Content $depsFlag -Raw).Trim())
-            if (((Get-Date) - $lastDeps).TotalHours -lt 1) { $depsDejaTentees = $true }
-        } catch { }
-    }
+    # ((83)) FINI le verrou « au plus tôt dans 1 h » : après un échec, tout
+    # démarrage RE-TENTE l'installation — l'ancien verrou figeait la panne
+    # pendant que l'utilisatrice relançait deux fois de suite (cas réel du
+    # 23/11 : deux relances, toujours 'ruamel'). Le flag reste écrit comme
+    # horodatage de la dernière tentative, jamais comme interdit.
     $venvPy = Join-Path $homeDir '.venv\Scripts\python.exe'
     $venvOk = Test-Path $venvPy
     # Le marqueur « venv » sans venv réel ne ment pas deux fois : on repart.
@@ -1169,7 +1168,7 @@ function Install-AgentIntoHome {
     }
     # Avec le portable, PAS de venv : l'isolation (D1) est le portable lui-
     # même — un python qui vit dans le dossier ne peut marcher sur personne.
-    if ($pyKind -ne 'portable' -and -not $venvOk -and -not $depsDejaTentees) {
+    if ($pyKind -ne 'portable' -and -not $venvOk) {
         try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
         Log "• création de l'environnement python dédié de l'agent (.venv — isolé du python système)…"
         $venvJob = Start-Job -ScriptBlock { param($p, $pre, $d) & $p @pre -m venv $d 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pyCmd, $pyPre, (Join-Path $homeDir '.venv')
@@ -1192,30 +1191,63 @@ function Install-AgentIntoHome {
     # partage rien — un ancien venv traînant du repli système est ignoré) ;
     # dans l'environnement dédié s'il existe, sinon système (repli dit
     # clairement). Marquées « réussies » uniquement sur code 0.
-    if (-not (Test-Path $depsOk) -and -not $depsDejaTentees) {
+    if (-not (Test-Path $depsOk)) {
         $venvActif = ($pyKind -ne 'portable') -and $venvOk
         $pipCmd = if ($venvActif) { $venvPy } else { $pyCmd }
         $pipPre = if ($venvActif) { @() } else { $pyPre }
         try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
         Log ("• installation des dépendances python de l'agent ({0}, 10 min max — 45 paquets chez l'amont)…" -f $(if ($venvActif) { 'environnement dédié' } elseif ($pyKind -eq 'portable') { 'python portable du dossier' } else { 'python système — repli' }))
+        # ((83)) Filet : sans l'outil pip, « python -m pip » échoue sans rien
+        # dire d'utile — on le dit AVANT, et le lanceur reposera pip d'abord
+        # au prochain démarrage (Ensure-PortableSetup retente toujours).
+        $pipChk = (& $pipCmd @pipPre -m pip --version 2>&1 | Out-String)
+        if ($pipChk -notmatch 'pip \d') {
+            Log "  ATTENTION : l'outil d'installation (pip) manque dans le python choisi — le lanceur le reposera au prochain démarrage ; dépendances reportées, aucun verrou posé."
+            return
+        }
         # Le job renvoie CODE=<sortie pip> : on ne marque « réussi » que si pip
         # sort vraiment en 0 — sinon nouvelle tentative au prochain démarrage.
         $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pipCmd, $pipPre, $req
         if (-not (Wait-Job $pipJob -Timeout 600)) {
+            # ((83)) Le délai montre SES dernières lignes reçues, et ne
+            # verrouille plus : le prochain démarrage retente tout de suite.
+            $partial = ''
+            try { $partial = (Receive-Job $pipJob 2>&1 | Out-String).Trim() } catch { }
             Stop-Job $pipJob; Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
-            Log "  ATTENTION : dépendances non terminées en 10 min — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+            $pJoin = (@($partial -split '\r?\n' | Where-Object { $_.Trim() } | Select-Object -Last 4) -join ' | ')
+            if ($pJoin) { if ($pJoin.Length -gt 300) { $pJoin = $pJoin.Substring(0, 300) + '…' }; Log "  dernières lignes reçues : $pJoin" }
+            Log "  ATTENTION : dépendances non terminées en 10 min — nouvelle tentative au prochain démarrage."
+            try { Remove-Item $depsFlag -Force -ErrorAction SilentlyContinue } catch { }
             return
         }
         $pipOut = (Receive-Job $pipJob 2>&1 | Out-String).Trim()
         Remove-Job $pipJob -ErrorAction SilentlyContinue
         $code = if ($pipOut -match 'CODE=(\d+)\s*$') { $Matches[1] } else { '1' }
         if ($code -eq '0') {
+            # ((83)) PREUVE PAR IMPORT : pip peut dire 0 sans que le python
+            # importe vraiment (fichier ._pth, paquet tronqué, cache pip
+            # mensonger) — la cause 'ruamel' n'est déclarée réglée que si
+            # le module s'importe RÉELLEMENT dans CE python.
+            $proof = (& $pipCmd @pipPre -c "import ruamel.yaml" 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) {
+                $proofShort = if ($proof) { $proof.Substring(0, [Math]::Min(200, $proof.Length)) } else { 'sans détail' }
+                Log "  ATTENTION : l'installation dit ok mais l'import de ruamel.yaml échoue ($proofShort) — retenté au prochain démarrage."
+                try { Remove-Item $depsFlag -Force -ErrorAction SilentlyContinue } catch { }
+                return
+            }
             try { Set-Content $depsOk $(if ($venvActif) { 'venv' } elseif ($pyKind -eq 'portable') { 'portable' } else { 'systeme' }) } catch { }
-            Log "  dépendances installées — l'agent peut démarrer."
+            Log "  dépendances installées et PROUVÉES par import (ruamel.yaml) — l'agent peut démarrer."
             # Le HEAD actuel devient la base des dépendances (réussies).
             if ($houseHead) { try { Set-Content (Join-Path $RuntimeDir 'agent-deps-head.txt') $houseHead -Encoding ASCII } catch { } }
         } else {
-            Log ("  ATTENTION : installation des dépendances échouée (code {0}) — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)." -f $code)
+            # ((83)) L'échec montre SES dernières lignes (pip écrit ses
+            # erreurs à la fin) et ne verrouille plus : le prochain
+            # démarrage retente — l'ancien « au plus tôt dans 1 h » figeait
+            # la panne pendant que l'utilisatrice relançait deux fois.
+            $errJoin = (@($pipOut -split '\r?\n' | Where-Object { $_.Trim() } | Select-Object -Last 6) -join ' | ')
+            if ($errJoin) { if ($errJoin.Length -gt 400) { $errJoin = $errJoin.Substring(0, 400) + '…' }; Log "  détail de l'échec pip : $errJoin" }
+            Log ("  ATTENTION : installation des dépendances échouée (code {0}) — nouvelle tentative au prochain démarrage." -f $code)
+            try { Remove-Item $depsFlag -Force -ErrorAction SilentlyContinue } catch { }
             return
         }
     }
@@ -1726,7 +1758,7 @@ function Phase-Prerequis {
     } elseif ($depsOkF) {
         Set-SanteAgent 'installé (dépendances réussies, pas encore certifié)' ''
     } else {
-        Set-SanteAgent 'installé sans dépendances complètes' $(if ($pyCmd) { 'les dépendances seront retentées au prochain démarrage (au plus tôt dans 1 h)' } else { 'python absent — installez Python puis relancez' })
+        Set-SanteAgent 'installé sans dépendances complètes' $(if ($pyCmd) { 'les dépendances seront retentées au prochain démarrage' } else { 'python absent — installez Python puis relancez' })
     }
     Write-Sante -pret 'en cours'
 }

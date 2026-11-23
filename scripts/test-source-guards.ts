@@ -529,6 +529,30 @@ async function main() {
   check("carte : le bouton CLI est explicitement dit non pertinent pour cette cause",
     motorCardUi.includes("n&apos;y répond pas"));
 
+  console.log("[83] deps : plus de verrou horaire, échec détaillé, preuve par import");
+  // Cas réel du 23/11 : deux relances rapprochées, toujours « ruamel » —
+  // l'ancien verrou « au plus tôt dans 1 h » sautait chaque nouvelle
+  // tentative, le détail de l'échec pip était jeté, et « installées »
+  // pouvait être écrit sans qu'aucun module ne s'importe vraiment.
+  const ps183 = read("desktop/hermes-ui.ps1");
+  const sh83 = read("desktop/hermes-ui.sh");
+  const ps1Deps = ps183.split("\n").filter((l) => /dépendances/i.test(l)).join("\n");
+  const shDeps = sh83.split("\n").filter((l) => /dépendances/i.test(l)).join("\n");
+  check("ps1 : plus AUCUN verrou horaire sur les dépendances",
+    !ps183.includes("depsDejaTentees") && !ps1Deps.includes("au plus tôt dans 1 h"));
+  check("ps1 : l'échec pip montre ses dernières lignes",
+    ps183.includes("détail de l'échec pip") && ps183.includes("Select-Object -Last 6"));
+  check("ps1 : dépendances PROUVÉES par import de ruamel.yaml",
+    ps183.includes('-c "import ruamel.yaml"') && ps183.includes("PROUVÉES par import"));
+  check("ps1 : filet pip absent (testé avant l'installation)",
+    ps183.includes("-m pip --version"));
+  check("sh : plus AUCUN verrou horaire sur les dépendances",
+    !sh83.includes("depsrecent") && !shDeps.includes("au plus tôt dans 1 h"));
+  check("sh : l'échec pip montre la fin du journal",
+    sh83.includes("Dernières lignes pip") && sh83.includes("tail -n 3"));
+  check("sh : dépendances PROUVÉES par import de ruamel.yaml",
+    sh83.includes('import ruamel.yaml" >/dev/null') && sh83.includes("PROUVÉES par import"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

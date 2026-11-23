@@ -35,6 +35,20 @@ if [ "$1" = "-m" ] && [ "$2" = "hermes_cli.main" ]; then
   fi
   exec "${REAL_PY3:-python3}" -c "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',9120)); s.listen(1); time.sleep(300)"
 fi
+# ((83)) pip simulé : TRIAL_PIP=1 → échec parlant — le lanceur doit montrer le détail
+if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
+  if [ "${TRIAL_PIP:-0}" = "1" ]; then
+    echo "ERROR: Could not find a version that satisfies the requirement ruamel.yaml==9.9.9"
+    echo "DETAIL-PIP-ECHEC-FACTICE"
+    exit 1
+  fi
+  exit 0
+fi
+# ((83)) la preuve par import est contrôlée : TRIAL_PROOF=1 → échec
+if [ "$1" = "-c" ] && [ "$2" = "import ruamel.yaml" ]; then
+  [ "${TRIAL_PROOF:-0}" = "1" ] && exit 1
+  exit 0
+fi
 # ((80)) la génération des dépendances (-c tomllib) passe au VRAI python
 if [ "$1" = "-c" ]; then exec "${REAL_PY3:-python3}" "$@"; fi
 if [ "$1" = "-m" ]; then exit 0; fi
@@ -47,7 +61,19 @@ PYEOF
   chmod +x "$3/bin/python"
   exit 0
 fi
-if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then exit 0; fi
+if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
+  if [ "${TRIAL_PIP:-0}" = "1" ]; then
+    echo "ERROR: Could not find a version that satisfies the requirement ruamel.yaml==9.9.9"
+    echo "DETAIL-PIP-ECHEC-FACTICE"
+    exit 1
+  fi
+  exit 0
+fi
+# ((83)) la preuve par import est contrôlée : TRIAL_PROOF=1 → échec
+if [ "$1" = "-c" ] && [ "$2" = "import ruamel.yaml" ]; then
+  [ "${TRIAL_PROOF:-0}" = "1" ] && exit 1
+  exit 0
+fi
 # ((80)) la génération des dépendances (-c tomllib) passe au VRAI python
 if [ "$1" = "-c" ]; then exec "${REAL_PY3:-python3}" "$@"; fi
 exit 0
@@ -93,6 +119,10 @@ echo "Python was not found; run without arguments to install from the Microsoft 
 exit 9009
 EOF
 chmod +x "$TD/python3"
+# ((83)) Le poste « sans python » a AUSSI l'alias « python » (les deux
+# raccourcis du magasin) — sinon un vrai python d'un venv système traînant
+# serait accepté et le cas ne simulerait plus rien.
+cp "$TD/python3" "$TD/python"
 mkdir -p "$TD/runtime" "$TD/root"
 ROOT="$TD/root" RUNTIME_DIR="$TD/runtime" SANTE_FILE="$TD/runtime/sante.json" PATH="$TD:$PATH" \
   HERMES_PYTHON_URL="file:///inexistant-hermes-portable.tar.gz" \
@@ -104,6 +134,10 @@ else
 fi
 # Et le provisionnement refuse de tenter quoi que ce soit avec ce faux python ;
 # le portable est tenté (loi 8) mais le réseau simulé refuse → honnête échec.
+# ((83)) État propre pour la 2e partie : les CAS A-C laissent agent-deps.ok,
+# et l'idempotence ((63)/(80)) de la fonction sortirait EN SILENCE avant
+# d'atteindre le provisionnement — le cas D part de « deps jamais réussies ».
+rm -f "$T/runtime/agent-deps.ok" "$T/runtime/agent-deps.flag" "$T/runtime/agent-certifie.ok" "$T/runtime/agent-certif.flag" "$T/runtime/agent-deps-head.txt"
 export ROOT="$T/root" RUNTIME_DIR="$T/runtime" LAUNCHER_LOG="$T/launcher.log" REAL_PY3="$REAL_PY3"
 PATH="$TD:$PATH" HERMES_PYTHON_URL="file:///inexistant-hermes-portable.tar.gz" TRIAL_MODE=listen bash -c "$HARNESS" "$T" 2>&1 | grep -q "aucun VRAI python" \
   && echo "PREUVE : le provisionnement refuse le faux python et donne le remède" \
@@ -192,6 +226,11 @@ EOF
 # venv fake (comme le CAS A) : -c passe au vrai python (tomllib), -m pip → OK.
 cat > "$TH/root/hermes-agent/.venv/bin/python" <<'EOF'
 #!/usr/bin/env bash
+# ((83)) la preuve par import est contrôlée : TRIAL_PROOF=1 → échec
+if [ "$1" = "-c" ] && [ "$2" = "import ruamel.yaml" ]; then
+  [ "${TRIAL_PROOF:-0}" = "1" ] && exit 1
+  exit 0
+fi
 if [ "$1" = "-c" ]; then exec "${REAL_PY3:-python3}" "$@"; fi
 if [ "$1" = "-m" ] && [ "$2" = "hermes_cli.main" ]; then
   exec "${REAL_PY3:-python3}" -c "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',9120)); s.listen(1); time.sleep(300)"
@@ -216,5 +255,36 @@ fi
   || { echo "ECHEC : deps non marquées après génération"; rm -rf "$TH"; exit 1; }
 rm -rf "$TH"
 
+echo "── CAS I : échec pip → détail affiché, AUCUN verrou, la relance retente ((83)) ──"
+# Cas réel du 23/11 : deux relances rapprochées, toujours 'ruamel' —
+# l'ancien verrou « au plus tôt dans 1 h » sautait chaque nouvelle
+# tentative, et le détail de l'échec pip était jeté.
+# ((83)) Rétablir les exports (le CAS H les a écrasés vers son $TH supprimé).
+export ROOT="$T/root" RUNTIME_DIR="$T/runtime" LAUNCHER_LOG="$T/launcher.log" REAL_PY3="$REAL_PY3" PATH="$T:$PATH"
+rm -f "$T/runtime/agent-deps.ok" "$T/runtime/agent-certifie.ok" "$T/runtime/agent-certif.flag" "$T/runtime/agent-deps.flag" "$T/runtime/agent-deps-head.txt"
+TRIAL_PIP=1 TRIAL_MODE=listen bash -c "$HARNESS" "$T" | grep -q "DETAIL-PIP-ECHEC-FACTICE" \
+  && echo "PREUVE : le détail de l'échec pip est affiché à l'écran" \
+  || { echo "ECHEC : l'échec pip est muet (détail jeté)"; exit 1; }
+[ -f "$T/runtime/agent-deps.flag" ] \
+  && { echo "ECHEC : verrou présent après échec — la relance serait sautée"; exit 1; } \
+  || echo "PREUVE : aucun verrou après échec"
+TRIAL_MODE=listen bash -c "$HARNESS" "$T" >/dev/null 2>&1
+[ -f "$T/runtime/agent-deps.ok" ] \
+  && echo "PREUVE : la relance immédiate a retenté et réussi (deps.ok écrit)" \
+  || { echo "ECHEC : la relance n'a pas retenté (verrou fantôme ?)"; exit 1; }
+sleep 1
+pkill -f "bind..127\.0\.0\.1.,9120" 2>/dev/null || true
+
+echo "── CAS J : pip dit ok mais l'import échoue → PAS de marqueur ((83)) ──"
+rm -f "$T/runtime/agent-deps.ok" "$T/runtime/agent-certifie.ok" "$T/runtime/agent-certif.flag" "$T/runtime/agent-deps.flag" "$T/runtime/agent-deps-head.txt"
+TRIAL_PROOF=1 TRIAL_MODE=listen bash -c "$HARNESS" "$T" | grep -q "l'import de ruamel.yaml échoue" \
+  && echo "PREUVE : la preuve par import est exigée et parlante" \
+  || { echo "ECHEC : la preuve par import n'est pas exigée"; exit 1; }
+[ -f "$T/runtime/agent-deps.ok" ] \
+  && { echo "ECHEC : deps.ok écrit sans preuve d'import"; exit 1; } \
+  || echo "PREUVE : aucun marqueur sans la preuve"
+sleep 1
+pkill -f "bind..127\.0\.0\.1.,9120" 2>/dev/null || true
+
 echo ""
-echo "Épreuve lanceur refonte (69+70+(71)+72+(80)) : succès"
+echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)) : succès"

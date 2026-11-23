@@ -255,7 +255,7 @@ phase_prerequis() {
     set_sante_agent "installé (dépendances réussies, pas encore certifié)" ""
   else
     if [ -n "$pycmd" ]; then
-      set_sante_agent "installé sans dépendances complètes" "les dépendances seront retentées au prochain démarrage (au plus tôt dans 1 h)"
+      set_sante_agent "installé sans dépendances complètes" "les dépendances seront retentées au prochain démarrage"
     else
       set_sante_agent "installé sans dépendances complètes" "python absent — installez Python puis relancez"
     fi
@@ -537,7 +537,7 @@ install_agent_fresh() {
   # test « requirements.txt absent → rien installer » laissait l'agent
   # SANS AUCUNE dépendance (le dépôt amont n'a pas de requirements.txt,
   # cas réel du 23/11 13:44 : ModuleNotFoundError 'ruamel').
-  local pycmd="" pyver="" venvpy="" depsrecent=0
+  local pycmd="" pyver="" venvpy=""
   if command -v python3 >/dev/null 2>&1; then pycmd="python3"
   elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
   if [ -n "$pycmd" ]; then
@@ -579,15 +579,16 @@ install_agent_fresh() {
   # Un marqueur « sans-requirements » (ou vide : l'ancien sh) est périmé
   # depuis le (80) — la source existe maintenant, on retente pour de vrai.
   if [ -f "$depsok" ] && ! grep -qs . "$depsok"; then rm -f "$depsok" 2>/dev/null || true; fi
-  if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
-    depsrecent=1
-  fi
+  # ((83)) FINI le verrou horaire : après un échec, chaque démarrage
+  # RE-TENTE l'installation — l'ancien « au plus tôt dans 1 h » figeait la
+  # panne pendant que l'utilisatrice relançait deux fois de suite (cas
+  # réel du 23/11 : deux relances, toujours 'ruamel').
   venvpy="$maison/.venv/bin/python"
   # Le marqueur « venv » sans venv réel ne ment pas deux fois : on repart.
   if [ -f "$depsok" ] && grep -q venv "$depsok" 2>/dev/null && [ ! -x "$venvpy" ]; then
     rm -f "$depsok" 2>/dev/null || true
   fi
-  if [ ! -x "$venvpy" ] && [ "$depsrecent" = "0" ]; then
+  if [ ! -x "$venvpy" ]; then
     touch "$depsflag" 2>/dev/null || true
     log "• création de l'environnement python dédié de l'agent (.venv — isolé du python système)…"
     if command -v timeout >/dev/null 2>&1; then
@@ -603,7 +604,7 @@ install_agent_fresh() {
   fi
   # Dépendances : dans l'environnement dédié s'il existe, sinon système
   # (repli dit clairement). Marquées « réussies » uniquement sur code 0.
-  if [ ! -f "$depsok" ] && [ "$depsrecent" = "0" ]; then
+  if [ ! -f "$depsok" ]; then
     touch "$depsflag" 2>/dev/null || true
     local piprc=1
     if [ -n "$venvpy" ]; then
@@ -628,18 +629,29 @@ install_agent_fresh() {
       fi
     fi
     if [ "$piprc" = "0" ]; then
-      if [ -n "$venvpy" ]; then printf 'venv' > "$depsok" 2>/dev/null || touch "$depsok"
-      else printf 'systeme' > "$depsok" 2>/dev/null || touch "$depsok"; fi
-      log "  dépendances installées — l'agent peut démarrer."
-      # Le HEAD actuel devient la base des dépendances (réussies).
-      [ -n "$househead" ] && printf '%s' "$househead" > "$RUNTIME_DIR/agent-deps-head.txt" 2>/dev/null || true
+      # ((83)) PREUVE PAR IMPORT : pip peut dire 0 sans que le python
+      # importe vraiment (paquet tronqué, cache mensonger) — la cause
+      # 'ruamel' n'est déclarée réglée que si le module s'importe.
+      if "${venvpy:-python3}" -c "import ruamel.yaml" >/dev/null 2>&1; then
+        if [ -n "$venvpy" ]; then printf 'venv' > "$depsok" 2>/dev/null || touch "$depsok"
+        else printf 'systeme' > "$depsok" 2>/dev/null || touch "$depsok"; fi
+        log "  dépendances installées et PROUVÉES par import (ruamel.yaml) — l'agent peut démarrer."
+        # Le HEAD actuel devient la base des dépendances (réussies).
+        [ -n "$househead" ] && printf '%s' "$househead" > "$RUNTIME_DIR/agent-deps-head.txt" 2>/dev/null || true
+      else
+        log "  ATTENTION : l'installation dit ok mais l'import de ruamel.yaml échoue — retenté au prochain démarrage."
+        rm -f "$depsflag" 2>/dev/null || true
+        return 0
+      fi
     else
-      log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+      # ((83)) L'échec montre SES dernières lignes (le journal pip complet
+      # vit dans LAUNCHER_LOG) et ne verrouille plus : le prochain
+      # démarrage retente.
+      log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage. Dernières lignes pip :"
+      tail -n 3 "$LAUNCHER_LOG" 2>/dev/null | cut -c1-200 | sed 's/^/    /'
+      rm -f "$depsflag" 2>/dev/null || true
       return 0
     fi
-  elif [ ! -f "$depsok" ]; then
-    log "• dépendances de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
-    return 0
   fi
   # ── CERTIFICATION (refonte (69) D2) : la gateway doit PROUVER qu'elle
   # répond — allumage d'essai borné (90 s), sonde réelle du 9120. Port déjà
