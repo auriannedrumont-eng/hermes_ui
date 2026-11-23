@@ -50,6 +50,10 @@ export interface StoreMessagesMethods {
     rounds: number | null,
     config: ModeConfig | null,
   ): ConversationMeta | null;
+  /** Chantier sessions natives (75) : identifiant de la session moteur
+    * rattachée à la conversation (API REST /api/sessions du moteur). */
+  getConversationMotorSession(id: string): string | null;
+  setConversationMotorSession(id: string, motorSessionId: string): void;
   setPinned(id: string, pinned: boolean): ConversationMeta | null;
   touchConversation(id: string, title?: string): ConversationMeta | null;
   getMessages(conversationId: string): ChatMessage[];
@@ -396,6 +400,24 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
           id,
         );
       return this.getConversation(id);
+    },
+
+    /** Sessions natives (75) : lecture de la liaison conversation → session
+      * moteur (null tant que la bascule REST n'a pas lié la conversation). */
+    getConversationMotorSession(id: string): string | null {
+      const r = this.db
+        .query("SELECT motor_session_id FROM conversations WHERE id = ?")
+        .get(id) as { motor_session_id: string | null } | null;
+      return r?.motor_session_id ?? null;
+    },
+
+    /** Sessions natives (75) : écriture de la liaison. L'identifiant est
+      * déterministe (`ui-<conversationId>`) : la ligne moteur est créée une
+      * fois par conversation et jamais renommée. */
+    setConversationMotorSession(id: string, motorSessionId: string): void {
+      this.db
+        .query("UPDATE conversations SET motor_session_id = ? WHERE id = ?")
+        .run(motorSessionId, id);
     },
 
     /** Épingle / détache une conversation (remonte en haut de la liste). */

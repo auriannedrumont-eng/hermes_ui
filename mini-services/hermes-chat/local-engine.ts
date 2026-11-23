@@ -32,6 +32,13 @@ export interface TurnRequest {
   /** Instructions système complètes du tour (base + F-11 + F-19, composées
    *  par le service) — replaces le prompt de base si fournies. */
   systemPrompt?: string | null;
+  /** Chantier sessions natives (75) : identifiant de la session moteur
+   *  (colonne conversations.motor_session_id). Présent → le tour gateway
+   *  tente le chemin REST /api/sessions/{id}/chat/stream (le moteur porte
+   *  l'historique de SA session) ; à la moindre erreur avant premier
+   *  delta, repli instantané sur le WebSocket — même moteur, jamais un
+   *  autre. Absent → comportement inchangé. */
+  motorSessionId?: string | null;
 }
 
 const SYSTEM_PROMPT = `Tu es Hermes, l'assistant au volant de l'interface web « Hermes Web » — un client de chat pour l'agent Hermes de Nous Research (https://github.com/NousResearch/hermes-agent).

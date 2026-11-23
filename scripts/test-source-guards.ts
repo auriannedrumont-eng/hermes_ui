@@ -323,6 +323,34 @@ async function main() {
   check("schéma : la colonne de correspondance est une migration douce (base locale intacte)",
     schemaF.includes('softAlter(db, "conversations", "motor_session_id TEXT")'));
 
+  console.log("[15] sessions natives : la bascule REST avec filet WS ((75))");
+  // La bascule est sûre par construction : REST d'abord, WebSocket du MÊME
+  // moteur en repli à toute erreur avant premier delta ; la liaison est
+  // idempotente (201/409), jamais bloquante (échec → null → WS inchangé) ;
+  // le store local écrit la liaison, jamais la base du moteur (qui ne
+  // reçoit que POST /api/sessions et /chat/stream du contrat amont).
+  const mrF = read("mini-services/hermes-chat/motor-rest.ts");
+  const runTurn = read("mini-services/hermes-chat/hermes-connector.ts");
+  const runnerF = read("mini-services/hermes-chat/turn-runner.ts");
+  check("connector : REST tenté puis WS en repli, dans cet ordre, même moteur",
+    runTurn.indexOf("runRestTurn(") < runTurn.indexOf("return await this.runGatewayTurn(req, cb)") &&
+      runTurn.includes("MÊME moteur, jamais un") &&
+      runTurn.includes("restTurnCandidate(req)"));
+  check("connector : REST refusé pour les tours avec pièces jointes",
+    runTurn.includes("!req.motorSessionId || req.attachments?.length"));
+  check("liaison : idempotente (201 OU 409) et non bloquante (échec → null)",
+    mrF.includes("res.ok || res.status === 409") &&
+      runnerF.includes("await ensureConversationMotorLink(") &&
+      mrF.includes("if (!ok)") && mrF.includes("return null"));
+  check("liaison : écrit la base LOCALE, jamais la base du moteur",
+    mrF.includes("store.setConversationMotorSession(conversationId, sessionId)") &&
+      mrF.includes("DELETE") === false && mrF.includes("PATCH") === false);
+  check("moteur : seuls POST /api/sessions et /chat/stream sont appelés",
+    mrF.includes("/api/sessions`") && mrF.includes("/chat/stream`") &&
+      mrF.includes("/messages") === false && mrF.includes("/fork") === false);
+  check("stop utilisateur : partiel rendu sans repli (pas de travail relancé)",
+    mrF.includes("signal.aborted") && runTurn.includes("cb.signal.aborted"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

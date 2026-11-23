@@ -16,6 +16,8 @@ import { catalogModelsResult } from "./models";
 import type { LlmPoolApi, PoolTurnResult, TurnUsage } from "./llm-pool";
 import type { Attachment, GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./local-engine";
+import { runRestTurn } from "./motor-rest";
+import { trace } from "./trace";
 
 // URL par défaut : l'agent Hermes lancé localement (gateway/run_api.py).
 // Priorité : interface (Paramètres → Système) > HERMES_GATEWAY_URL > défaut.
@@ -285,9 +287,66 @@ export class HermesConnector {
     return this.mode === "gateway";
   }
 
+  /** Bascule REST (75) : un candidat existe si la conversation est liée à
+   *  une session moteur et que le tour n'emporte pas de pièces jointes. */
+  private restTurnCandidate(req: TurnRequest): { base: string; sessionId: string } | null {
+    if (!req.motorSessionId || req.attachments?.length || !this.gatewayUrl) return null;
+    return { base: toHttpBase(this.gatewayUrl), sessionId: req.motorSessionId };
+  }
+
   async runTurn(req: TurnRequest, cb: TurnCallbacks): Promise<TurnOutcome> {
     await this.reprobeIfOffline();
     if (this.mode === "gateway" && this.gatewayUrl) {
+      // Bascule sessions natives (75) : conversation liée au moteur + tour
+      // sans pièces jointes (contrat multimodal REST non éprouvé) → le tour
+      // tente le chemin REST /api/sessions/{id}/chat/stream — le moteur
+      // porte alors l'historique de SA session. Toute erreur AVANT le
+      // premier delta replie sur le WebSocket : MÊME moteur, jamais un
+      // autre (la loi du chemin unique vise un autre moteur ; ici seul le
+      // transport change, pas le cerveau).
+      const rest = this.restTurnCandidate(req);
+      if (rest) {
+        try {
+          const out = await runRestTurn(
+            rest.base,
+            this.gatewayToken,
+            rest.sessionId,
+            {
+              message: req.content,
+              ...(req.modelId ? { model: req.modelId } : {}),
+              ...(req.systemPrompt ? { system_message: req.systemPrompt } : {}),
+            },
+            {
+              onDelta: cb.onDelta,
+              onReasoning: cb.onReasoning,
+              onStatus: cb.onStatus,
+              onToolEvent: cb.onToolEvent,
+            },
+            cb.signal,
+          );
+          return {
+            content: out.content,
+            reasoning: out.reasoning,
+            model: req.model || "hermes (gateway)",
+            engine: "gateway",
+          };
+        } catch (err) {
+          if (cb.signal.aborted) {
+            // Stop utilisateur avant tout delta : partiel (vide) rendu —
+            // pas de repli qui relancerait le travail interrompu.
+            return {
+              content: "",
+              reasoning: "",
+              model: req.model || "hermes (gateway)",
+              engine: "gateway",
+            };
+          }
+          trace(
+            "motor-rest",
+            `REST indisponible (${err instanceof Error ? err.message : String(err)}) — repli WebSocket, même moteur`,
+          );
+        }
+      }
       // Chemin unique du chat : la gateway répond, ou l'erreur est affichée
       // telle quelle — jamais de repli silencieux vers un autre moteur.
       return await this.runGatewayTurn(req, cb);

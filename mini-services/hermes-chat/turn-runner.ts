@@ -6,7 +6,8 @@
 // fait aucun câblage réseau.
 import type { Server } from "socket.io";
 import type { Store } from "./store";
-import type { HermesConnector } from "./hermes-connector";
+import { toHttpBase, type HermesConnector } from "./hermes-connector";
+import { ensureConversationMotorLink } from "./motor-rest";
 import { runWebSearch, webSearchSection, type WebSource } from "./web-search";
 import { modelLabel, DEFAULT_MODEL_ID } from "./models";
 import {
@@ -775,6 +776,26 @@ const runAssistantTurn = async (
         provider: wc.provider,
       };
     } else {
+      // Bascule sessions natives (75) : lie la conversation à une session
+      // moteur (id déterministe `ui-<conversationId>`, création idempotente
+      // 201/409) puis passe l'identifiant — le tour gateway tente alors le
+      // chemin REST (le moteur porte l'historique de SA session) et replie
+      // sur le WebSocket à la moindre erreur avant premier delta. Jamais
+      // bloquant : échec de liaison → null → WS inchangé, comme avant.
+      const motorSessionId =
+        connector.mode === "gateway" && connector.gatewayUrl
+          ? await ensureConversationMotorLink(
+              store,
+              toHttpBase(connector.gatewayUrl),
+              connector.gatewayToken,
+              conversationId,
+              // Le prompt de conversation gateway (même expression que le
+              // tour) : posé à la création de la session, renvoyé à jour
+              // dans le body de chaque tour REST (system_message).
+              store.getConversationPrompt(conversationId)?.content ?? null,
+              controller.signal,
+            )
+          : null;
       result = await connector.runTurn(
       {
         content: opts.content,
@@ -782,6 +803,7 @@ const runAssistantTurn = async (
         model,
         modelId: turnModelId,
         attachments,
+        motorSessionId,
         // Réglages du tour : effort/permissions du composer + mémoire
         // utilisateur (F-18) — les notes ne partent que si la mémoire est
         // active (mode gateway ; en local elles vivent dans systemPrompt).
