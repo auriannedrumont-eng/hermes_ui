@@ -186,6 +186,26 @@ async function main() {
   check("gitignore : la copie fraîche reste hors versionnage",
     read(".gitignore").includes("/hermes-agent/"));
 
+  console.log("[9] manifeste de santé : une seule vérité, écrite et lue partout (§10 (68))");
+  // La chaîne complète : ps1 + sh écrivent sante.json (et Die y consigne
+  // l'échec), le service le lit et le diffuse, l'écran Système l'affiche —
+  // plus jamais deux histoires différentes.
+  const ps1Sante = read("desktop/hermes-ui.ps1");
+  const shSante = read("desktop/hermes-ui.sh");
+  const santeTs = read("mini-services/hermes-chat/sante.ts");
+  check("ps1 : écrit sante.json + Die consigne l'échec",
+    ps1Sante.includes("'sante.json'") && ps1Sante.includes("Write-Sante -pret 'echec' -cause $msg"));
+  check("sh : écrit sante.json + die consigne l'échec",
+    shSante.includes('"$RUNTIME_DIR/sante.json"') && shSante.includes('write_sante "echec" "$*"'));
+  check("phase 0 : appelée avant tout démarrage de composant (ps1 + sh)",
+    ps1Sante.includes("Phase-Prerequis") && shSante.includes("phase_prerequis"));
+  check("service : lecteur honnête (null si absent), diffusé aux deux routes",
+    santeTs.includes("SanteManifeste | null") &&
+      read("mini-services/hermes-chat/index.ts").includes("manifeste: readSanteManifeste()") &&
+      read("mini-services/hermes-chat/http-server.ts").includes("manifeste: readSanteManifeste()"));
+  check("écran Système : la carte du manifeste est montée",
+    read("src/components/settings/system-section.tsx").includes("<SanteCard />"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

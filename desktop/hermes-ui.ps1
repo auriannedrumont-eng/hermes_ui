@@ -79,6 +79,12 @@ $MajLog     = Join-Path $RuntimeDir 'maj.log'
 # supprime le drapeau — le lanceur attend au plus 8 s puis arrete. Les
 # ecrans clients recoivent leur fin de tour au lieu d'un mort dans l'oeuf.
 $DrainFlag  = Join-Path $RuntimeDir 'arret-propre.flag'
+# Manifeste de santé (§10 refonte (68), loi « une seule vérité ») : un seul
+# état écrit par le lanceur à chaque phase — prérequis ✓/✗, état de l'agent,
+# maillons — lu par le mini-service (/diagnostics) et affiché à l'écran
+# Système. Plus jamais deux histoires différentes entre la fenêtre du
+# lanceur et l'interface.
+$SanteFile  = Join-Path $RuntimeDir 'sante.json'
 New-Item -ItemType Directory -Force -Path $RuntimeDir, $LogDir | Out-Null
 
 $LauncherLog = Join-Path $LogDir 'launcher.log'
@@ -122,6 +128,11 @@ function Write-MajLog([string]$msg) {
 function Die([string]$msg) {
     Write-MajLog "MAJ ERREUR - $msg"
     Log "ERREUR : $msg"
+    # Manifeste (refonte (68)) : l'échec du boot est écrit AVANT la sortie —
+    # l'écran Système peut montrer POURQUOI le dernier démarrage a échoué
+    # même quand la fenêtre du lanceur est déjà fermée. Le document garde
+    # tout ce qui était déjà connu (prérequis, agent, maillons).
+    Write-Sante -pret 'echec' -cause $msg
     Write-Host ''
     Write-Host "  Hermes Web n'a pas demarre : $msg" -ForegroundColor Red
     Write-Host ''
@@ -1161,6 +1172,99 @@ function Ensure-ServiceToken {
     }
 }
 
+# ── MANIFESTE DE SANTÉ + PHASE 0 — PRÉREQUIS (§10 refonte (68)) ─────────
+# Loi 1 : rien n'est « pret » sans sonde réelle. Loi 2 : un échec = cause +
+# remède, affiché ICI et dans l'interface (même manifeste). Loi 3 : jamais de
+# demi-démarrage muet. La checklist s'affiche ✓/✗ dans la fenêtre ET est
+# écrite dans sante.json (lu par le mini-service, montré en Système).
+# Bloquants (arrêt propre avec remède) : runtime de l'interface et Caddy
+# (déjà installés et vérifiés par Ensure-PortableSetup), droits d'écriture,
+# espace disque. Non bloquants mais DITS clairement : Git (mises à jour +
+# clone désactivés si absent), Python/pip (provisionnement de l'agent — si
+# absents, l'interface tournera sur vos clés et le manifeste le dira).
+$Script:SantePrerequis = New-Object System.Collections.Generic.List[object]
+$Script:SanteAgent     = [ordered]@{ etat = 'inconnu'; cause = '' }
+$Script:SanteMaillons  = [ordered]@{ service = 'en attente'; interface = 'en attente'; passerelle = 'en attente'; agent = 'en attente' }
+
+function Write-Sante {
+    param([string]$pret, [string]$cause = '')
+    try {
+        $commit = ''
+        try { $commit = (Invoke-Git @('rev-parse', '--short', 'HEAD')).Text.Trim() } catch { }
+        $doc = [ordered]@{
+            horodatage = (Get-Date).ToString('o')
+            commit     = $commit
+            pret       = $pret
+            cause      = $cause
+            prerequis  = @($Script:SantePrerequis | ForEach-Object { [ordered]@{ nom = $_['nom']; ok = $_['ok']; note = $_['note'] } })
+            agent      = $Script:SanteAgent
+            maillons   = $Script:SanteMaillons
+        }
+        $doc | ConvertTo-Json -Depth 5 | Set-Content -Path $SanteFile -Encoding UTF8
+    } catch { }
+}
+function Add-SantePrerequis([string]$nom, [bool]$ok, [string]$note) {
+    $Script:SantePrerequis.Add([ordered]@{ nom = $nom; ok = $ok; note = $note })
+    $mark = if ($ok) { '✓' } else { '✗' }
+    $suffix = if ($note) { " — $note" } else { '' }
+    Log ("  {0} {1}{2}" -f $mark, $nom, $suffix)
+}
+function Set-SanteAgent([string]$etat, [string]$cause) {
+    $Script:SanteAgent.etat = $etat
+    $Script:SanteAgent.cause = $cause
+    Write-Sante -pret 'en cours'
+}
+function Set-SanteMaillon([string]$nom, [string]$etat) {
+    $Script:SanteMaillons[$nom] = $etat
+    Write-Sante -pret 'en cours'
+}
+function Phase-Prerequis {
+    Log "── Phase 0 : prérequis ─────────────────────────────────"
+    # Git — non bloquant : sans lui, mise à jour GitHub et installation de
+    # l'agent sont désactivées CE démarrage, mais l'application reste utilisable.
+    $gitOk = Test-Command 'git'
+    Add-SantePrerequis 'Git' $gitOk $(if ($gitOk) { '' } else { "mises à jour GitHub et installation de l'agent désactivées ce démarrage" })
+    # Python + pip — requis pour provisionner/certifier l'agent, pas pour
+    # faire tourner l'interface (les clés répondent sans agent).
+    $pyCmd = $null; $pyPre = @(); $pyVer = ''
+    if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
+    if ($pyCmd) { try { $pyVer = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim() } catch { } }
+    Add-SantePrerequis 'Python' ($null -ne $pyCmd) $(if ($pyVer) { $pyVer } else { "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés" })
+    $pipOk = $false
+    if ($pyCmd) { try { & $pyCmd @pyPre -m pip --version 2>&1 | Out-Null; $pipOk = ($LASTEXITCODE -eq 0) } catch { } }
+    Add-SantePrerequis 'pip (module python)' $pipOk $(if ($pipOk) { '' } else { "installation des dépendances de l'agent impossible" })
+    # Bun / Caddy — Ensure-PortableSetup vient de les installer et vérifier ;
+    # ils ne peuvent plus être absents ici (sinon il aurait déjà arrêté).
+    Add-SantePrerequis "Runtime de l'interface (bun)" (Test-Command 'bun') ''
+    Add-SantePrerequis 'Passerelle (caddy)' (Test-Command 'caddy') ''
+    # Droits d'écriture sur le dossier — bloquant : tout le reste en dépend.
+    $wOK = $false
+    try { $probe = Join-Path $Root '.hermes-ecriture-test'; Set-Content -Path $probe -Value 'ok' -ErrorAction Stop; Remove-Item $probe -Force -ErrorAction SilentlyContinue; $wOK = $true } catch { }
+    Add-SantePrerequis "Droits d'écriture sur le dossier" $wOK $(if ($wOK) { '' } else { 'vérifiez que le dossier n est pas en lecture seule ni verrouillé (OneDrive, antivirus)' })
+    if (-not $wOK) { Write-Sante -pret 'echec'; Die "écriture impossible dans le dossier de l'application — vérifiez qu'il n'est pas en lecture seule (antivirus, OneDrive, droits)." }
+    # Espace disque — bloquant sous 500 Mo (un build a besoin de marge).
+    $freeGB = 0
+    try { $freeGB = [math]::Round((Get-PSDrive ($Root.Substring(0, 1))).Free / 1GB, 1) } catch { }
+    $diskOk = ($freeGB -ge 0.5)
+    Add-SantePrerequis 'Espace disque' $diskOk $(if ($diskOk) { "$freeGB Go libres" } else { "$freeGB Go libres — un build a besoin de marge ; libérez de la place" })
+    if (-not $diskOk) { Write-Sante -pret 'echec'; Die "espace disque insuffisant ($freeGB Go libres sur le disque du dossier) — libérez de la place puis relancez." }
+    # État de l'agent : lu sur le disque (la maison + ses marqueurs), la
+    # vérité du LIVE (branché / en allumage) reste celle de l'interface.
+    $house = Join-Path $Root 'hermes-agent'
+    $depsOkF = Test-Path (Join-Path $RuntimeDir 'agent-deps.ok')
+    $certOkF = Test-Path (Join-Path $RuntimeDir 'agent-certifie.ok')
+    if (-not ((Test-Path (Join-Path $house '.git')) -or (Test-Path (Join-Path $house 'gateway\run_api.py')))) {
+        Set-SanteAgent 'non installé' $(if ($pyCmd) { "l'installation se fera au prochain démarrage (réseau requis une fois)" } else { 'python absent — installez Python puis relancez' })
+    } elseif ($certOkF) {
+        Set-SanteAgent 'certifié' ''
+    } elseif ($depsOkF) {
+        Set-SanteAgent 'installé (dépendances réussies, pas encore certifié)' ''
+    } else {
+        Set-SanteAgent 'installé sans dépendances complètes' $(if ($pyCmd) { 'les dépendances seront retentées au prochain démarrage (au plus tôt dans 1 h)' } else { 'python absent — installez Python puis relancez' })
+    }
+    Write-Sante -pret 'en cours'
+}
+
 # ── COMMANDES ───────────────────────────────────────────────────────────
 function Show-Status {
     Load-State
@@ -1269,6 +1373,10 @@ function Do-Start {
     Ensure-PortableSetup
     Initialize-JobObject
 
+    # Phase 0 (refonte (68)) : prérequis vérifiés et AFFICHÉS (✓/✗) + écrits
+    # dans le manifeste — avant le moindre démarrage de composant.
+    Phase-Prerequis
+
     # Ticks du script APRES l'installation portable : Update-FromGit peut y
     # avoir mis a jour hermes-ui.ps1 lui-meme — c'est CETTE reference qui
     # jugera de la peremption au prochain double-clic (cf. commentaire du
@@ -1288,8 +1396,15 @@ function Do-Start {
 
     Write-MajLog "relance des services (mini-service, interface, passerelle)..."
     [void](Start-Chat)
+    Set-SanteMaillon 'service' 'répondu'
     [void](Start-Ui)
+    Set-SanteMaillon 'interface' 'répondu'
     [void](Start-Gateway)
+    Set-SanteMaillon 'passerelle' 'répondu'
+    # Agent : sonde réelle du port 9120 — la vérité du live, écrite telle
+    # quelle (branché sur notre agent, sur le vôtre déjà en marche, ou muet).
+    if (Test-PortBusy 9120) { Set-SanteMaillon 'agent' 'répond (9120)' } else { Set-SanteMaillon 'agent' 'ne répond pas (9120)' }
+    Write-Sante -pret 'pret'
     if ($MajDepuisInterface) {
         # Le lanceur lui-meme fait-il partie de ce qui vient d'etre recu ?
         # Dans ce cas il CONTINUE de tourner en memoire avec l'ancien code :

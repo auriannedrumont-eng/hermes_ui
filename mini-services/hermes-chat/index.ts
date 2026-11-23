@@ -53,6 +53,7 @@ import { startAgentMotorWatchdog } from "./agent-motor";
 import { registerStorageHandlers } from "./handlers/storage";
 import { startDrainWatchdog } from "./handlers/drain";
 import { startAgentGatewayIfDown } from "./agent-starter";
+import { readSanteManifeste } from "./sante";
 import { HermesConnector } from "./hermes-connector";
 import { createLlmPool } from "./llm-pool";
 import {
@@ -682,6 +683,9 @@ function helloPayload() {
     // le front affiche le point d'information ET l'onglet Système le
     // badge orange, même sans jamais ouvrir la page.
     update: currentUpdateState(),
+    // Manifeste du dernier démarrage (refonte (68)) : prérequis ✓/✗, état
+    // de l'agent, maillons — écrit par le lanceur, la même vérité partout.
+    manifeste: readSanteManifeste(),
     chromeHeadless: chromeHeadlessStatus(),
     // Mémoire active (F-18) : le client affiche un état honnête.
     memoryChars: store.getSettingBool(MEMORY_ENABLED_KEY, true)

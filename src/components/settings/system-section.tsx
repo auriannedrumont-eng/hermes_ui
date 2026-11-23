@@ -39,6 +39,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pastille } from "@/components/settings/bits";
 import { AgentMotorCard } from "@/components/settings/agent-motor-card";
+import { SanteCard } from "@/components/settings/sante-card";
 import {
   type FilLigne,
   derniereLigne,
@@ -544,6 +545,10 @@ export function SystemSection({
         {/* ══ CARTE 2 — HERMES (le moteur) ═══════════════════════════════
             Même grammaire que la carte application — agent-motor-card. */}
         <AgentMotorCard connected={connected} onNavigateStorage={onNavigateStorage} />
+        {/* Refonte (68) : le manifeste du dernier démarrage — la même
+            vérité que la fenêtre du lanceur (prérequis ✓/✗, agent, verdict).
+            N'existe qu'une fois qu'un lanceur à jour a écrit sante.json. */}
+        <SanteCard />
       </div>
     </section>
   );

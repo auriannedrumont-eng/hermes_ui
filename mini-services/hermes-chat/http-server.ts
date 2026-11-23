@@ -27,6 +27,7 @@ import {
 import { parseSnapshot, isValidShareToken, type SharedConversationData } from "./shares";
 import { readWebchatConfig } from "./webchat/engine";
 import { readPilotInfo, isBrowserUp, browserCandidates } from "./webchat/browser";
+import { readSanteManifeste } from "./sante";
 import { resolveVoiceChars } from "./modes";
 import { traceDump, traceMeta } from "./trace";
 
@@ -202,6 +203,9 @@ async function handleDiagnostics(res: ServerResponse, deps: HttpDeps): Promise<v
     // Tours LLM en vol (F-31ter) : lastByteAgeS grand = fournisseur muet,
     // petit = réponse lente mais vivante. Vide = aucun tour en cours.
     pool: { streams: deps.activeStreams() },
+    // Manifeste du dernier démarrage (refonte (68)) : ce que le lanceur a
+    // vérifié et ce qu'il en conclut — la même vérité que la fenêtre.
+    manifeste: readSanteManifeste(),
     trace: traceDump(150),
     traceMeta: traceMeta(),
   };

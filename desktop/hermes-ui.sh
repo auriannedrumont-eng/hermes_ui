@@ -64,6 +64,135 @@ MAJ_ENCOURS=0
 DRAIN_FLAG="$RUNTIME_DIR/arret-propre.flag"
 mkdir -p "$RUNTIME_DIR" "$LOG_DIR" 2>/dev/null || true
 
+# ── Manifeste de santé (§10 refonte (68), loi « une seule vérité ») ──────
+# Un seul état écrit par le lanceur à chaque phase — prérequis ✓/✗, état de
+# l'agent, maillons — lu par le mini-service (/diagnostics) et affiché à
+# l'écran Système. Plus jamais deux histoires différentes entre la fenêtre
+# du lanceur et l'interface. Convention ok : 0 = vrai, 1 = faux.
+SANTE_FILE="$RUNTIME_DIR/sante.json"
+SANTE_PREREQUIS=""
+SANTE_AGENT_ETAT="inconnu"
+SANTE_AGENT_CAUSE=""
+SANTE_MAILLONS_SERVICE="en attente"
+SANTE_MAILLONS_INTERFACE="en attente"
+SANTE_MAILLONS_PASSERELLE="en attente"
+SANTE_MAILLONS_AGENT="en attente"
+
+write_sante() { # [pret] [cause] — jamais bloquant
+  local pret="${1:-en cours}" cause="${2:-}"
+  local commit
+  commit="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '')"
+  printf '{"horodatage":"%s","commit":"%s","pret":"%s","cause":"%s","prerequis":[%s],"agent":{"etat":"%s","cause":"%s"},"maillons":{"service":"%s","interface":"%s","passerelle":"%s","agent":"%s"}}\n' \
+    "$(date +%Y-%m-%dT%H:%M:%S%z)" "$commit" "$pret" "$cause" \
+    "$SANTE_PREREQUIS" "$SANTE_AGENT_ETAT" "$SANTE_AGENT_CAUSE" \
+    "$SANTE_MAILLONS_SERVICE" "$SANTE_MAILLONS_INTERFACE" \
+    "$SANTE_MAILLONS_PASSERELLE" "$SANTE_MAILLONS_AGENT" \
+    > "$SANTE_FILE" 2>/dev/null || true
+}
+add_sante_prerequis() { # nom ok(0/1) [note] — affiche ✓/✗ ET enregistre
+  local nom="$1" ok="$2" note="${3:-}" mark json_ok aff
+  if [ "$ok" = "0" ]; then mark="✓"; json_ok="true"; else mark="✗"; json_ok="false"; fi
+  aff="$nom"
+  [ -n "$note" ] && aff="$nom — $note"
+  log "  $mark $aff"
+  # Échappement JSON minimal : ni guillemets ni antislashs dans les champs.
+  nom="$(printf '%s' "$nom" | tr -d '"\\')"
+  note="$(printf '%s' "$note" | tr -d '"\\')"
+  [ -n "$SANTE_PREREQUIS" ] && SANTE_PREREQUIS="$SANTE_PREREQUIS,"
+  SANTE_PREREQUIS="$SANTE_PREREQUIS$(printf '{"nom":"%s","ok":%s,"note":"%s"}' "$nom" "$json_ok" "$note")"
+}
+set_sante_agent() { # etat [cause]
+  SANTE_AGENT_ETAT="$1"; SANTE_AGENT_CAUSE="${2:-}"; write_sante "en cours"
+}
+set_sante_maillon() { # nom etat
+  case "$1" in
+    service)   SANTE_MAILLONS_SERVICE="$2" ;;
+    interface) SANTE_MAILLONS_INTERFACE="$2" ;;
+    passerelle) SANTE_MAILLONS_PASSERELLE="$2" ;;
+    agent)     SANTE_MAILLONS_AGENT="$2" ;;
+  esac
+  write_sante "en cours"
+}
+# Phase 0 — prérequis parlants (§10 refonte (68)). Bloquants (arrêt propre
+# avec remède) : bun, caddy, droits d'écriture, disque. Non bloquants mais
+# DITS clairement : Git (mises à jour + clone désactivés si absent),
+# Python/pip (provisionnement de l'agent — si absents, l'interface tournera
+# sur vos clés et le manifeste le dira).
+phase_prerequis() {
+  log "── Phase 0 : prérequis ─────────────────────────────────"
+  if command -v git >/dev/null 2>&1; then
+    add_sante_prerequis "Git" 0
+  else
+    add_sante_prerequis "Git" 1 "mises à jour GitHub et installation de l'agent désactivées ce démarrage"
+  fi
+  local pycmd="" pyver="" pipok=1
+  if command -v python3 >/dev/null 2>&1; then pycmd="python3"
+  elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
+  if [ -n "$pycmd" ]; then pyver="$("$pycmd" --version 2>/dev/null || echo '')"; fi
+  if [ -n "$pycmd" ]; then
+    add_sante_prerequis "Python" 0 "$pyver"
+    if "$pycmd" -m pip --version >/dev/null 2>&1; then pipok=0; fi
+  else
+    add_sante_prerequis "Python" 1 "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés"
+  fi
+  if [ "$pipok" = "0" ]; then
+    add_sante_prerequis "pip (module python)" 0
+  else
+    add_sante_prerequis "pip (module python)" 1 "installation des dépendances de l'agent impossible"
+  fi
+  if command -v bun >/dev/null 2>&1; then
+    add_sante_prerequis "Runtime de l'interface (bun)" 0
+  else
+    add_sante_prerequis "Runtime de l'interface (bun)" 1 ""
+    write_sante "echec" "runtime de l'interface introuvable (bun) — vérifiez votre réseau ou réinstallez"
+    die "runtime de l'interface introuvable (bun) — vérifiez votre réseau ou réinstallez."
+  fi
+  if command -v caddy >/dev/null 2>&1; then
+    add_sante_prerequis "Passerelle (caddy)" 0
+  else
+    add_sante_prerequis "Passerelle (caddy)" 1 ""
+    write_sante "echec" "caddy introuvable — réinstallez ou vérifiez le réseau"
+    die "caddy introuvable — réinstallez-le ou vérifiez le réseau."
+  fi
+  if touch "$ROOT/.hermes-ecriture-test" 2>/dev/null; then
+    rm -f "$ROOT/.hermes-ecriture-test"
+    add_sante_prerequis "Droits d'écriture sur le dossier" 0
+  else
+    add_sante_prerequis "Droits d'écriture sur le dossier" 1 "vérifiez la lecture seule / OneDrive / antivirus"
+    write_sante "echec" "écriture impossible dans le dossier de l'application"
+    die "écriture impossible dans le dossier de l'application — vérifiez qu'il n'est pas en lecture seule (antivirus, OneDrive, droits)."
+  fi
+  local free_kb
+  free_kb="$(df -Pk "$ROOT" 2>/dev/null | awk 'NR==2 {print $4}')"
+  if [ -n "$free_kb" ] && [ "$free_kb" -ge 524288 ]; then
+    add_sante_prerequis "Espace disque" 0 "$(( free_kb / 1048576 )) Go libres"
+  else
+    add_sante_prerequis "Espace disque" 1 "${free_kb:-inconnu} Ko libres — un build a besoin de marge ; libérez de la place"
+    write_sante "echec" "espace disque insuffisant sur le disque du dossier"
+    die "espace disque insuffisant — libérez de la place puis relancez."
+  fi
+  # État de l'agent : lu sur le disque (maison + marqueurs) ; la vérité du
+  # LIVE (branché / en allumage) reste celle de l'interface et du service.
+  if [ ! -e "$ROOT/hermes-agent/.git" ] && [ ! -f "$ROOT/hermes-agent/gateway/run_api.py" ]; then
+    if [ -n "$pycmd" ]; then
+      set_sante_agent "non installé" "l'installation se fera au prochain démarrage (réseau requis une fois)"
+    else
+      set_sante_agent "non installé" "python absent — installez Python puis relancez"
+    fi
+  elif [ -f "$RUNTIME_DIR/agent-certifie.ok" ]; then
+    set_sante_agent "certifié" ""
+  elif [ -f "$RUNTIME_DIR/agent-deps.ok" ]; then
+    set_sante_agent "installé (dépendances réussies, pas encore certifié)" ""
+  else
+    if [ -n "$pycmd" ]; then
+      set_sante_agent "installé sans dépendances complètes" "les dépendances seront retentées au prochain démarrage (au plus tôt dans 1 h)"
+    else
+      set_sante_agent "installé sans dépendances complètes" "python absent — installez Python puis relancez"
+    fi
+  fi
+  write_sante "en cours"
+}
+
 LAUNCHER_LOG="$LOG_DIR/launcher.log"
 UI_LOG="$LOG_DIR/interface.log"
 CHAT_LOG="$LOG_DIR/mini-service.log"
@@ -91,7 +220,7 @@ log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LAUNCHER_LOG"; }
 # l'interface (MAJ_ENCOURS posé au ramassage du drapeau) — les démarrages
 # ordinaires ne polluent pas le journal.
 maj_log() { [ "$MAJ_ENCOURS" = "1" ] || return 0; printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" >> "$MAJ_LOG" 2>/dev/null || true; }
-die() { maj_log "MAJ ERREUR - $*"; log "ERREUR : $*"; echo "Hermes Web n'a pas démarré : $*" >&2; exit 1; }
+die() { maj_log "MAJ ERREUR - $*"; log "ERREUR : $*"; write_sante "echec" "$*"; echo "Hermes Web n'a pas démarré : $*" >&2; exit 1; }
 
 # ── Aides ────────────────────────────────────────────────────────────────
 port_open() { # port → 0 si occupé
@@ -484,6 +613,9 @@ do_status() {
 do_start() {
   ensure_service_token
   check_deps
+  # Phase 0 (refonte (68)) : prérequis vérifiés et AFFICHÉS (✓/✗) + écrits
+  # dans le manifeste — avant le moindre démarrage de composant.
+  phase_prerequis
 
   # Drapeau resté posé (demande faite sans lanceur vivant) : le démarrage fait
   # de toute façon la mise à jour GitHub — le retirer évite une relance
@@ -580,8 +712,15 @@ do_start() {
 
   maj_log "relance des services…"
   start_chat
+  set_sante_maillon service "répondu"
   start_ui
+  set_sante_maillon interface "répondu"
   start_gateway
+  set_sante_maillon passerelle "répondu"
+  # Agent : sonde réelle du port 9120 — la vérité du live, écrite telle
+  # quelle (branché sur notre agent, sur le vôtre déjà en marche, ou muet).
+  if port_open 9120; then set_sante_maillon agent "répond (9120)"; else set_sante_maillon agent "ne répond pas (9120)"; fi
+  write_sante "pret"
   if [ "${SANS_NAVIGATEUR:-0}" = "1" ]; then
     # Le lanceur lui-même fait-il partie de ce qui vient d'être reçu ? Dans
     # ce cas il continue de tourner en mémoire avec l'ancien code : la
