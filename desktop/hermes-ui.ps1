@@ -111,6 +111,7 @@ $Script:SupCycle = 0   # cycle de surveillance courant (voir Supervise-One)
 $MChat = 'index\.ts|hermes-chat'
 $MUii  = 'next dev|standalone[\\/]server\.js|next-server'
 $MGw   = 'caddy run'
+$MAgent = 'gateway[\\/]run_api\.py'
 
 function Log([string]$msg) {
     $line = '[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $msg
@@ -754,7 +755,10 @@ function Ensure-PortableSetup {
     # de telechargement des outils ci-dessous sont celles du code le plus
     # recent, et dependances/build tiendront compte des fichiers recus) ──
     Update-FromGit
-    Install-AgentIntoHome
+    # (77) L'installation de l'agent est déplacée APRÈS la Phase 0 : clone,
+    # venv, dépendances et certification ont besoin du Python portable que
+    # la Phase 0 installe — appelée avant, elle partait en repli « python
+    # système » (absent sur un poste vierge) et l'agent n'existait jamais.
 
     # ── 1. Node.js (node + npm vivent dans le meme dossier) ──
     # tools\ d abord (dossier autonome), telechargement sinon, copie
@@ -1221,10 +1225,64 @@ function Install-AgentIntoHome {
         }
         Log ("  ATTENTION : l'essai n'a pas répondu — {0}. Nouvelle tentative au prochain démarrage (au plus tôt dans 1 h) ; détail : {1}" -f $derniere, $certLog)
     }
-    # L'essai s'arrête TOUJOURS — c'est à l'interface d'allumer le vrai.
+    # L'essai s'arrête TOUJOURS — c'est au lanceur d'allumer le vrai
+    # (Start-AgentRuntime, refonte (77)).
     try {
         if (-not $certProc.HasExited) { taskkill /PID $certProc.Id /T /F 2>&1 | Out-Null }
     } catch { }
+}
+
+function Start-AgentRuntime {
+    # (77) LE LANCEUR ALLUME L'AGENT. Avant, il se bornait à SONDER le 9120
+    # après avoir allumé interface et passerelle : un agent installé mais
+    # jamais allumé laissait l'interface à vie sur les clés fournisseurs
+    # (cas réel du 23/11 matin : Phase 0 toute verte, bandeau « Hermes
+    # éteint · vos clés répondent » quand même). Le python DÉDIÉ est utilisé
+    # d'abord (.venv de l'agent), le portable en repli. Déjà en marche :
+    # adopté sans rien toucher. Le PID est enregistré pour l'arrêt propre ;
+    # en tant qu'enfant du Job Object, la fermeture de la fenêtre l'arrête.
+    $house = Join-Path $Root 'hermes-agent'
+    if (-not ((Test-Path (Join-Path $house '.git')) -or (Test-Path (Join-Path $house 'gateway\run_api.py')))) {
+        Set-SanteMaillon 'agent' "pas installé — l'interface tourne sur vos clés"
+        Log "• agent : pas encore installé dans le dossier — l'interface tourne sur vos clés ce démarrage."
+        return
+    }
+    if (Test-PortBusy 9120) {
+        Set-SanteMaillon 'agent' 'répond (9120) — adopté'
+        Log "• agent : déjà en marche sur le port 9120 — l'interface l'adopte."
+        return
+    }
+    $venvPy = Join-Path $house '.venv\Scripts\python.exe'
+    $apy = $null; $aPre = @()
+    if (Test-Path $venvPy) { $apy = $venvPy }
+    elseif ($Script:PortablePython) { $apy = $Script:PortablePython }
+    elseif (Test-Command 'py') { $apy = 'py'; $aPre = @('-3') }
+    elseif (Test-Command 'python') { $apy = 'python' }
+    if (-not $apy) {
+        Set-SanteMaillon 'agent' "aucun python pour l'allumer — vos clés"
+        Log "• agent : installé mais aucun python pour l'allumer — l'interface reste sur vos clés ce démarrage."
+        return
+    }
+    Log "• demarrage de l'agent (moteur local) sur :9120..."
+    $alog = Join-Path $Root 'db\agent.log'
+    $ap = Start-Process -FilePath $apy -ArgumentList (@($aPre) + ('"{0}"' -f (Join-Path $house 'gateway\run_api.py'))) -WorkingDirectory $house -WindowStyle Hidden -RedirectStandardError $alog -RedirectStandardOutput ($alog + '.out') -PassThru
+    State-Set 'AGENT_PID' $ap.Id; State-Set 'AGENT_OWNED' '1'
+    $up = $false
+    for ($i = 0; $i -lt 45; $i++) {
+        Start-Sleep -Seconds 1
+        if ($ap.HasExited) { break }
+        if (Test-PortBusy 9120) { $up = $true; break }
+    }
+    if ($up) {
+        Set-SanteMaillon 'agent' 'répond (9120)'
+        Log "  OK agent branché (9120) — le moteur local tient la mémoire de vos tours."
+    } else {
+        $cause = ''
+        try { $cause = (Get-Content $alog -Tail 5 | Where-Object { $_.Trim() } | Select-Object -Last 1) } catch { }
+        if (-not $cause) { if ($ap.HasExited) { $cause = "processus terminé dès le départ (code $($ap.ExitCode))" } else { $cause = "toujours muet après 45 s" } }
+        Set-SanteMaillon 'agent' "n'a pas répondu — vos clés (détail : db\agent.log)"
+        Log ("  ATTENTION : l'agent n'a pas répondu en 45 s — {0} ; l'interface reste sur vos clés ce démarrage (détail : {1})." -f $cause, $alog)
+    }
 }
 
 # ── ARRET PROPRE ────────────────────────────────────────────────────────
@@ -1252,7 +1310,8 @@ function Stop-All {
     # mini-service en dernier : ses donnees sont en WAL, recuperees
     # automatiquement au demarrage suivant meme en cas d'arret force
     Stop-Tree 'CHAT_PID' $MChat
-    Wait-Gone $MChat 10; Wait-Gone $MUii 10; Wait-Gone $MGw 10
+    Stop-Tree 'AGENT_PID' $MAgent
+    Wait-Gone $MChat 10; Wait-Gone $MUii 10; Wait-Gone $MGw 10; Wait-Gone $MAgent 10
     # etat vide : le verrou disparait avec la pile
     $Script:State = @{}
     Save-State
@@ -1706,6 +1765,10 @@ function Do-Start {
     # dans le manifeste — avant le moindre démarrage de composant.
     Phase-Prerequis
 
+    # (77) Installation de l'agent — ICI et plus tôt (voir note à Update-FromGit).
+    # Idempotente : déjà installée avec dépendances à jour, sortie immédiate.
+    Install-AgentIntoHome
+
     # Ticks du script APRES l'installation portable : Update-FromGit peut y
     # avoir mis a jour hermes-ui.ps1 lui-meme — c'est CETTE reference qui
     # jugera de la peremption au prochain double-clic (cf. commentaire du
@@ -1742,8 +1805,10 @@ function Do-Start {
         Set-SanteMaillon 'passerelle' "page OK mais liaison temps réelle muette (code $via)"
         Log "  ATTENTION : liaison temps réelle muette à travers la passerelle (code $via) — l'onglet dirait « Hors ligne »"
     }
-    # Agent : sonde réelle du port 9120 — la vérité du live, écrite telle
-    # quelle (branché sur notre agent, sur le vôtre déjà en marche, ou muet).
+    # Agent : LE LANCEUR L'ALLUME (refonte (77)), puis la sonde 9120 tranche
+    # la vérité du live (branché sur le nôtre, sur le vôtre déjà en marche,
+    # ou muet — cause dans db\agent.log).
+    Start-AgentRuntime
     if (Test-PortBusy 9120) { Set-SanteMaillon 'agent' 'répond (9120)' } else { Set-SanteMaillon 'agent' 'ne répond pas (9120)' }
     Write-Sante -pret 'pret'
     if ($MajDepuisInterface) {

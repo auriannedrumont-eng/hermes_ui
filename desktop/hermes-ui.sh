@@ -743,6 +743,50 @@ request_chat_drain() {
   done
   log "• pas d'accusé en 8 s (service déjà muet ?) — arrêt forcé."
 }
+
+start_agent_runtime() {
+  # (77) LE LANCEUR ALLUME L'AGENT — même faute que Windows avant ce jour :
+  # il se bornait à sonder le 9120 sans jamais allumer ; un agent installé
+  # mais éteint laissait l'interface à vie sur les clés fournisseurs. Le
+  # python DÉDIÉ du venv d'abord, le système en repli. Déjà en marche :
+  # adopté sans rien toucher. PID dans l'état pour l'arrêt propre.
+  local maison="$ROOT/hermes-agent" apy up=0 cause
+  if [ ! -d "$maison/.git" ] && [ ! -f "$maison/gateway/run_api.py" ]; then
+    set_sante_maillon agent "pas installé — l'interface tourne sur vos clés"
+    log "• agent : pas encore installé dans le dossier — l'interface tourne sur vos clés ce démarrage."
+    return 0
+  fi
+  if port_open 9120; then
+    set_sante_maillon agent "répond (9120) — adopté"
+    log "• agent : déjà en marche sur le port 9120 — l'interface l'adopte."
+    return 0
+  fi
+  apy="${venvpy:-}"; [ -n "$apy" ] || apy="${pycmd:-}"; [ -n "$apy" ] || apy="$(command -v python3 2>/dev/null || true)"
+  if [ -z "$apy" ]; then
+    set_sante_maillon agent "aucun python pour l'allumer — vos clés"
+    log "• agent : installé mais aucun python pour l'allumer — l'interface reste sur vos clés ce démarrage."
+    return 0
+  fi
+  log "• démarrage de l'agent (moteur local) sur :9120…"
+  mkdir -p "$ROOT/db"
+  ( cd "$maison" && exec "$apy" gateway/run_api.py >>"$ROOT/db/agent.log" 2>&1 ) &
+  state_set AGENT_PID "$!"
+  for _ in $(seq 1 45); do
+    if port_open 9120; then up=1; break; fi
+    pid_alive "$(state_get AGENT_PID)" || break
+    sleep 1
+  done
+  if [ "$up" = 1 ]; then
+    set_sante_maillon agent "répond (9120)"
+    log "  OK agent branché (9120) — le moteur local tient la mémoire de vos tours."
+  else
+    cause="$(tail -5 "$ROOT/db/agent.log" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -1)"
+    [ -n "$cause" ] || cause="toujours muet après 45 s (ou processus terminé)"
+    set_sante_maillon agent "n'a pas répondu — vos clés (détail : db/agent.log)"
+    log "  ATTENTION : l'agent n'a pas répondu en 45 s — $cause ; l'interface reste sur vos clés ce démarrage (détail : db/agent.log)."
+  fi
+  return 0
+}
 do_stop() {
   log "Arrêt demandé…"
   request_chat_drain
@@ -754,9 +798,11 @@ do_stop() {
   # 3. Le mini-service EN DERNIER : son handler SIGTERM fait le
   #    checkpoint WAL (données intégrées au fichier SQLite principal)
   stop_tree CHAT_PID "bun index\.ts|hermes-chat/index" TERM
+  stop_tree AGENT_PID "gateway/run_api\.py" TERM
   wait_tree_gone CHAT_PID "bun index\.ts|hermes-chat/index" 10
   wait_tree_gone UI_PID  "next dev|standalone/server\.js|next-server" 10
   wait_tree_gone GW_PID  "caddy run" 10
+  wait_tree_gone AGENT_PID "gateway/run_api\.py" 10
   rm -f "$STATE_FILE" "$RUNTIME_DIR"/*.pid 2>/dev/null
   # Composants adoptés (OWNED=0) : volontairement NON arrêtés — ils
   # n'ont pas été démarrés par ce lanceur.
@@ -854,7 +900,7 @@ do_status() {
     echo "  adresse   : http://127.0.0.1:$(state_get GW_PORT)/"
     echo "  interface : port $(state_get UI_PORT) ($(state_get UI_MODE)), mini-service : $CHAT_PORT/$FILES_PORT"
     local pid
-    for spec in "GW_PID:caddy run:GW_OWNED:passerelle" "UI_PID:next dev|server.js:UI_OWNED:interface" "CHAT_PID:index.ts:CHAT_OWNED:mini-service"; do
+    for spec in "GW_PID:caddy run:GW_OWNED:passerelle" "UI_PID:next dev|server.js:UI_OWNED:interface" "CHAT_PID:index.ts:CHAT_OWNED:mini-service" "AGENT_PID:run_api.py:AGENT_OWNED:agent"; do
       IFS=: read -r var marker owned name <<<"$spec"
       pid="$(state_get "$var")"
       if pid_alive "$pid" && our_process "$pid"; then echo "  $name : actif (pid $pid, à nous)"
@@ -1002,8 +1048,9 @@ do_start() {
     set_sante_maillon passerelle "page OK mais liaison temps réelle muette (code $via)"
     log "  ATTENTION : liaison temps réelle muette à travers la passerelle (code $via) — l'onglet dirait « Hors ligne »"
   fi
-  # Agent : sonde réelle du port 9120 — la vérité du live, écrite telle
-  # quelle (branché sur notre agent, sur le vôtre déjà en marche, ou muet).
+  # Agent : LE LANCEUR L'ALLUME (77), puis la sonde 9120 tranche la vérité
+  # du live (branché sur le nôtre, sur le vôtre déjà en marche, ou muet).
+  start_agent_runtime
   if port_open 9120; then set_sante_maillon agent "répond (9120)"; else set_sante_maillon agent "ne répond pas (9120)"; fi
   write_sante "pret"
   if [ "${SANS_NAVIGATEUR:-0}" = "1" ]; then

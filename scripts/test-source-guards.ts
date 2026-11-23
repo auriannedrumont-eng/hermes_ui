@@ -286,8 +286,14 @@ async function main() {
     ps1F.includes("MinGit-2.51.0-64-bit.zip") &&
       ps1F.includes("$Script:GitDir = Resolve-Tool 'git' 'git.exe' $GitZipUrl $true"));
   check("ps1 : le git posé du dossier est résolu AVANT la mise à jour GitHub et le clonage",
-    ps1F.indexOf("$Script:GitDir = Resolve-Tool 'git'") < ps1F.indexOf("Update-FromGit\n    Install-AgentIntoHome") &&
-      ps1F.includes("& $Script:GitExe -C $Root @GitArgs"));
+    (() => {
+      // ((77)) l'appel de l'agent a déménagé après la Phase 0 : l'ordre se
+      // vérifie sur les lignes d'APPEL (4 espaces), pas sur une séquence figée.
+      const g = ps1F.indexOf("$Script:GitDir = Resolve-Tool 'git'");
+      const m = ps1F.search(/^\s{4}Update-FromGit\s*$/m);
+      const c = ps1F.search(/^\s{4}Install-AgentIntoHome\s*$/m);
+      return g > -1 && m > g && c > g && ps1F.includes("& $Script:GitExe -C $Root @GitArgs");
+    })());
   check("ps1 : plus AUCUN appel git direct au PATH (le PATH n'est pas une source de vérité)",
     ps1F.includes("& git -C $Root") === false &&
       ps1F.includes("& git -C $homeDir") === false &&
@@ -374,6 +380,50 @@ async function main() {
   check("relance APRÈS l'invalidation du build (le nouveau passage reconstruira)",
     psU.indexOf("Remove-Item -Recurse -Force (Join-Path $Root '.next')") < psU.indexOf("lanceur-relance.flag") &&
       shU.indexOf("rm -rf \"$ROOT/.next\"") < shU.indexOf("HERMES_RELANCE"));
+
+  console.log("[17] le lanceur ALLUME l'agent — jamais seulement sondé ((77))");
+  // Cas réel du 23/11 matin : Phase 0 toute verte (Git, Python portable
+  // 3.14.3, pip, bun, caddy ✓), interface et passerelle répondaient — et
+  // pourtant le bandeau restait « Hermes éteint · vos clés répondent ».
+  // Cause : après la liaison passerelle, le lanceur se bornait à SONDER le
+  // port 9120 (son commentaire le disait : « branché sur notre agent, sur
+  // le vôtre déjà en marche, ou muet ») et PERSONNE n'allumait jamais
+  // run_api.py — ni le ps1, ni le sh, ni l'interface. Complété : l'essai de
+  // certification s'arrête toujours, puis Start-AgentRuntime /
+  // start_agent_runtime allument le vrai, l'adoptent s'il tourne déjà,
+  // écrivent la cause honnête (db/agent.log) sinon ; l'arrêt propre tue le
+  // PID enregistré ; Install-AgentIntoHome tourne après la Phase 0 (elle
+  // a besoin du Python portable), plus avant.
+  const psN = psU.replace(/\r\n/g, "\n");
+  check("ps1 : Start-AgentRuntime existe, allume run_api.py, PID en état",
+    psN.includes("function Start-AgentRuntime") &&
+      psN.includes("State-Set 'AGENT_PID'") &&
+      psN.includes("gateway\\run_api.py") &&
+      psN.includes("Test-PortBusy 9120"));
+  check("ps1 : appelé dans le flux juste avant la sonde 9120",
+    /Start-AgentRuntime\r?\n\s*if \(Test-PortBusy 9120\)/.test(psU));
+  check("ps1 : arrêt propre — Stop-Tree AGENT_PID + marque run_api.py",
+    psN.includes("Stop-Tree 'AGENT_PID' $MAgent") &&
+      psN.includes("$MAgent = 'gateway[\\\\/]run_api\\.py'"));
+  check("ps1 : Install-AgentIntoHome déplacé APRÈS Phase-Prerequis (Python portable prêt)",
+    (() => {
+      // Lignes d'APPEL seules (la définition de fonction vit plus haut,
+      // entre les deux appels — ce n'est pas elle qu'on ordonne).
+      const upd = psN.search(/^\s{4}Update-FromGit\s*$/m);
+      const pha = psN.search(/^\s{4}Phase-Prerequis\s*$/m);
+      const ins = psN.search(/^\s{4}Install-AgentIntoHome\s*$/m);
+      return upd > -1 && pha > upd && ins > pha &&
+        psN.slice(upd, pha).search(/^\s{4}Install-AgentIntoHome\s*$/m) === -1;
+    })());
+  check("sh : start_agent_runtime existe, PID dans l'état, appelé avant la sonde",
+    shU.includes("start_agent_runtime()") &&
+      shU.includes("state_set AGENT_PID") &&
+      /start_agent_runtime\r?\n\s*if port_open 9120/.test(shU));
+  check("sh : arrêt propre — stop_tree AGENT_PID + status connaît l'agent",
+    shU.includes('stop_tree AGENT_PID "gateway/run_api\\.py" TERM') &&
+      shU.includes('"AGENT_PID:run_api.py:AGENT_OWNED:agent"'));
+  check("allumage honnête : cause écrite si l'agent ne répond pas (db/agent.log), jamais de Die",
+    psN.includes("db\\agent.log") && shU.includes("db/agent.log"));
 
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
