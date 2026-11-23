@@ -223,9 +223,10 @@ async function main() {
     shCoeur.includes(".venv/bin/python") &&
       shCoeur.includes("agent-certifie.ok") &&
       shCoeur.includes("port_open 9120"));
-  check("starter : le venv de la maison est le PREMIER candidat python",
-    starterC.includes("pythonCandidates(agentDir)") && starterC.includes(".venv"));
-  check("motor : la cause lue dans le journal est exposée (gatewayCause)",
+  check("starter : le portable du dossier est le PREMIER candidat python (loi 8), venv ensuite",
+    starterC.includes("portablePythonPath()") &&
+      starterC.indexOf("portable") < starterC.indexOf("venvPython") &&
+      starterC.includes("pythonCandidates(agentDir)") && starterC.includes(".venv"));  check("motor : la cause lue dans le journal est exposée (gatewayCause)",
     motorC.includes("gatewayCause") &&
       read("mini-services/hermes-chat/shared/chat-protocol.ts").includes("gatewayCause"));
   check("écran Système : la cause est affichée à la carte Hermes",
@@ -246,6 +247,33 @@ async function main() {
     ps1F.includes("-not $agentChange") && ps1F.includes("agent-deps-head.txt"));
   check("sh : la re-certification est vérifiée AVANT la sortie anticipée",
     shF.includes('[ "$agentchange" = "0" ]') && shF.includes("agent-deps-head.txt"));
+
+  console.log("[12] la portabilité totale : le lanceur possède son Python ((71), loi 8)");
+  // Rappel fondateur de l'utilisatrice : « tout doit fonctionner
+  // indépendamment de ce qui est installé sur Windows, tout doit être
+  // portable et utilisable depuis le dossier de l'interface » — le lanceur
+  // télécharge et pose le Python DANS le dossier (comme Bun et Caddy déjà),
+  // l'utilise en premier partout, et ne replie sur le python système
+  // démasqué qu'en cas de besoin, avec la cause dite.
+  check("ps1 : Ensure-PortablePython pose le python dans le dossier (python.org, zip autonome)",
+    ps1F.includes("function Ensure-PortablePython") &&
+      ps1F.includes("python.org/ftp/python") &&
+      ps1F.includes("python-portable") &&
+      ps1F.includes("get-pip.py"));
+  check("ps1 : phase 0 = portable d'abord, système démasqué en repli",
+    ps1F.includes("Python portable (dans le dossier)") && ps1F.includes("Python (repli système)"));
+  check("ps1 : provisionnement et certification sur le portable",
+    ps1F.includes("$pyKind -ne 'portable'") && ps1F.includes("python portable du dossier"));
+  check("sh : ensure_portable_python télécharge dans le dossier (surchargeable pour les épreuves)",
+    shF.includes("ensure_portable_python") &&
+      shF.includes("HERMES_PYTHON_URL") &&
+      shF.includes("python-portable"));
+  check("sh : phase 0 et provisionnement passent par le portable en cas de besoin",
+    shF.includes("Python (portable, dans le dossier)") &&
+      shF.includes("le lanceur\n  # possède le sien") &&
+      shF.includes("ensure_portable_python 2>/dev/null || echo ''"));
+  check("starter : le python du dossier est résolu du vrai chemin, jamais deviné",
+    starterC.includes('"desktop", "runtime", "python-portable"'));
 
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);

@@ -1035,19 +1035,26 @@ function Install-AgentIntoHome {
         if (-not (Test-Path $depsOk)) { try { Set-Content $depsOk 'sans-requirements' } catch { } }
         return
     }
-    $pyCmd = $null; $pyPre = @()
-    if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
-    if ($pyCmd) {
-        # Le faux raccourci du Microsoft Store répond AUSSI à « python » —
-        # sa phrase « Python was not found » prouve qu'il n'y a AUCUN vrai
-        # python derrière (cas réel du 23/11, cause montrée en Système).
-        try {
-            $pyVerChk = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim()
-            if ($pyVerChk -match 'was not found') { $pyCmd = $null }
-        } catch { }
+    # Loi 8 (plan v2, chantier 5) : le Python du dossier d'abord — posé par
+    # le lanceur, il ne partage rien avec Windows ; le python système n'est
+    # qu'un repli, démasqué (le faux raccourci du magasin ne passe pas).
+    $pyCmd = $null; $pyPre = @(); $pyKind = 'systeme'
+    if ($Script:PortablePython -and (Test-Path $Script:PortablePython)) {
+        $pyCmd = $Script:PortablePython; $pyKind = 'portable'
+    } else {
+        if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
+        if ($pyCmd) {
+            # Le faux raccourci du Microsoft Store répond AUSSI à « python » —
+            # sa phrase « Python was not found » prouve qu'il n'y a AUCUN vrai
+            # python derrière (cas réel du 23/11, cause montrée en Système).
+            try {
+                $pyVerChk = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim()
+                if ($pyVerChk -match 'was not found') { $pyCmd = $null }
+            } catch { }
+        }
     }
     if (-not $pyCmd) {
-        Log "• ATTENTION : aucun VRAI python sur ce poste (le raccourci du Microsoft Store ne compte pas) — l'agent ne peut pas démarrer. Remède : installez Python depuis python.org en cochant « Add python.exe to PATH », puis relancez Hermes-Web. Si un vrai Python existe déjà : Paramètres > Applications > Alias d'exécution d'applications > désactivez les raccourcis python."
+        Log "• ATTENTION : aucun VRAI python, ni dans le dossier (portable) ni sur ce poste — l'agent ne peut pas démarrer ce tour. Remède : réseau (le Python portable s'installera tout seul au prochain démarrage), ou installez Python depuis python.org en cochant « Add python.exe to PATH » ; si un vrai Python existe déjà : Paramètres > Applications > Alias d'exécution d'applications > désactivez les raccourcis python."
         return
     }
     $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
@@ -1066,7 +1073,9 @@ function Install-AgentIntoHome {
             if ((Get-Content $depsOk -Raw).Trim() -eq 'venv') { Remove-Item $depsOk -Force -ErrorAction SilentlyContinue }
         } catch { }
     }
-    if (-not $venvOk -and -not $depsDejaTentees) {
+    # Avec le portable, PAS de venv : l'isolation (D1) est le portable lui-
+    # même — un python qui vit dans le dossier ne peut marcher sur personne.
+    if ($pyKind -ne 'portable' -and -not $venvOk -and -not $depsDejaTentees) {
         try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
         Log "• création de l'environnement python dédié de l'agent (.venv — isolé du python système)…"
         $venvJob = Start-Job -ScriptBlock { param($p, $pre, $d) & $p @pre -m venv $d 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pyCmd, $pyPre, (Join-Path $homeDir '.venv')
@@ -1085,13 +1094,16 @@ function Install-AgentIntoHome {
             Log "  ATTENTION : création de l'environnement dédié non terminée en 2 min — repli sur le python système."
         }
     }
-    # Dépendances : dans l'environnement dédié s'il existe, sinon système
-    # (repli dit clairement). Marquées « réussies » uniquement sur code 0.
+    # Dépendances : avec le portable, DANS le dossier du portable (il ne
+    # partage rien — un ancien venv traînant du repli système est ignoré) ;
+    # dans l'environnement dédié s'il existe, sinon système (repli dit
+    # clairement). Marquées « réussies » uniquement sur code 0.
     if (-not (Test-Path $depsOk) -and -not $depsDejaTentees) {
-        $pipCmd = if ($venvOk) { $venvPy } else { $pyCmd }
-        $pipPre = if ($venvOk) { @() } else { $pyPre }
+        $venvActif = ($pyKind -ne 'portable') -and $venvOk
+        $pipCmd = if ($venvActif) { $venvPy } else { $pyCmd }
+        $pipPre = if ($venvActif) { @() } else { $pyPre }
         try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
-        Log ("• installation des dépendances python de l'agent ({0}, 5 min max)…" -f $(if ($venvOk) { 'environnement dédié' } else { 'python système — repli' }))
+        Log ("• installation des dépendances python de l'agent ({0}, 5 min max)…" -f $(if ($venvActif) { 'environnement dédié' } elseif ($pyKind -eq 'portable') { 'python portable du dossier' } else { 'python système — repli' }))
         # Le job renvoie CODE=<sortie pip> : on ne marque « réussi » que si pip
         # sort vraiment en 0 — sinon nouvelle tentative au prochain démarrage.
         $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pipCmd, $pipPre, $req
@@ -1104,7 +1116,7 @@ function Install-AgentIntoHome {
         Remove-Job $pipJob -ErrorAction SilentlyContinue
         $code = if ($pipOut -match 'CODE=(\d+)\s*$') { $Matches[1] } else { '1' }
         if ($code -eq '0') {
-            try { Set-Content $depsOk $(if ($venvOk) { 'venv' } else { 'systeme' }) } catch { }
+            try { Set-Content $depsOk $(if ($venvActif) { 'venv' } elseif ($pyKind -eq 'portable') { 'portable' } else { 'systeme' }) } catch { }
             Log "  dépendances installées — l'agent peut démarrer."
             # Le HEAD actuel devient la base des dépendances (réussies).
             if ($houseHead) { try { Set-Content (Join-Path $RuntimeDir 'agent-deps-head.txt') $houseHead -Encoding ASCII } catch { } }
@@ -1133,8 +1145,8 @@ function Install-AgentIntoHome {
             }
         } catch { }
     }
-    $certPy = if ($venvOk) { $venvPy } else { $pyCmd }
-    $certPre = if ($venvOk) { @() } else { $pyPre }
+    $certPy = if ($pyKind -ne 'portable' -and $venvOk) { $venvPy } else { $pyCmd }
+    $certPre = if ($pyKind -ne 'portable' -and $venvOk) { @() } else { $pyPre }
     try { Set-Content $certFlag ((Get-Date).ToString('o')) } catch { }
     $certLog = Join-Path $Root 'db\agent-certification.log'
     Log "• certification de l'agent : allumage d'essai (90 s max)…"
@@ -1348,25 +1360,144 @@ function Set-SanteMaillon([string]$nom, [string]$etat) {
     $Script:SanteMaillons[$nom] = $etat
     Write-Sante -pret 'en cours'
 }
+function Ensure-PortablePython {
+    # Loi 8 (plan v2, chantier 5) : le Python de l'application vit DANS le
+    # dossier, posé par le lanceur comme Bun et Caddy déjà. Rien ne dépend
+    # de ce que Windows a installé — et le faux raccourci du magasin n'a
+    # plus aucun rôle tant que ce Python existe. Le paquet est l'édition
+    # « embeddable » officielle de python.org : un zip autonome qui ne
+    # s'installe pas, ne touche ni au registre, ni au PATH, ni aux alias.
+    $portDir = Join-Path $RuntimeDir 'python-portable'
+    $portPy  = Join-Path $portDir 'python.exe'
+    try {
+        if (Test-Path $portPy) {
+            $v = ''
+            try { $v = (& $portPy --version 2>&1 | Out-String).Trim() } catch { }
+            if ($v -match '^Python 3') { return $portPy }
+            # Cas 31 : présent mais illisible — rien de menteur n'est gardé.
+            Log "• le Python portable du dossier est illisible — nettoyage puis retéléchargement."
+            try { Remove-Item -Recurse -Force $portDir } catch { }
+        }
+        # Un échec récent (1 h) ne se répète pas : un réseau absent ne doit
+        # pas rallonger chaque démarrage (même garde que les dépendances).
+        $flagF = Join-Path $RuntimeDir 'portable-python.flag'
+        if (Test-Path $flagF) {
+            try {
+                $last = [datetime]::Parse((Get-Content $flagF -Raw).Trim())
+                if (((Get-Date) - $last).TotalHours -lt 1) {
+                    Log "• Python portable : la dernière tentative d'installation a échoué — nouvelle tentative au plus tôt dans 1 h (repli ce démarrage : python système démasqué)."
+                    return $null
+                }
+            } catch { }  # flag illisible : on retente, on le réécrira
+        }
+        try { Set-Content $flagF ((Get-Date).ToString('o')) } catch { }
+        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+        $zipUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-$arch.zip"
+        Log "• installation du Python portable de l'application (source officielle python.org, zip autonome)…"
+        Log "  il vit dans le dossier de l'interface : ni PATH, ni registre, ni alias du magasin ne sont touchés."
+        $zip = Join-Path $RuntimeDir 'python-embed.zip'
+        $dl = Start-Job -ScriptBlock {
+            param($u, $d)
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $u -OutFile $d -UseBasicParsing
+            "CODE=$LASTEXITCODE"
+        } -ArgumentList $zipUrl, $zip
+        if (-not (Wait-Job $dl -Timeout 300)) {
+            Stop-Job $dl; Remove-Job $dl -Force
+            Log "  ATTENTION : téléchargement non terminé en 5 min — l'interface tourne sur vos clés ce démarrage ; nouvelle tentative au prochain démarrage."
+            return $null
+        }
+        Remove-Job $dl -ErrorAction SilentlyContinue
+        # Cas 30 : un fichier tronqué ne sera jamais gardé pour un Python.
+        if (-not (Test-Path $zip) -or ((Get-Item $zip).Length -lt 1MB)) {
+            Log "  ATTENTION : fichier reçu tronqué — rien de menteur n'est gardé ; nouvelle tentative au prochain démarrage."
+            try { Remove-Item $zip -Force -ErrorAction SilentlyContinue } catch { }
+            return $null
+        }
+        try { New-Item -ItemType Directory -Path $portDir -Force | Out-Null } catch { }
+        Expand-Archive -Path $zip -DestinationPath $portDir -Force
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        # Le zip livré verrouille la recherche des bibliothèques dans son
+        # propre dossier : on ouvre le verrou, sinon les dépendances de
+        # l'agent ne pourraient pas s'installer dedans.
+        $pth = Get-ChildItem $portDir -Filter 'python*._pth' | Select-Object -First 1
+        if ($pth) {
+            $lines = @(Get-Content $pth.FullName | Where-Object { $_ -notmatch 'import\s+site' })
+            $lines += 'Lib\site-packages'
+            $lines += 'import site'
+            Set-Content $pth.FullName ($lines -join "`r`n") -Encoding ASCII
+        }
+        # pip : posé par le lanceur officiel de python.org, DANS le dossier.
+        Log "• ajout de l'outil d'installation de bibliothèques (pip) dans le dossier…"
+        $gp = Join-Path $RuntimeDir 'get-pip.py'
+        $dl2 = Start-Job -ScriptBlock {
+            param($u, $d)
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $u -OutFile $d -UseBasicParsing
+            "CODE=$LASTEXITCODE"
+        } -ArgumentList 'https://bootstrap.pypa.io/get-pip.py', $gp
+        if (-not (Wait-Job $dl2 -Timeout 180)) {
+            Stop-Job $dl2; Remove-Job $dl2 -Force
+            Log "  ATTENTION : pip non téléchargé en 3 min — nouvelle tentative au prochain démarrage."
+            try { Remove-Item -Recurse -Force $portDir } catch { }
+            return $null
+        }
+        Remove-Job $dl2 -ErrorAction SilentlyContinue
+        if (-not (Test-Path $gp) -or ((Get-Item $gp).Length -lt 100KB)) {
+            Log "  ATTENTION : pip reçu tronqué — rien de menteur n'est gardé ; nouvelle tentative au prochain démarrage."
+            try { Remove-Item -Recurse -Force $portDir } catch { }
+            return $null
+        }
+        & $portPy $gp --no-warn-script-location 2>&1 | Out-Null
+        try { Remove-Item $gp -Force -ErrorAction SilentlyContinue } catch { }
+        if ($LASTEXITCODE -ne 0) {
+            Log "  ATTENTION : pip n'a pas pu s'installer dans le dossier — nouvelle tentative au prochain démarrage."
+            try { Remove-Item -Recurse -Force $portDir } catch { }
+            return $null
+        }
+        $v = (& $portPy --version 2>&1 | Out-String).Trim()
+        Log "  Python portable prêt ($v) — il vit dans le dossier de l'interface ; Windows n'a plus rien à dire."
+        return $portPy
+    } catch {
+        Log "  ATTENTION : installation du Python portable impossible ($($_.Exception.Message)) — repli ce démarrage sur le python système démasqué."
+        return $null
+    }
+}
 function Phase-Prerequis {
     Log "── Phase 0 : prérequis ─────────────────────────────────"
     # Git — non bloquant : sans lui, mise à jour GitHub et installation de
     # l'agent sont désactivées CE démarrage, mais l'application reste utilisable.
     $gitOk = Test-Command 'git'
     Add-SantePrerequis 'Git' $gitOk $(if ($gitOk) { '' } else { "mises à jour GitHub et installation de l'agent désactivées ce démarrage" })
-    # Python + pip — requis pour provisionner/certifier l'agent, pas pour
-    # faire tourner l'interface (les clés répondent sans agent).
-    $pyCmd = $null; $pyPre = @(); $pyVer = ''
-    if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
-    if ($pyCmd) { try { $pyVer = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim() } catch { } }
-    # Le faux raccourci du Microsoft Store répond AUSSI à « python » : sa
-    # phrase « Python was not found » prouve qu'il n'y a AUCUN vrai python
-    # derrière (cas réel du 23/11 — la cause exacte affichée en Système).
-    if ($pyVer -match 'was not found') { $pyCmd = $null; $pyVer = '' }
-    Add-SantePrerequis 'Python' ($null -ne $pyCmd) $(if ($pyVer) { $pyVer } else { "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés. Sur Windows : installez Python depuis python.org en cochant « Add python.exe to PATH », ou désactivez les faux raccourcis (Paramètres > Applications > Alias d'exécution d'applications)" })
-    $pipOk = $false
-    if ($pyCmd) { try { & $pyCmd @pyPre -m pip --version 2>&1 | Out-Null; $pipOk = ($LASTEXITCODE -eq 0) } catch { } }
-    Add-SantePrerequis 'pip (module python)' $pipOk $(if ($pipOk) { '' } else { "installation des dépendances de l'agent impossible" })
+    # Python — Loi 8 (plan v2, chantier 5) : le Python de l'application vit
+    # DANS le dossier, posé par le lanceur ; le python système n'est qu'un
+    # repli démasqué, et le faux raccourci du magasin n'a plus aucun rôle.
+    $Script:PortablePython = Ensure-PortablePython
+    if ($Script:PortablePython) {
+        $portVer = ''
+        try { $portVer = (& $Script:PortablePython --version 2>&1 | Out-String).Trim() } catch { }
+        Add-SantePrerequis 'Python portable (dans le dossier)' $true "$portVer — aucune dépendance au python de Windows"
+        $pipOk = $false
+        try { & $Script:PortablePython -m pip --version 2>&1 | Out-Null; $pipOk = ($LASTEXITCODE -eq 0) } catch { }
+        Add-SantePrerequis 'pip (dans le portable)' $pipOk $(if ($pipOk) { '' } else { "le portable sera réinstallé au prochain démarrage" })
+    } else {
+        # Repli : python système — mais le NOM ne suffit pas (le faux
+        # raccourci du magasin répond aussi) : sa phrase « was not found »
+        # le démasque (cas réel du 23/11).
+        $pyCmd = $null; $pyPre = @(); $pyVer = ''
+        if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
+        if ($pyCmd) { try { $pyVer = (& $pyCmd @pyPre --version 2>&1 | Out-String).Trim() } catch { } }
+        if ($pyVer -match 'was not found') { $pyCmd = $null; $pyVer = '' }
+        if ($null -ne $pyCmd) {
+            Add-SantePrerequis 'Python (repli système)' $true "$pyVer — repli ce démarrage ; le Python portable s'installera au prochain démarrage"
+            $pipOk = $false
+            try { & $pyCmd @pyPre -m pip --version 2>&1 | Out-Null; $pipOk = ($LASTEXITCODE -eq 0) } catch { }
+            Add-SantePrerequis 'pip (module python)' $pipOk $(if ($pipOk) { '' } else { "installation des dépendances de l'agent impossible" })
+        } else {
+            Add-SantePrerequis 'Python' $false "aucun python utilisable ce démarrage — l'agent ne s'installera pas ; l'interface restera sur vos clés. Remède : réseau (le Python portable s'installera tout seul au prochain démarrage), ou python.org avec « Add python.exe to PATH », ou désactivez les faux raccourcis (Paramètres > Applications > Alias d'exécution d'applications)"
+            Add-SantePrerequis 'pip (module python)' $false "installation des dépendances de l'agent impossible"
+        }
+    }
     # Bun / Caddy — Ensure-PortableSetup vient de les installer et vérifier ;
     # ils ne peuvent plus être absents ici (sinon il aurait déjà arrêté).
     Add-SantePrerequis "Runtime de l'interface (bun)" (Test-Command 'bun') ''

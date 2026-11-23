@@ -23,17 +23,40 @@ import { trace } from "./trace";
 
 const WAIT_MS = 15_000;
 
-/** Candidats python pour la gateway : le VENV DÉDIÉ de la maison d'abord
- *  (refonte (69) D1 — ses dépendances, certifiées par le lanceur, ne
- *  marchent jamais sur le python système qui fait aussi tourner vos autres
- *  Hermes), puis les interpréteurs système en repli (installations dont les
- *  dépendances existent déjà côté système). */
+/** Le Python PORTABLE de l'application (loi 8 du plan v2, chantier 5) :
+ *  posé par le lanceur dans desktop/runtime/python-portable, comme Bun et
+ *  Caddy déjà. null si absent — jamais de chemin deviné. */
+export function portablePythonPath(): string | null {
+  const root = join(import.meta.dir, "..", "..", "desktop", "runtime", "python-portable");
+  const candidates =
+    process.platform === "win32"
+      ? [join(root, "python.exe")]
+      : [join(root, "python", "bin", "python3"), join(root, "bin", "python3")];
+  for (const exe of candidates) {
+    try {
+      if (existsSync(exe)) return exe;
+    } catch {
+      /* indisponible : candidat suivant */
+    }
+  }
+  return null;
+}
+
+/** Candidats python pour la gateway, dans l'ordre de confiance : le Python
+ *  PORTABLE du dossier d'abord (loi 8, chantier 5 — il vit chez nous, le
+ *  faux raccourci « python » du Microsoft Store ne peut plus répondre à sa
+ *  place : cas réel du 23/11), puis le VENV DÉDIÉ de la maison (refonte (69)
+ *  D1 — repli système : ses dépendances certifiées ne marchent jamais sur le
+ *  python système qui fait aussi tourner vos autres Hermes), puis les
+ *  interpréteurs système démasqués en dernier repli. */
 export function pythonCandidates(agentDir: string): { cmd: string; args: string[] }[] {
+  const list: { cmd: string; args: string[] }[] = [];
+  const portable = portablePythonPath();
+  if (portable) list.push({ cmd: portable, args: [] });
   const venvPython =
     process.platform === "win32"
       ? join(agentDir, ".venv", "Scripts", "python.exe")
       : join(agentDir, ".venv", "bin", "python");
-  const list: { cmd: string; args: string[] }[] = [];
   if (existsSync(venvPython)) list.push({ cmd: venvPython, args: [] });
   if (process.platform === "win32") {
     list.push({ cmd: "py", args: ["-3"] });

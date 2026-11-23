@@ -113,11 +113,65 @@ set_sante_maillon() { # nom etat
   esac
   write_sante "en cours"
 }
+# ── BLOC PORTABLE (loi 8, chantier 5) — extrait tel quel par les épreuves ──
 # Phase 0 — prérequis parlants (§10 refonte (68)). Bloquants (arrêt propre
 # avec remède) : bun, caddy, droits d'écriture, disque. Non bloquants mais
 # DITS clairement : Git (mises à jour + clone désactivés si absent),
 # Python/pip (provisionnement de l'agent — si absents, l'interface tournera
 # sur vos clés et le manifeste le dira).
+# Loi 8 (plan v2, chantier 5) : le dossier sait se suffire — même sur Unix,
+# un poste sans VRAI python3 n'est pas un cul-de-sac. Le lanceur télécharge
+# alors un python portable (construction autonome du projet python-build-
+# standalone) DANS le dossier de l'interface : ni PATH ni rien d'autre ne
+# sont touchés. Sur Unix, un python3 système réel passe d'abord (c'est
+# l'équivalent Unix d'une installation saine) ; le portable n'est téléchargé
+# que si aucun python réel n'existe — ou est muet/faux. Les messages passent
+# par stderr (écran + journal) : la fonction REND le chemin sur stdout,
+# capturé par $(...) chez les appelants.
+log_stderr() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LAUNCHER_LOG" >&2; }
+ensure_portable_python() {
+  local portdir="$RUNTIME_DIR/python-portable"
+  local portpy="$portdir/python/bin/python3"
+  if [ ! -x "$portpy" ]; then portpy="$portdir/bin/python3"; fi
+  if [ -x "$portpy" ]; then
+    if "$portpy" --version >/dev/null 2>&1; then printf '%s' "$portpy"; return 0; fi
+    # Cas 31 : présent mais illisible — rien de menteur n'est gardé.
+    log_stderr "• le Python portable du dossier est illisible — nettoyage puis retéléchargement."
+    rm -rf "$portdir" 2>/dev/null || true
+  fi
+  if [ -f "$RUNTIME_DIR/portable-python.flag" ] && [ "$(( $(date +%s) - $(date -r "$RUNTIME_DIR/portable-python.flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+    log_stderr "• Python portable : la dernière tentative d'installation a échoué — nouvelle tentative au plus tôt dans 1 h (repli ce démarrage : python système)."
+    return 1
+  fi
+  touch "$RUNTIME_DIR/portable-python.flag" 2>/dev/null || true
+  local url="${HERMES_PYTHON_URL:-https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-x86_64-unknown-linux-gnu-install_only.tar.gz}"
+  local tarball="$RUNTIME_DIR/python-portable.tar.gz"
+  log_stderr "• installation du Python portable de l'application (construction autonome officielle, dans le dossier — rien d'autre n'est touché)…"
+  if ! curl -fsSL -m 300 -o "$tarball" "$url" 2>/dev/null || [ ! -s "$tarball" ]; then
+    log_stderr "  ATTENTION : téléchargement impossible — l'interface tourne sur vos clés ce démarrage ; nouvelle tentative au prochain démarrage."
+    rm -f "$tarball" 2>/dev/null || true
+    return 1
+  fi
+  mkdir -p "$portdir" 2>/dev/null || true
+  if ! tar xzf "$tarball" -C "$portdir" 2>/dev/null; then
+    log_stderr "  ATTENTION : archive illisible — rien de menteur n'est gardé ; nouvelle tentative au prochain démarrage."
+    rm -rf "$portdir" "$tarball" 2>/dev/null || true
+    return 1
+  fi
+  rm -f "$tarball" 2>/dev/null || true
+  portpy="$portdir/python/bin/python3"
+  if [ ! -x "$portpy" ]; then portpy="$portdir/bin/python3"; fi
+  if [ ! -x "$portpy" ] || ! "$portpy" --version >/dev/null 2>&1; then
+    log_stderr "  ATTENTION : python portable reçu illisible — rien de menteur n'est gardé ; nouvelle tentative au prochain démarrage."
+    rm -rf "$portdir" 2>/dev/null || true
+    return 1
+  fi
+  log_stderr "  Python portable prêt ($("$portpy" --version 2>/dev/null || echo '')) — il vit dans le dossier de l'interface."
+  printf '%s' "$portpy"
+  return 0
+}
+# === FIN-BLOC-PORTABLE ===
+
 phase_prerequis() {
   log "── Phase 0 : prérequis ─────────────────────────────────"
   if command -v git >/dev/null 2>&1; then
@@ -125,7 +179,7 @@ phase_prerequis() {
   else
     add_sante_prerequis "Git" 1 "mises à jour GitHub et installation de l'agent désactivées ce démarrage"
   fi
-  local pycmd="" pyver="" pipok=1
+  local pycmd="" pyver="" pipok=1 portpy=""
   if command -v python3 >/dev/null 2>&1; then pycmd="python3"
   elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
   if [ -n "$pycmd" ]; then pyver="$("$pycmd" --version 2>&1 || echo '')"; fi
@@ -137,7 +191,16 @@ phase_prerequis() {
     add_sante_prerequis "Python" 0 "$pyver"
     if "$pycmd" -m pip --version >/dev/null 2>&1; then pipok=0; fi
   else
-    add_sante_prerequis "Python" 1 "absent — l'agent ne pourra pas s'installer ; l'interface restera sur vos clés. Sur Windows : installez Python depuis python.org en cochant « Add python.exe to PATH », ou désactivez les faux raccourcis (Paramètres > Applications > Alias d'exécution d'applications)"
+    # Loi 8 (plan v2, chantier 5) : aucun vrai python → le lanceur possèdera
+    # le sien (Python portable téléchargé DANS le dossier, une fois, borné).
+    portpy="$(ensure_portable_python 2>/dev/null || echo '')"
+    if [ -n "$portpy" ]; then
+      add_sante_prerequis "Python (portable, dans le dossier)" 0 "$("$portpy" --version 2>/dev/null || echo '') — aucune dépendance au python du poste"
+      pycmd="$portpy"
+      if "$pycmd" -m pip --version >/dev/null 2>&1; then pipok=0; fi
+    else
+      add_sante_prerequis "Python" 1 "aucun python utilisable ce démarrage — l'agent ne s'installera pas ; l'interface restera sur vos clés. Remède : réseau (le Python portable s'installera tout seul au prochain démarrage), ou python.org avec « Add python.exe to PATH », ou désactivez les faux raccourcis (Paramètres > Applications > Alias d'exécution d'applications)"
+    fi
   fi
   if [ "$pipok" = "0" ]; then
     add_sante_prerequis "pip (module python)" 0
@@ -414,8 +477,11 @@ install_agent_fresh() {
     pyver="$("$pycmd" --version 2>&1 || echo '')"
     case "$pyver" in *"was not found"*) pycmd="" ;; esac
   fi
+  # Loi 8 (plan v2, chantier 5) : aucun vrai python sur le poste → le lanceur
+  # possède le sien : le Python portable téléchargé DANS le dossier.
+  if [ -z "$pycmd" ]; then pycmd="$(ensure_portable_python 2>/dev/null || echo '')"; fi
   if [ -z "$pycmd" ]; then
-    log "• ATTENTION : aucun VRAI python sur ce poste (le raccourci du Microsoft Store ne compte pas) — l'agent ne peut pas démarrer. Remède : installez Python depuis python.org en cochant « Add python.exe to PATH », puis relancez ; si un vrai Python existe déjà, désactivez les alias (Paramètres > Applications > Alias d'exécution d'applications)."
+    log "• ATTENTION : aucun VRAI python, ni dans le dossier (portable) ni sur ce poste — l'agent ne peut pas démarrer ce tour. Remède : réseau (le Python portable s'installera tout seul au prochain démarrage), ou python.org avec « Add python.exe to PATH » ; si un vrai Python existe déjà, désactivez les alias (Paramètres > Applications > Alias d'exécution d'applications)."
     return 0
   fi
   if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then

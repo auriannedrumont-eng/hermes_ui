@@ -14,7 +14,7 @@ sleep 1
 # de l'essai et le processe étranger du cas C en ont besoin.
 REAL_PY3="$(command -v python3)"
 DIR="$(cd "$(dirname "$0")" && pwd)"
-sed -n '/^install_agent_fresh() {/,/^}/p' "$DIR/../desktop/hermes-ui.sh" > "$T/f.sh"
+sed -n '/── BLOC PORTABLE/,/=== FIN-BLOC-PORTABLE ===/p;/^install_agent_fresh() {/,/^}/p' "$DIR/../desktop/hermes-ui.sh" > "$T/f.sh"
 mkdir -p "$T/runtime" "$T/root/db" "$T/root/hermes-agent/.git" "$T/root/hermes-agent/gateway"
 echo "fake-requirements" > "$T/root/hermes-agent/requirements.txt"
 echo "# stub" > "$T/root/hermes-agent/gateway/run_api.py"
@@ -82,15 +82,17 @@ EOF
 chmod +x "$TD/python3"
 mkdir -p "$TD/runtime" "$TD/root"
 ROOT="$TD/root" RUNTIME_DIR="$TD/runtime" SANTE_FILE="$TD/runtime/sante.json" PATH="$TD:$PATH" \
+  HERMES_PYTHON_URL="file:///inexistant-hermes-portable.tar.gz" \
   bash -c 'log(){ echo "$*"; }; write_sante(){ :; }; set_sante_agent(){ :; }; source "$0/sante.sh"; phase_prerequis' "$TD" > "$TD/out.txt" 2>&1
 if grep -q "✗ Python" "$TD/out.txt" && grep -q "Alias d'exécution d'applications" "$TD/out.txt"; then
   echo "PREUVE : le faux python est démasqué (✗ + remède exact affiché)"
 else
   echo "ECHEC : le faux python n'est pas démasqué — sortie :"; cat "$TD/out.txt"; rm -rf "$TD"; exit 1
 fi
-# Et le provisionnement refuse de tenter quoi que ce soit avec ce faux python.
+# Et le provisionnement refuse de tenter quoi que ce soit avec ce faux python ;
+# le portable est tenté (loi 8) mais le réseau simulé refuse → honnête échec.
 export ROOT="$T/root" RUNTIME_DIR="$T/runtime" LAUNCHER_LOG="$T/launcher.log" REAL_PY3="$REAL_PY3"
-PATH="$TD:$PATH" TRIAL_MODE=listen bash -c "$HARNESS" "$T" 2>&1 | grep -q "aucun VRAI python" \
+PATH="$TD:$PATH" HERMES_PYTHON_URL="file:///inexistant-hermes-portable.tar.gz" TRIAL_MODE=listen bash -c "$HARNESS" "$T" 2>&1 | grep -q "aucun VRAI python" \
   && echo "PREUVE : le provisionnement refuse le faux python et donne le remède" \
   || { echo "ECHEC : provisionnement trompé par le faux python"; rm -rf "$TD"; exit 1; }
 rm -rf "$TD"
@@ -110,5 +112,33 @@ TRIAL_MODE=listen bash -c "$HARNESS" "$T" 2>&1 | grep -q "le code de l'agent a c
   && echo "PREUVE : mise à jour détectée → dépendances et certification refaites" \
   || { echo "ECHEC : le changement de version est passé inaperçu"; exit 1; }
 
+echo "── CAS F : aucun python du tout → le lanceur installe le Python PORTABLE dans le dossier (loi 8) ──"
+# Le « poste » : un faux python du magasin (comme le vrai Windows sans python).
+# Le réseau simulé sert un tarball de python portable (URL surchargeable).
+TF="$(mktemp -d)"
+TFD="$(mktemp -d)"
+mkdir -p "$TF/runtime" "$TF/root/db" "$TF/root/hermes-agent/gateway" "$TF/portable-src/python/bin"
+echo "fake-requirements" > "$TF/root/hermes-agent/requirements.txt"
+echo "# stub" > "$TF/root/hermes-agent/gateway/run_api.py"
+cp "$T/python3" "$TF/portable-src/python/bin/python3"
+tar czf "$TF/portable.tar.gz" -C "$TF/portable-src" python
+cat > "$TFD/python3" <<'EOF'
+#!/usr/bin/env bash
+echo "Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases." >&2
+exit 9009
+EOF
+chmod +x "$TFD/python3"
+export ROOT="$TF/root" RUNTIME_DIR="$TF/runtime" LAUNCHER_LOG="$TF/launcher.log" REAL_PY3="$REAL_PY3"
+PATH="$TFD:$PATH" HERMES_PYTHON_URL="file://$TF/portable.tar.gz" TRIAL_MODE=listen bash -c "$HARNESS" "$T" 2>&1 | grep -q "CERTIFIÉ" \
+  && echo "PREUVE : le lanceur a posé son propre python dans le dossier et l'agent est certifié avec lui" \
+  || { echo "ECHEC : le portable n'a pas pris le relais"; rm -rf "$TF" "$TFD"; exit 1; }
+[ -x "$TF/runtime/python-portable/python/bin/python3" ] \
+  && echo "PREUVE : le Python portable vit dans le dossier de l'interface (runtime/python-portable)" \
+  || { echo "ECHEC : pas de portable dans le dossier"; rm -rf "$TF" "$TFD"; exit 1; }
+[ "$(cat "$TF/runtime/agent-deps.ok" 2>/dev/null)" = "venv" ] \
+  && echo "PREUVE : dépendances posées via le portable (environnement dédié créé par lui)" \
+  || { echo "ECHEC : dépendances non marquées"; rm -rf "$TF" "$TFD"; exit 1; }
+rm -rf "$TF" "$TFD"
+
 echo ""
-echo "Épreuve lanceur refonte (69+70) : succès"
+echo "Épreuve lanceur refonte (69+70+loi 8) : succès"
