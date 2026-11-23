@@ -532,10 +532,11 @@ install_agent_fresh() {
   # dépendances se marchent dessus (la panne du 23/11). La maison a donc SON
   # python (.venv créé une fois), SES dépendances, et doit PROUVER qu'elle
   # s'allume : allumage d'essai borné (90 s) avec sonde réelle du 9120.
-  if [ ! -f "$maison/requirements.txt" ]; then
-    [ -f "$depsok" ] || touch "$depsok" 2>/dev/null || true
-    return 0
-  fi
+  # ((80)) Les dépendances sont résolues plus bas, depuis LE DÉPÔT
+  # (pyproject.toml) — jamais depuis une liste copiée en dur : l'ancien
+  # test « requirements.txt absent → rien installer » laissait l'agent
+  # SANS AUCUNE dépendance (le dépôt amont n'a pas de requirements.txt,
+  # cas réel du 23/11 13:44 : ModuleNotFoundError 'ruamel').
   local pycmd="" pyver="" venvpy="" depsrecent=0
   if command -v python3 >/dev/null 2>&1; then pycmd="python3"
   elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
@@ -552,6 +553,32 @@ install_agent_fresh() {
     log "• ATTENTION : aucun VRAI python, ni dans le dossier (portable) ni sur ce poste — l'agent ne peut pas démarrer ce tour. Remède : réseau (le Python portable s'installera tout seul au prochain démarrage), ou python.org avec « Add python.exe to PATH » ; si un vrai Python existe déjà, désactivez les alias (Paramètres > Applications > Alias d'exécution d'applications)."
     return 0
   fi
+  # ((80)) Dépendances : depuis LE DÉPÔT, jamais une liste copiée en dur.
+  # requirements.txt du dépôt s'il en a un un jour ; sinon extraction de
+  # pyproject.toml ([project].dependencies avec leurs marqueurs — pip les
+  # évalue lui-même). Régénérée dès que le pyproject est plus récent (un
+  # pull suffit). Cas réel du 23/11 13:44 : rien n'était installé du tout
+  # (« sans-requirements » quand le dépôt n'a pas de requirements.txt)
+  # → ModuleNotFoundError 'ruamel'.
+  local reqsrc="$maison/requirements.txt"
+  local genreq="$RUNTIME_DIR/agent-requirements.txt"
+  if [ ! -f "$reqsrc" ] && [ -f "$maison/pyproject.toml" ] && [ -n "$pycmd" ]; then
+    if [ ! -f "$genreq" ] || [ "$maison/pyproject.toml" -nt "$genreq" ]; then
+      if "$pycmd" -c 'import tomllib,sys;d=tomllib.load(open(sys.argv[1],"rb"));req=[l.strip() for l in d["project"].get("dependencies",[]) if l.strip()];open(sys.argv[2],"w",encoding="utf-8").write("\n".join(req)+"\n");print("DEPS=%d"%len(req))' "$maison/pyproject.toml" "$genreq" >>"$LAUNCHER_LOG" 2>&1; then
+        log "• dépendances de l'agent extraites du pyproject du dépôt — plus jamais une liste copiée en dur."
+      else
+        rm -f "$genreq" 2>/dev/null || true
+      fi
+    fi
+    [ -f "$genreq" ] && reqsrc="$genreq"
+  fi
+  if [ ! -f "$reqsrc" ]; then
+    [ -f "$depsok" ] || touch "$depsok" 2>/dev/null || true
+    return 0
+  fi
+  # Un marqueur « sans-requirements » (ou vide : l'ancien sh) est périmé
+  # depuis le (80) — la source existe maintenant, on retente pour de vrai.
+  if [ -f "$depsok" ] && ! grep -qs . "$depsok"; then rm -f "$depsok" 2>/dev/null || true; fi
   if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
     depsrecent=1
   fi
@@ -580,22 +607,22 @@ install_agent_fresh() {
     touch "$depsflag" 2>/dev/null || true
     local piprc=1
     if [ -n "$venvpy" ]; then
-      log "• installation des dépendances python de l'agent (environnement dédié, 5 min max)…"
+      log "• installation des dépendances python de l'agent (environnement dédié, 10 min max — 45 paquets chez l'amont)…"
       if command -v timeout >/dev/null 2>&1; then
-        timeout 300 "$venvpy" -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 && piprc=0
+        timeout 600 "$venvpy" -m pip install -r "$reqsrc" >>"$LAUNCHER_LOG" 2>&1 && piprc=0
       else
-        "$venvpy" -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 && piprc=0
+        "$venvpy" -m pip install -r "$reqsrc" >>"$LAUNCHER_LOG" 2>&1 && piprc=0
       fi
     else
-      log "• installation des dépendances python de l'agent (python système — repli, 5 min max)…"
+      log "• installation des dépendances python de l'agent (python système — repli, 10 min max — 45 paquets chez l'amont)…"
       if command -v timeout >/dev/null 2>&1; then
-        if timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-           || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
+        if timeout 600 pip3 install -r "$reqsrc" >>"$LAUNCHER_LOG" 2>&1 \
+           || timeout 600 python3 -m pip install -r "$reqsrc" >>"$LAUNCHER_LOG" 2>&1; then
           piprc=0
         fi
       else
-        if pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-           || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
+        if pip3 install -r "$reqsrc" >>"$LAUNCHER_LOG" 2>&1 \
+           || python3 -m pip install -r "$reqsrc" >>"$LAUNCHER_LOG" 2>&1; then
           piprc=0
         fi
       fi

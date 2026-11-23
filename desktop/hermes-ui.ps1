@@ -1086,11 +1086,11 @@ function Install-AgentIntoHome {
     # doit PROUVER qu'elle s'allume : allumage d'essai borné (90 s) avec
     # sonde réelle du port 9120 → marqueur agent-certifie.ok. Échec de venv
     # → repli honnête sur le python système (comme (67)), cause dite.
-    $req = Join-Path $homeDir 'requirements.txt'
-    if (-not (Test-Path $req)) {
-        if (-not (Test-Path $depsOk)) { try { Set-Content $depsOk 'sans-requirements' } catch { } }
-        return
-    }
+    # ((80)) Les dépendances sont résolues plus bas, depuis LE DÉPÔT
+    # (pyproject.toml) — jamais depuis une liste copiée en dur : l'ancien
+    # test « requirements.txt absent → rien installer » laissait l'agent
+    # SANS AUCUNE dépendance (le dépôt amont n'a pas de requirements.txt,
+    # cas réel du 23/11 13:44 : ModuleNotFoundError 'ruamel').
     # Loi 8 (plan v2, chantier 5) : le Python du dossier d'abord — posé par
     # le lanceur, il ne partage rien avec Windows ; le python système n'est
     # qu'un repli, démasqué (le faux raccourci du magasin ne passe pas).
@@ -1112,6 +1112,44 @@ function Install-AgentIntoHome {
     if (-not $pyCmd) {
         Log "• ATTENTION : aucun VRAI python, ni dans le dossier (portable) ni sur ce poste — l'agent ne peut pas démarrer ce tour. Remède : réseau (le Python portable s'installera tout seul au prochain démarrage), ou installez Python depuis python.org en cochant « Add python.exe to PATH » ; si un vrai Python existe déjà : Paramètres > Applications > Alias d'exécution d'applications > désactivez les raccourcis python."
         return
+    }
+    # ((80)) Dépendances : depuis LE DÉPÔT, jamais depuis une liste copiée
+    # en dur. requirements.txt du dépôt s'il en a un un jour ; sinon
+    # extraction de pyproject.toml ([project].dependencies — 45 pins
+    # exacts avec leurs marqueurs de version/platforme, pip les évalue
+    # lui-même). Régénérée dès que le pyproject est plus récent que la
+    # dernière extraction : un `git pull` suffit à rafraîchir la liste.
+    $req = Join-Path $RuntimeDir 'agent-requirements.txt'
+    $reqDepot = Join-Path $homeDir 'requirements.txt'
+    $pyproj = Join-Path $homeDir 'pyproject.toml'
+    if (Test-Path $reqDepot) {
+        $req = $reqDepot
+    } elseif ((Test-Path $pyproj) -and $pyCmd) {
+        $regen = $true
+        if ((Test-Path $req) -and (Test-Path $pyproj)) {
+            try { $regen = ((Get-Item $pyproj).LastWriteTime -gt (Get-Item $req).LastWriteTime) } catch { }
+        }
+        if ($regen) {
+            try {
+                $gen = (& $pyCmd @pyPre -c "import tomllib,sys;d=tomllib.load(open(sys.argv[1],'rb'));req=[l.strip() for l in d['project'].get('dependencies',[]) if l.strip()];open(sys.argv[2],'w',encoding='utf-8').write('\n'.join(req)+'\n');print('DEPS=%d'%len(req))" $pyproj $req | Out-String).Trim()
+                Log ("• dépendances de l'agent extraites du pyproject du dépôt ({0}) — plus jamais une liste copiée en dur." -f $gen)
+            } catch {
+                Log "  ATTENTION : extraction des dépendances depuis pyproject.toml impossible ($($_.Exception.Message)) — retenté au prochain démarrage."
+                if (Test-Path $req) { Remove-Item $req -Force -ErrorAction SilentlyContinue }
+            }
+        }
+    }
+    if (-not (Test-Path $req)) {
+        if (-not (Test-Path $depsOk)) { try { Set-Content $depsOk 'sans-requirements' } catch { } }
+        return
+    }
+    # Un marqueur « sans-requirements » (ou vide : l'ancien sh) est périmé
+    # depuis le (80) — la source existe maintenant, on retente pour de vrai.
+    if (Test-Path $depsOk) {
+        try {
+            $depTxt = (Get-Content $depsOk -Raw -ErrorAction SilentlyContinue)
+            if (-not $depTxt -or $depTxt.Trim() -eq 'sans-requirements') { Remove-Item $depsOk -Force -ErrorAction SilentlyContinue }
+        } catch { }
     }
     $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
     $depsDejaTentees = $false
@@ -1159,13 +1197,13 @@ function Install-AgentIntoHome {
         $pipCmd = if ($venvActif) { $venvPy } else { $pyCmd }
         $pipPre = if ($venvActif) { @() } else { $pyPre }
         try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
-        Log ("• installation des dépendances python de l'agent ({0}, 5 min max)…" -f $(if ($venvActif) { 'environnement dédié' } elseif ($pyKind -eq 'portable') { 'python portable du dossier' } else { 'python système — repli' }))
+        Log ("• installation des dépendances python de l'agent ({0}, 10 min max — 45 paquets chez l'amont)…" -f $(if ($venvActif) { 'environnement dédié' } elseif ($pyKind -eq 'portable') { 'python portable du dossier' } else { 'python système — repli' }))
         # Le job renvoie CODE=<sortie pip> : on ne marque « réussi » que si pip
         # sort vraiment en 0 — sinon nouvelle tentative au prochain démarrage.
         $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pipCmd, $pipPre, $req
-        if (-not (Wait-Job $pipJob -Timeout 300)) {
+        if (-not (Wait-Job $pipJob -Timeout 600)) {
             Stop-Job $pipJob; Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
-            Log "  ATTENTION : dépendances non terminées en 5 min — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+            Log "  ATTENTION : dépendances non terminées en 10 min — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
             return
         }
         $pipOut = (Receive-Job $pipJob 2>&1 | Out-String).Trim()

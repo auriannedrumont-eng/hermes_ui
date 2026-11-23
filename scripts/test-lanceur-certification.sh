@@ -35,6 +35,8 @@ if [ "$1" = "-m" ] && [ "$2" = "hermes_cli.main" ]; then
   fi
   exec "${REAL_PY3:-python3}" -c "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',9120)); s.listen(1); time.sleep(300)"
 fi
+# ((80)) la génération des dépendances (-c tomllib) passe au VRAI python
+if [ "$1" = "-c" ]; then exec "${REAL_PY3:-python3}" "$@"; fi
 if [ "$1" = "-m" ]; then exit 0; fi
 if [ "${TRIAL_MODE:-listen}" = "die" ]; then
   echo "ModuleNotFoundError: No module named 'fastapi'" >&2
@@ -46,6 +48,8 @@ PYEOF
   exit 0
 fi
 if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then exit 0; fi
+# ((80)) la génération des dépendances (-c tomllib) passe au VRAI python
+if [ "$1" = "-c" ]; then exec "${REAL_PY3:-python3}" "$@"; fi
 exit 0
 EOF
 chmod +x "$T/python3"
@@ -169,5 +173,48 @@ RUNTIME_DIR="$TG/runtime" LAUNCHER_LOG="$TG/l.log" HERMES_NODE_URL="file://$TG/n
   || { echo "ECHEC : pas de portable dans le dossier"; rm -rf "$TG"; exit 1; }
 rm -rf "$TG"
 
+echo "── CAS H : deps extraites du pyproject du dépôt ((80) — jamais une liste en dur) ──"
+# Le dépôt amont n'a PAS de requirements.txt : ses vraies dépendances
+# vivent dans pyproject.toml ([project].dependencies avec marqueurs).
+# Le lanceur doit les extraire (tomllib) dans runtime/ et les installer.
+TH="$(mktemp -d)"
+mkdir -p "$TH/runtime" "$TH/root/db" "$TH/root/hermes-agent/gateway" "$TH/root/hermes-agent/.venv/bin"
+echo "# stub" > "$TH/root/hermes-agent/gateway/run_api.py"
+cat > "$TH/root/hermes-agent/pyproject.toml" <<'EOF'
+[project]
+name = "fake-agent"
+version = "0.0.0"
+dependencies = [
+  "depa==1.0.0; python_version >= '3.14'",
+  "depb==2.0.0",
+]
+EOF
+# venv fake (comme le CAS A) : -c passe au vrai python (tomllib), -m pip → OK.
+cat > "$TH/root/hermes-agent/.venv/bin/python" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "-c" ]; then exec "${REAL_PY3:-python3}" "$@"; fi
+if [ "$1" = "-m" ] && [ "$2" = "hermes_cli.main" ]; then
+  exec "${REAL_PY3:-python3}" -c "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',9120)); s.listen(1); time.sleep(300)"
+fi
+if [ "$1" = "-m" ]; then exit 0; fi
+exec "${REAL_PY3:-python3}" -c "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',9120)); s.listen(1); time.sleep(300)"
+EOF
+chmod +x "$TH/root/hermes-agent/.venv/bin/python"
+cp "$T/python3" "$TH/python3"
+export ROOT="$TH/root" RUNTIME_DIR="$TH/runtime" LAUNCHER_LOG="$TH/launcher.log" PATH="$TH:$PATH"
+# $0 reste "$T" : c'est là que vit f.sh ; les chemins réels passent par les variables.
+TRIAL_MODE=listen bash -c "$HARNESS" "$T" >/dev/null 2>&1
+if grep -q "depa==1.0.0" "$TH/runtime/agent-requirements.txt" 2>/dev/null \
+   && grep -q "depb==2.0.0" "$TH/runtime/agent-requirements.txt" 2>/dev/null; then
+  echo "PREUVE : requirements générés depuis le pyproject du dépôt, marqueurs conservés"
+else
+  echo "ECHEC : la génération depuis pyproject.toml n'a pas produit runtime/agent-requirements.txt"
+  echo "── launcher.log (fin) :"; tail -5 "$TH/launcher.log" 2>/dev/null; rm -rf "$TH"; exit 1
+fi
+[ -f "$TH/runtime/agent-deps.ok" ] \
+  && echo "PREUVE : dépendances extraites installées (agent-deps.ok = $(cat "$TH/runtime/agent-deps.ok"))" \
+  || { echo "ECHEC : deps non marquées après génération"; rm -rf "$TH"; exit 1; }
+rm -rf "$TH"
+
 echo ""
-echo "Épreuve lanceur refonte (69+70+(71)+72) : succès"
+echo "Épreuve lanceur refonte (69+70+(71)+72+(80)) : succès"

@@ -460,6 +460,35 @@ async function main() {
   check("sh : PYTHONPATH explicite dans les deux lancements (certification + allumage)",
     (shU.match(/PYTHONPATH="\$maison\$\{PYTHONPATH:\+:\$PYTHONPATH\}"/g) || []).length >= 2);
 
+  console.log("[80] les dépendances viennent du DÉPÔT (pyproject.toml) — jamais d'une liste en dur");
+  // Cas réel du 23/11 13:44 : `ModuleNotFoundError: No module named
+  // 'ruamel'`. Le dépôt amont n'a PAS de requirements.txt : ses 45
+  // dépendances core (ruamel.yaml, fastapi, uvicorn, pydantic, pywin32…,
+  // pins exacts pour python 3.14 avec marqueurs) vivent dans
+  // pyproject.toml. L'ancien lanceur, sans requirements.txt, écrivait
+  // « sans-requirements » et n'installait RIEN. Corrigé : extraction
+  // tomllib de [project].dependencies vers runtime/agent-requirements.txt
+  // (régénérée dès que le pyproject est plus récent — un pull suffit),
+  // repli sur requirements.txt du dépôt s'il en acquiert un un jour,
+  // purge du marqueur périmé, timeout pip 5→10 min (45 paquets).
+  check("ps1 : extraction tomllib de pyproject.toml vers agent-requirements.txt, régénérée si plus récent",
+    psN.includes("agent-requirements.txt") &&
+      psN.includes("tomllib.load(open(sys.argv[1],'rb'))") &&
+      psN.includes("LastWriteTime -gt (Get-Item $req).LastWriteTime") &&
+      psN.includes("Test-Path $reqDepot"));
+  check("ps1 : le marqueur « sans-requirements » périmé est purgé (retente l'install)",
+    psN.includes("sans-requirements") && psN.includes("Remove-Item $depsOk"));
+  check("ps1 + sh : timeout pip 600 s (45 paquets)",
+    psN.includes("-Timeout 600") && (shU.match(/timeout 600/g) || []).length >= 3);
+  check("sh : extraction tomllib + repli requirements.txt du dépôt + purge marqueur vide",
+    shU.includes("agent-requirements.txt") &&
+      shU.includes('tomllib.load(open(sys.argv[1],"rb"))') &&
+      shU.includes('[ "$maison/pyproject.toml" -nt "$genreq" ]') &&
+      shU.includes("local reqsrc=") &&
+      !shU.includes('-r "$maison/requirements.txt"'));
+  check("sh : l'ancien early-return « requirements absent → rien installer » est parti",
+    !/if \[ ! -f "\$maison\/requirements\.txt" \]; then\n\s*\[ -f "\$depsok" \] \|\| touch/.test(shU));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }
