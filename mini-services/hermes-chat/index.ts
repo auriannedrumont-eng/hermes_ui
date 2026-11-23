@@ -554,6 +554,21 @@ void startAgentGatewayIfDown().then((up) => {
 // pose ses socket.on(...) ; le contexte partagé (handlers/context.ts) est
 // câblé juste avant. disconnect/error (cycle de vie) restent ici.
 
+// ((90)) Re-sonde périodique tant que le mode est local : la sonde unique de
+// boot (probeNow ci-dessus) a perdu une course réelle le 23/11 00:21 — le
+// port 9120 répondait déjà mais la poignée de main WS n'était pas prête, et
+// sans tour utilisateur le badge restait « éteint » pour toujours alors que
+// l'agent vivait. Un timer léger (30 s, throttlé par reprobeIfOffline, zéro
+// requête dès que le mode est gateway) rend la bascule automatique certaine ;
+// le passage gateway rediffuse le hello comme le fait probeNow.
+setInterval(() => {
+  if (connector.mode !== "gateway") {
+    void connector.probeNow().then((ok) => {
+      if (ok) io.emit("hello", helloPayload());
+    });
+  }
+}, 30_000).unref?.();
+
 // Contexte partagé des handlers (découpage 2026-11) : une seule pose, avant
 // toute connexion client — majLogSig passe par accesseur (mutable côté service).
 bindHandlerContext({
