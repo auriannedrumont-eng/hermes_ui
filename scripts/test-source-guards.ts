@@ -172,6 +172,20 @@ async function main() {
   check("les lanceurs ne promettent plus de « secours » pour l'agent",
     !ps1Install.includes("secours") && !shInstall.includes("secours"));
 
+  console.log("[8] build : hermes-agent vit dans le dossier, jamais dans le build (§9 (66))");
+  // Capture réelle : next build avalait le dépôt cloné (507 Ko d'erreurs
+  // TS2307 des sources web/ evals/ website/ de l'agent) et l'interface
+  // retombait en mode développement. L'agent vit chez nous, il ne fait
+  // pas partie de notre build.
+  const tsconfig = read("tsconfig.json");
+  const excludeIdx = tsconfig.indexOf('"exclude"');
+  check("tsconfig : hermes-agent exclu du type-check",
+    tsconfig.slice(excludeIdx).includes('"hermes-agent"'));
+  check("eslint : hermes-agent ignoré",
+    read("eslint.config.mjs").includes('"hermes-agent/**"'));
+  check("gitignore : la copie fraîche reste hors versionnage",
+    read(".gitignore").includes("/hermes-agent/"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

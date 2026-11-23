@@ -47,6 +47,14 @@
     // échouait chez l'utilisateur (TS1005 en rafale) tant que ce dossier
     // n'était pas exclu du type-check. Absent du dépôt, le défaut ne se
     // voyait qu'à la première reconstruction locale.
-    "tools"
+    "tools",
+    // hermes-agent/ : la copie fraîche de l'agent Hermes clonée par le
+    // lanceur DANS le dossier de l'interface (§9 (63), gitignoré). C'est un
+    // dépôt séparé avec ses propres sources (web/, evals/, website/…) qui
+    // ne compilent PAS avec nos réglages : sans exclusion, next build
+    // avalait tout le dépôt (507 Ko d'erreurs TS2307 en rafale) et
+    // l'interface retombait en mode développement. L'agent vit chez nous,
+    // il ne fait pas partie de notre build — loi (66).
+    "hermes-agent"
   ]
 }

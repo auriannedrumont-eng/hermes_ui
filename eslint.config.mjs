@@ -46,8 +46,11 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
 }, {
   // tools/ : cache du bun portable du lanceur (types « ts7.1 » non
   // parsables par le TypeScript du projet — cf. tsconfig.json exclude) ;
-  // desktop/runtime, db, upload/download : données locales hors dépôt.
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "tools/**", "desktop/runtime/**", "db/**"]
+  // hermes-agent/ : la copie fraîche de l'agent clonée DANS le dossier de
+  // l'interface (§9 (63)/(66)) — dépôt séparé, jamais linté ni compilé
+  // avec nos réglages ; desktop/runtime, db, upload/download : données
+  // locales hors dépôt.
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "tools/**", "desktop/runtime/**", "db/**", "hermes-agent/**"]
 }];
 
 export default eslintConfig;
