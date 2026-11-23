@@ -938,6 +938,18 @@ function Start-Chat {
         Die "les ports $ChatPort/$FilesPort sont occupes par un autre programme alors que le service Hermes n'y repond pas (netstat -ano | findstr ""$ChatPort $FilesPort"")."
     }
     Log "• demarrage du mini-service (ports $ChatPort/$FilesPort)..."
+    # (87) Jeton de session du webapp de l'agent : depuis hermes-agent 0.21.x
+    # avec webapp.enabled, la poignee de main /api/ws n'admet sur la boucle
+    # locale QUE le jeton de session en `?token=` (la porte du webapp compare
+    # ce parametre — cf. amont hermes_cli/web_server_chat.py) ; l'en-tete
+    # Bearer reste pour le REST. Le connecteur du mini-service lit ce jeton
+    # via HERMES_GATEWAY_TOKEN. Le fichier est cree par l'agent au premier
+    # allumage du listener (gateway/webapp_listener.py, webapp/session-token).
+    $gwHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $env:USERPROFILE '.hermes' }
+    $gwTokenFile = Join-Path $gwHome 'webapp\session-token'
+    if (Test-Path $gwTokenFile) {
+        try { $env:HERMES_GATEWAY_TOKEN = (Get-Content $gwTokenFile -Raw).Trim() } catch { }
+    }
     $chatScript = Join-Path $Root 'mini-services\hermes-chat\index.ts'   # chemin absolu : marque le processus comme nôtre
     $p = Start-Component 'bun' @($chatScript) (Join-Path $Root 'mini-services\hermes-chat') 'mini-service'
     State-Set 'CHAT_PID' $p.Id; State-Set 'CHAT_OWNED' 1

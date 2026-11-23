@@ -38,6 +38,18 @@ function toWsUrl(url: string): string {
   return clean.endsWith("/api/ws") ? clean : `${clean}/api/ws`;
 }
 
+/** URL de dial WebSocket avec le jeton de session : depuis hermes-agent 0.21.x
+ *  avec webapp.enabled, la poignée de main /api/ws n'accepte sur la boucle
+ *  locale QUE le jeton de session du webapp passé en `?token=` (la porte du
+ *  webapp le compare à constante de temps — cf. amont hermes_cli/
+ *  web_server_chat.py, `_ws_auth_credential_and_reason`) ; l'en-tête
+ *  Authorization reste pour les appels REST (listModels, sessions natives).
+ *  Sans jeton réglé, dial identique à avant (gateway sans webapp). */
+function toWsDialUrl(url: string, token: string | null): string {
+  const base = toWsUrl(url);
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
 // Exporté pour la sonde REST « sessions natives » (motor-sessions.ts) :
 // même base HTTP que la gateway du chat, déjà résolue ici.
 export function toHttpBase(url: string): string {
@@ -246,7 +258,7 @@ export class HermesConnector {
         }
         resolve(ok);
       };
-      const ws = new WebSocket(toWsUrl(this.gatewayUrl!), {
+      const ws = new WebSocket(toWsDialUrl(this.gatewayUrl!, this.gatewayToken), {
         headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
         handshakeTimeout: timeoutMs,
       });
@@ -398,7 +410,7 @@ export class HermesConnector {
       let endedProperly = false;
       let content = "";
       let reasoning = "";
-      const ws = new WebSocket(toWsUrl(this.gatewayUrl!), {
+      const ws = new WebSocket(toWsDialUrl(this.gatewayUrl!, this.gatewayToken), {
         headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
         handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
       });
