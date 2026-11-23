@@ -194,7 +194,7 @@ chat_healthy() {
 ui_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get UI_PORT)/" 6)" = "200" ]; }
 gw_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get GW_PORT)/" 4)" = "200" ]; }
 
-# §9 (63) — copie fraîche de l'agent dans le dossier de l'application.
+# §9 (63)/(67) — copie fraîche de l'agent dans le dossier de l'application.
 # L'interface installe SA copie de l'agent officiel (NousResearch/hermes-agent,
 # surcharge HERMES_AGENT_REPO_URL) dans <racine>/hermes-agent — le dossier que
 # le service consulte EN PREMIER. Les installations existantes (dossier frère
@@ -203,47 +203,68 @@ gw_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get GW_PORT)/" 4)" = "20
 # maison est l'UNIQUE emplacement que le service connaît ; si le clone échoue,
 # l'interface reste sans agent (état honnête) jusqu'à une installation
 # réussie au prochain démarrage.
-# Idempotent ; au plus une tentative par heure (flag daté) — un réseau absent
-# ne doit pas rallonger chaque démarrage ; clone borné 10 min, dépendances
-# python 5 min (meilleur effort) ; jamais bloquant.
+# Dépendances python (67) : tentées tant que le marqueur agent-deps.ok
+# n'existe pas — au plus une fois par heure (flag daté). Avant (67) elles
+# n'étaient tentées qu'au moment du clone : un échec silencieux laissait
+# l'agent mort pour toujours (« Hermes éteint · vos clés répondent »).
+# Idempotent ; clone borné 10 min, dépendances 5 min ; jamais bloquant.
 install_agent_fresh() {
   local maison="$ROOT/hermes-agent" flag="$RUNTIME_DIR/agent-install.flag" url
+  local depsok="$RUNTIME_DIR/agent-deps.ok" depsflag="$RUNTIME_DIR/agent-deps.flag"
   if [ -e "$maison/.git" ] || [ -f "$maison/gateway/run_api.py" ]; then
-    return 0
-  fi
-  if [ -f "$flag" ] && [ "$(( $(date +%s) - $(date -r "$flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
-    log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
-    return 0
-  fi
-  touch "$flag" 2>/dev/null || true
-  if [ -d "$maison" ]; then
-    log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
-    rm -rf "$maison" 2>/dev/null || { log "  ATTENTION : nettoyage impossible — pas d'agent installé ; l'installation retentera au prochain démarrage."; return 0; }
-  fi
-  url="${HERMES_AGENT_REPO_URL:-https://github.com/NousResearch/hermes-agent}"
-  log "• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : $url)…"
-  if command -v timeout >/dev/null 2>&1; then
-    timeout 600 git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
+    # maison valide : rien SAUF si les dépendances n'ont jamais réussi
+    if [ -f "$depsok" ]; then return 0; fi
   else
-    git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
+    if [ -f "$flag" ] && [ "$(( $(date +%s) - $(date -r "$flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+      log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
+      return 0
+    fi
+    touch "$flag" 2>/dev/null || true
+    if [ -d "$maison" ]; then
+      log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
+      rm -rf "$maison" 2>/dev/null || { log "  ATTENTION : nettoyage impossible — pas d'agent installé ; l'installation retentera au prochain démarrage."; return 0; }
+    fi
+    url="${HERMES_AGENT_REPO_URL:-https://github.com/NousResearch/hermes-agent}"
+    log "• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : $url)…"
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 600 git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
+    else
+      git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
+    fi
+    if [ -f "$maison/gateway/run_api.py" ]; then
+      log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
+    else
+      log "  ATTENTION : clone échoué — pas d'agent installé : l'installation retentera au prochain démarrage."
+      rm -rf "$maison" 2>/dev/null || true
+      return 0
+    fi
   fi
-  if [ -f "$maison/gateway/run_api.py" ]; then
-    log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
-    if [ -f "$maison/requirements.txt" ]; then
-      log "  installation des dépendances python (meilleur effort, 5 min max)…"
-      if command -v timeout >/dev/null 2>&1; then
-        timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-          || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-          || log "  dépendances incomplètes — voir le journal ; l'agent risque de réclamer un module au premier lancement."
+  if [ -f "$maison/requirements.txt" ] && [ ! -f "$depsok" ]; then
+    if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+      log "• dépendances de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
+      return 0
+    fi
+    touch "$depsflag" 2>/dev/null || true
+    log "• installation des dépendances python de l'agent (5 min max)…"
+    if command -v timeout >/dev/null 2>&1; then
+      if timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+         || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
+        touch "$depsok" 2>/dev/null || true
+        log "  dépendances installées — l'agent peut démarrer."
       else
-        pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-          || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-          || true
+        log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+      fi
+    else
+      if pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+         || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
+        touch "$depsok" 2>/dev/null || true
+        log "  dépendances installées — l'agent peut démarrer."
+      else
+        log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage."
       fi
     fi
-  else
-    log "  ATTENTION : clone échoué — pas d'agent installé : l'installation retentera au prochain démarrage."
-    rm -rf "$maison" 2>/dev/null || true
+  elif [ ! -f "$depsok" ]; then
+    touch "$depsok" 2>/dev/null || true  # pas de requirements.txt : rien à tenter
   fi
 }
 

@@ -922,67 +922,103 @@ function Open-Browser([string]$url) {
 # connaît ; si le clone échoue, l'interface reste sans agent (état
 # honnête) jusqu'à une installation réussie au prochain démarrage.
 # Garde-fous :
-#   • déjà à la maison avec une installation valide → rien (idempotent) ;
+#   • déjà à la maison, installation valide ET dépendances réussies → rien ;
 #   • dossier sans installation valide (clone avorté) → nettoyé puis
 #     réinstallé — c'est le dossier géré par le lanceur ;
+#   • dépendances python : tentées tant qu'elles n'ont pas réussi UNE fois
+#     (marqueur agent-deps.ok), au plus une fois par heure (flag daté) —
+#     avant (67) elles n'étaient tentées qu'au moment du clone : un échec
+#     silencieux laissait l'agent mort pour toujours (« Hermes éteint ·
+#     vos clés répondent » sans jamais s'allumer) ;
 #   • réessaie pas plus d'une fois par heure (flag daté) : un réseau
 #     absent ne doit pas rallonger chaque démarrage ;
 #   • clone et dépendances bornés (10 min / 5 min), jamais bloquants.
 function Install-AgentIntoHome {
     $homeDir = Join-Path $Root 'hermes-agent'
-    if ((Test-Path (Join-Path $homeDir '.git')) -or
-        (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) { return }
-    $tryFlag = Join-Path $RuntimeDir 'agent-install.flag'
-    if (Test-Path $tryFlag) {
-        try {
-            $last = [datetime]::Parse((Get-Content $tryFlag -Raw).Trim())
-            if (((Get-Date) - $last).TotalHours -lt 1) {
-                Log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
+    $depsOk = Join-Path $RuntimeDir 'agent-deps.ok'
+    $valide = (Test-Path (Join-Path $homeDir '.git')) -or (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))
+    if ($valide -and (Test-Path $depsOk)) { return }
+    if (-not $valide) {
+        $tryFlag = Join-Path $RuntimeDir 'agent-install.flag'
+        if (Test-Path $tryFlag) {
+            try {
+                $last = [datetime]::Parse((Get-Content $tryFlag -Raw).Trim())
+                if (((Get-Date) - $last).TotalHours -lt 1) {
+                    Log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
+                    return
+                }
+            } catch { }  # flag illisible : on retente, on le réécrira
+        }
+        if (Test-Path $homeDir) {
+            Log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
+            try { Remove-Item -Recurse -Force $homeDir } catch {
+                Log "  ATTENTION : nettoyage impossible — pas d'agent installé ; l'installation retentera au prochain démarrage."
+                try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
                 return
             }
-        } catch { }  # flag illisible : on retente, on le réécrira
-    }
-    if (Test-Path $homeDir) {
-        Log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
-        try { Remove-Item -Recurse -Force $homeDir } catch {
-            Log "  ATTENTION : nettoyage impossible — pas d'agent installé ; l'installation retentera au prochain démarrage."
-            try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
+        }
+        $repoUrl = if ($env:HERMES_AGENT_REPO_URL) { $env:HERMES_AGENT_REPO_URL } else { 'https://github.com/NousResearch/hermes-agent' }
+        Log ("• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : {0})..." -f $repoUrl)
+        try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
+        # Clone borné : un réseau lent ne doit pas bloquer le démarrage.
+        $cloneJob = Start-Job -ScriptBlock { param($u, $d) git clone $u $d 2>&1 } -ArgumentList $repoUrl, $homeDir
+        if (-not (Wait-Job $cloneJob -Timeout 600)) {
+            Stop-Job $cloneJob; Remove-Job $cloneJob -Force
+            Log "  ATTENTION : clone non terminé en 10 min — abandonné. Pas d'agent installé : l'installation retentera au prochain démarrage (au plus tôt dans 1 h)."
+            if (Test-Path $homeDir) { try { Remove-Item -Recurse -Force $homeDir } catch { } }
             return
         }
-    }
-    $repoUrl = if ($env:HERMES_AGENT_REPO_URL) { $env:HERMES_AGENT_REPO_URL } else { 'https://github.com/NousResearch/hermes-agent' }
-    Log ("• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : {0})..." -f $repoUrl)
-    try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
-    # Clone borné : un réseau lent ne doit pas bloquer le démarrage.
-    $cloneJob = Start-Job -ScriptBlock { param($u, $d) git clone $u $d 2>&1 } -ArgumentList $repoUrl, $homeDir
-    if (-not (Wait-Job $cloneJob -Timeout 600)) {
-        Stop-Job $cloneJob; Remove-Job $cloneJob -Force
-        Log "  ATTENTION : clone non terminé en 10 min — abandonné. Pas d'agent installé : l'installation retentera au prochain démarrage (au plus tôt dans 1 h)."
-        if (Test-Path $homeDir) { try { Remove-Item -Recurse -Force $homeDir } catch { } }
-        return
-    }
-    $cloneOut = (Receive-Job $cloneJob 2>&1 | Out-String).Trim()
-    Remove-Job $cloneJob
-    if (-not (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) {
-        $derniere = ($cloneOut -split "`r?`n" | Select-Object -Last 1)
-        Log ("  ATTENTION : clone échoué ({0}) — pas d'agent installé : l'installation retentera au prochain démarrage." -f $derniere)
-        return
-    }
-    Log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
-    # Dépendances python : meilleur effort, borné — sur un poste où l'agent
-    # officiel tourne déjà, elles existent déjà côté système.
-    $req = Join-Path $homeDir 'requirements.txt'
-    if (Test-Path $req) {
-        $pyCmd = $null; $pyPre = @()
-        if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') }
-        elseif (Test-Command 'python') { $pyCmd = 'python' }
-        if ($pyCmd) {
-            Log "  installation des dépendances python (meilleur effort, 5 min max)…"
-            $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1 } -ArgumentList $pyCmd, $pyPre, $req
-            if (Wait-Job $pipJob -Timeout 300) { Log "  étape dépendances terminée (si l'agent réclame un module, elle est relancée au prochain démarrage)." }
-            else { Stop-Job $pipJob; Log "  dépendances non terminées en 5 min — abandonnées ; l'agent risque de réclamer un module au premier lancement." }
-            Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
+        $cloneOut = (Receive-Job $cloneJob 2>&1 | Out-String).Trim()
+        Remove-Job $cloneJob
+        if (-not (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) {
+            $derniere = ($cloneOut -split "`r?`n" | Select-Object -Last 1)
+            Log ("  ATTENTION : clone échoué ({0}) — pas d'agent installé : l'installation retentera au prochain démarrage." -f $derniere)
+            return
         }
+        Log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
+    }
+    # Dépendances python de l'agent (§9 (67)) : tentées tant que le marqueur
+    # agent-deps.ok n'existe pas — au plus une fois par heure (flag daté).
+    $req = Join-Path $homeDir 'requirements.txt'
+    if (-not (Test-Path $req)) {
+        if (-not (Test-Path $depsOk)) { try { Set-Content $depsOk 'sans-requirements' } catch { } }
+        return
+    }
+    $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
+    if (Test-Path $depsFlag) {
+        try {
+            $lastDeps = [datetime]::Parse((Get-Content $depsFlag -Raw).Trim())
+            if (((Get-Date) - $lastDeps).TotalHours -lt 1) {
+                Log "• dépendances de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
+                return
+            }
+        } catch { }
+    }
+    $pyCmd = $null; $pyPre = @()
+    if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') }
+    elseif (Test-Command 'python') { $pyCmd = 'python' }
+    if (-not $pyCmd) {
+        Log "• ATTENTION : python introuvable sur ce poste — l'agent ne peut pas démarrer ; installez Python puis relancez Hermes-Web."
+        return
+    }
+    try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
+    Log "• installation des dépendances python de l'agent (5 min max)…"
+    # Le job renvoie CODE=<sortie pip> : on ne marque « réussi » que si pip
+    # sort vraiment en 0 — sinon nouvelle tentative au prochain démarrage.
+    $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pyCmd, $pyPre, $req
+    if (-not (Wait-Job $pipJob -Timeout 300)) {
+        Stop-Job $pipJob; Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
+        Log "  ATTENTION : dépendances non terminées en 5 min — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+        return
+    }
+    $pipOut = (Receive-Job $pipJob 2>&1 | Out-String).Trim()
+    Remove-Job $pipJob -ErrorAction SilentlyContinue
+    $code = if ($pipOut -match 'CODE=(\d+)\s*$') { $Matches[1] } else { '1' }
+    if ($code -eq '0') {
+        try { Set-Content $depsOk 'ok' } catch { }
+        Log "  dépendances installées — l'agent peut démarrer."
+    } else {
+        Log ("  ATTENTION : installation des dépendances échouée (code {0}) — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)." -f $code)
     }
 }
 
