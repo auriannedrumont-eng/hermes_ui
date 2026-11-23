@@ -140,5 +140,25 @@ PATH="$TFD:$PATH" HERMES_PYTHON_URL="file://$TF/portable.tar.gz" TRIAL_MODE=list
   || { echo "ECHEC : dépendances non marquées"; rm -rf "$TF" "$TFD"; exit 1; }
 rm -rf "$TF" "$TFD"
 
+echo "── CAS G : node absent → le lanceur installe le Node PORTABLE dans le dossier (loi 8) ──"
+TG="$(mktemp -d)"
+mkdir -p "$TG/runtime" "$TG/node-src/node-v22.20.0-linux-x64/bin" "$TG/fakebin"
+printf '#!/usr/bin/env bash\necho "v22.20.0"\nexit 0\n' > "$TG/node-src/node-v22.20.0-linux-x64/bin/node"
+chmod +x "$TG/node-src/node-v22.20.0-linux-x64/bin/node"
+tar cJf "$TG/node.tar.xz" -C "$TG/node-src" node-v22.20.0-linux-x64/bin
+# Un « poste » sans node : un PATH minimal (bash, tar, curl, tee… mais PAS node).
+# xz est requis par tar pour décompresser le .tar.xz — présent sur tout Unix.
+for t in bash sh tar chmod date tee uname curl mkdir rm grep head cat xz; do
+  p="$(command -v "$t" 2>/dev/null)" && ln -sf "$p" "$TG/fakebin/$t"
+done
+sed -n '/── BLOC NODE-PORTABLE/,/=== FIN-BLOC-NODE-PORTABLE ===/p' "$DIR/../desktop/hermes-ui.sh" > "$TG/n.sh"
+RUNTIME_DIR="$TG/runtime" LAUNCHER_LOG="$TG/l.log" HERMES_NODE_URL="file://$TG/node.tar.xz" \
+  PATH="$TG/fakebin" bash -c 'source "$0/n.sh"; r="$(ensure_node)"; if [ -x "$r" ]; then "$r" --version | grep -q v22 && echo "PREUVE : Node portable installé dans le dossier et utilisable"; else echo "ECHEC : pas de node portable"; exit 1; fi' "$TG" \
+  || { echo "ECHEC : CAS G"; rm -rf "$TG"; exit 1; }
+[ -x "$TG/runtime/node-portable/bin/node" ] \
+  && echo "PREUVE : le Node portable vit dans le dossier de l'interface (runtime/node-portable)" \
+  || { echo "ECHEC : pas de portable dans le dossier"; rm -rf "$TG"; exit 1; }
+rm -rf "$TG"
+
 echo ""
-echo "Épreuve lanceur refonte (69+70+loi 8) : succès"
+echo "Épreuve lanceur refonte (69+70+(71)+72) : succès"

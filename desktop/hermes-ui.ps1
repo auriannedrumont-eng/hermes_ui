@@ -356,15 +356,27 @@ $Script:UpdateChangedFiles = @()
 
 # Appelle git en absorbant stderr (avec $ErrorActionPreference = Stop un
 # « 2>&1 » brut interromprait le script sous PowerShell 5.1) ; renvoie
-# @{ Code = code de sortie ; Text = sortie compilee }.
+# @{ Code = code de sortie ; Text = sortie compilee }. Le git appelé est
+# celui du dossier (MinGit, loi 8) — le système n'est qu'un repli.
 function Invoke-Git([string[]]$GitArgs) {
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $out = & git -C $Root @GitArgs 2>&1
+        $out = & $Script:GitExe -C $Root @GitArgs 2>&1
         $text = ($out | ForEach-Object { [string]$_ }) -join "`n"
         return @{ Code = $LASTEXITCODE; Text = $text }
     } finally { $ErrorActionPreference = $old }
+}
+
+# Git prêt : MinGit du dossier posé et lisible (le dossier d'abord), sinon
+# git du système. Jamais deviné : le nom « git » ne suffit pas — et un MinGit
+# posé mais illisible n'est pas remplacé en silence par le système.
+function Test-GitReady {
+    if ($Script:GitDir) {
+        if ($Script:GitExe -and (Test-Path $Script:GitExe)) { return $true }
+        return $false
+    }
+    return (Test-Command 'git')
 }
 
 # La mise a jour a-t-elle touche l un des fichiers listes ?
@@ -375,7 +387,7 @@ function Test-FilesChanged([string[]]$Paths) {
 
 # Revision git courante du dossier ('' si git absent ou dossier non clone).
 function Get-RepoRevision {
-    if (-not (Test-Command 'git')) { return '' }
+    if (-not (Test-GitReady)) { return '' }
     if (-not (Test-Path (Join-Path $Root '.git'))) { return '' }
     $r = Invoke-Git @('rev-parse', 'HEAD')
     if ($r.Code -ne 0) { return '' }
@@ -383,8 +395,8 @@ function Get-RepoRevision {
 }
 
 function Update-FromGit {
-    if (-not (Test-Command 'git')) {
-        Log "• mise a jour auto : git n est pas installe — Hermes demarre avec la version presente"
+    if (-not (Test-GitReady)) {
+        Log "• mise a jour auto : git n est pas disponible (ni MinGit dans le dossier, ni git du système) — Hermes demarre avec la version presente"
         return
     }
     if (-not (Test-Path (Join-Path $Root '.git'))) {
@@ -537,6 +549,12 @@ $FfmpegZipUrls = @(   # transcription vocale (conversion WAV) : miroir GitHub ra
     'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
     'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
 )
+$GitZipUrl   = 'https://github.com/git-for-windows/git/releases/download/v2.51.0.windows.1/MinGit-2.51.0-64-bit.zip'   # le git minimal SANS installeur de git-for-windows
+# Git est possede comme les autres briques (loi 8) : la mise a jour GitHub
+# et le clonage de l'agent l'appellent AVANT tout le reste du provisionnement
+# — sur une machine vierge Windows, git n'existe pas.
+$Script:GitDir = $null
+$Script:GitExe = 'git'   # repli par defaut tant que MinGit n'est pas resolu
 
 # Tout ce que les outils ecrivent reste DANS le dossier : les caches npm
 # et bun (qui vivent par defaut dans le profil Windows) sont rediriges
@@ -697,6 +715,13 @@ function Ensure-PortableSetup {
     }
 
     New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
+
+    # ── Git AVANT TOUT (loi 8) : la mise à jour GitHub et le clonage de
+    # l'agent l'appellent ; sur une machine vierge Windows, il n'existe pas.
+    # MinGit = le git minimal de git-for-windows : un zip sans installeur,
+    # décompressé dans tools\git — ni PATH, ni registre, ni alias touchés.
+    $Script:GitDir = Resolve-Tool 'git' 'git.exe' $GitZipUrl $true
+    if ($Script:GitDir) { $Script:GitExe = Join-Path $Script:GitDir 'git.exe' }
 
     # ── 0. Mise a jour automatique depuis GitHub (TOUT D ABORD : les sources
     # de telechargement des outils ci-dessous sont celles du code le plus
@@ -957,7 +982,7 @@ function Install-AgentIntoHome {
     $agentChange = $false
     if ($valide) {
         try {
-            $h = & git -C $homeDir rev-parse HEAD 2>$null
+            $h = & $Script:GitExe -C $homeDir rev-parse HEAD 2>$null
             if ($LASTEXITCODE -eq 0 -and $h) { $houseHead = [string]$h }
         } catch { }
         if ($houseHead) {
@@ -1001,7 +1026,7 @@ function Install-AgentIntoHome {
         Log ("• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : {0})..." -f $repoUrl)
         try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
         # Clone borné : un réseau lent ne doit pas bloquer le démarrage.
-        $cloneJob = Start-Job -ScriptBlock { param($u, $d) git clone $u $d 2>&1 } -ArgumentList $repoUrl, $homeDir
+        $cloneJob = Start-Job -ScriptBlock { param($g, $u, $d) & $g clone $u $d 2>&1 } -ArgumentList $Script:GitExe, $repoUrl, $homeDir
         if (-not (Wait-Job $cloneJob -Timeout 600)) {
             Stop-Job $cloneJob; Remove-Job $cloneJob -Force
             Log "  ATTENTION : clone non terminé en 10 min — abandonné. Pas d'agent installé : l'installation retentera au prochain démarrage (au plus tôt dans 1 h)."
@@ -1018,7 +1043,7 @@ function Install-AgentIntoHome {
         Log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
         # La copie fraîche a un HEAD : c'est lui la base des dépendances.
         try {
-            $h2 = & git -C $homeDir rev-parse HEAD 2>$null
+            $h2 = & $Script:GitExe -C $homeDir rev-parse HEAD 2>$null
             if ($LASTEXITCODE -eq 0 -and $h2) { $houseHead = [string]$h2 }
         } catch { }
     }
@@ -1392,7 +1417,10 @@ function Ensure-PortablePython {
         }
         try { Set-Content $flagF ((Get-Date).ToString('o')) } catch { }
         $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
-        $zipUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-$arch.zip"
+        # 3.14 : la version que l'agent EXIGE — ses dépendances sûres (pydantic
+        # sans le core qui segfaulte, httpx/requests avec les correctifs CVE)
+        # sont réservées à python >= 3.14 par le projet amont.
+        $zipUrl = "https://www.python.org/ftp/python/3.14.3/python-3.14.3-embed-$arch.zip"
         Log "• installation du Python portable de l'application (source officielle python.org, zip autonome)…"
         Log "  il vit dans le dossier de l'interface : ni PATH, ni registre, ni alias du magasin ne sont touchés."
         $zip = Join-Path $RuntimeDir 'python-embed.zip'
@@ -1465,10 +1493,19 @@ function Ensure-PortablePython {
 }
 function Phase-Prerequis {
     Log "── Phase 0 : prérequis ─────────────────────────────────"
-    # Git — non bloquant : sans lui, mise à jour GitHub et installation de
-    # l'agent sont désactivées CE démarrage, mais l'application reste utilisable.
-    $gitOk = Test-Command 'git'
-    Add-SantePrerequis 'Git' $gitOk $(if ($gitOk) { '' } else { "mises à jour GitHub et installation de l'agent désactivées ce démarrage" })
+    # Git — Loi 8 (chantier 6) : le git de l'application vit dans tools\git
+    # (MinGit, posé par le lanceur) ; le git système n'est qu'un repli. Sans
+    # aucun git : non bloquant — mises à jour et installation de l'agent
+    # sont désactivées CE démarrage, mais l'application reste utilisable.
+    if (Test-GitReady) {
+        $gitVer = ''
+        try { $gitVer = (& $Script:GitExe --version 2>&1 | Out-String).Trim() } catch { }
+        Add-SantePrerequis 'Git (dans le dossier)' $true "$gitVer — mises à jour et installation de l'agent actives"
+    } elseif (Test-Command 'git') {
+        Add-SantePrerequis 'Git (repli système)' $true "repli ce démarrage ; MinGit s'installera dans le dossier au prochain démarrage"
+    } else {
+        Add-SantePrerequis 'Git' $false "mises à jour GitHub et installation de l'agent désactivées ce démarrage"
+    }
     # Python — Loi 8 (plan v2, chantier 5) : le Python de l'application vit
     # DANS le dossier, posé par le lanceur ; le python système n'est qu'un
     # repli démasqué, et le faux raccourci du magasin n'a plus aucun rôle.

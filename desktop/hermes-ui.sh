@@ -144,7 +144,10 @@ ensure_portable_python() {
     return 1
   fi
   touch "$RUNTIME_DIR/portable-python.flag" 2>/dev/null || true
-  local url="${HERMES_PYTHON_URL:-https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-x86_64-unknown-linux-gnu-install_only.tar.gz}"
+  # 3.14 : la version que l'agent EXIGE — ses dépendances sûres (pydantic
+  # sans le core qui segfaulte, httpx/requests avec les correctifs CVE)
+  # sont réservées à python >= 3.14 par le projet amont.
+  local url="${HERMES_PYTHON_URL:-https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-x86_64-unknown-linux-gnu-install_only.tar.gz}"
   local tarball="$RUNTIME_DIR/python-portable.tar.gz"
   log_stderr "• installation du Python portable de l'application (construction autonome officielle, dans le dossier — rien d'autre n'est touché)…"
   if ! curl -fsSL -m 300 -o "$tarball" "$url" 2>/dev/null || [ ! -s "$tarball" ]; then
@@ -368,10 +371,70 @@ state_set() { # clé valeur
 }
 state_get() { grep "^$1=" "$STATE_FILE" 2>/dev/null | tail -1 | cut -d= -f2-; }
 
+# ── BLOC NODE-PORTABLE (loi 8, chantier 6) — extrait tel quel par les épreuves ──
+# Node construit l'interface (npm run build). Sur Unix il existe presque
+# partout ; s'il est absent, le lanceur possèdera le sien (distribution
+# officielle nodejs.org, tarball autonome, DANS le dossier — rien d'autre
+# n'est touché). Messages par stderr ; le chemin est rendu sur stdout.
+log_node() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LAUNCHER_LOG" >&2; }
+ensure_node() {
+  if command -v node >/dev/null 2>&1; then command -v node; return 0; fi
+  local portdir="$RUNTIME_DIR/node-portable"
+  local portnode="$portdir/bin/node"
+  if [ -x "$portnode" ] && "$portnode" --version >/dev/null 2>&1; then printf '%s' "$portnode"; return 0; fi
+  if [ -f "$RUNTIME_DIR/portable-node.flag" ] && [ "$(( $(date +%s) - $(date -r "$RUNTIME_DIR/portable-node.flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+    log_node "• Node portable : la dernière tentative d'installation a échoué — nouvelle tentative au plus tôt dans 1 h."
+    return 1
+  fi
+  touch "$RUNTIME_DIR/portable-node.flag" 2>/dev/null || true
+  local narch
+  case "$(uname -m)" in
+    aarch64|arm64) narch="linux-arm64" ;;
+    *) narch="linux-x64" ;;
+  esac
+  local url="${HERMES_NODE_URL:-https://nodejs.org/dist/v22.20.0/node-v22.20.0-$narch.tar.xz}"
+  local tarball="$RUNTIME_DIR/node-portable.tar.xz"
+  log_node "• installation du Node portable de l'application (source officielle nodejs.org, dans le dossier — rien d'autre n'est touché)…"
+  if ! curl -fsSL -m 300 -o "$tarball" "$url" 2>/dev/null || [ ! -s "$tarball" ]; then
+    log_node "  ATTENTION : téléchargement impossible — installez Node.js ou vérifiez le réseau ; nouvelle tentative au prochain démarrage."
+    rm -f "$tarball" 2>/dev/null || true
+    return 1
+  fi
+  mkdir -p "$portdir" 2>/dev/null || true
+  if ! tar xJf "$tarball" -C "$portdir" --strip-components=1 2>/dev/null; then
+    log_node "  ATTENTION : archive illisible — rien de menteur n'est gardé ; nouvelle tentative au prochain démarrage."
+    rm -rf "$portdir" "$tarball" 2>/dev/null || true
+    return 1
+  fi
+  rm -f "$tarball" 2>/dev/null || true
+  if [ ! -x "$portnode" ]; then
+    # Layout inattendu (préfixe non retiré) : on cherche le binaire réel.
+    portnode="$(find "$portdir" -type f -name node -path '*/bin/node' 2>/dev/null | head -1)"
+  fi
+  if [ -z "$portnode" ] || [ ! -x "$portnode" ] || ! "$portnode" --version >/dev/null 2>&1; then
+    log_node "  ATTENTION : Node portable reçu illisible — rien de menteur n'est gardé ; nouvelle tentative au prochain démarrage."
+    rm -rf "$portdir" 2>/dev/null || true
+    return 1
+  fi
+  log_node "  Node portable prêt ($("$portnode" --version 2>/dev/null || echo '')) — il vit dans le dossier de l'interface."
+  printf '%s' "$portnode"
+  return 0
+}
+# === FIN-BLOC-NODE-PORTABLE ===
+
 # ── Dépendances ──────────────────────────────────────────────────────────
 check_deps() {
   command -v bun >/dev/null 2>&1 || die "« bun » est introuvable (https://bun.sh)."
-  command -v node >/dev/null 2>&1 || die "« node » est introuvable."
+  # Loi 8 (chantier 6) : node du dossier d'abord (posé par le lanceur si
+  # absent), système sinon — et le PATH en profite pour npm.
+  local portnode
+  portnode="$(ensure_node 2>/dev/null || echo '')"
+  if [ -n "$portnode" ]; then
+    log "• Node du dossier en service ($("$portnode" --version 2>/dev/null || echo '')) — le système n'a plus rien à dire."
+    export PATH="$(dirname "$portnode"):$PATH"
+  elif ! command -v node >/dev/null 2>&1; then
+    die "« node » est introuvable et le Node portable n'a pas pu s'installer — installez Node.js ou vérifiez le réseau, puis relancez."
+  fi
   [ -f "$ROOT/mini-services/hermes-chat/index.ts" ] || die "projet introuvable autour de $ROOT"
   [ -d "$ROOT/node_modules" ] || die "node_modules absent — lancez « npm install » dans $ROOT"
   [ -d "$ROOT/mini-services/hermes-chat/node_modules" ] || \

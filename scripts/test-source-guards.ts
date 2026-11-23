@@ -275,6 +275,33 @@ async function main() {
   check("starter : le python du dossier est résolu du vrai chemin, jamais deviné",
     starterC.includes('"desktop", "runtime", "python-portable"'));
 
+  console.log("[13] le lanceur possède aussi Git — et Node sous Unix ((72), loi 8)");
+  // L'audit demandé par l'utilisatrice (« je suis sûre que tu as oublié des
+  // choses ») a révélé deux trous : Git n'était que DÉTECTÉ sur Windows (ni
+  // mise à jour ni clonage sur une machine vierge) et le miroir Unix exigeait
+  // node du système. De plus, l'agent officiel réserve ses dépendances sûres
+  // à Python >= 3.14 (pydantic-core sans segfault, correctifs CVE) : le
+  // portable suit 3.14, pas 3.12.
+  check("ps1 : MinGit posé dans tools\\git (zip sans installeur de git-for-windows)",
+    ps1F.includes("MinGit-2.51.0-64-bit.zip") &&
+      ps1F.includes("$Script:GitDir = Resolve-Tool 'git' 'git.exe' $GitZipUrl $true"));
+  check("ps1 : le git posé du dossier est résolu AVANT la mise à jour GitHub et le clonage",
+    ps1F.indexOf("$Script:GitDir = Resolve-Tool 'git'") < ps1F.indexOf("Update-FromGit\n    Install-AgentIntoHome") &&
+      ps1F.includes("& $Script:GitExe -C $Root @GitArgs"));
+  check("ps1 : plus AUCUN appel git direct au PATH (le PATH n'est pas une source de vérité)",
+    ps1F.includes("& git -C $Root") === false &&
+      ps1F.includes("& git -C $homeDir") === false &&
+      ps1F.includes("git clone $u $d") === false);
+  check("ps1 : phase 0 = « Git (dans le dossier) », système en repli",
+    ps1F.includes("Git (dans le dossier)") && ps1F.includes("Git (repli système)"));
+  check("ps1 : le Python portable suit la version exigée par l'agent (3.14)",
+    ps1F.includes("python-3.14.3-embed"));
+  check("sh : node du dossier d'abord (nodejs.org officiel, dans le dossier, surchargeable)",
+    shF.includes("ensure_node") && shF.includes("HERMES_NODE_URL") &&
+      shF.includes("nodejs.org/dist") && shF.includes("node-portable"));
+  check("sh : le python portable suit la version exigée par l'agent (3.14, install_only)",
+    shF.includes("cpython-3.14.10") && shF.includes("install_only"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }
