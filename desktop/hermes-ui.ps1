@@ -1166,6 +1166,22 @@ function Install-AgentIntoHome {
             if ((Get-Content $depsOk -Raw).Trim() -eq 'venv') { Remove-Item $depsOk -Force -ErrorAction SilentlyContinue }
         } catch { }
     }
+    # ((84)) PREUVE PERMANENTE : le marqueur peut mentir — écrit par un boot
+    # où pip a « réussi » dans un AUTRE python que celui qui lance l'agent
+    # (cas réel du 23/11 15:18 : dépendances dans le portable, lancement
+    # dans le .venv hérité). Une preuve par import (< 1 s) à chaque
+    # démarrage ; si elle rate, le marqueur est invalidé et l'installation
+    # se refait ICI, dans le python qui lancera vraiment l'agent.
+    if (Test-Path $depsOk) {
+        $proofPy = if ($pyKind -ne 'portable' -and $venvOk) { $venvPy } else { $pyCmd }
+        if ($proofPy) {
+            & $proofPy @pyPre -c "import ruamel.yaml" 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Log ("• le marqueur des dépendances ment : ruamel.yaml ne s'importe pas dans le python qui lance l'agent ({0}) — invalidation, réinstallation immédiate." -f $proofPy)
+                try { Remove-Item $depsOk -Force -ErrorAction SilentlyContinue } catch { }
+            }
+        }
+    }
     # Avec le portable, PAS de venv : l'isolation (D1) est le portable lui-
     # même — un python qui vit dans le dossier ne peut marcher sur personne.
     if ($pyKind -ne 'portable' -and -not $venvOk) {
@@ -1356,10 +1372,19 @@ function Start-AgentRuntime {
         Log "• agent : déjà en marche sur le port 9120 — l'interface l'adopte."
         return
     }
+    # ((84)) Le python qui lance l'agent = celui où les dépendances sont
+    # installées. La loi 8 et la fonction deps choisissent le PORTABLE du
+    # dossier (l.1196 installation, l.1274 certification) — l'ancien code ici
+    # prenait le .venv D'ABORD : un .venv hérité du python système (posé
+    # avant la loi 8, sans 'ruamel') lançait l'agent pendant que les 45
+    # dépendances vivaient dans le portable → panne identique à chaque boot,
+    # la réinstallation allait au mauvais endroit et le silence idempotent
+    # interdisait de recommencer (cas réel du 23/11 15:18). Ordre unique :
+    # portable → venv → système.
     $venvPy = Join-Path $house '.venv\Scripts\python.exe'
     $apy = $null; $aPre = @()
-    if (Test-Path $venvPy) { $apy = $venvPy }
-    elseif ($Script:PortablePython) { $apy = $Script:PortablePython }
+    if ($Script:PortablePython) { $apy = $Script:PortablePython }
+    elseif (Test-Path $venvPy) { $apy = $venvPy }
     elseif (Test-Command 'py') { $apy = 'py'; $aPre = @('-3') }
     elseif (Test-Command 'python') { $apy = 'python' }
     if (-not $apy) {

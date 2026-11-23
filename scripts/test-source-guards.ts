@@ -553,6 +553,28 @@ async function main() {
   check("sh : dépendances PROUVÉES par import de ruamel.yaml",
     sh83.includes('import ruamel.yaml" >/dev/null') && sh83.includes("PROUVÉES par import"));
 
+  console.log("[84] un seul python de l'agent : portable d'abord, marqueur prouvé à chaque boot");
+  // Cas réel du 23/11 15:18 : les 45 dépendances installées dans le
+  // portable, l'agent lancé dans le .venv hérité du python système →
+  // 'ruamel' à chaque boot ; l'idempotence interdisait la réparation et
+  // le lanceur semblait « à jour » en ne faisant rien.
+  const ps184 = read("desktop/hermes-ui.ps1");
+  const sh84 = read("desktop/hermes-ui.sh");
+  const idxLaunch84 = ps184.indexOf("function Start-AgentRuntime");
+  const launchZone = ps184.slice(idxLaunch84, ps184.indexOf("── ARRET PROPRE", idxLaunch84));
+  const pyPortable = launchZone.indexOf("if ($Script:PortablePython) { $apy = $Script:PortablePython }");
+  const pyVenv = launchZone.indexOf("elseif (Test-Path $venvPy) { $apy = $venvPy }");
+  check("ps1 : le lancement de l'agent choisit le portable AVANT le venv",
+    pyPortable >= 0 && pyVenv > pyPortable);
+  check("ps1 : plus aucun lancement « venv d'abord » dans Start-AgentRuntime",
+    !launchZone.split("\n").some((l) => l.trim().startsWith("if (Test-Path $venvPy) { $apy = $venvPy }")));
+  check("ps1 : la preuve permanente dit le mensonge à voix haute",
+    ps184.includes("le marqueur des dépendances ment") && ps184.includes("réinstallation immédiate"));
+  check("sh : la preuve permanente dit le mensonge à voix haute",
+    sh84.includes("le marqueur des dépendances ment") && sh84.includes("réinstallation immédiate"));
+  check("harnais : le CAS K couvre le marqueur mensonger",
+    read("scripts/test-lanceur-certification.sh").includes("CAS K : marqueur mensonger"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

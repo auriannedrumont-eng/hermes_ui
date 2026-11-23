@@ -286,5 +286,20 @@ TRIAL_PROOF=1 TRIAL_MODE=listen bash -c "$HARNESS" "$T" | grep -q "l'import de r
 sleep 1
 pkill -f "bind..127\.0\.0\.1.,9120" 2>/dev/null || true
 
+echo "── CAS K : marqueur mensonger → invalidation + réinstallation immédiate ((84)) ──"
+# Cas réel du 23/11 15:18 : deps marquées « réussies » dans UN python,
+# l'agent lancé dans un AUTRE → 'ruamel' à chaque boot et le silence
+# idempotent interdisait la réparation. La preuve permanente doit dire
+# le mensonge à voix haute et invalider le marqueur.
+printf 'venv' > "$T/runtime/agent-deps.ok"
+TRIAL_PROOF=1 TRIAL_MODE=listen bash -c "$HARNESS" "$T" | grep -q "le marqueur des dépendances ment" \
+  && echo "PREUVE : le marqueur mensonger est détecté et dit à voix haute" \
+  || { echo "ECHEC : le marqueur mensonger n'est pas invalidé"; exit 1; }
+[ -f "$T/runtime/agent-deps.ok" ] \
+  && { echo "ECHEC : le marqueur qui ment a survécu"; exit 1; } \
+  || echo "PREUVE : le marqueur mensonger est invalidé (réinstallation immédiate)"
+sleep 1
+pkill -f "bind..127\.0\.0\.1.,9120" 2>/dev/null || true
+
 echo ""
-echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)) : succès"
+echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)+(84)) : succès"

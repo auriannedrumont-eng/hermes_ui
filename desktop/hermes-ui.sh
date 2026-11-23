@@ -491,9 +491,21 @@ install_agent_fresh() {
     fi
   fi
   if [ -e "$maison/.git" ] || [ -f "$maison/gateway/run_api.py" ]; then
-    # maison valide : rien SAUF si le code a changé (mise à jour) ou si les
-    # dépendances n'ont jamais réussi
-    if [ -f "$depsok" ] && [ "$agentchange" = "0" ]; then return 0; fi
+    # maison valide : rien SAUF si le code a changé (mise à jour), si les
+    # dépendances n'ont jamais réussi, ou si le marqueur MENT ((84) : la
+    # preuve par import vit ICI, AVANT la sortie anticipée — même leçon que
+    # (69) : une vérification placée après le « déjà fait, on sort » ne
+    # tourne jamais. Cas réel du ps1 du 23/11 15:18 : deps réussies dans un
+    # python, l'agent lancé dans un autre, marqueur jamais invalidé.)
+    if [ -f "$depsok" ] && [ "$agentchange" = "0" ]; then
+      pp="$maison/.venv/bin/python"
+      if [ -x "$pp" ] && ! "$pp" -c "import ruamel.yaml" >/dev/null 2>&1; then
+        log "• le marqueur des dépendances ment : ruamel.yaml ne s'importe pas dans le python qui lance l'agent — invalidation, réinstallation immédiate."
+        rm -f "$depsok" 2>/dev/null || true
+      else
+        return 0
+      fi
+    fi
     if [ "$agentchange" = "1" ]; then
       log "• le code de l'agent a changé (mise à jour) — dépendances et certification refaites pour la nouvelle version."
       rm -f "$depsok" "$RUNTIME_DIR/agent-certifie.ok" "$depsflag" "$RUNTIME_DIR/agent-certif.flag" 2>/dev/null || true
@@ -537,7 +549,7 @@ install_agent_fresh() {
   # test « requirements.txt absent → rien installer » laissait l'agent
   # SANS AUCUNE dépendance (le dépôt amont n'a pas de requirements.txt,
   # cas réel du 23/11 13:44 : ModuleNotFoundError 'ruamel').
-  local pycmd="" pyver="" venvpy=""
+  local pycmd="" pyver="" venvpy="" pp=""
   if command -v python3 >/dev/null 2>&1; then pycmd="python3"
   elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
   if [ -n "$pycmd" ]; then
@@ -587,6 +599,18 @@ install_agent_fresh() {
   # Le marqueur « venv » sans venv réel ne ment pas deux fois : on repart.
   if [ -f "$depsok" ] && grep -q venv "$depsok" 2>/dev/null && [ ! -x "$venvpy" ]; then
     rm -f "$depsok" 2>/dev/null || true
+  fi
+  # ((84)) PREUVE PERMANENTE : le marqueur peut mentir — écrit par un boot
+  # où pip a « réussi » dans un AUTRE python que celui qui lance l'agent
+  # (cas réel du ps1 : deps dans le portable, lancement dans le venv).
+  # Une preuve par import (< 1 s) à chaque démarrage ; si elle rate, le
+  # marqueur est invalidé et l'installation se refait ICI.
+  if [ -f "$depsok" ]; then
+    pp="${venvpy:-}"; [ -x "$pp" ] || pp="${pycmd:-}"
+    if [ -n "$pp" ] && ! "$pp" -c "import ruamel.yaml" >/dev/null 2>&1; then
+      log "• le marqueur des dépendances ment : ruamel.yaml ne s'importe pas dans le python qui lance l'agent — invalidation, réinstallation immédiate."
+      rm -f "$depsok" 2>/dev/null || true
+    fi
   fi
   if [ ! -x "$venvpy" ]; then
     touch "$depsflag" 2>/dev/null || true
