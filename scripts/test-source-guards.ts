@@ -515,6 +515,20 @@ async function main() {
   check("motor : la cause ne lit que depuis le dernier lancement",
     motorUi.includes('lastIndexOf("lancement automatique")'));
 
+  console.log("[82] la carte distingue cause-dépendances (remède : relance) et maj CLI");
+  // Cas réel du 23/11 : cause « ModuleNotFoundError 'ruamel' » affichée à
+  // côté du bouton « Mettre à jour » — la juxtaposition laissait croire que
+  // la mise à jour de la CLI corrigait une cause qui relève du lanceur
+  // (dépendances de la copie du dossier). La carte dit maintenant le bon
+  // remède quand la cause est un défaut de modules.
+  const motorCardUi = read("src/components/settings/agent-motor-card.tsx");
+  check("carte : le défaut de dépendances renvoie à la RELANCE de l'application",
+    motorCardUi.includes("modulenotfounderror|importerror") &&
+      motorCardUi.includes("relancez simplement l&apos;application") &&
+      motorCardUi.includes("installe les dépendances depuis le dépôt du projet"));
+  check("carte : le bouton CLI est explicitement dit non pertinent pour cette cause",
+    motorCardUi.includes("n&apos;y répond pas"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

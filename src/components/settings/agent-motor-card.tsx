@@ -383,11 +383,26 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
             {/* Cause connue (refonte (69), loi 2 « un échec = cause ») :
                 quand la gateway est lancée mais muette, le service lit la
                 dernière ligne parlante de SON journal et la montre ici —
-                plus jamais un « éteint » sans mot. */}
+                plus jamais un « éteint » sans mot. ((82)) si cette cause
+                est un défaut de modules/dépendances, le remède est la
+                RELANCE de l'application — son lanceur extrait et installe
+                les dépendances depuis le dépôt du projet ((80)) — pas la
+                mise à jour de la CLI du poste, qui n'y répond pas : on le
+                dit au lieu de laisser croire que le bouton corrige. */}
             {connected && !op && state?.gatewayCause ? (
-              <p className="fil mt-1 text-[12.5px] leading-relaxed text-warning [&_b]:font-semibold">
-                Cause connue, lue dans le journal d&apos;Hermes&nbsp;: <b>{state.gatewayCause}</b>
-              </p>
+              <>
+                <p className="fil mt-1 text-[12.5px] leading-relaxed text-warning [&_b]:font-semibold">
+                  Cause connue, lue dans le journal d&apos;Hermes&nbsp;: <b>{state.gatewayCause}</b>
+                </p>
+                {/modulenotfounderror|importerror/i.test(state.gatewayCause) ? (
+                  <p className="fil mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
+                    C&apos;est un défaut de dépendances de la copie du dossier&nbsp;: <b>relancez simplement l&apos;application</b> —
+                    son lanceur extrait et installe les dépendances depuis le dépôt du projet (une fois, 10&nbsp;min max, réseau requis),
+                    puis l&apos;agent démarre. La mise à jour proposée ici concerne la CLI installée sur le poste&nbsp;:
+                    elle est sûre (sauvegarde + retour arrière) mais <b>n&apos;y répond pas</b>.
+                  </p>
+                ) : null}
+              </>
             ) : null}
           </div>
 
