@@ -310,6 +310,10 @@ export interface MotorState {
   previousVersion: string | null;
   agentDir: string | null;
   gatewayUrl: string | null;
+  /** Refonte (69), loi 2 « un échec = cause » : quand la gateway est lancée
+   *  mais muette, la cause lue dans SON journal (dernière ligne parlante —
+   *  ModuleNotFoundError, port refusé…) — null sinon. */
+  gatewayCause: string | null;
 }
 
 /** Carnet de bord du moteur (fork.agent.journal — liste bornée, 100). */

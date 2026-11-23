@@ -368,33 +368,119 @@ install_agent_fresh() {
       return 0
     fi
   fi
-  if [ -f "$maison/requirements.txt" ] && [ ! -f "$depsok" ]; then
-    if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
-      log "• dépendances de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
-      return 0
-    fi
+  # ── Environnement python DÉDIÉ (refonte (69) D1) + dépendances + certification (D2) ──
+  # Le python système sert aussi à vos autres installations Hermes : leurs
+  # dépendances se marchent dessus (la panne du 23/11). La maison a donc SON
+  # python (.venv créé une fois), SES dépendances, et doit PROUVER qu'elle
+  # s'allume : allumage d'essai borné (90 s) avec sonde réelle du 9120.
+  if [ ! -f "$maison/requirements.txt" ]; then
+    [ -f "$depsok" ] || touch "$depsok" 2>/dev/null || true
+    return 0
+  fi
+  local pycmd="" venvpy="" depsrecent=0
+  if command -v python3 >/dev/null 2>&1; then pycmd="python3"
+  elif command -v python >/dev/null 2>&1; then pycmd="python"; fi
+  if [ -z "$pycmd" ]; then
+    log "• ATTENTION : python introuvable sur ce poste — l'agent ne peut pas démarrer ; installez Python puis relancez."
+    return 0
+  fi
+  if [ -f "$depsflag" ] && [ "$(( $(date +%s) - $(date -r "$depsflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+    depsrecent=1
+  fi
+  venvpy="$maison/.venv/bin/python"
+  # Le marqueur « venv » sans venv réel ne ment pas deux fois : on repart.
+  if [ -f "$depsok" ] && grep -q venv "$depsok" 2>/dev/null && [ ! -x "$venvpy" ]; then
+    rm -f "$depsok" 2>/dev/null || true
+  fi
+  if [ ! -x "$venvpy" ] && [ "$depsrecent" = "0" ]; then
     touch "$depsflag" 2>/dev/null || true
-    log "• installation des dépendances python de l'agent (5 min max)…"
+    log "• création de l'environnement python dédié de l'agent (.venv — isolé du python système)…"
     if command -v timeout >/dev/null 2>&1; then
-      if timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-         || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
-        touch "$depsok" 2>/dev/null || true
-        log "  dépendances installées — l'agent peut démarrer."
+      timeout 120 "$pycmd" -m venv "$maison/.venv" >>"$LAUNCHER_LOG" 2>&1
+    else
+      "$pycmd" -m venv "$maison/.venv" >>"$LAUNCHER_LOG" 2>&1
+    fi && [ -x "$venvpy" ] \
+      && log "  environnement dédié prêt — vos autres installations python ne sont pas touchées." \
+      || log "  ATTENTION : création de l'environnement dédié impossible (module venv absent ? python3-venv à installer ?) — repli sur le python système."
+    [ -x "$venvpy" ] && venvpy="$maison/.venv/bin/python" || venvpy=""
+  elif [ ! -x "$venvpy" ]; then
+    venvpy=""
+  fi
+  # Dépendances : dans l'environnement dédié s'il existe, sinon système
+  # (repli dit clairement). Marquées « réussies » uniquement sur code 0.
+  if [ ! -f "$depsok" ] && [ "$depsrecent" = "0" ]; then
+    touch "$depsflag" 2>/dev/null || true
+    local piprc=1
+    if [ -n "$venvpy" ]; then
+      log "• installation des dépendances python de l'agent (environnement dédié, 5 min max)…"
+      if command -v timeout >/dev/null 2>&1; then
+        timeout 300 "$venvpy" -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 && piprc=0
       else
-        log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+        "$venvpy" -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 && piprc=0
       fi
     else
-      if pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-         || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
-        touch "$depsok" 2>/dev/null || true
-        log "  dépendances installées — l'agent peut démarrer."
+      log "• installation des dépendances python de l'agent (python système — repli, 5 min max)…"
+      if command -v timeout >/dev/null 2>&1; then
+        if timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+           || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
+          piprc=0
+        fi
       else
-        log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage."
+        if pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
+           || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1; then
+          piprc=0
+        fi
       fi
     fi
+    if [ "$piprc" = "0" ]; then
+      if [ -n "$venvpy" ]; then printf 'venv' > "$depsok" 2>/dev/null || touch "$depsok"
+      else printf 'systeme' > "$depsok" 2>/dev/null || touch "$depsok"; fi
+      log "  dépendances installées — l'agent peut démarrer."
+    else
+      log "  ATTENTION : dépendances incomplètes — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+      return 0
+    fi
   elif [ ! -f "$depsok" ]; then
-    touch "$depsok" 2>/dev/null || true  # pas de requirements.txt : rien à tenter
+    log "• dépendances de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
+    return 0
   fi
+  # ── CERTIFICATION (refonte (69) D2) : la gateway doit PROUVER qu'elle
+  # répond — allumage d'essai borné (90 s), sonde réelle du 9120. Port déjà
+  # occupé (votre agent en marche ?) → reporté : on ne certifie jamais sur
+  # le processus de quelqu'un d'autre.
+  local certok="$RUNTIME_DIR/agent-certifie.ok" certflag="$RUNTIME_DIR/agent-certif.flag"
+  [ -f "$certok" ] && return 0
+  if port_open 9120; then
+    log "• certification de l'agent reportée : le port 9120 est déjà occupé (votre Hermes est-il déjà en marche ?) — l'interface l'adoptera tant qu'il vit."
+    return 0
+  fi
+  if [ -f "$certflag" ] && [ "$(( $(date +%s) - $(date -r "$certflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
+    log "• certification de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
+    return 0
+  fi
+  local certpy="$pycmd" certlog="$ROOT/db/agent-certification.log"
+  [ -n "$venvpy" ] && certpy="$venvpy"
+  touch "$certflag" 2>/dev/null || true
+  mkdir -p "$ROOT/db" 2>/dev/null || true
+  log "• certification de l'agent : allumage d'essai (90 s max)…"
+  ( cd "$maison" && exec "$certpy" gateway/run_api.py >>"$certlog" 2>&1 ) &
+  local trial=$! certup=0 i
+  for i in $(seq 1 45); do
+    sleep 2
+    kill -0 "$trial" 2>/dev/null || break
+    if port_open 9120; then certup=1; break; fi
+  done
+  if [ "$certup" = "1" ]; then
+    log "  agent CERTIFIÉ : la gateway a répondu à l'essai — elle saura s'allumer toute seule."
+    touch "$certok" 2>/dev/null || true
+  else
+    log "  ATTENTION : l'essai n'a pas répondu — $(tail -n 5 "$certlog" 2>/dev/null | grep -m 1 . || echo 'aucune sortie lue'). Nouvelle tentative au prochain démarrage (au plus tôt dans 1 h) ; détail : $certlog"
+  fi
+  # L'essai s'arrête TOUJOURS (notre pid, jamais celui de quelqu'un d'autre).
+  kill "$trial" 2>/dev/null || true
+  sleep 1
+  kill -9 "$trial" 2>/dev/null || true
+  return 0
 }
 
 # ── Démarrage des composants ─────────────────────────────────────────────
@@ -717,6 +803,18 @@ do_start() {
   set_sante_maillon interface "répondu"
   start_gateway
   set_sante_maillon passerelle "répondu"
+  # Chemin COMPLET (refonte (69)) : la vraie liaison que la page utilise —
+  # la poignée de main temps réel à travers la passerelle (XTransformPort).
+  # Le « OK passerelle » à l'ancienne ne prouvait que la PAGE, pas cette
+  # liaison : c'est elle qui disait « Hors ligne » à l'écran (23/11).
+  via="$(http_code "http://127.0.0.1:$gw/?EIO=4&transport=polling&XTransformPort=3003" 6)"
+  if [ "$via" = "200" ]; then
+    set_sante_maillon passerelle "répondue — page ET liaison temps réelle vérifiées"
+    log "  OK liaison temps réelle à travers la passerelle vérifiée"
+  else
+    set_sante_maillon passerelle "page OK mais liaison temps réelle muette (code $via)"
+    log "  ATTENTION : liaison temps réelle muette à travers la passerelle (code $via) — l'onglet dirait « Hors ligne »"
+  fi
   # Agent : sonde réelle du port 9120 — la vérité du live, écrite telle
   # quelle (branché sur notre agent, sur le vôtre déjà en marche, ou muet).
   if port_open 9120; then set_sante_maillon agent "répond (9120)"; else set_sante_maillon agent "ne répond pas (9120)"; fi

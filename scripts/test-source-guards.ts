@@ -206,6 +206,31 @@ async function main() {
   check("écran Système : la carte du manifeste est montée",
     read("src/components/settings/system-section.tsx").includes("<SanteCard />"));
 
+  console.log("[10] cœur (69) : venv dédié d'abord, certification réelle, cause affichée");
+  // La panne du 23/11 (agent lancé, gateway muette) meurt ici : le python
+  // dédié de la maison évite les conflits avec le python système, la
+  // certification prouve l'allumage AVANT de déclarer l'agent prêt, et une
+  // gateway muette montre désormais SA cause lue dans son journal.
+  const ps1Coeur = read("desktop/hermes-ui.ps1");
+  const shCoeur = read("desktop/hermes-ui.sh");
+  const starterC = read("mini-services/hermes-chat/agent-starter.ts");
+  const motorC = read("mini-services/hermes-chat/agent-motor.ts");
+  check("ps1 : venv dédié + allumage d'essai + marqueur agent-certifie.ok",
+    ps1Coeur.includes("'.venv\\Scripts\\python.exe'") &&
+      ps1Coeur.includes("agent-certifie.ok") &&
+      ps1Coeur.includes("Test-PortBusy 9120"));
+  check("sh : venv dédié + allumage d'essai + marqueur agent-certifie.ok",
+    shCoeur.includes(".venv/bin/python") &&
+      shCoeur.includes("agent-certifie.ok") &&
+      shCoeur.includes("port_open 9120"));
+  check("starter : le venv de la maison est le PREMIER candidat python",
+    starterC.includes("pythonCandidates(agentDir)") && starterC.includes(".venv"));
+  check("motor : la cause lue dans le journal est exposée (gatewayCause)",
+    motorC.includes("gatewayCause") &&
+      read("mini-services/hermes-chat/shared/chat-protocol.ts").includes("gatewayCause"));
+  check("écran Système : la cause est affichée à la carte Hermes",
+    read("src/components/settings/agent-motor-card.tsx").includes("Cause connue"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

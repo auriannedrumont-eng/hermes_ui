@@ -988,49 +988,134 @@ function Install-AgentIntoHome {
         }
         Log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
     }
-    # Dépendances python de l'agent (§9 (67)) : tentées tant que le marqueur
-    # agent-deps.ok n'existe pas — au plus une fois par heure (flag daté).
+    # ── Environnement python DÉDIÉ (refonte (69) D1) + dépendances + certification (D2) ──
+    # Le python système sert aussi à vos autres installations Hermes : leurs
+    # dépendances se marchent dessus (la panne du 23/11). La maison a donc
+    # SON python (.venv, créé une fois), SES dépendances (installées dedans,
+    # tant que agent-deps.ok n'existe pas, au plus une fois par heure), et
+    # doit PROUVER qu'elle s'allume : allumage d'essai borné (90 s) avec
+    # sonde réelle du port 9120 → marqueur agent-certifie.ok. Échec de venv
+    # → repli honnête sur le python système (comme (67)), cause dite.
     $req = Join-Path $homeDir 'requirements.txt'
     if (-not (Test-Path $req)) {
         if (-not (Test-Path $depsOk)) { try { Set-Content $depsOk 'sans-requirements' } catch { } }
         return
     }
-    $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
-    if (Test-Path $depsFlag) {
-        try {
-            $lastDeps = [datetime]::Parse((Get-Content $depsFlag -Raw).Trim())
-            if (((Get-Date) - $lastDeps).TotalHours -lt 1) {
-                Log "• dépendances de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
-                return
-            }
-        } catch { }
-    }
     $pyCmd = $null; $pyPre = @()
-    if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') }
-    elseif (Test-Command 'python') { $pyCmd = 'python' }
+    if (Test-Command 'py') { $pyCmd = 'py'; $pyPre = @('-3') } elseif (Test-Command 'python') { $pyCmd = 'python' }
     if (-not $pyCmd) {
         Log "• ATTENTION : python introuvable sur ce poste — l'agent ne peut pas démarrer ; installez Python puis relancez Hermes-Web."
         return
     }
-    try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
-    Log "• installation des dépendances python de l'agent (5 min max)…"
-    # Le job renvoie CODE=<sortie pip> : on ne marque « réussi » que si pip
-    # sort vraiment en 0 — sinon nouvelle tentative au prochain démarrage.
-    $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pyCmd, $pyPre, $req
-    if (-not (Wait-Job $pipJob -Timeout 300)) {
-        Stop-Job $pipJob; Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
-        Log "  ATTENTION : dépendances non terminées en 5 min — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+    $depsFlag = Join-Path $RuntimeDir 'agent-deps.flag'
+    $depsDejaTentees = $false
+    if (Test-Path $depsFlag) {
+        try {
+            $lastDeps = [datetime]::Parse((Get-Content $depsFlag -Raw).Trim())
+            if (((Get-Date) - $lastDeps).TotalHours -lt 1) { $depsDejaTentees = $true }
+        } catch { }
+    }
+    $venvPy = Join-Path $homeDir '.venv\Scripts\python.exe'
+    $venvOk = Test-Path $venvPy
+    # Le marqueur « venv » sans venv réel ne ment pas deux fois : on repart.
+    if (-not $venvOk -and (Test-Path $depsOk)) {
+        try {
+            if ((Get-Content $depsOk -Raw).Trim() -eq 'venv') { Remove-Item $depsOk -Force -ErrorAction SilentlyContinue }
+        } catch { }
+    }
+    if (-not $venvOk -and -not $depsDejaTentees) {
+        try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
+        Log "• création de l'environnement python dédié de l'agent (.venv — isolé du python système)…"
+        $venvJob = Start-Job -ScriptBlock { param($p, $pre, $d) & $p @pre -m venv $d 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pyCmd, $pyPre, (Join-Path $homeDir '.venv')
+        if (Wait-Job $venvJob -Timeout 120) {
+            $venvOut = (Receive-Job $venvJob 2>&1 | Out-String).Trim()
+            Remove-Job $venvJob -ErrorAction SilentlyContinue
+            $vcode = if ($venvOut -match 'CODE=(\d+)\s*$') { $Matches[1] } else { '1' }
+            if ($vcode -eq '0' -and (Test-Path $venvPy)) {
+                $venvOk = $true
+                Log "  environnement dédié prêt — vos autres installations python ne sont pas touchées."
+            } else {
+                Log "  ATTENTION : création de l'environnement dédié impossible (code $vcode) — repli sur le python système ; l'agent reste sensible aux conflits de dépendances."
+            }
+        } else {
+            Stop-Job $venvJob; Remove-Job $venvJob -Force -ErrorAction SilentlyContinue
+            Log "  ATTENTION : création de l'environnement dédié non terminée en 2 min — repli sur le python système."
+        }
+    }
+    # Dépendances : dans l'environnement dédié s'il existe, sinon système
+    # (repli dit clairement). Marquées « réussies » uniquement sur code 0.
+    if (-not (Test-Path $depsOk) -and -not $depsDejaTentees) {
+        $pipCmd = if ($venvOk) { $venvPy } else { $pyCmd }
+        $pipPre = if ($venvOk) { @() } else { $pyPre }
+        try { Set-Content $depsFlag ((Get-Date).ToString('o')) } catch { }
+        Log ("• installation des dépendances python de l'agent ({0}, 5 min max)…" -f $(if ($venvOk) { 'environnement dédié' } else { 'python système — repli' }))
+        # Le job renvoie CODE=<sortie pip> : on ne marque « réussi » que si pip
+        # sort vraiment en 0 — sinon nouvelle tentative au prochain démarrage.
+        $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1; "CODE=$LASTEXITCODE" } -ArgumentList $pipCmd, $pipPre, $req
+        if (-not (Wait-Job $pipJob -Timeout 300)) {
+            Stop-Job $pipJob; Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
+            Log "  ATTENTION : dépendances non terminées en 5 min — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)."
+            return
+        }
+        $pipOut = (Receive-Job $pipJob 2>&1 | Out-String).Trim()
+        Remove-Job $pipJob -ErrorAction SilentlyContinue
+        $code = if ($pipOut -match 'CODE=(\d+)\s*$') { $Matches[1] } else { '1' }
+        if ($code -eq '0') {
+            try { Set-Content $depsOk $(if ($venvOk) { 'venv' } else { 'systeme' }) } catch { }
+            Log "  dépendances installées — l'agent peut démarrer."
+        } else {
+            Log ("  ATTENTION : installation des dépendances échouée (code {0}) — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)." -f $code)
+            return
+        }
+    }
+    # ── CERTIFICATION (refonte (69) D2) : un allumage d'essai BORNÉ — la
+    # gateway doit PROUVER qu'elle répond avant qu'on la déclare prête.
+    # Port 9120 déjà occupé (votre agent en marche ?) → reporté : on ne
+    # certifie jamais sur le processus de quelqu'un d'autre.
+    $certOkF = Join-Path $RuntimeDir 'agent-certifie.ok'
+    $certFlag = Join-Path $RuntimeDir 'agent-certif.flag'
+    if (Test-Path $certOkF) { return }
+    if (Test-PortBusy 9120) {
+        Log "• certification de l'agent reportée : le port 9120 est déjà occupé (votre Hermes est-il déjà en marche ?) — l'interface l'adoptera tant qu'il vit."
         return
     }
-    $pipOut = (Receive-Job $pipJob 2>&1 | Out-String).Trim()
-    Remove-Job $pipJob -ErrorAction SilentlyContinue
-    $code = if ($pipOut -match 'CODE=(\d+)\s*$') { $Matches[1] } else { '1' }
-    if ($code -eq '0') {
-        try { Set-Content $depsOk 'ok' } catch { }
-        Log "  dépendances installées — l'agent peut démarrer."
-    } else {
-        Log ("  ATTENTION : installation des dépendances échouée (code {0}) — nouvelle tentative au prochain démarrage (au plus tôt dans 1 h)." -f $code)
+    if (Test-Path $certFlag) {
+        try {
+            $lastCert = [datetime]::Parse((Get-Content $certFlag -Raw).Trim())
+            if (((Get-Date) - $lastCert).TotalHours -lt 1) {
+                Log "• certification de l'agent : tentative récente — prochaine tentative au plus tôt dans 1 h."
+                return
+            }
+        } catch { }
     }
+    $certPy = if ($venvOk) { $venvPy } else { $pyCmd }
+    $certPre = if ($venvOk) { @() } else { $pyPre }
+    try { Set-Content $certFlag ((Get-Date).ToString('o')) } catch { }
+    $certLog = Join-Path $Root 'db\agent-certification.log'
+    Log "• certification de l'agent : allumage d'essai (90 s max)…"
+    $certProc = Start-Process -FilePath $certPy -ArgumentList (@($certPre) + ('"{0}"' -f (Join-Path $homeDir 'gateway\run_api.py'))) -WorkingDirectory $homeDir -WindowStyle Hidden -RedirectStandardError $certLog -RedirectStandardOutput ($certLog + '.out') -PassThru
+    $certUp = $false
+    for ($i = 0; $i -lt 45; $i++) {
+        Start-Sleep -Seconds 2
+        if ($certProc.HasExited) { break }
+        if (Test-PortBusy 9120) { $certUp = $true; break }
+    }
+    if ($certUp) {
+        Log "  agent CERTIFIÉ : la gateway a répondu à l'essai — elle saura s'allumer toute seule."
+        try { Set-Content $certOkF (Get-Date).ToString('o') } catch { }
+    } else {
+        $derniere = ''
+        try { $derniere = (Get-Content $certLog -Tail 5 | Where-Object { $_.Trim() } | Select-Object -Last 1) } catch { }
+        if (-not $derniere) {
+            if ($certProc.HasExited) { $derniere = "processus terminé dès le départ (code $($certProc.ExitCode))" }
+            else { $derniere = "toujours muet après 90 s" }
+        }
+        Log ("  ATTENTION : l'essai n'a pas répondu — {0}. Nouvelle tentative au prochain démarrage (au plus tôt dans 1 h) ; détail : {1}" -f $derniere, $certLog)
+    }
+    # L'essai s'arrête TOUJOURS — c'est à l'interface d'allumer le vrai.
+    try {
+        if (-not $certProc.HasExited) { taskkill /PID $certProc.Id /T /F 2>&1 | Out-Null }
+    } catch { }
 }
 
 # ── ARRET PROPRE ────────────────────────────────────────────────────────
@@ -1401,6 +1486,18 @@ function Do-Start {
     Set-SanteMaillon 'interface' 'répondu'
     [void](Start-Gateway)
     Set-SanteMaillon 'passerelle' 'répondu'
+    # Chemin COMPLET (refonte (69)) : la vraie liaison que la page utilise —
+    # la poignée de main temps réel à travers la passerelle (XTransformPort).
+    # Le « OK passerelle » à l'ancienne ne prouvait que la PAGE, pas cette
+    # liaison : c'est elle qui disait « Hors ligne » à l'écran (23/11).
+    $via = Get-HttpCode ("http://127.0.0.1:{0}/?EIO=4&transport=polling&XTransformPort=3003" -f (State-Get 'GW_PORT')) 6
+    if ($via -eq 200) {
+        Set-SanteMaillon 'passerelle' 'répondue — page ET liaison temps réelle vérifiées'
+        Log "  OK liaison temps réelle à travers la passerelle vérifiée"
+    } else {
+        Set-SanteMaillon 'passerelle' "page OK mais liaison temps réelle muette (code $via)"
+        Log "  ATTENTION : liaison temps réelle muette à travers la passerelle (code $via) — l'onglet dirait « Hors ligne »"
+    }
     # Agent : sonde réelle du port 9120 — la vérité du live, écrite telle
     # quelle (branché sur notre agent, sur le vôtre déjà en marche, ou muet).
     if (Test-PortBusy 9120) { Set-SanteMaillon 'agent' 'répond (9120)' } else { Set-SanteMaillon 'agent' 'ne répond pas (9120)' }

@@ -8,27 +8,41 @@
 //    au processus de quelqu'un d'autre) ;
 //  - installation amont introuvable (resolveAgentDir) → rien : l'interface
 //    affiche son état honnête « agent non détecté » avec la marche à suivre ;
-//  - lancement possible → python (py -3 / python3 / python) en détaché,
-//    journal dédié db/agent-gateway.log, attente du port 15 s max.
+//  - lancement possible → python du VENV dédié d'abord (.venv de la maison,
+//    refonte (69) D1 — isolé du python système qui sert aussi à F:\hermes),
+//    système en repli ; sortie capturée dans db/agent-gateway.log ; attente
+//    du port 15 s max, puis CAUSE lue dans le journal si muet (loi 2).
 // Choix assumé : l'agent N'EST JAMAIS tué par ce module ni par le service —
 // il est adopté au boot suivant et survit aux relances de l'interface
 // (pas de kill sur pid non vérifié, même garde que S-03 côté webchat).
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, openSync } from "node:fs";
 import { join } from "node:path";
-import { gatewayPortOpen, resolveAgentDir } from "./agent-motor";
+import { gatewayLogCause, gatewayLogPath, gatewayPortOpen, resolveAgentDir } from "./agent-motor";
 import { trace } from "./trace";
 
 const WAIT_MS = 15_000;
 
-function pythonCandidates(): { cmd: string; args: string[] }[] {
+/** Candidats python pour la gateway : le VENV DÉDIÉ de la maison d'abord
+ *  (refonte (69) D1 — ses dépendances, certifiées par le lanceur, ne
+ *  marchent jamais sur le python système qui fait aussi tourner vos autres
+ *  Hermes), puis les interpréteurs système en repli (installations dont les
+ *  dépendances existent déjà côté système). */
+export function pythonCandidates(agentDir: string): { cmd: string; args: string[] }[] {
+  const venvPython =
+    process.platform === "win32"
+      ? join(agentDir, ".venv", "Scripts", "python.exe")
+      : join(agentDir, ".venv", "bin", "python");
+  const list: { cmd: string; args: string[] }[] = [];
+  if (existsSync(venvPython)) list.push({ cmd: venvPython, args: [] });
   if (process.platform === "win32") {
-    return [
-      { cmd: "py", args: ["-3"] },
-      { cmd: "python", args: [] },
-    ];
+    list.push({ cmd: "py", args: ["-3"] });
+    list.push({ cmd: "python", args: [] });
+  } else {
+    list.push({ cmd: "python3", args: [] });
+    list.push({ cmd: "python", args: [] });
   }
-  return [{ cmd: "python3", args: [] }, { cmd: "python", args: [] }];
+  return list;
 }
 
 /** Lance la passerelle amont si elle est éteinte et que l'installation
@@ -46,8 +60,18 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
       return false;
     }
     let spawned = false;
-    const log = join(import.meta.dir, "..", "..", "..", "db", "agent-gateway.log");
-    for (const py of pythonCandidates()) {
+    const log = gatewayLogPath();
+    // Sortie de l'agent capturée DANS SON JOURNAL (fd ouvert en append) :
+    // c'est elle qui portera la CAUSE si la gateway reste muette — avant
+    // (69) elle partait dans /dev/null et l'utilisateur ne voyait qu'un
+    // « éteint » sans mot (la panne réelle du 23/11).
+    let logFd: number | null = null;
+    try {
+      logFd = openSync(log, "a");
+    } catch {
+      logFd = null; // journal impossible : on lance quand même, sans capture
+    }
+    for (const py of pythonCandidates(agentDir)) {
       // ENOENT (interpréteur absent) arrive via l'événement "error", pas au
       // lancement — chaque candidat est éprouvé 2 s : sans erreur, il vit.
       const ok = await new Promise<boolean>((resolve) => {
@@ -55,7 +79,7 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
         const child = spawn(py.cmd, [...py.args, script], {
           cwd: agentDir,
           detached: true,
-          stdio: ["ignore", "ignore", "ignore"],
+          stdio: logFd !== null ? ["ignore", logFd, logFd] : ["ignore", "ignore", "ignore"],
           windowsHide: true,
         });
         const finish = (result: boolean) => {
@@ -70,9 +94,9 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
       });
       if (!ok) continue;
       // Journal léger côté fork : une ligne par lancement (le journal
-      // complet de l'agent vit dans sa propre console amont).
+      // complet de l'agent vit désormais juste au-dessus dans le même
+      // fichier, capturé par fd).
       try {
-        const { appendFileSync } = await import("node:fs");
         appendFileSync(
           log,
           `${new Date().toISOString()} lancement automatique ${py.cmd} ${py.args.join(" ")}\n`
@@ -82,6 +106,14 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
       }
       spawned = true;
       break;
+    }
+    if (logFd !== null) {
+      try {
+        // Le fils garde SA copie du fd : le parent peut fermer la sienne.
+        closeSync(logFd);
+      } catch {
+        /* déjà fermé */
+      }
     }
     if (!spawned) {
       trace("system", "agent non démarré automatiquement : aucun interpréteur python trouvé");
@@ -95,9 +127,12 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
       }
       await new Promise((r) => setTimeout(r, 500));
     }
+    const cause = gatewayLogCause();
     trace(
       "system",
-      "agent lancé mais la gateway ne répond pas encore — l'interface reste sur son état honnête jusqu'au prochain sondage"
+      cause
+        ? `agent lancé mais la gateway ne répond pas — cause lue dans son journal : ${cause}`
+        : "agent lancé mais la gateway ne répond pas encore — l'interface reste sur son état honnête jusqu'au prochain sondage"
     );
     return false;
   } catch (err) {

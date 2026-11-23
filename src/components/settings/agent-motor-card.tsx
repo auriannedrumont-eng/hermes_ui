@@ -380,6 +380,15 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </>
               )}
             </p>
+            {/* Cause connue (refonte (69), loi 2 « un échec = cause ») :
+                quand la gateway est lancée mais muette, le service lit la
+                dernière ligne parlante de SON journal et la montre ici —
+                plus jamais un « éteint » sans mot. */}
+            {connected && !op && state?.gatewayCause ? (
+              <p className="fil mt-1 text-[12.5px] leading-relaxed text-warning [&_b]:font-semibold">
+                Cause connue, lue dans le journal d&apos;Hermes&nbsp;: <b>{state.gatewayCause}</b>
+              </p>
+            ) : null}
           </div>
 
           {/* Lot audit : classe Tailwind corrompue réparée (voir system-section). */}

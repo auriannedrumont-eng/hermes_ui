@@ -71,6 +71,50 @@ export function gatewayPortOpen(timeoutMs = 800): Promise<boolean> {
   });
 }
 
+// ── Cause de la gateway muette (refonte (69), loi 2 « un échec = cause ») ──
+// Le starter capture la VRAIE sortie de l'agent dans ce journal (fd) ;
+// quand il reste muet sur 9120, la dernière ligne parlante devient la
+// cause affichée — plus jamais un « éteint » sans mot.
+
+/** Chemin du journal capturé de l'agent. Surchargeable pour les tests. */
+export function gatewayLogPath(): string {
+  return (
+    process.env.HERMES_AGENT_GATEWAY_LOG ??
+    join(import.meta.dir, "..", "..", "db", "agent-gateway.log")
+  );
+}
+
+const CAUSE_CAP = 65_536;
+
+/** Extrait la CAUSE parlante d'un journal d'agent : la dernière ligne qui
+ *  parle d'erreur (ModuleNotFoundError, Traceback, port refusé…), sinon la
+ *  dernière ligne non vide, sinon null. Bornée à 200 caractères — c'est une
+ *  cause à afficher, pas un dump. */
+export function extractGatewayCause(text: string): string | null {
+  const lignes = text
+    .slice(-CAUSE_CAP)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lignes.length === 0) return null;
+  const parlante = [...lignes]
+    .reverse()
+    .find((l) => /error|exception|traceback|modulenotfound|importerror|refus|denied|failed/i.test(l));
+  const choisie = parlante ?? lignes[lignes.length - 1];
+  return choisie.length > 200 ? `${choisie.slice(0, 200)}…` : choisie;
+}
+
+/** La cause du jour, lue dans le journal réel de l'agent (queue 64 Ko).
+ *  Journal absent/vide → null : on n'invente rien. */
+export function gatewayLogCause(): string | null {
+  try {
+    if (statSync(gatewayLogPath()).size === 0) return null;
+    return extractGatewayCause(readFileSync(gatewayLogPath(), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /** Journal des opérations (maj / retour) — même dossier que la base. */
 const motorLogPath = () =>
   process.env.HERMES_MOTOR_LOG ??
@@ -111,6 +155,7 @@ let motorState: MotorState = {
   previousVersion: null,
   agentDir: null,
   gatewayUrl: null,
+  gatewayCause: null,
 };
 
 export function getMotorState(): MotorState {
@@ -387,6 +432,10 @@ export async function refreshMotorStatus(deps: MotorDeps): Promise<MotorState> {
     release !== null &&
     installed !== null &&
     compareVersions(release.tag, installed) > 0;
+  // Cause connue (refonte (69)) : si la gateway est muette, la dernière
+  // ligne parlante de SON journal devient la cause affichée ; si elle
+  // répond, il n'y a plus de cause à montrer.
+  const muette = !(await gatewayPortOpen());
   setState(
     {
       installed,
@@ -396,6 +445,7 @@ export async function refreshMotorStatus(deps: MotorDeps): Promise<MotorState> {
       previousVersion: previousSaved,
       agentDir: resolveAgentDir(),
       gatewayUrl: deps.connector.gatewayUrl,
+      gatewayCause: muette ? gatewayLogCause() : null,
     },
     deps
   );
