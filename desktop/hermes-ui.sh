@@ -633,7 +633,12 @@ install_agent_fresh() {
   touch "$certflag" 2>/dev/null || true
   mkdir -p "$ROOT/db" 2>/dev/null || true
   log "• certification de l'agent : allumage d'essai (90 s max)…"
-  ( cd "$maison" && exec "$certpy" gateway/run_api.py >>"$certlog" 2>&1 ) &
+  # ((78)) Commande officielle du projet amont : le runtime supervise
+  # (python -m hermes_cli.main gateway run) allume lui-même le listener 9120.
+  # run_api.py en fichier était doublement faux : package `gateway` non
+  # importable depuis son dossier (ModuleNotFoundError, cas réel du 23/11)
+  # et module qui exige un appelant ayant initialisé l'autorité de session.
+  ( cd "$maison" && PYTHONIOENCODING=utf-8 exec "$certpy" -m hermes_cli.main --profile default gateway run --quiet >>"$certlog" 2>&1 ) &
   local trial=$! certup=0 i
   for i in $(seq 1 45); do
     sleep 2
@@ -768,8 +773,10 @@ start_agent_runtime() {
     return 0
   fi
   log "• démarrage de l'agent (moteur local) sur :9120…"
+  # ((78)) Commande officielle amont (cf. l'essai de certification) : le
+  # runtime supervise allume lui-même le listener 9120 (webapp_listener).
   mkdir -p "$ROOT/db"
-  ( cd "$maison" && exec "$apy" gateway/run_api.py >>"$ROOT/db/agent.log" 2>&1 ) &
+  ( cd "$maison" && PYTHONIOENCODING=utf-8 exec "$apy" -m hermes_cli.main --profile default gateway run --quiet >>"$ROOT/db/agent.log" 2>&1 ) &
   state_set AGENT_PID "$!"
   for _ in $(seq 1 45); do
     if port_open 9120; then up=1; break; fi
@@ -798,11 +805,11 @@ do_stop() {
   # 3. Le mini-service EN DERNIER : son handler SIGTERM fait le
   #    checkpoint WAL (données intégrées au fichier SQLite principal)
   stop_tree CHAT_PID "bun index\.ts|hermes-chat/index" TERM
-  stop_tree AGENT_PID "gateway/run_api\.py" TERM
+  stop_tree AGENT_PID "hermes_cli\.main.*gateway" TERM
   wait_tree_gone CHAT_PID "bun index\.ts|hermes-chat/index" 10
   wait_tree_gone UI_PID  "next dev|standalone/server\.js|next-server" 10
   wait_tree_gone GW_PID  "caddy run" 10
-  wait_tree_gone AGENT_PID "gateway/run_api\.py" 10
+  wait_tree_gone AGENT_PID "hermes_cli\.main.*gateway" 10
   rm -f "$STATE_FILE" "$RUNTIME_DIR"/*.pid 2>/dev/null
   # Composants adoptés (OWNED=0) : volontairement NON arrêtés — ils
   # n'ont pas été démarrés par ce lanceur.

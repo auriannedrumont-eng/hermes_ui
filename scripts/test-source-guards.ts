@@ -395,16 +395,29 @@ async function main() {
   // PID enregistré ; Install-AgentIntoHome tourne après la Phase 0 (elle
   // a besoin du Python portable), plus avant.
   const psN = psU.replace(/\r\n/g, "\n");
-  check("ps1 : Start-AgentRuntime existe, allume run_api.py, PID en état",
+  check("ps1 : Start-AgentRuntime existe, PID en état",
     psN.includes("function Start-AgentRuntime") &&
       psN.includes("State-Set 'AGENT_PID'") &&
-      psN.includes("gateway\\run_api.py") &&
       psN.includes("Test-PortBusy 9120"));
+  check("[78] LA COMMANDE OFFICIELLE amont, des deux lanceurs : python -m hermes_cli.main --profile default gateway run --quiet (cwd racine)",
+    // Prouvé dans le dépôt amont : hermes_cli/gateway_runtime_start.py l.93
+    // construit exactement [python, -m, hermes_cli.main, --profile, default,
+    // gateway, run, --quiet] avec cwd = racine ; le listener 9120 est
+    // gateway/webapp_listener.py (DEFAULT_PORT = 9120). Lancer
+    // gateway/run_api.py en fichier était doublement faux : package
+    // `gateway` non importable depuis son dossier (ModuleNotFoundError,
+    // cas réel du 23/11 06:34) ET module qui exige un appelant ayant déjà
+    // initialisé l'autorité de session.
+    psN.includes("'-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet'") &&
+      shU.includes("-m hermes_cli.main --profile default gateway run --quiet") &&
+      shU.includes('PYTHONIOENCODING=utf-8'));
   check("ps1 : appelé dans le flux juste avant la sonde 9120",
     /Start-AgentRuntime\r?\n\s*if \(Test-PortBusy 9120\)/.test(psU));
-  check("ps1 : arrêt propre — Stop-Tree AGENT_PID + marque run_api.py",
+  check("arrêt propre : marque = le runtime supervise (plus run_api.py), les deux lanceurs",
     psN.includes("Stop-Tree 'AGENT_PID' $MAgent") &&
-      psN.includes("$MAgent = 'gateway[\\\\/]run_api\\.py'"));
+      psN.includes("$MAgent = 'hermes_cli\\.main.*gateway'") &&
+      shU.includes('stop_tree AGENT_PID "hermes_cli\\.main.*gateway" TERM') &&
+      shU.includes('wait_tree_gone AGENT_PID "hermes_cli\\.main.*gateway" 10'));
   check("ps1 : Install-AgentIntoHome déplacé APRÈS Phase-Prerequis (Python portable prêt)",
     (() => {
       // Lignes d'APPEL seules (la définition de fonction vit plus haut,
@@ -419,9 +432,8 @@ async function main() {
     shU.includes("start_agent_runtime()") &&
       shU.includes("state_set AGENT_PID") &&
       /start_agent_runtime\r?\n\s*if port_open 9120/.test(shU));
-  check("sh : arrêt propre — stop_tree AGENT_PID + status connaît l'agent",
-    shU.includes('stop_tree AGENT_PID "gateway/run_api\\.py" TERM') &&
-      shU.includes('"AGENT_PID:run_api.py:AGENT_OWNED:agent"'));
+  check("sh : status connaît l'agent (la marque d'arrêt est vérifiée plus haut, [78])",
+    shU.includes('"AGENT_PID:run_api.py:AGENT_OWNED:agent"'));
   check("allumage honnête : cause écrite si l'agent ne répond pas (db/agent.log), jamais de Die",
     psN.includes("db\\agent.log") && shU.includes("db/agent.log"));
 

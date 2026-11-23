@@ -26,6 +26,15 @@ if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then
   mkdir -p "$3/bin"
   cat > "$3/bin/python" <<'PYEOF'
 #!/usr/bin/env bash
+# ((78)) le venv imite le runtime OFFICIEL : `python -m hermes_cli.main
+# gateway run` (cf. desktop/hermes-ui.sh, start_agent_runtime + certification).
+if [ "$1" = "-m" ] && [ "$2" = "hermes_cli.main" ]; then
+  if [ "${TRIAL_MODE:-listen}" = "die" ]; then
+    echo "ModuleNotFoundError: No module named 'fastapi'" >&2
+    exit 1
+  fi
+  exec "${REAL_PY3:-python3}" -c "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',9120)); s.listen(1); time.sleep(300)"
+fi
 if [ "$1" = "-m" ]; then exit 0; fi
 if [ "${TRIAL_MODE:-listen}" = "die" ]; then
   echo "ModuleNotFoundError: No module named 'fastapi'" >&2

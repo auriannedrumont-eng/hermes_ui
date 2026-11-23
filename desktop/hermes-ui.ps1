@@ -111,7 +111,7 @@ $Script:SupCycle = 0   # cycle de surveillance courant (voir Supervise-One)
 $MChat = 'index\.ts|hermes-chat'
 $MUii  = 'next dev|standalone[\\/]server\.js|next-server'
 $MGw   = 'caddy run'
-$MAgent = 'gateway[\\/]run_api\.py'
+$MAgent = 'hermes_cli\.main.*gateway'
 
 function Log([string]$msg) {
     $line = '[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $msg
@@ -1206,7 +1206,14 @@ function Install-AgentIntoHome {
     try { Set-Content $certFlag ((Get-Date).ToString('o')) } catch { }
     $certLog = Join-Path $Root 'db\agent-certification.log'
     Log "• certification de l'agent : allumage d'essai (90 s max)…"
-    $certProc = Start-Process -FilePath $certPy -ArgumentList (@($certPre) + ('"{0}"' -f (Join-Path $homeDir 'gateway\run_api.py'))) -WorkingDirectory $homeDir -WindowStyle Hidden -RedirectStandardError $certLog -RedirectStandardOutput ($certLog + '.out') -PassThru
+    # ((78)) La commande officielle du projet amont (hermes_cli.gateway_runtime_start.py
+    # la lance elle-meme) : le runtime supervise allume le listener 9120.
+    # `gateway\run_api.py` en fichier etait doublement faux : le package
+    # `gateway` n'est pas importable depuis son dossier (ModuleNotFoundError,
+    # cas reel du 23/11) et ce module exige un appelant qui a deja initialise
+    # l'autorite de session — c'est le runtime qui fait tout cela.
+    try { $env:PYTHONIOENCODING = 'utf-8' } catch { }
+    $certProc = Start-Process -FilePath $certPy -ArgumentList (@($certPre) + @('-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet')) -WorkingDirectory $homeDir -WindowStyle Hidden -RedirectStandardError $certLog -RedirectStandardOutput ($certLog + '.out') -PassThru
     $certUp = $false
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 2
@@ -1264,8 +1271,13 @@ function Start-AgentRuntime {
         return
     }
     Log "• demarrage de l'agent (moteur local) sur :9120..."
+    # ((78)) Commande officielle du projet amont (cf. l'essai de certification
+    # plus haut) : `python -m hermes_cli.main gateway run`, cwd = racine de
+    # l'agent — le runtime supervise allume lui-meme le listener 9120
+    # (gateway/webapp_listener.py, DEFAULT_PORT = 9120).
+    try { $env:PYTHONIOENCODING = 'utf-8' } catch { }
     $alog = Join-Path $Root 'db\agent.log'
-    $ap = Start-Process -FilePath $apy -ArgumentList (@($aPre) + ('"{0}"' -f (Join-Path $house 'gateway\run_api.py'))) -WorkingDirectory $house -WindowStyle Hidden -RedirectStandardError $alog -RedirectStandardOutput ($alog + '.out') -PassThru
+    $ap = Start-Process -FilePath $apy -ArgumentList (@($aPre) + @('-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet')) -WorkingDirectory $house -WindowStyle Hidden -RedirectStandardError $alog -RedirectStandardOutput ($alog + '.out') -PassThru
     State-Set 'AGENT_PID' $ap.Id; State-Set 'AGENT_OWNED' '1'
     $up = $false
     for ($i = 0; $i -lt 45; $i++) {
