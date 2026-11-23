@@ -404,10 +404,23 @@ function Update-FromGit {
         Log "• mise a jour auto : le dossier n est pas un clone git — ignoree"
         return
     }
+    # ((85)) LE DEPOT DU PROJET EST LA REFERENCE — en dur, avec surcharge
+    # d'epreuve (HERMES_FORK_URL). L'ancien code faisait confiance au
+    # remote « origin » existant : s'il pointait ailleurs (ou si la branche
+    # suivie etait derivee d'une reference morte), « a jour » etait
+    # eternellement vrai pendant que GitHub avancait — cas reel du 23/11
+    # 15:32 : « aucune nouvelle version » a chaque boot, aucune reparation
+    # ne pouvait jamais arriver.
+    $fork = if ($env:HERMES_FORK_URL) { $env:HERMES_FORK_URL } else { 'https://github.com/auriannedrummont-eng/hermes_ui.git' }
     $r = Invoke-Git @('remote', 'get-url', 'origin')
-    if ($r.Code -ne 0 -or $r.Text.Trim() -notmatch '^https?://') {
-        Log "• mise a jour auto : pas de depot GitHub distant — ignoree"
-        return
+    if ($r.Code -ne 0) {
+        Log "• mise a jour auto : ce dossier n'a pas de depot distant — origin est aligne sur le depot du projet."
+        $r = Invoke-Git @('remote', 'add', 'origin', $fork)
+        if ($r.Code -ne 0) { Log "  ATTENTION : alignement du depot distant impossible — mise a jour ignoree"; return }
+    } elseif ($r.Text.Trim() -ne $fork) {
+        Log ("  origin pointait ailleurs ({0}) — realigne sur le depot du projet." -f $r.Text.Trim())
+        $r = Invoke-Git @('remote', 'set-url', 'origin', $fork)
+        if ($r.Code -ne 0) { Log "  ATTENTION : realignement du depot distant impossible — mise a jour ignoree"; return }
     }
     # Ne jamais rester bloque sur une demande de saisie console ; la
     # connexion GitHub passe par la fenetre du gestionnaire d identifiants.
@@ -423,9 +436,16 @@ function Update-FromGit {
         Write-MajLog "GitHub injoignable (reseau ou connexion) — version locale conservee"
         return
     }
-    $r = Invoke-Git @('rev-parse', '@{u}')
-    if ($r.Code -ne 0) { Log "  pas de branche distante suivie — mise a jour ignoree"; Write-MajLog "pas de branche distante suivie — version locale conservee"; return }
+    # ((85)) La comparaison porte sur origin/main EN EXPLICITE — plus jamais
+    # sur la branche suivie (@{u}), qui peut pointer une reference morte.
+    $r = Invoke-Git @('rev-parse', 'origin/main')
+    if ($r.Code -ne 0) { Log "  ATTENTION : pas de branche main sur le depot du projet — mise a jour ignoree"; Write-MajLog "pas de branche main sur le depot du projet — version locale conservee"; return }
     $upstream = $r.Text.Trim()
+    $r = Invoke-Git @('rev-parse', '--abbrev-ref', 'HEAD')
+    $curBranch = if ($r.Code -eq 0) { $r.Text.Trim() } else { '?' }
+    $bShort = if ($before.Length -ge 7) { $before.Substring(0, 7) } else { $before }
+    $uShort = if ($upstream.Length -ge 7) { $upstream.Substring(0, 7) } else { $upstream }
+    Log ("  verifie : branche {0} · dossier {1} · depot {2}" -f $curBranch, $bShort, $uShort)
     if ($upstream -eq $before) { Log "  a jour : aucune nouvelle version"; Write-MajLog "deja a jour — aucune nouvelle version sur GitHub"; return }
     $r = Invoke-Git @('merge', '--ff-only', $upstream)
     if ($r.Code -ne 0) {

@@ -301,5 +301,52 @@ TRIAL_PROOF=1 TRIAL_MODE=listen bash -c "$HARNESS" "$T" | grep -q "le marqueur d
 sleep 1
 pkill -f "bind..127\.0\.0\.1.,9120" 2>/dev/null || true
 
+echo "── CAS L : origin faussé + branche dérivée → réaligné, mise à jour appliquée ((85)) ──"
+# Cas réel du 23/11 15:32 : « a jour : aucune nouvelle version » éternel
+# pendant que GitHub avançait — le regard git du lanceur (remote « origin »
+# + branche suivie @{u}) ne pointait pas vers la branche qui avance. Le
+# (85) : référence en dur (surcharge HERMES_FORK_URL), origin réaligné,
+# comparaison sur origin/main explicite, transparence branche·SHA·SHA.
+sed -n '/── bloc maj (debut epreuve) ──/,/── bloc maj (fin epreuve) ──/p' \
+  "$DIR/../desktop/hermes-ui.sh" > "$T/fmaj.sh"
+export HERMES_FORK_URL="$T/origin.git"
+git init --bare -q -b main "$T/origin.git" 2>/dev/null
+git init --bare -q -b main "$T/faux.git" 2>/dev/null
+git clone -q "$T/origin.git" "$T/lseed" 2>/dev/null
+( cd "$T/lseed" \
+  && git config user.email epreuve@local && git config user.name epreuve \
+  && echo v1 > VERSION.txt && git add VERSION.txt && git commit -qm v1 \
+  && git push -q origin main ) >/dev/null 2>&1
+# Le dossier du lanceur est cloné quand main est encore à v1…
+git clone -q "$T/origin.git" "$T/lroot" 2>/dev/null
+( cd "$T/lseed" && echo v2 > VERSION.txt && git commit -qam v2 \
+  && git push -q origin main ) >/dev/null 2>&1
+# …puis une version v2 est PUBLIÉE pendant que le dossier passe sur une
+# branche dérivée « travail » qui suit origin/travail (référence morte)
+# et un remote « origin » FAUSSÉ — exactement la situation du 23/11 15:32.
+( cd "$T/lroot" \
+  && git config user.email epreuve@local && git config user.name epreuve \
+  && git checkout -qb travail \
+  && git remote set-url origin "$T/faux.git" \
+  && git push -q origin travail \
+  && git fetch -q origin travail \
+  && git branch -qu origin/travail travail ) >/dev/null 2>&1
+mkdir -p "$T/lruntime"
+{ echo 'log(){ echo "LOG: $*"; }'; echo 'maj_log(){ echo "MAJLOG: $*"; }';
+  echo 'maj_epreuve(){'; cat "$T/fmaj.sh"; echo '}'; echo 'maj_epreuve'; } > "$T/runmaj.sh"
+ROOT="$T/lroot" RUNTIME_DIR="$T/lruntime" bash "$T/runmaj.sh" > "$T/L.out" 2>&1
+grep -q "origin pointait ailleurs" "$T/L.out" \
+  && echo "PREUVE : le remote faussé est dit à voix haute et réaligné sur le dépôt du projet" \
+  || { echo "ECHEC : l'origin faussé n'est pas détecté"; tail -5 "$T/L.out"; exit 1; }
+grep -q "vérifié : branche travail" "$T/L.out" \
+  && echo "PREUVE : la transparence dit la branche réelle et les deux SHA" \
+  || { echo "ECHEC : pas de ligne de transparence"; tail -5 "$T/L.out"; exit 1; }
+grep -q "mise à jour appliquée" "$T/L.out" \
+  && echo "PREUVE : la mise à jour publiée sur main est appliquée malgré la branche dérivée" \
+  || { echo "ECHEC : la mise à jour n'est pas appliquée"; tail -5 "$T/L.out"; exit 1; }
+[ "$(cat "$T/lroot/VERSION.txt" 2>/dev/null)" = "v2" ] \
+  && echo "PREUVE : le dossier est bien sur la version v2 de main" \
+  || { echo "ECHEC : VERSION.txt n'est pas v2"; exit 1; }
+
 echo ""
-echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)+(84)) : succès"
+echo "Épreuve lanceur refonte (69+70+(71)+72+(80)+(83)+(84)+(85)) : succès"

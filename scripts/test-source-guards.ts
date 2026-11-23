@@ -575,6 +575,32 @@ async function main() {
   check("harnais : le CAS K couvre le marqueur mensonger",
     read("scripts/test-lanceur-certification.sh").includes("CAS K : marqueur mensonger"));
 
+  console.log("[85] le regard git : référence en dur, origin/main explicite, jamais @{u}");
+  // Cas réel du 23/11 15:32 : « a jour : aucune nouvelle version » éternel
+  // pendant que GitHub avançait (remote faussé ou branche suivie morte) —
+  // aucune réparation ne pouvait jamais arriver par le lanceur.
+  const ps185 = read("desktop/hermes-ui.ps1");
+  const sh85 = read("desktop/hermes-ui.sh");
+  const harn85 = read("scripts/test-lanceur-certification.sh");
+  check("ps1 : la référence du dépôt du projet est en dur (surchargeable)",
+    ps185.includes("auriannedrummont-eng/hermes_ui.git") && ps185.includes("HERMES_FORK_URL"));
+  check("ps1 : plus AUCUNE comparaison sur la branche suivie @{u} (hors commentaires)",
+    !ps185.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").includes("@{u}"));
+  check("ps1 : comparaison sur origin/main explicite + réalignement d'origin",
+    ps185.includes("'origin/main'") && ps185.includes("pointait ailleurs"));
+  check("ps1 : ligne de transparence branche · dossier · dépôt",
+    ps185.includes("verifie : branche {0} · dossier {1} · depot {2}"));
+  check("sh : la référence du dépôt du projet est en dur (surchargeable)",
+    sh85.includes("auriannedrummont-eng/hermes_ui.git") && sh85.includes("HERMES_FORK_URL"));
+  check("sh : plus AUCUNE comparaison sur la branche suivie @{u} (hors commentaires)",
+    !sh85.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").includes("@{u}"));
+  check("sh : comparaison sur origin/main explicite + réalignement d'origin",
+    sh85.includes("'origin/main'") && sh85.includes("pointait ailleurs"));
+  check("sh : bornes d'épreuve du bloc maj (CAS L)",
+    sh85.includes("── bloc maj (debut epreuve) ──") && sh85.includes("── bloc maj (fin epreuve) ──"));
+  check("harnais : le CAS L couvre origin faussé + branche dérivée",
+    harn85.includes("CAS L : origin faussé + branche dérivée"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

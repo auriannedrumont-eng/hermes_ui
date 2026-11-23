@@ -1003,11 +1003,28 @@ do_start() {
   # échoue (réseau coupé) laissait apres non définie et la comparaison
   # avala fin « unbound variable » — arrêt brutal, ni marqueur MAJ ni
   # relance de la pile.
-  local avant="" apres=""
+  # ── bloc maj (debut epreuve) ──
+  # ((85)) LE DEPOT DU PROJET EST LA REFERENCE — en dur (surcharge
+  # d'epreuve : HERMES_FORK_URL). origin est réaligné s'il pointait
+  # ailleurs, et la comparaison porte sur origin/main explicite — plus
+  # jamais sur la branche suivie (@{u}), qui peut pointer une référence
+  # morte pendant que GitHub avance (cas réel du 23/11 15:32 : « a jour »
+  # éternellement vrai, aucune réparation ne pouvait jamais arriver).
+  local avant="" apres="" fork="" urlactuel="" branche=""
+  fork="${HERMES_FORK_URL:-https://github.com/auriannedrummont-eng/hermes_ui.git}"
+  urlactuel="$(git -C "$ROOT" remote get-url origin 2>/dev/null || echo '')"
+  if [ -z "$urlactuel" ]; then
+    git -C "$ROOT" remote add origin "$fork" 2>/dev/null || true
+  elif [ "$urlactuel" != "$fork" ]; then
+    log "• origin pointait ailleurs ($urlactuel) — réaligné sur le dépôt du projet."
+    git -C "$ROOT" remote set-url origin "$fork" 2>/dev/null || true
+  fi
   avant="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
   maj_log "consultation de GitHub…"
   if [ -n "$avant" ] && git -C "$ROOT" fetch --quiet origin 2>/dev/null; then
-    apres="$(git -C "$ROOT" rev-parse '@{u}' 2>/dev/null)"
+    apres="$(git -C "$ROOT" rev-parse 'origin/main' 2>/dev/null)"
+    branche="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+    log "• vérifié : branche $branche · dossier ${avant:0:7} · dépôt ${apres:0:7}"
     if [ -n "$apres" ] && [ "$apres" != "$avant" ]; then
       if git -C "$ROOT" merge --ff-only "$apres" >/dev/null 2>&1; then
         log "• mise à jour appliquée : $(git -C "$ROOT" diff --name-only "$avant" "$apres" 2>/dev/null | grep -c . || echo '?') fichier(s) récupéré(s)"
@@ -1050,6 +1067,7 @@ do_start() {
   else
     maj_log "GitHub injoignable — version locale conservée"
   fi
+  # ── bloc maj (fin epreuve) ──
 
   # Installation de l'agent dans le dossier de l'application (§9 (63),
   # décision : « pas de déplacement de mon hermes actuel — l'interface
