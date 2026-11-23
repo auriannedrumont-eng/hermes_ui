@@ -430,7 +430,12 @@ check_deps() {
   local portnode
   portnode="$(ensure_node 2>/dev/null || echo '')"
   if [ -n "$portnode" ]; then
-    log "• Node du dossier en service ($("$portnode" --version 2>/dev/null || echo '')) — le système n'a plus rien à dire."
+    case "$portnode" in
+      */node-portable/*)
+        log "• Node du dossier en service ($("$portnode" --version 2>/dev/null || echo '')) — le système n'a plus rien à dire."
+        ;;
+      *) log "• Node système détecté ($("$portnode" --version 2>/dev/null || echo ''))." ;;
+    esac
     export PATH="$(dirname "$portnode"):$PATH"
   elif ! command -v node >/dev/null 2>&1; then
     die "« node » est introuvable et le Node portable n'a pas pu s'installer — installez Node.js ou vérifiez le réseau, puis relancez."

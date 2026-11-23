@@ -704,7 +704,9 @@ function Ensure-PortableSetup {
                    -not (Get-ToolDir 'bun' 'bun.exe') -or
                    -not (Get-ToolDir 'caddy' 'caddy.exe') -or
                    -not (Get-ToolDir 'chrome-headless-shell' 'chrome-headless-shell.exe') -or
-                   -not (Get-ToolDir 'ffmpeg' 'ffmpeg.exe')
+                   -not (Get-ToolDir 'ffmpeg' 'ffmpeg.exe') -or
+                   -not (Get-ToolDir 'git' 'git.exe') -or
+                   -not (Test-Path (Join-Path $RuntimeDir 'python-portable\python.exe'))
     if ($needInstall) {
         Write-Host ''
         Write-Host '  ═══ PREMIER DEMARRAGE : installation automatique ═══'
