@@ -27,6 +27,7 @@
 // HERMES_AGENT_RELEASES_URL (JSON releases/latest).
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import { join, resolve } from "node:path";
 import type { Store } from "./store";
 import type { HermesConnector } from "./hermes-connector";
@@ -50,6 +51,25 @@ const agentBin = () => process.env.HERMES_AGENT_BIN ?? "hermes";
 const UPDATE_TIMEOUT_MS = 10 * 60_000;
 const GATEWAY_STOP_TIMEOUT_MS = 15_000;
 const VERSION_TIMEOUT_MS = 4_000;
+
+// ── Sondes de la passerelle (§9 (64)) — partagées avec agent-starter ────────
+// Port lu à l'USAGE (convention du module) : surcharge d'environnement pour
+// les tests, défaut 9120 comme le connecteur.
+const gatewayPort = () => Number(process.env.HERMES_AGENT_GATEWAY_PORT ?? 9120);
+
+/** Le port de la passerelle répond-il ? (TCP — un port WS suffit.) */
+export function gatewayPortOpen(timeoutMs = 800): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port: gatewayPort() });
+    const done = (up: boolean) => {
+      socket.destroy();
+      resolve(up);
+    };
+    socket.setTimeout(timeoutMs, () => done(false));
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+  });
+}
 
 /** Journal des opérations (maj / retour) — même dossier que la base. */
 const motorLogPath = () =>
@@ -215,7 +235,11 @@ function runLogged(
       } catch {
         /* déjà parti */
       }
-      logLine(deps, `(arrêté : plus de ${Math.round(opts.timeoutMs / 1000)} s sans fin)`);
+      // §9 (64) : une sonde quiet ne doit JAMAIS écrire dans le journal
+      // d'opération — le « arrêté : plus de 4 s sans fin » vu chez
+      // l'utilisatrice venait d'une sonde --version silencieuse qui y
+      // fuyait au moment du timeout.
+      if (!opts.quiet) logLine(deps, `(arrêté : plus de ${Math.round(opts.timeoutMs / 1000)} s sans fin)`);
       resolve({ code: -1, output });
     }, opts.timeoutMs);
     const feed = (buf: Buffer) => {
@@ -232,7 +256,7 @@ function runLogged(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      logLine(deps, `commande introuvable : ${err.message}`);
+      if (!opts.quiet) logLine(deps, `commande introuvable : ${err.message}`);
       resolve({ code: -1, output });
     });
     child.on("close", (code) => {
@@ -440,6 +464,25 @@ export async function runSensesCheck(deps: MotorDeps): Promise<MotorControl> {
 // ── Mise à jour du moteur : `hermes update --backup` (officiel) ────────────
 export async function startAgentUpdate(deps: MotorDeps): Promise<{ ok: boolean; error?: string }> {
   if (motorState.op) return { ok: false, error: "une opération est déjà en cours" };
+  // §9 (64), capture du 23 : le programme officiel `hermes update` REFUSE de
+  // se lancer tant que Hermes tourne (fichiers .pyd verrouillés) — et comme
+  // l'interface allume l'agent toute seule (loi « tout simplement »), le
+  // bouton échouait à coup sûr avec un refus en anglais brut. On refuse
+  // NOUS-MÊMES, en français, AVANT de lancer quoi que ce soit : rien n'est
+  // réservé, rien n'est lancé, et on n'arrête jamais l'agent de quelqu'un
+  // (loi « tout simplement » : c'est à la personne de fermer Hermes).
+  if (await gatewayPortOpen()) {
+    logLine(
+      deps,
+      "MOTEUR MAJ REFUSÉ — Hermes est en marche : le programme officiel refuse de se mettre à jour tant qu'il tourne (fichiers verrouillés). Fermez l'application Hermes et les autres terminaux Hermes, puis refaites la mise à jour ici — rien n'a été modifié.",
+      true
+    );
+    setState({ error: "Hermes est en marche — fermez-le (application de bureau, autres terminaux), puis relancez la mise à jour." }, deps);
+    return {
+      ok: false,
+      error: "Hermes est en marche — fermez l'application Hermes (et les autres terminaux Hermes), puis relancez la mise à jour.",
+    };
+  }
   // (audit 2026-11-21) Réservation SYNCHRONE avant tout await : le test
   // ci-dessus puis `await hermesVersion(true)` (jusqu'à 4 s) laissaient une
   // fenêtre où deux déclenchements (deux onglets) passaient tous deux le
@@ -454,6 +497,22 @@ export async function startAgentUpdate(deps: MotorDeps): Promise<{ ok: boolean; 
   logLine(deps, `mise à jour du moteur Hermes demandée depuis l'interface — version actuelle ${before}, gardée en mémoire pour un retour arrière`, true);
   const res = await runLogged(deps, agentBin(), ["update", "--backup"], { timeoutMs: UPDATE_TIMEOUT_MS });
   if (res.code !== 0) {
+    // Ceinture et bretelles (§9 (64)) : si le programme officiel a refusé
+    // malgré notre pré-sonde (Hermes relancé entre-temps), le verdict dit
+    // LA raison en français au lieu d'un échec générique.
+    const refusHermesActif = /force-venv|\.pyd\b|close the hermes desktop app/i.test(res.output);
+    if (refusHermesActif) {
+      logLine(deps, "MOTEUR MAJ REFUSÉ — Hermes est en marche : le programme officiel refuse de se mettre à jour tant qu'il tourne (il a été relancé entre-temps ?). Fermez-le (application de bureau, autres terminaux), puis refaites la mise à jour ici — rien n'a été modifié.");
+      setState({ op: null, error: "Hermes est en marche — fermez-le, puis relancez la mise à jour." }, deps);
+      journalAppend(deps.store, {
+        type: "maj",
+        label: "Mise à jour du moteur Hermes",
+        version: before,
+        resultat: "echec",
+        detail: "refus du programme officiel : Hermes tourne déjà (fichiers verrouillés)",
+      });
+      return { ok: false, error: "Hermes est en marche — fermez-le, puis relancez la mise à jour." };
+    }
     logLine(deps, "MOTEUR MAJ ERREUR — la mise à jour n'a pas abouti (détail ci-dessus). Rien n'a changé : la version installée continue de tourner.");
     setState({ op: null, error: "la mise à jour du moteur n'a pas abouti" }, deps);
     journalAppend(deps.store, {

@@ -104,6 +104,15 @@ check("RETOUR EFFECTUÉ → classe ok", M("[11:06:00] RETOUR EFFECTUÉ (version 
 check("commande introuvable → incident ko", M("[11:05:02] commande introuvable : spawn hermes ENOENT").classe === "ko");
 check("ligne brute du stdout → neutre", M("[11:00:30] Downloading hermes-agent 4.3.0 ...").classe === "");
 
+// §9 (64) : le refus du programme officiel quand Hermes tourne déjà —
+// capture réelle du 23 (refus anglais brut + ✕ « arrêté : plus de 4 s »).
+check("REFUSÉ (Hermes en marche) → mots simples, classe ko", (() => { const r = M("[11:00:01] MOTEUR MAJ REFUSÉ — Hermes est en marche : le programme officiel refuse de se mettre à jour tant qu'il tourne (fichiers verrouillés). Fermez l'application Hermes et les autres terminaux Hermes, puis refaites la mise à jour ici — rien n'a été modifié."); return r.texte.includes("refuse de se mettre à jour tant qu'il tourne") && r.classe === "ko"; })());
+check("ligne .pyd du refus officiel → expliquée", M("[11:00:02] On Windows these keep native extension files (.pyd) locked, so the").texte.includes("verrouillés"));
+check("consigne officielle « close the desktop app » → marche à suivre", M("[11:00:03] Close the Hermes desktop app / other Hermes terminals, then re-run:").texte.includes("Fermez l'application Hermes"));
+check("option --force-venv → conseil de ne pas forcer", M("[11:00:04] (or use `hermes update --force-venv` to proceed anyway at your own risk)").texte.includes("risque d'abîmer"));
+check("dépendances verrouillées → risque expliqué", M("[11:00:05] dependency update would fail partway and leave a broken install.").texte.includes("casserait l'installation"));
+check("verdictMotor : MOTEUR MAJ REFUSÉ → erreur", verdictMotor("[11:00:06] MOTEUR MAJ REFUSÉ — Hermes est en marche : fermez-le puis relancez.") === "erreur");
+
 // ── Partie 5 : parseFil — les jalons ne reculent jamais ────────────────────
 console.log("\nPartie 5 — parseFil");
 // Journal réaliste : « déjà à jour » est une ligne MI-PARCOURS — les

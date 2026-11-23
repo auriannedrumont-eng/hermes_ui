@@ -136,6 +136,17 @@ async function main() {
     sh.includes("https://github.com/NousResearch/hermes-agent"));
   check("sh : aucun déplacement de l'agent existant (bloc agent_src supprimé)", !sh.includes("agent_src"));
 
+  console.log("[6] moteur : refus AVANT lancement + sondes silencieuses sans fuite (§9 (64))");
+  const motor = read("mini-services/hermes-chat/agent-motor.ts");
+  check("startAgentUpdate : pré-sonde de la passerelle avant tout lancement",
+    motor.includes("if (await gatewayPortOpen()) {"));
+  check("runLogged : la ligne d'arrêt est gated par quiet (plus de fuite « plus de 4 s »)",
+    /if \(!opts\.quiet\) logLine\(deps, `\(arrêté/.test(motor));
+  check("runLogged : « commande introuvable » est gated par quiet",
+    /if \(!opts\.quiet\) logLine\(deps, `commande introuvable/.test(motor));
+  check("verdict/traduction : le refus officiel est reconnu (MOTEUR MAJ REFUSÉ)",
+    read("src/components/settings/fil-live.tsx").includes("MOTEUR MAJ REFUSÉ"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

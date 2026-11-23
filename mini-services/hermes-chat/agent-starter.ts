@@ -15,28 +15,11 @@
 // (pas de kill sur pid non vérifié, même garde que S-03 côté webchat).
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import net from "node:net";
 import { join } from "node:path";
-import { resolveAgentDir } from "./agent-motor";
+import { gatewayPortOpen, resolveAgentDir } from "./agent-motor";
 import { trace } from "./trace";
 
-const GATEWAY_HOST = "127.0.0.1";
-const GATEWAY_PORT = 9120;
 const WAIT_MS = 15_000;
-
-/** Le port de la passerelle répond-il ? (TCP — un port WS suffit.) */
-function gatewayPortOpen(timeoutMs = 800): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host: GATEWAY_HOST, port: GATEWAY_PORT });
-    const done = (up: boolean) => {
-      socket.destroy();
-      resolve(up);
-    };
-    socket.setTimeout(timeoutMs, () => done(false));
-    socket.once("connect", () => done(true));
-    socket.once("error", () => done(false));
-  });
-}
 
 function pythonCandidates(): { cmd: string; args: string[] }[] {
   if (process.platform === "win32") {

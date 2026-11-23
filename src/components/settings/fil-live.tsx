@@ -59,7 +59,7 @@ export function verdictApp(text: string): null | "ok" | "erreur" {
 export function verdictMotor(text: string): null | "ok" | "erreur" {
   const lines = text.split("\n").filter((l) => l.trim().length > 0);
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (/RETOUR ERREUR|MOTEUR MAJ ERREUR/.test(lines[i])) return "erreur";
+    if (/RETOUR ERREUR|MOTEUR MAJ ERREUR|MOTEUR MAJ REFUSÉ/.test(lines[i])) return "erreur";
     if (/RETOUR OK|RETOUR EFFECTUÉ|MOTEUR MAJ OK|CONTRÔLE OK/.test(lines[i])) return "ok";
   }
   return null;
@@ -159,6 +159,24 @@ export function traduireLigneMotor(brute: string): FilLigne {
   const { heure, texte } = splitHeure(brute);
   const t = sansAccents(texte);
 
+  // §9 (64) : le refus du programme officiel quand Hermes tourne déjà
+  // (« .pyd locked — close the Hermes desktop app… ») — règles SPÉCIFIQUES
+  // placées avant les génériques, en mots simples.
+  if (t.includes("hermes est en marche : le programme officiel refuse")) {
+    return { heure, texte: "Hermes est en marche : le programme officiel refuse de se mettre à jour tant qu'il tourne. Fermez-le (application de bureau, autres terminaux), puis refaites la mise à jour ici — rien n'a été modifié.", jalon: -1, classe: "ko" };
+  }
+  if (t.includes(".pyd") || t.includes("native extension files")) {
+    return { heure, texte: "Hermes tourne déjà ailleurs : ses fichiers techniques sont verrouillés tant qu'il fonctionne.", jalon: -1, classe: "" };
+  }
+  if (t.includes("close the hermes desktop app") || t.includes("other hermes terminals")) {
+    return { heure, texte: "Fermez l'application Hermes (et les autres terminaux Hermes), puis refaites la mise à jour ici.", jalon: -1, classe: "" };
+  }
+  if (t.includes("force-venv")) {
+    return { heure, texte: "Forcer la mise à jour malgré tout risque d'abîmer l'installation — préférez fermer Hermes d'abord.", jalon: -1, classe: "" };
+  }
+  if (t.includes("dependency update would fail") || t.includes("leave a broken install")) {
+    return { heure, texte: "Une mise à jour forcée maintenant casserait l'installation à moitié.", jalon: -1, classe: "" };
+  }
   if (texte.includes("MOTEUR MAJ OK")) {
     return { heure, texte: "Hermes a installé la nouvelle version — contrôle de la liaison en cours (jusqu'à 2 minutes)…", jalon: 3, classe: "" };
   }

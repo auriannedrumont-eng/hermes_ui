@@ -167,6 +167,20 @@ async function partB() {
   const jr = M.journalList(store);
   check("carnet : mise à jour notée", jr.some((e) => e.type === "maj" && e.version === "0.10.0"));
 
+  // 3.b §9 (64) : Hermes EN MARCHE → refus immédiat en français, le binaire
+  // officiel n'est jamais lancé, aucune sonde silencieuse ne fuit dans le
+  // journal (capture réelle : « ✕ arrêté : plus de 4 s sans fin »).
+  const logAvant = M.motorLogRead().text;
+  process.env.HERMES_AGENT_GATEWAY_PORT = String(gwSrv.port); // un port QUI RÉPOND
+  const refus = await M.startAgentUpdate(deps);
+  check("refus : Hermes en marche → mise à jour refusée d'entrée", refus.ok === false, refus.error ?? "");
+  check("refus : la marche à suivre est dite en français", (refus.error ?? "").toLowerCase().includes("fermez"));
+  const ajoute = M.motorLogRead().text.slice(logAvant.length);
+  check("refus : le binaire officiel n'a pas été lancé", !ajoute.includes("update --backup"));
+  check("refus : aucune sonde silencieuse ne fuit (« arrêté »)", !ajoute.includes("(arrêté"));
+  check("refus : aucune opération réservée", M.getMotorState().op === null);
+  process.env.HERMES_AGENT_GATEWAY_PORT = "1"; // port vide — la suite du flux reste possible
+
   // 4. Problème simulé : la gateway ne répond plus (autre connecteur).
   const depsDown = {
     ...deps,
