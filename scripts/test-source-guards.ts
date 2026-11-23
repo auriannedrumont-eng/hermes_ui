@@ -147,6 +147,31 @@ async function main() {
   check("verdict/traduction : le refus officiel est reconnu (MOTEUR MAJ REFUSÉ)",
     read("src/components/settings/fil-live.tsx").includes("MOTEUR MAJ REFUSÉ"));
 
+  console.log("[7] résolution : UNE SEULE source — la maison, aucun filet (§9 (65))");
+  // Décision verrouillée : resolveAgentDir ne connaît que
+  // <racine interface>/hermes-agent (+ surcharge explicite pour les tests).
+  // Aucune mention des anciens secours de (62) : frère, LOCALAPPDATA, ~/.hermes.
+  const resolveIdx = motor.indexOf("export function resolveAgentDir");
+  const resolveBody = motor.slice(resolveIdx, motor.indexOf("/** Dernière release", resolveIdx));
+  check("resolveAgentDir ne connaît que hermes-agent dans l'interface",
+    resolveBody.includes('join(repoRoot, "hermes-agent")'));
+  check("exactement deux candidats : surcharge explicite + maison",
+    (resolveBody.match(/candidates\.push/g) ?? []).length === 2);
+  check("plus de %LOCALAPPDATA%\\hermes", !resolveBody.includes("LOCALAPPDATA"));
+  check("plus de ~/.hermes", !resolveBody.includes(".hermes"));
+  check("la surcharge explicite HERMES_AGENT_DIR reste (tests/bac à sable)",
+    resolveBody.includes("HERMES_AGENT_DIR"));
+  // Borné à la fonction d'installation : le .sh a un « SIGKILL de secours »
+  // légitime dans l'arrêt du webchat, hors sujet ici.
+  const ps1Install = read("desktop/hermes-ui.ps1").slice(
+    read("desktop/hermes-ui.ps1").indexOf("function Install-AgentIntoHome"),
+    read("desktop/hermes-ui.ps1").indexOf("── ARRET PROPRE")
+  );
+  const shFull = read("desktop/hermes-ui.sh");
+  const shInstall = shFull.slice(shFull.indexOf("install_agent_fresh() {"), shFull.indexOf("── Démarrage des composants"));
+  check("les lanceurs ne promettent plus de « secours » pour l'agent",
+    !ps1Install.includes("secours") && !shInstall.includes("secours"));
+
   console.log(failures === 0 ? "\nGardes de source : 0 échec" : `\nGardes de source : ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

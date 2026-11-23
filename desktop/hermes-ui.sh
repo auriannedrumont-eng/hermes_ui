@@ -199,7 +199,10 @@ gw_healthy() { [ "$(http_code "http://127.0.0.1:$(state_get GW_PORT)/" 4)" = "20
 # surcharge HERMES_AGENT_REPO_URL) dans <racine>/hermes-agent — le dossier que
 # le service consulte EN PREMIER. Les installations existantes (dossier frère
 # « hermes », ~/.hermes) ne sont JAMAIS lues, déplacées ni modifiées : elles
-# restent le secours si le clone échoue (résolution relative du service).
+# vivent leur vie — et depuis (65) elles ne sont même plus un filet : la
+# maison est l'UNIQUE emplacement que le service connaît ; si le clone échoue,
+# l'interface reste sans agent (état honnête) jusqu'à une installation
+# réussie au prochain démarrage.
 # Idempotent ; au plus une tentative par heure (flag daté) — un réseau absent
 # ne doit pas rallonger chaque démarrage ; clone borné 10 min, dépendances
 # python 5 min (meilleur effort) ; jamais bloquant.
@@ -209,13 +212,13 @@ install_agent_fresh() {
     return 0
   fi
   if [ -f "$flag" ] && [ "$(( $(date +%s) - $(date -r "$flag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
-    log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (l'agent existant reste le secours)."
+    log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
     return 0
   fi
   touch "$flag" 2>/dev/null || true
   if [ -d "$maison" ]; then
     log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
-    rm -rf "$maison" 2>/dev/null || { log "  ATTENTION : nettoyage impossible — l'agent existant reste le secours."; return 0; }
+    rm -rf "$maison" 2>/dev/null || { log "  ATTENTION : nettoyage impossible — pas d'agent installé ; l'installation retentera au prochain démarrage."; return 0; }
   fi
   url="${HERMES_AGENT_REPO_URL:-https://github.com/NousResearch/hermes-agent}"
   log "• installation d'une copie fraîche de l'agent Hermes dans le dossier de l'application (hermes-agent, source : $url)…"
@@ -225,13 +228,13 @@ install_agent_fresh() {
     git clone "$url" "$maison" >>"$LAUNCHER_LOG" 2>&1
   fi
   if [ -f "$maison/gateway/run_api.py" ]; then
-    log "  copie fraîche installée — l'interface l'utilise en priorité ; vos installations existantes restent intactes."
+    log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
     if [ -f "$maison/requirements.txt" ]; then
       log "  installation des dépendances python (meilleur effort, 5 min max)…"
       if command -v timeout >/dev/null 2>&1; then
         timeout 300 pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
           || timeout 300 python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
-          || log "  dépendances incomplètes — voir le journal ; au besoin, l'agent existant reste le secours."
+          || log "  dépendances incomplètes — voir le journal ; l'agent risque de réclamer un module au premier lancement."
       else
         pip3 install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
           || python3 -m pip install -r "$maison/requirements.txt" >>"$LAUNCHER_LOG" 2>&1 \
@@ -239,7 +242,7 @@ install_agent_fresh() {
       fi
     fi
   else
-    log "  ATTENTION : clone échoué — l'agent existant (ex. dossier voisin « hermes ») reste le secours."
+    log "  ATTENTION : clone échoué — pas d'agent installé : l'installation retentera au prochain démarrage."
     rm -rf "$maison" 2>/dev/null || true
   fi
 }

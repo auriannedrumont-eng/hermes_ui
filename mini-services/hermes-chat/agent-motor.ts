@@ -21,9 +21,9 @@
 //
 // Environnement (tests/bac à sable) : HERMES_AGENT_BIN (binaire, défaut
 // "hermes"), HERMES_AGENT_DIR (dossier d'installation — surcharge explicite ;
-// sans elle, résolution RELATIVE uniquement, cf. resolveAgentDir : la maison
-// officielle est hermes-agent/ DANS le dossier de l'interface, puis le
-// dossier frère « hermes », puis %LOCALAPPDATA%/hermes, puis ~/.hermes),
+// sans elle, résolution RELATIVE uniquement, cf. resolveAgentDir : l'UNIQUE
+// emplacement connu est la maison officielle hermes-agent/ DANS le dossier
+// de l'interface — aucun filet ailleurs, décision (65)),
 // HERMES_AGENT_RELEASES_URL (JSON releases/latest).
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -300,22 +300,17 @@ function isAgentDir(dir: string): boolean {
 export function resolveAgentDir(): string | null {
   const candidates: string[] = [];
   if (process.env.HERMES_AGENT_DIR) candidates.push(process.env.HERMES_AGENT_DIR);
-  // §9 (62), demande de l'utilisatrice : les fichiers de l'agent vivent
-  // DANS le dossier de l'interface — renommer ou déplacer ce dossier doit
-  // tout emporter sans rien casser. Résolution donc 100 % RELATIVE, dans
-  // l'ordre : 1) HERMES_AGENT_DIR (surcharge explicite) ; 2) la maison
-  // officielle <racine interface>/hermes-agent (le lanceur y range l'agent
-  // trouvé ailleurs) ; 3) le dossier frère « hermes » à côté du dossier de
-  // l'interface (ex. interface dans F:\hermes_web, agent dans F:\hermes) ;
-  // 4) %LOCALAPPDATA%\hermes ; 5) ~/.hermes (installations historiques).
+  // §9 (65), décision de l'utilisatrice : « seule source hermes agent dans
+  // le dossier de mon interface » — la maison officielle
+  // <racine interface>/hermes-agent est l'UNIQUE emplacement que la
+  // résolution connaît (le lanceur y installe la copie fraîche officielle,
+  // (63)). AUCUN filet : aucun dossier frère, aucun dossier système ni
+  // dossier utilisateur caché — si la maison n'a pas d'installation valide,
+  // la réponse est null et l'interface affiche son état honnête
+  // (installation retentée au prochain démarrage). La surcharge explicite
+  // HERMES_AGENT_DIR reste pour les tests et les bac à sable.
   const repoRoot = join(import.meta.dir, "..", "..");
   candidates.push(join(repoRoot, "hermes-agent"));
-  const sibling = resolve(join(repoRoot, "..", "hermes"));
-  if (sibling !== resolve(repoRoot)) candidates.push(sibling);
-  if (process.platform === "win32" && process.env.LOCALAPPDATA) {
-    candidates.push(join(process.env.LOCALAPPDATA, "hermes"));
-  }
-  candidates.push(join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".hermes"));
   for (const dir of candidates) {
     if (isAgentDir(dir)) return dir;
   }
@@ -626,7 +621,7 @@ export async function startAgentRollback(deps: MotorDeps): Promise<{ ok: boolean
   if (!dir) {
     logLine(
       deps,
-      `RETOUR ERREUR — installation de Hermes introuvable (cherchée : hermes-agent dans le dossier de l'application, dossier voisin « hermes », %LOCALAPPDATA%\\hermes, ~/.hermes). Procédure manuelle officielle : dans le dossier de Hermes, « git checkout v${previous} » puis relancez l'agent.`,
+      `RETOUR ERREUR — installation de Hermes introuvable (l'unique emplacement est hermes-agent DANS le dossier de l'application — elle sera installée au prochain démarrage si absente). Procédure manuelle officielle : dans le dossier de Hermes, « git checkout v${previous} » puis relancez l'agent.`,
     );
     setState({ op: null, error: "installation de Hermes introuvable" }, deps);
     journalAppend(deps.store, {

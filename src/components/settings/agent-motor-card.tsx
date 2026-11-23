@@ -369,8 +369,9 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                 </>
               ) : (
                 <>
-                  Hermes n&apos;est pas détecté sur ce poste. Lancez-le puis «&nbsp;Revérifier&nbsp;» —
-                  ou <Button
+                  Hermes n&apos;est pas encore installé dans le dossier de l&apos;application —
+                  relancez l&apos;interface : sa copie s&apos;installera toute seule (réseau requis
+                  une fois), puis «&nbsp;Revérifier&nbsp;». Ou <Button
                     type="button"
                     variant="link"
                     onClick={() => setAdvOpen(true)}

@@ -917,8 +917,10 @@ function Open-Browser([string]$url) {
 # dans <racine>\hermes-agent — le dossier que resolveAgentDir consulte
 # EN PREMIER. Les installations EXISTANTES (dossier frère « hermes »,
 # %LOCALAPPDATA%\hermes, ~/.hermes) ne sont JAMAIS lues, déplacées ni
-# modifiées : elles vivent leur vie et restent le secours — si le clone
-# échoue, le service trouve l'agent sur place (résolution relative).
+# modifiées : elles vivent leur vie — et depuis (65) elles ne sont même
+# plus un filet : la maison est l'UNIQUE emplacement que le service
+# connaît ; si le clone échoue, l'interface reste sans agent (état
+# honnête) jusqu'à une installation réussie au prochain démarrage.
 # Garde-fous :
 #   • déjà à la maison avec une installation valide → rien (idempotent) ;
 #   • dossier sans installation valide (clone avorté) → nettoyé puis
@@ -935,7 +937,7 @@ function Install-AgentIntoHome {
         try {
             $last = [datetime]::Parse((Get-Content $tryFlag -Raw).Trim())
             if (((Get-Date) - $last).TotalHours -lt 1) {
-                Log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (l'agent existant reste le secours)."
+                Log "• pas d'agent dans le dossier de l'application — installation réessayée au plus tôt dans 1 h (d'ici là, l'interface tourne sans agent)."
                 return
             }
         } catch { }  # flag illisible : on retente, on le réécrira
@@ -943,7 +945,7 @@ function Install-AgentIntoHome {
     if (Test-Path $homeDir) {
         Log "• hermes-agent existe sans installation valide (clone avorté ?) — nettoyage puis installation fraîche."
         try { Remove-Item -Recurse -Force $homeDir } catch {
-            Log "  ATTENTION : nettoyage impossible — l'agent existant reste le secours."
+            Log "  ATTENTION : nettoyage impossible — pas d'agent installé ; l'installation retentera au prochain démarrage."
             try { Set-Content $tryFlag ((Get-Date).ToString('o')) } catch { }
             return
         }
@@ -955,7 +957,7 @@ function Install-AgentIntoHome {
     $cloneJob = Start-Job -ScriptBlock { param($u, $d) git clone $u $d 2>&1 } -ArgumentList $repoUrl, $homeDir
     if (-not (Wait-Job $cloneJob -Timeout 600)) {
         Stop-Job $cloneJob; Remove-Job $cloneJob -Force
-        Log "  ATTENTION : clone non terminé en 10 min — abandonné. L'agent existant (ex. dossier voisin « hermes ») reste le secours."
+        Log "  ATTENTION : clone non terminé en 10 min — abandonné. Pas d'agent installé : l'installation retentera au prochain démarrage (au plus tôt dans 1 h)."
         if (Test-Path $homeDir) { try { Remove-Item -Recurse -Force $homeDir } catch { } }
         return
     }
@@ -963,10 +965,10 @@ function Install-AgentIntoHome {
     Remove-Job $cloneJob
     if (-not (Test-Path (Join-Path $homeDir 'gateway\run_api.py'))) {
         $derniere = ($cloneOut -split "`r?`n" | Select-Object -Last 1)
-        Log ("  ATTENTION : clone échoué ({0}) — l'agent existant reste le secours." -f $derniere)
+        Log ("  ATTENTION : clone échoué ({0}) — pas d'agent installé : l'installation retentera au prochain démarrage." -f $derniere)
         return
     }
-    Log "  copie fraîche installée — l'interface l'utilise en priorité ; vos installations existantes restent intactes."
+    Log "  copie fraîche installée — c'est elle que l'interface allume ; vos installations existantes restent intactes."
     # Dépendances python : meilleur effort, borné — sur un poste où l'agent
     # officiel tourne déjà, elles existent déjà côté système.
     $req = Join-Path $homeDir 'requirements.txt'
@@ -978,7 +980,7 @@ function Install-AgentIntoHome {
             Log "  installation des dépendances python (meilleur effort, 5 min max)…"
             $pipJob = Start-Job -ScriptBlock { param($p, $pre, $r) & $p @pre -m pip install -r $r 2>&1 } -ArgumentList $pyCmd, $pyPre, $req
             if (Wait-Job $pipJob -Timeout 300) { Log "  étape dépendances terminée (si l'agent réclame un module, elle est relancée au prochain démarrage)." }
-            else { Stop-Job $pipJob; Log "  dépendances non terminées en 5 min — abandonnées ; l'agent existant reste le secours." }
+            else { Stop-Job $pipJob; Log "  dépendances non terminées en 5 min — abandonnées ; l'agent risque de réclamer un module au premier lancement." }
             Remove-Job $pipJob -Force -ErrorAction SilentlyContinue
         }
     }
