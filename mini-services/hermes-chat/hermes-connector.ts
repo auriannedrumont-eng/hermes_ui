@@ -187,9 +187,7 @@ function parseModelOptions(data: any): ModelOption[] {
 function noEngineError(): Error {
   return new Error(
     "[HERMES_OFFLINE] Hermes n'est pas connecté — lancez l'application " +
-      "(Hermes-Web.bat) ou vérifiez la connexion dans Paramètres → Système. " +
-      "Vous pouvez aussi ajouter une clé fournisseur dans Paramètres → " +
-      "Fournisseurs & clés pour discuter sans agent."
+      "(Hermes-Web.bat) ou vérifiez la connexion dans Paramètres → Système."
   );
 }
 

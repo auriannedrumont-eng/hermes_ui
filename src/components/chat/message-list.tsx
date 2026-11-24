@@ -505,8 +505,8 @@ export function MessageList({
                       Hermes n'est pas encore connecté
                     </p>
                     <p className="mt-0.5 break-words text-[12.5px] text-muted-foreground">
-                      Configurez une clé fournisseur pour discuter — ou lancez
-                      l'agent Hermes (il se branche tout seul). Tout se passe
+                      Lancez l&apos;agent Hermes (l&apos;application le fait toute
+                      seule si vous passez par Hermes-Web.bat). Tout se passe
                       dans Paramètres.
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">

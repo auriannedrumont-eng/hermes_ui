@@ -209,9 +209,8 @@ export function SettingsPanel({
   }, [open]);
 
   const isLocal = connected && mode !== "gateway";
-  // « local » : réponses réelles (clés fournisseurs) si au moins une clé est
-  // active — sinon état « agent non détecté » (rien n'est simulé).
-  const poolActive = (engineProviders?.length ?? 0) > 0;
+  // Loi « une seule voix » (24/11) : sans gateway, aucune réponse n'arrive —
+  // plus d'état « vos clés répondent » (les clés ne parlent plus dans le chat).
   const extUpdate = api.extensions.some((e) => e.updateAvailable);
 
   // Navigation interne du volet (liens croisés des sections v2.4).
@@ -367,28 +366,15 @@ export function SettingsPanel({
             {/* Pied : état du moteur + modifications en attente (v4) */}
             <div className="flex flex-none items-center gap-2.5 border-t border-border bg-background px-5 py-[9px] min-[1100px]:px-[34px]">
               {isLocal ? (
-                poolActive ? (
-                  <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
-                    <span className="size-[7px] flex-none rounded-full bg-success" />
-                    <span className="truncate">Hermes éteint · vos clés répondent</span>
-                    <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                      Hermes est éteint : les réponses partent sur l&apos;API de vos
-                      fournisseurs (clés actives : {engineProviders!.join(", ")}). Ajoutez ou
-                      retirez des clés dans la section Fournisseurs.
-                    </span>
-                  </div>
-                ) : (
                 <div className="group relative flex min-w-0 cursor-help items-center gap-2 text-[11px] text-muted-foreground">
                   <span className="size-[7px] flex-none rounded-full bg-muted-foreground/50" />
                   <span className="truncate">Hermes est éteint</span>
                   <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[260px] rounded-md bg-foreground px-[11px] py-2 text-left text-[11px] leading-relaxed text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                     L&apos;application l&apos;allume toute seule si Hermes est installé ;
                     sinon lancez-le comme d&apos;habitude — la connexion est automatique.
-                    Ou ajoutez la clé d&apos;un fournisseur (section Fournisseurs)
-                    pour répondre sans Hermes.
+                    Sans lui, aucune réponse n&apos;est envoyée.
                   </span>
                 </div>
-                )
               ) : (
                 <span className="min-w-0" />
               )}

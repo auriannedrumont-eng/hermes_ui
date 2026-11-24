@@ -192,6 +192,14 @@ export function Composer({
       outgoingDraftRef.current = { key: draftLoaded, value };
     }
     setDraftLoaded(draftKey);
+    try {
+      // chargement du brouillon de la conversation entrante — sous la
+      // même garde : un setValue inconditionnel dans le corps du rendu
+      // boucle à l'infini (React relance le rendu à chaque écriture).
+      setValue(window.localStorage.getItem(draftStorageKey(draftKey)) ?? "");
+    } catch {
+      setValue("");
+    }
   }
   useEffect(() => {
     return () => {
@@ -209,11 +217,6 @@ export function Composer({
       }
     };
   }, [draftKey]);
-  try {
-    setValue(window.localStorage.getItem(draftStorageKey(draftKey)) ?? "");
-  } catch {
-    setValue("");
-  }
   useEffect(() => {
     if (textareaRef.current) textareaRef.current.focus();
   }, [draftKey]);

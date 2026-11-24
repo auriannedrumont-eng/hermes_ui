@@ -176,10 +176,11 @@ export function Sidebar({
     });
   };
 
-  // Carte de statut honnête (v2.4) : l'agent Hermes connecté, les clés
-  // fournisseurs actives, ou un état « agent non détecté » clair — jamais
-  // de moteur simulé.
-  const poolActive = (engineProviders?.length ?? 0) > 0;
+  // Carte de statut honnête (v2.4) : l'agent Hermes connecté ou un état
+  // « Hermes éteint » clair — jamais de moteur simulé. Loi « une seule
+  // voix » (24/11) : sans gateway, AUCUNE réponse n'arrive (les clés
+  // fournisseurs ne parlent plus dans le chat), donc plus d'état
+  // « vos clés répondent » qui promettait l'inverse du réel.
 
   // ── Application immédiate des réglages (page Paramètres) ──────────────
   // Tri des projets et repliage suivent le bus `hermes-ui:settings-changed`.
@@ -881,9 +882,9 @@ export function Sidebar({
 
       {/* Carte de statut du moteur — voyant d'état (§9 (62)) : une seule
           question à l'écran — Hermes répond-il, et sinon que faire ? La
-          teinte de la carte PORTE l'état : vert = ça répond, terracotta =
-          vos clés travaillent, ambre pulsant = il faut allumer Hermes,
-          gris = hors ligne (reconnexion seule en cours). */}
+          teinte de la carte PORTE l'état : vert = ça répond, ambre pulsant
+          = il faut allumer Hermes, gris = hors ligne (reconnexion seule
+          en cours). */}
       <div className="border-t border-sidebar-border p-3">
         <div
           className={`rounded-xl px-3 py-2.5 ring-1 ring-inset transition-colors ${
@@ -891,9 +892,7 @@ export function Sidebar({
               ? "bg-sidebar-accent ring-sidebar-border"
               : mode === "gateway"
                 ? "bg-success/10 ring-success/30"
-                : poolActive
-                  ? "bg-sidebar-accent ring-hermes/30"
-                  : "bg-warning/10 ring-warning/30"
+                : "bg-warning/10 ring-warning/30"
           }`}
         >
           <div className="flex items-center gap-2">
@@ -903,9 +902,7 @@ export function Sidebar({
                   ? "bg-muted-foreground/50"
                   : mode === "gateway"
                     ? "bg-success"
-                    : poolActive
-                      ? "bg-hermes"
-                      : "bg-warning animate-pulse"
+                    : "bg-warning animate-pulse"
               }`}
               aria-hidden="true"
             />
@@ -917,9 +914,7 @@ export function Sidebar({
                 ? "Hors ligne"
                 : mode === "gateway"
                   ? "Hermes branché"
-                  : poolActive
-                    ? "Hermes éteint · vos clés répondent"
-                    : "Hermes est éteint"}
+                  : "Hermes est éteint"}
             </p>
             {/* Entrée unique des paramètres (décision v1 confirmée v3).
                 v0.3.3 : point orange tant qu'une mise à jour est
@@ -949,15 +944,10 @@ export function Sidebar({
               "Reconnexion automatique en cours…"
             ) : mode === "gateway" ? (
               (serverModel ?? "")
-            ) : poolActive ? (
-              <>
-                Clés actives : {engineProviders!.join(", ")} — les réponses
-                viennent de leurs API.
-              </>
             ) : (
               <>
                 L&apos;application allume Hermes toute seule dès qu&apos;il est
-                installé — aucune réponse simulée.
+                installé — sans lui, aucune réponse n&apos;est envoyée.
               </>
             )}
           </p>
