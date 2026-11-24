@@ -1,26 +1,5 @@
 [
  {
-  "name": "Composer",
-  "ns": "components.chat.composer",
-  "cc": 110,
-  "start": 113,
-  "end": 734,
-  "lines": 622,
-  "file": "src/components/chat/composer.tsx",
-  "decisions": {
-   "if": 27,
-   "else if": 0,
-   "for/while": 0,
-   "catch": 4,
-   "ternaire": 37,
-   "&&": 18,
-   "||": 9,
-   "??": 7,
-   "?.": 14,
-   "case": 0
-  }
- },
- {
   "name": "StorageSection",
   "ns": "components.settings.storage-section",
   "cc": 105,
@@ -714,6 +693,27 @@
   }
  },
  {
+  "name": "Composer",
+  "ns": "components.chat.composer",
+  "cc": 45,
+  "start": 704,
+  "end": 1048,
+  "lines": 345,
+  "file": "src/components/chat/composer.tsx",
+  "decisions": {
+   "if": 18,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 4,
+   "ternaire": 5,
+   "&&": 7,
+   "||": 1,
+   "??": 2,
+   "?.": 9,
+   "case": 0
+  }
+ },
+ {
   "name": "VersionPopover",
   "ns": "components.chat.version-popover",
   "cc": 43,
@@ -878,6 +878,27 @@
    "||": 3,
    "??": 5,
    "?.": 1,
+   "case": 0
+  }
+ },
+ {
+  "name": "ComposerSaisie",
+  "ns": "components.chat.composer",
+  "cc": 38,
+  "start": 254,
+  "end": 415,
+  "lines": 162,
+  "file": "src/components/chat/composer.tsx",
+  "decisions": {
+   "if": 6,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 0,
+   "ternaire": 16,
+   "&&": 7,
+   "||": 5,
+   "??": 3,
+   "?.": 3,
    "case": 0
   }
  },

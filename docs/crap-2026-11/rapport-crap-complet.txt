@@ -7,7 +7,6 @@ Function                              Namespace                                 
 main                                  scripts.test-providers-wallets                                            183   0.0%  33672.0
 main                                  scripts.test-source-guards                                                128   0.0%  16512.0
 main                                  scripts.test-integration-fixes                                            115   0.0%  13340.0
-Composer                              components.chat.composer                                                  110   0.0%  12210.0
 main                                  scripts.test-reattach-stream                                              109   0.0%  11990.0
 StorageSection                        components.settings.storage-section                                       105   0.0%  11130.0
 SystemSection                         components.settings.system-section                                        102   0.0%  10506.0
@@ -52,6 +51,7 @@ MessageList                           components.chat.message-list              
 streamOpenAiTurn                      mini-services.hermes-chat.llm-streams                                      47   0.0%   2256.0
 main                                  scripts.test-providers-flow                                                47   0.0%   2256.0
 main                                  scripts.test-share-flow                                                    46   0.0%   2162.0
+Composer                              components.chat.composer                                                   45   0.0%   2070.0
 VersionPopover                        components.chat.version-popover                                            43   0.0%   1892.0
 AgentMotorEnTete                      components.settings.agent-motor-card                                       43   0.0%   1892.0
 main                                  scripts.test-cost-flow                                                     43   0.0%   1892.0
@@ -62,6 +62,7 @@ SingleTabGuard                        components.single-tab-guard               
 useChatSettings                       hooks.use-chat-settings                                                    39   0.0%   1560.0
 handleKeyDown                         .next.dev.server.chunks.ssr.node_modules_@dnd-kit_core_dist_core_esm_57071f37.KeyboardSensor   38   0.0%   1482.0
 handleKeyDown                         .next.dev.static.chunks.node_modules_@dnd-kit_core_dist_core_esm_3ed85ea0.KeyboardSensor   38   0.0%   1482.0
+ComposerSaisie                        components.chat.composer                                                   38   0.0%   1482.0
 main                                  scripts.run-tests                                                          38   0.0%   1482.0
 main                                  scripts.test-stop-error-flow                                               38   0.0%   1482.0
 AddProviderPanel                      components.settings.providers-section                                      37   0.0%   1406.0
@@ -120,6 +121,7 @@ persistFailedTurn                     mini-services.hermes-chat.turn-runner     
 errorScenario                         scripts.test-stop-error-flow                                               24   0.0%    600.0
 decodeString                          .next.dev.server.chunks.ssr.node_modules_c37d0238._.Decoder                23   0.0%    552.0
 decodeString                          .next.dev.static.chunks.node_modules_cf89e8f1._.Decoder                    23   0.0%    552.0
+ComposerBarre                         components.chat.composer                                                   23   0.0%    552.0
 ProjectGroup                          components.chat.project-group                                              23   0.0%    552.0
 startAgentRollback                    mini-services.hermes-chat.agent-motor                                      23   0.0%    552.0
 runDebate                             mini-services.hermes-chat.orchestrator                                     23   0.0%    552.0
@@ -778,6 +780,8 @@ emitAck                               scripts.debug-429-turn                    
 main                                  scripts.diag-single-tab                                                     4   0.0%     20.0
 make                                  scripts.make-pwa-icons                                                      4   0.0%     20.0
 check                                 scripts.probe-artifact-view                                                 4   0.0%     20.0
+ok                                    scripts.qa-composer-dom                                                     4   0.0%     20.0
+waitHttp                              scripts.qa-composer-dom                                                     4   0.0%     20.0
 check                                 scripts.qa-corrections-v3                                                   4   0.0%     20.0
 cleanup                               scripts.qa-motor-card-v3-dom                                                4   0.0%     20.0
 ok                                    scripts.qa-motor-card-v3-dom                                                4   0.0%     20.0
@@ -975,6 +979,7 @@ ArtifactMetaLine                      components.chat.artifact-panel            
 useCopySource                         components.chat.artifact-panel                                              3   0.0%     12.0
 FileAttachment                        components.chat.attachments                                                 3   0.0%     12.0
 formatBytes                           components.chat.attachments                                                 3   0.0%     12.0
+ComposerAlertes                       components.chat.composer                                                    3   0.0%     12.0
 toneOf                                components.chat.context-gauge                                               3   0.0%     12.0
 ActionButton                          components.chat.message-bubble                                              3   0.0%     12.0
 ReasoningBlock                        components.chat.message-bubble                                              3   0.0%     12.0
@@ -1056,6 +1061,7 @@ argOf                                 mini-services.hermes-chat.webchat.watchdog
 buildRevision                         next.config                                                                 3   0.0%     12.0
 check                                 scripts.probe-maj-stream                                                    3   0.0%     12.0
 check                                 scripts.probe-registry-install                                              3   0.0%     12.0
+cleanup                               scripts.qa-composer-dom                                                     3   0.0%     12.0
 boxes                                 scripts.qa-layout                                                           3   0.0%     12.0
 startGW                               scripts.qa-motor-card-v3-dom                                                3   0.0%     12.0
 stopGW                                scripts.qa-motor-card-v3-dom                                                3   0.0%     12.0
@@ -1325,6 +1331,10 @@ AttachmentsList                       components.chat.attachments               
 AudioAttachment                       components.chat.attachments                                                 2   0.0%      6.0
 ImageAttachment                       components.chat.attachments                                                 2   0.0%      6.0
 ThemeToggle                           components.chat.chat-header                                                 2   0.0%      6.0
+ComposerPied                          components.chat.composer                                                    2   0.0%      6.0
+ComposerPuces                         components.chat.composer                                                    2   0.0%      6.0
+ComposerRecouvrement                  components.chat.composer                                                    2   0.0%      6.0
+ComposerSlash                         components.chat.composer                                                    2   0.0%      6.0
 readFavoriteIds                       components.chat.model-picker                                                2   0.0%      6.0
 DropZone                              components.chat.project-group                                               2   0.0%      6.0
 SidebarHistorique                     components.chat.sidebar                                                     2   0.0%      6.0
@@ -1352,6 +1362,7 @@ DialogContent                         components.ui.dialog                      
 ResizableHandle                       components.ui.resizable                                                     2   0.0%      6.0
 top                                   docs.crap-2026-11.scripts.analyze_crap_edn                                  2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_agent_motor_leaves                        2   0.0%      6.0
+ancre                                 docs.crap-2026-11.scripts.extract_composer_leaves                           2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_sidebar_leaves                            2   0.0%      6.0
 notify                                hooks.use-pricing                                                           2   0.0%      6.0
 notify                                hooks.use-profiles                                                          2   0.0%      6.0
@@ -2199,6 +2210,7 @@ TooltipProvider                       components.ui.tooltip                     
 TooltipTrigger                        components.ui.tooltip                                                       1   0.0%      2.0
 bloc_fonction                         docs.crap-2026-11.scripts.extract_agent_motor_leaves                        1   0.0%      2.0
 morceau                               docs.crap-2026-11.scripts.extract_agent_motor_leaves                        1   0.0%      2.0
+morceau                               docs.crap-2026-11.scripts.extract_composer_leaves                           1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.extract_conversations_hook                        1   0.0%      2.0
 replace                               docs.crap-2026-11.scripts.extract_conversations_hook                        1   0.0%      2.0
 morceau                               docs.crap-2026-11.scripts.extract_sidebar_leaves                            1   0.0%      2.0
@@ -2207,6 +2219,7 @@ L                                     docs.crap-2026-11.scripts.extract_turn_act
 replace                               docs.crap-2026-11.scripts.extract_turn_actions                              1   0.0%      2.0
 strip_noise                           docs.crap-2026-11.scripts.inventory_effect2                                 1   0.0%      2.0
 strip_noise                           docs.crap-2026-11.scripts.inventory_effect3                                 1   0.0%      2.0
+slice_head                            docs.crap-2026-11.scripts.preuve_composer_verbatim                          1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_sidebar_verbatim                           1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.providers_valide                                  1   0.0%      2.0
 replace                               docs.crap-2026-11.scripts.providers_valide                                  1   0.0%      2.0

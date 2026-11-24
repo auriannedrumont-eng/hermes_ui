@@ -457,3 +457,81 @@ C. Classement crapper après la vague 5 (production, CC ≥ 30 — 59 fonctions)
    CC  75  WebchatSection               (UI)
    CC  74  Sidebar                      (acceptable — feuilles 2-15)
 
+
+10. VAGUE 6 UI (3) — COMPOSER (CC 110, CRAP 12 210) → 8 FONCTIONS < 100
+══════════════════════════════════════════════════════════════════════════════
+
+A. Chirurgie ancrée VERBATIM (extract_composer_leaves.py, bornes vérifiées
+   AVANT écriture ; preuve_composer_verbatim.py, 12 plages comparées)
+   La barre de saisie (trombone, glisser-déposer, coller, textarea
+   auto-redimensionnée, dictée, commandes slash, brouillons persistants,
+   jauge de contexte, sélecteurs mode/modèle, bouclier des autorisations)
+   est démontée en SEPT feuilles appelées dans l'ordre du rendu — aucune
+   ligne de JSX ni de handler modifiée, les closures deviennent des props
+   typées du même nom ; 345 lignes JSX déplacées VERBATIM, 12 plages (728
+   lignes : morceaux déplacés + parent conservé) identiques octet par octet
+   au HEAD ; structure DOM inchangée (mêmes nœuds dans le même ordre — les
+   feuilles à plusieurs enfants racine sont enveloppées dans un fragment,
+   aucun nœud DOM ajouté) ; props publiques de Composer inchangées ; tout
+   l'état reste à l'orchestrateur (brouillons, dictée, slash, jauge,
+   submit), les refs textarea/file-input descendent en props (convention
+   RefObject du repo, cf. use-conversations.ts).
+     Composer (orchestrateur)      CC 110 → 45  CRAP 12 210 → 2 070 (−83 %)
+     ComposerSaisie (feuille 4)    CC 38        CRAP  1 482  rangée de
+                                                saisie : trombone, textarea
+                                                (raccourcis, coller), dictée,
+                                                stop / bloqué / envoi
+     ComposerBarre (feuille 5)     CC 23        CRAP    552  mode, modèle,
+                                                recherche web, bouclier, jauge
+     ComposerAlertes (feuille 6)   CC  3        CRAP     12  bandeau « toutes
+                                                permissions » + AlertDialog
+     ComposerPied (feuille 7)      CC  2        CRAP      6  erreur de dictée
+                                                + pied de page
+     ComposerPuces (feuille 3)     CC  2        CRAP      6  puces des pièces
+                                                jointes en attente
+     ComposerRecouvrement (f. 1)   CC  2        CRAP      6  indicateur de
+                                                dépôt du glisser-déposer
+     ComposerSlash (feuille 2)     CC  2        CRAP      6  menu des
+                                                commandes slash
+   Bilan : CRAP du fichier 12 211 → 4 141 (−66 %) ; plus aucune fonction
+   du fichier au-dessus de CC 45.
+
+B. Validation
+   Baseline vérifiée verte sur HEAD AVANT chirurgie (tsc ×3, eslint,
+   33/33, gardes, Vitest 144/144). Le typecheck est l'auditeur des props :
+   il a imposé les fragments (TS2657 « JSX expressions must have one parent
+   element » — un commentaire JSX compte comme un enfant) — ajoutés DANS le
+   script, fichier restauré git checkout, relance propre, aucune retouche
+   manuelle du produit. Le script a aussi refusé proprement deux fois en
+   mise au point (ancre L351 : le submit finit L350 ; compteur de feuilles
+   fausse — une définition ne commence pas par `<`).
+   QA finale : tsc ×3 0 erreur · eslint 0 erreur (193 warnings sources :
+   194 à HEAD, −1 légitime — « PendingAttachment inutilisé » référencé par
+   les interfaces props ; +2 artefacts de mesure target/, non commités) ·
+   suite autonome 33/33 · gardes de source 0 échec · Vitest 144/144 ·
+   QA DOM dédiée scripts/qa-composer-dom.ts **25/25** (harnais auto-porté :
+   service base jetable + front dev + passerelle :81 — trombone, textarea,
+   placeholder, envoi bloqué à vide puis activé à la saisie, toggle web et
+   bouclier aria-disabled en local, menu slash « / »/Échap sans altérer le
+   texte, indicateur de dépôt dragenter/dragleave, auto-redimensionnement,
+   mobile 375 px sans débordement). Consigne de harnais : le sandbox fait
+   tourner SON caddy (:81 → :3000) — le harnais l'utilise tel quel, un
+   caddy local ne peut pas binder ; les journaux du service et du front
+   sont écrits dans des fichiers (aucun pipe tamponné).
+
+C. Classement crapper après la vague 6 (production, CC ≥ 30 — 60 fonctions)
+   CC 105  StorageSection               (UI : prochaine cible)
+   CC 102  SystemSection                (UI)
+   CC  96  registerProvidersHandlers    (sous-registres)
+   CC  94  registerExtensionsHandlers   (sous-registres)
+   CC  86  useHermesChat                (acceptable)
+   CC  84  runAssistantTurn             (acceptable)
+   CC  82  HermesWebPage                (UI)
+   CC  81  useChatSocketEvents          (acceptable)
+   CC  77  registerTurnHandlers         (sous-registres)
+   CC  77  runGatewayTurn               (sous-registres)
+   CC  75  WebchatSection               (UI)
+   CC  74  Sidebar                      (acceptable — feuilles 2-15)
+   CC  52  AgentMotorCard               (acceptable — feuilles 30-57)
+   CC  45  Composer                     (acceptable — feuilles 2-38)
+   CC  38  ComposerSaisie               (feuille du Composer)

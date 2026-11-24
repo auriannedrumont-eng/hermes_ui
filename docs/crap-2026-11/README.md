@@ -14,13 +14,13 @@ Vitest ajoutés au mini-service en sont la **première couverture mesurable**.
 | Fichier | Rôle |
 | --- | --- |
 | `audit-cc30.txt` | Phase 1 — audit des 44 fonctions de production CC ≥ 30 (1052 fonctions analysées), familles A-E. |
-| `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séances UI du 25/11 — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
-| `suite-tests.log` | Preuves de validation brutes (dernière séance) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM carte v3 41/41, preuve VERBATIM du découpage AgentMotorCard (14 morceaux) puis Sidebar (23 plages, 976 lignes), retournement des verrous D-02. |
-| `refactoring.patch` | Vagues 1+2+3+4 + séances UI — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
-| `table-crap.txt` | Snapshot crapper complet après la vague 5 UI du 25/11 (fonction, namespace, CC, couverture, CRAP). |
-| `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la vague 5 UI du 25/11. |
+| `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séances UI du 25/11 (vagues 5 et 6) — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
+| `suite-tests.log` | Preuves de validation brutes de la dernière séance (fichier LOCAL — `*.log` gitignore, non commité comme les précédents) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM dédiée Composer 25/25, preuve VERBATIM du découpage Composer (12 plages, 728 lignes), classement crapper après la vague 6. |
+| `refactoring.patch` | Vagues 1+2+3+4 + séances UI (vagues 5 et 6) — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
+| `table-crap.txt` | Snapshot crapper complet après la vague 6 UI du 25/11 (fonction, namespace, CC, couverture, CRAP). |
+| `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la vague 6 UI du 25/11. |
 | `crap.edn` | Métriques au format EDN pour uml-viewer. |
-| `hotspots.json` | Les 59 fonctions de production CC ≥ 30 après la vague 5 UI du 25/11 (chunks .next/ exclus de l'extraction), avec spans et décompte des décisions (if/ternaire/&&/…). |
+| `hotspots.json` | Les 60 fonctions de production CC ≥ 30 après la vague 6 UI du 25/11 (chunks .next/ exclus de l'extraction), avec spans et décompte des décisions (if/ternaire/&&/…). |
 | `digest-hotspots.txt` | Digest de lecture des hotspots : en-tête de fichier, signature, corps (le Top 15 = entrées 1-15). |
 | `lcov-mini-service.info` | LCOV Vitest du mini-service (store-messages 81,8-100 %, providers-validate 100 %, parseRepoInput 100 %, models 100 %, modes 98 %, prompts 97 %, fiches 95 %, parseModelOptions 100 %). |
 
@@ -36,6 +36,7 @@ Vitest ajoutés au mini-service en sont la **première couverture mesurable**.
 | registerSettingsSystemHandlers | 157 | 1 | 7 sous-registres thématiques (8-50) |
 | AgentMotorCard | 179 | 52 | 3 sous-cartes feuilles VERBATIM : AgentMotorEnTete 43, AgentMotorBlocs 57, AgentMotorReplis 30 — séance UI 25/11 (QA DOM dédiée 41/41) |
 | Sidebar | 138 | 74 | 5 feuilles VERBATIM (Recherche 8, Dossiers 8, Historique 2, Statut 13, Dialogues 15) + 2 algorithmes de module purs (computeSearchTree 11, reorderProjectsFlat 15) — vague 5 UI 25/11, 23 plages prouvées au HEAD |
+| Composer | 110 | 45 | 7 feuilles VERBATIM (Recouvrement 2, Slash 2, Puces 2, Saisie 38, Barre 23, Alertes 3, Pied 2) — vague 6 UI 25/11, 12 plages (728 lignes) prouvées au HEAD, QA DOM dédiée 25/25 |
 | runAssistantTurn | 147 | 84 | 7 étapes module-level (3-24) — vague 4 |
 | registerProvidersHandlers | 114 | 96 | validations d'URL/clés → providers-validate.ts (8 helpers purs testés) — vague 4 |
 | registerArtifactsSharesHandlers | 59 | 1 | 3 sous-registres (14-28) — vague 4 |
@@ -49,9 +50,9 @@ crap 5402 → 77 sur la machine F-14), un 4e registre démontlé (artifacts-shar
 59 → 1), les validations d'URL/clés réunies en un module pur testé
 (providers-validate.ts, 100 %), le hook géant sous la barre des 100 (86) et
 le tour assistant décomposé en étapes (147 → 84). Vitest : 67 → 144 tests.
-Les séances UI du 25/11 démontent les deux pires composants du front en
-feuilles VERBATIM : AgentMotorCard 179 → 52 et Sidebar 138 → 74 — plus
-aucune fonction UI au-dessus de la barre des 100 dans ces deux fichiers.
+Les séances UI du 25/11 démontent les trois pires composants du front en
+feuilles VERBATIM : AgentMotorCard 179 → 52, Sidebar 138 → 74 et
+Composer 110 → 45 — plus aucune fonction UI au-dessus de la barre des 100.
 
 Anomalie D-02 constatée en vague 4, **CORRIGÉE dans la séance UI du 25/11** :
 la purge des versions inactives est passée AVANT les DELETE dans
@@ -76,11 +77,23 @@ reorderProjectsFlat 15) ; 976 lignes déplacées prouvées identiques octet par
 octet au HEAD (preuve_sidebar_verbatim.py), structure DOM et props publiques
 inchangées, tout l'état reste à l'orchestrateur.
 
-Prochaines cibles (classement après la vague 5) : Composer 110 ·
-StorageSection 105 · SystemSection 102 · registerProvidersHandlers 96 ·
-registerExtensionsHandlers 94 — même discipline pour l'UI : sous-cartes
-feuilles VERBATIM + preuve de découpage versionnée (la QA DOM dédiée reste à
-prévoir par composant, comme qa-motor-card-v3-dom.ts).
+Vague 6 UI (3) du 25/11 (§10 de couverture-reelle.txt) : **Composer 110 → 45**
+(CRAP 12 210 → 2 070, −83 %) — 7 feuilles VERBATIM (ComposerRecouvrement 2 ·
+ComposerSlash 2 · ComposerPuces 2 · ComposerSaisie 38 · ComposerBarre 23 ·
+ComposerAlertes 3 · ComposerPied 2) ; 345 lignes JSX déplacées, 12 plages
+(728 lignes : morceaux + parent) prouvées identiques octet par octet au HEAD
+(preuve_composer_verbatim.py), structure DOM et props publiques inchangées,
+tout l'état reste à l'orchestrateur, refs textarea/file-input descendues en
+props (convention RefObject du repo) ; QA DOM dédiée
+scripts/qa-composer-dom.ts **25/25** (harnais auto-porté : service base
+jetable + front dev + passerelle :81 du sandbox — structure, comportements
+slash/envoi/dépôt, mobile 375 px).
+
+Prochaines cibles (classement après la vague 6) : StorageSection 105 ·
+SystemSection 102 · registerProvidersHandlers 96 · registerExtensionsHandlers
+94 — même discipline pour l'UI : sous-cartes feuilles VERBATIM + preuve de
+découpage versionnée + QA DOM dédiée par composant (qa-motor-card-v3-dom.ts,
+qa-composer-dom.ts).
 
 ## Scripts de mesure et de chirurgie (`scripts/`)
 
@@ -96,10 +109,16 @@ prévoir par composant, comme qa-motor-card-v3-dom.ts).
   et `split_turn_stages.py` (vague 4), `extract_agent_motor_leaves.py`
   (séance UI 25/11 — AgentMotorCard en 3 feuilles, JSX déplacé VERBATIM),
   `extract_sidebar_leaves.py` + `preuve_sidebar_verbatim.py` (vague 5 UI —
-  Sidebar en 5 feuilles + 2 algorithmes purs, 23 plages prouvées au HEAD).
+  Sidebar en 5 feuilles + 2 algorithmes purs, 23 plages prouvées au HEAD),
+  `extract_composer_leaves.py` + `preuve_composer_verbatim.py` (vague 6 UI —
+  Composer en 7 feuilles, 12 plages prouvées au HEAD).
 - QA DOM de la carte moteur : `scripts/qa-motor-card-v3-dom.ts` (à la racine
   du repo, harnais auto-porté : Caddy :81 + front dev + service stubbé —
   scénario complet de la carte v3, 41 vérifications).
+- QA DOM du Composer : `scripts/qa-composer-dom.ts` (à la racine du repo,
+  harnais auto-porté : service base jetable + front dev + passerelle :81 du
+  sandbox, journaux du service et du front en fichiers — 25 vérifications :
+  structure des 7 feuilles, comportements slash/envoi/dépôt, mobile 375 px).
 
 ## Reproduire la mesure
 

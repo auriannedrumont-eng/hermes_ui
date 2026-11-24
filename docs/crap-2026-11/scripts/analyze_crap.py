@@ -4,7 +4,7 @@ from collections import Counter
 from pathlib import Path
 
 RAW = Path("/tmp/crapper-stdout.txt")
-OUT = Path("/home/z/my-project/download/hermes_ui_crap")
+OUT = Path("docs/crap-2026-11")
 OUT.mkdir(parents=True, exist_ok=True)
 
 text = RAW.read_text(encoding="utf-8")
@@ -90,12 +90,12 @@ for ns, c in per_file.most_common(10):
 
 # ── artefacts ──────────────────────────────────────────────────────────────
 (OUT / "rapport-crap-complet.txt").write_text(text, encoding="utf-8")
-edn = Path("/home/z/my-project/repos/hermes_ui/.metrics/crap.edn")
+edn = Path(".metrics/crap.edn")
 if edn.is_file():
     (OUT / "crap.edn").write_text(edn.read_text(encoding="utf-8"), encoding="utf-8")
 (OUT / "table-crap.txt").write_text(
     "CRAP Report (crapper — unclebob) — hermes_ui\n"
-    "CRAP = CC^2 x (1 - couverture)^3 + CC   |   couverture TS non mesurable (bun/JSC, c8 V8) -> 0%\n"
+    "CRAP = CC^2 x (1 - couverture)^3 + CC   |   couverture : Vitest sur mini-services/hermes-chat (Store jetable), 0% ailleurs\n"
     + "=" * 100 + "\n" + table,
     encoding="utf-8",
 )

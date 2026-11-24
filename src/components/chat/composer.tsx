@@ -3,7 +3,16 @@
 // sélecteur de modèle, dictée vocale, commandes slash et brouillons.
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 import {
   ArrowUp,
   Globe,
@@ -46,6 +55,7 @@ import {
   estimateAttachmentTokens,
   estimateTokens,
   type ContextRow,
+  type ContextUsage,
 } from "@/lib/tokens";
 import type {
   Attachment,
@@ -108,6 +118,587 @@ interface ComposerProps {
 
 function draftStorageKey(draftKey: string): string {
   return `hermes.draft.${draftKey}`;
+}
+
+// ── Découpage en feuilles (chantier CRAP vague 6 UI, 2026-11-25) ────────
+// Le composant Composer (CC 110 au crapper) est démonté : sept feuilles
+// appelées dans l'ordre du rendu, corps déplacés VERBATIM (aucune ligne de
+// JSX ni de handler modifiée — les closures deviennent des props typées du
+// même nom), par chirurgie ancrée (ce script, versionné) :
+//   ComposerRecouvrement — l'indicateur de dépôt du glisser-déposer ;
+//   ComposerSlash        — le menu des commandes slash ;
+//   ComposerPuces        — les puces des pièces jointes en attente ;
+//   ComposerSaisie       — la rangée de saisie : trombone, textarea (raccourcis
+//                          clavier, coller), dictée, boutons stop / envoi
+//                          bloqué / envoi ;
+//   ComposerBarre        — la barre inférieure : mode, modèle, recherche web,
+//                          bouclier des autorisations, jauge de contexte ;
+//   ComposerAlertes      — le bandeau « toutes permissions » et l'AlertDialog
+//                          de confirmation ;
+//   ComposerPied         — l'erreur de dictée et la ligne de pied de page.
+// Tout l'état reste dans l'orchestrateur (Composer) : brouillons persistants,
+// dictée, slash, jauge de contexte, submit. Les refs (textarea, file input)
+// restent à l'orchestrateur et descendent en props (convention RefObject du
+// repo, cf. use-conversations.ts). Structure DOM inchangée (mêmes nœuds dans
+// le même ordre) ; props publiques de Composer inchangées. Les feuilles à
+// plusieurs enfants racine (un commentaire JSX compte comme un enfant) sont
+// enveloppées dans un fragment — aucun nœud DOM ajouté.
+
+/** Feuille 1 — l'indicateur de dépôt du glisser-déposer. Corps déplacé
+ *  VERBATIM de l'orchestrateur (chantier CRAP vague 6 UI, 2026-11-25). */
+interface ComposerRecouvrementProps {
+  dragOver: boolean;
+}
+
+function ComposerRecouvrement({ dragOver }: ComposerRecouvrementProps) {
+  return (
+    <>
+        {/* Indicateur de dépôt */}
+        {dragOver ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-hermes/5">
+            <p className="rounded-full bg-background/90 px-3.5 py-1.5 text-[12.5px] font-medium text-hermes-text shadow-sm">
+              Déposez vos fichiers pour les joindre
+            </p>
+          </div>
+        ) : null}
+    </>
+  );
+}
+
+/** Feuille 2 — le menu des commandes slash. Corps déplacé VERBATIM de
+ *  l'orchestrateur (chantier CRAP vague 6 UI, 2026-11-25) ; les matches et
+ *  la sélection clavier restent calculés côté parent. */
+interface ComposerSlashProps {
+  showSlash: boolean;
+  slashMatches: PromptTemplate[];
+  slashIndex: number;
+  applyPrompt: (tpl: PromptTemplate) => void;
+}
+
+function ComposerSlash({
+  showSlash,
+  slashMatches,
+  slashIndex,
+  applyPrompt,
+}: ComposerSlashProps) {
+  return (
+    <>
+        {/* Suggestions de commandes slash */}
+        {showSlash ? (
+          <SlashMenu matches={slashMatches} slashIndex={slashIndex} onPick={applyPrompt} />
+        ) : null}
+    </>
+  );
+}
+
+/** Feuille 3 — les puces des pièces jointes en attente. Corps déplacé
+ *  VERBATIM de l'orchestrateur (chantier CRAP vague 6 UI, 2026-11-25) ;
+ *  l'état des pièces jointes reste au hook useComposerAttachments (parent). */
+interface ComposerPucesProps {
+  pending: PendingAttachment[];
+  removePending: (localId: string) => void;
+}
+
+function ComposerPuces({ pending, removePending }: ComposerPucesProps) {
+  return (
+    <>
+        {/* Puces des pièces jointes en attente */}
+        {pending.length > 0 ? (
+          <div className="flex flex-wrap gap-2 px-3.5 pt-3 sm:px-4">
+            {pending.map((p) => (
+              <PendingAttachmentChip
+                key={p.localId}
+                name={p.file.name}
+                size={p.file.size}
+                kind={p.kind}
+                previewUrl={p.previewUrl}
+                uploading={p.uploading}
+                error={p.error}
+                onRemove={() => removePending(p.localId)}
+              />
+            ))}
+          </div>
+        ) : null}
+    </>
+  );
+}
+
+/** Feuille 4 — la rangée de saisie : trombone, textarea (raccourcis clavier
+ *  du menu slash, Entrée = envoi, coller), dictée vocale, boutons stop /
+ *  envoi bloqué / envoi. Corps déplacé VERBATIM de l'orchestrateur (chantier
+ *  CRAP vague 6 UI, 2026-11-25) ; les refs restent au parent et descendent
+ *  en props (convention RefObject du repo). */
+interface ComposerSaisieProps {
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  addFiles: ReturnType<typeof useComposerAttachments>["addFiles"];
+  disabled: boolean;
+  pending: PendingAttachment[];
+  value: string;
+  setSlashDismissed: Dispatch<SetStateAction<boolean>>;
+  setValue: Dispatch<SetStateAction<string>>;
+  showSlash: boolean;
+  slashMatches: PromptTemplate[];
+  slashIndex: number;
+  setSlashIndex: Dispatch<SetStateAction<number>>;
+  applyPrompt: (tpl: PromptTemplate) => void;
+  dictation: ReturnType<typeof useDictation>;
+  isBusy: boolean;
+  onStop: () => void;
+  uploading: boolean;
+  hasBlocking: boolean;
+  submit: () => void;
+  canSend: boolean;
+}
+
+function ComposerSaisie({
+  textareaRef,
+  fileInputRef,
+  addFiles,
+  disabled,
+  pending,
+  value,
+  setSlashDismissed,
+  setValue,
+  showSlash,
+  slashMatches,
+  slashIndex,
+  setSlashIndex,
+  applyPrompt,
+  dictation,
+  isBusy,
+  onStop,
+  uploading,
+  hasBlocking,
+  submit,
+  canSend,
+}: ComposerSaisieProps) {
+  return (
+        <div className="flex items-end gap-1.5 px-3 py-2.5 sm:px-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,image/avif,audio/*,video/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) addFiles(e.target.files);
+              e.target.value = "";
+            }}
+            aria-label="Joindre des fichiers"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || pending.length >= MAX_ATTACHMENTS}
+            aria-label="Joindre des fichiers (images, audio, vidéo, PDF)"
+            className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+          >
+            <Paperclip className="h-4.5 w-4.5" />
+          </Button>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              setSlashDismissed(false);
+              setValue(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (showSlash && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                e.preventDefault();
+                setSlashIndex((i) => {
+                  const n = slashMatches.length;
+                  return e.key === "ArrowDown" ? (i + 1) % n : (i - 1 + n) % n;
+                });
+                return;
+              }
+              if (showSlash && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
+                e.preventDefault();
+                applyPrompt(slashMatches[slashIndex] ?? slashMatches[0]);
+                return;
+              }
+              if (e.key === "Escape" && showSlash) {
+                setSlashDismissed(true); // ferme le menu, le texte reste intact
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData?.files ?? []);
+              if (files.length > 0) {
+                e.preventDefault();
+                addFiles(files);
+              }
+            }}
+            placeholder={
+              dictation.recording
+                ? `J'écoute… ${secondsLabel(dictation.seconds)} (clic sur le micro pour arrêter)`
+                : dictation.processing
+                  ? "Transcription de la dictée…"
+                  : "Envoyer un message à Hermes… (/ pour les commandes)"
+            }
+            aria-label="Message pour Hermes"
+            rows={1}
+            disabled={disabled}
+            className="max-h-[200px] min-h-7 flex-1 resize-none bg-transparent py-1 text-base leading-relaxed placeholder:text-muted-foreground focus:outline-none disabled:opacity-40"
+          />
+          {dictation.supported ? (
+            <Button
+              type="button"
+              variant={dictation.recording ? "default" : "ghost"}
+              size="icon"
+              onClick={dictation.recording || dictation.processing ? dictation.stop : dictation.start}
+              disabled={disabled && !dictation.recording}
+              aria-label={
+                dictation.recording ? "Arrêter la dictée et transcrire" : "Dicter un message"
+              }
+              title={dictation.error ?? undefined}
+              className={`h-9 w-9 shrink-0 rounded-full ${
+                dictation.recording
+                  ? "bg-destructive text-hermes-foreground hover:bg-destructive/90"
+                  : dictation.processing
+                    ? "bg-muted text-muted-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+              }`}
+            >
+              {dictation.recording ? (
+                <span className="relative flex h-4 w-4 items-center justify-center">
+                  <span className="absolute inline-flex h-4 w-4 animate-ping rounded-full bg-white/60" />
+                  <Square className="relative h-3 w-3 fill-current" />
+                </span>
+              ) : dictation.processing ? (
+                <Loader2 className="h-4.5 w-4.5 animate-spin" />
+              ) : (
+                <Mic className="h-4.5 w-4.5" />
+              )}
+            </Button>
+          ) : null}
+          {isBusy ? (
+            <Button
+              type="button"
+              onClick={onStop}
+              size="icon"
+              aria-label="Arrêter la génération"
+              className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+            </Button>
+          ) : uploading || hasBlocking ? (
+            <Button
+              type="button"
+              size="icon"
+              disabled
+              aria-label="Envoi des pièces jointes en cours"
+              className="h-9 w-9 shrink-0 rounded-full bg-hermes-strong text-hermes-foreground"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={submit}
+              disabled={!canSend}
+              size="icon"
+              aria-label="Envoyer le message"
+              className="h-9 w-9 shrink-0 rounded-full bg-hermes-strong text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:opacity-40"
+            >
+              <ArrowUp className="h-4.5 w-4.5" />
+            </Button>
+          )}
+        </div>
+  );
+}
+
+/** Feuille 5 — la barre inférieure : sélecteurs de mode et de modèle,
+ *  recherche web (F-09/F-12), bouclier des autorisations, jauge de contexte.
+ *  Ordre immuable du groupe de droite — la jauge reste l'élément le plus à
+ *  droite. Corps déplacé VERBATIM de l'orchestrateur (chantier CRAP vague 6
+ *  UI, 2026-11-25). */
+interface ComposerBarreProps {
+  conversationMode: ConversationMode;
+  conversationModeConfig: ModeConfig | null;
+  onSetConversationMode: (mode: ConversationMode, config: ModeConfig) => void;
+  models: ModelOption[];
+  disabled: boolean;
+  isBusy: boolean;
+  selectedModel: string | null;
+  modelsSource: ComposerProps["modelsSource"];
+  mode: GatewayMode | null;
+  onSelectModel: (id: string) => void;
+  effort: string | null;
+  onEffortChange: (effort: string) => void;
+  expert?: ExpertSettings;
+  onExpertChange?: (patch: Partial<ExpertSettings>) => void;
+  webSearch: boolean;
+  onToggleWebSearch: () => void;
+  webSearchAvailable: boolean;
+  permissionsMode: PermissionsMode;
+  onPermissionsChange: (mode: PermissionsMode) => void;
+  setPermDialogOpen: Dispatch<SetStateAction<boolean>>;
+  gaugeVisible: boolean;
+  contextUsage: ContextUsage | null;
+  contextBase: ComposerProps["contextBase"];
+  canCompact: boolean;
+  compactRunning: boolean;
+  onCompact: () => void;
+  onNewSession: () => void;
+}
+
+function ComposerBarre({
+  conversationMode,
+  conversationModeConfig,
+  onSetConversationMode,
+  models,
+  disabled,
+  isBusy,
+  selectedModel,
+  modelsSource,
+  mode,
+  onSelectModel,
+  effort,
+  onEffortChange,
+  expert,
+  onExpertChange,
+  webSearch,
+  onToggleWebSearch,
+  webSearchAvailable,
+  permissionsMode,
+  onPermissionsChange,
+  setPermDialogOpen,
+  gaugeVisible,
+  contextUsage,
+  contextBase,
+  canCompact,
+  compactRunning,
+  onCompact,
+  onNewSession,
+}: ComposerBarreProps) {
+  return (
+    <>
+        {/* Barre inférieure : modèle · aide clavier · bouclier · jauge.
+            Ordre immuable du groupe de droite — la jauge reste l'élément
+            le plus à droite. */}
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5 sm:px-4">
+          <div className="flex min-w-0 items-center gap-1">
+            {/* F-30 — le sélecteur de mode arrive en tête : un seul endroit
+                décide du traitement du prochain message. « Comparer » en est
+                la 4e entrée — l'ancienne bascule quitte la barre (F-17). */}
+            <ModePicker
+              mode={conversationMode}
+              config={conversationModeConfig}
+              models={models}
+              onSetMode={onSetConversationMode}
+              // Lot audit passe 2 : verrouillé pendant un tour (isBusy) — le
+              // service refuse désormais conversations:setMode en cours de
+              // déroulé ; l'UI suit pour ne pas proposer un choix refusé.
+              disabled={disabled || isBusy}
+            />
+            <ModelPicker
+              models={models}
+              selectedModel={selectedModel}
+              source={modelsSource}
+              mode={mode}
+              onSelect={onSelectModel}
+              effort={effort}
+              onEffortChange={onEffortChange}
+              expert={expert}
+              onExpertChange={onExpertChange}
+              // Lot audit passe 2 : même verrou que le sélecteur de mode.
+              disabled={disabled || isBusy}
+            />
+
+            {/* F-09 — capacités du tour : recherche web actionnable via les
+                clés de services ; agent et images attendent la gateway. */}
+            <span
+              className="mx-0.5 hidden h-5 w-px bg-border/60 sm:block"
+              aria-hidden="true"
+            />
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                // Revue P1-P7 (B2) : la bascule suit l'état RÉEL de la
+                // gateway — branchée, la recherche est gérée par l'agent
+                // Hermes (le service l'annonce dans le fil) ; hors ligne
+                // avec une clé Tavily/Exa, la recherche locale tourne.
+                if (mode === "gateway" || (webSearchAvailable && mode === "local"))
+                  onToggleWebSearch();
+              }}
+              aria-disabled={mode !== "gateway" && !(webSearchAvailable && mode === "local")}
+              aria-pressed={webSearch}
+              aria-label="Recherche web"
+              className={
+                webSearch
+                  ? "h-8 w-8 justify-center rounded-full bg-hermes/15 p-0 text-hermes-text hover:bg-hermes/25 disabled:opacity-40"
+                  : "h-8 w-8 justify-center rounded-full p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+              }
+            >
+              <Globe className="h-3.5 w-3.5 shrink-0" />
+            </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px]">
+                  {mode !== "local"
+                    ? "Recherche web : gérée par le moteur Hermes quand la gateway est branchée"
+                    : webSearchAvailable
+                      ? webSearch
+                        ? "Couper la recherche web (Tavily/Exa)"
+                        : "Recherche web (Tavily/Exa) : les résultats sont injectés dans le contexte du tour, sources citées sous la réponse"
+                      : "Recherche web : ajoutez une clé Tavily ou Exa dans Paramètres → Clés de services"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+          </div>
+          <div className="flex items-center gap-1.5">
+            {/* Bouclier des autorisations — sans objet en moteur local (pas
+                d'outils) : même idiome que la recherche web — le bouton reste
+                survolable et le tooltip explique pourquoi il est inactif,
+                au lieu d'un bouton désactivé sans explication visible. */}
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (mode !== "gateway") return;
+                if (permissionsMode === "auto") onPermissionsChange("ask");
+                else setPermDialogOpen(true);
+              }}
+              aria-disabled={mode !== "gateway"}
+              aria-label="Autorisations de l'agent"
+              className={`h-9 w-[34px] shrink-0 rounded-full transition-colors ${
+                permissionsMode === "auto"
+                  ? "bg-warning/15 text-warning hover:bg-warning/25 dark:text-warning"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              } ${mode !== "gateway" ? "opacity-45" : ""}`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px]">
+                  {mode !== "gateway"
+                    ? "Autorisations de l'agent : actives quand le moteur Hermes est lancé (connexion automatique). Lancez le moteur puis revenez ici."
+                    : permissionsMode === "auto"
+                      ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
+                      : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {/* Jauge de contexte — visible selon fork.context.gauge */}
+            {gaugeVisible ? (
+              <ContextGauge
+                usage={contextUsage}
+                historyCount={contextBase?.historyCount ?? 0}
+                historyCompacted={contextBase?.historyCompacted ?? false}
+                canCompact={canCompact}
+                compactRunning={compactRunning}
+                onCompact={onCompact}
+                onNewSession={onNewSession}
+              />
+            ) : null}
+          </div>
+        </div>
+    </>
+  );
+}
+
+/** Feuille 6 — le bandeau « toutes permissions » (le signal survit au
+ *  scroll et à l'oubli) et l'AlertDialog de confirmation. Corps déplacé
+ *  VERBATIM de l'orchestrateur (chantier CRAP vague 6 UI, 2026-11-25). */
+interface ComposerAlertesProps {
+  mode: GatewayMode | null;
+  permissionsMode: PermissionsMode;
+  onPermissionsChange: (mode: PermissionsMode) => void;
+  permDialogOpen: boolean;
+  setPermDialogOpen: Dispatch<SetStateAction<boolean>>;
+}
+
+function ComposerAlertes({
+  mode,
+  permissionsMode,
+  onPermissionsChange,
+  permDialogOpen,
+  setPermDialogOpen,
+}: ComposerAlertesProps) {
+  return (
+    <>
+      {/* Bandeau « toutes permissions » : le signal survit au scroll et à l'oubli */}
+      {mode === "gateway" && permissionsMode === "auto" ? (
+        <div
+          className="mx-auto mt-2.5 flex w-full max-w-3xl items-center gap-2 rounded-xl bg-warning/12 px-3.5 py-2 text-[12.5px] font-medium"
+          role="status"
+        >
+          <ShieldCheck className="h-[15px] w-[15px] shrink-0 text-warning" />
+          Mode toutes permissions actif — l&apos;agent exécute sans confirmation
+          <button
+            type="button"
+            onClick={() => onPermissionsChange("ask")}
+            className="ml-auto shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11px] font-semibold text-warning underline underline-offset-2 dark:text-warning"
+          >
+            Désactiver
+          </button>
+        </div>
+      ) : null}
+
+      {/* Armement explicite, jamais silencieux */}
+      <AlertDialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
+        <AlertDialogContent className="max-w-[340px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-[15px]">
+              <ShieldCheck className="h-[18px] w-[18px] text-warning" />
+              Autoriser toutes les actions ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Hermes pourra exécuter <strong>terminal, fichiers et web sans confirmation</strong>.
+              Le mode se réinitialise à la prochaine session.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onPermissionsChange("auto")}
+              className="bg-warning text-hermes-foreground hover:bg-warning/90"
+            >
+              Autoriser
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+/** Feuille 7 — l'erreur de dictée (role="alert") et la ligne de pied de
+ *  page. Corps déplacé VERBATIM de l'orchestrateur (chantier CRAP vague 6
+ *  UI, 2026-11-25). */
+interface ComposerPiedProps {
+  dictation: ReturnType<typeof useDictation>;
+}
+
+function ComposerPied({ dictation }: ComposerPiedProps) {
+  return (
+    <>
+      {dictation.error ? (
+        <p className="mt-1.5 text-center text-[11px] text-destructive" role="alert">
+          {dictation.error}
+        </p>
+      ) : null}
+      <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        Hermes Web · images, audio, vidéo et PDF acceptés · les réponses sont
+        générées par l&apos;agent — vérifiez les informations importantes.
+      </p>
+    </>
+  );
 }
 
 export function Composer({
@@ -378,357 +969,80 @@ export function Composer({
             : "border-border"
         }`}
       >
-        {/* Indicateur de dépôt */}
-        {dragOver ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-hermes/5">
-            <p className="rounded-full bg-background/90 px-3.5 py-1.5 text-[12.5px] font-medium text-hermes-text shadow-sm">
-              Déposez vos fichiers pour les joindre
-            </p>
-          </div>
-        ) : null}
+        <ComposerRecouvrement dragOver={dragOver} />
 
-        {/* Suggestions de commandes slash */}
-        {showSlash ? (
-          <SlashMenu matches={slashMatches} slashIndex={slashIndex} onPick={applyPrompt} />
-        ) : null}
+        <ComposerSlash
+          showSlash={showSlash}
+          slashMatches={slashMatches}
+          slashIndex={slashIndex}
+          applyPrompt={applyPrompt}
+        />
 
-        {/* Puces des pièces jointes en attente */}
-        {pending.length > 0 ? (
-          <div className="flex flex-wrap gap-2 px-3.5 pt-3 sm:px-4">
-            {pending.map((p) => (
-              <PendingAttachmentChip
-                key={p.localId}
-                name={p.file.name}
-                size={p.file.size}
-                kind={p.kind}
-                previewUrl={p.previewUrl}
-                uploading={p.uploading}
-                error={p.error}
-                onRemove={() => removePending(p.localId)}
-              />
-            ))}
-          </div>
-        ) : null}
+        <ComposerPuces pending={pending} removePending={removePending} />
 
-        <div className="flex items-end gap-1.5 px-3 py-2.5 sm:px-4">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,image/avif,audio/*,video/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files?.length) addFiles(e.target.files);
-              e.target.value = "";
-            }}
-            aria-label="Joindre des fichiers"
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled || pending.length >= MAX_ATTACHMENTS}
-            aria-label="Joindre des fichiers (images, audio, vidéo, PDF)"
-            className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-          >
-            <Paperclip className="h-4.5 w-4.5" />
-          </Button>
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => {
-              setSlashDismissed(false);
-              setValue(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (showSlash && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                e.preventDefault();
-                setSlashIndex((i) => {
-                  const n = slashMatches.length;
-                  return e.key === "ArrowDown" ? (i + 1) % n : (i - 1 + n) % n;
-                });
-                return;
-              }
-              if (showSlash && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
-                e.preventDefault();
-                applyPrompt(slashMatches[slashIndex] ?? slashMatches[0]);
-                return;
-              }
-              if (e.key === "Escape" && showSlash) {
-                setSlashDismissed(true); // ferme le menu, le texte reste intact
-                return;
-              }
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData?.files ?? []);
-              if (files.length > 0) {
-                e.preventDefault();
-                addFiles(files);
-              }
-            }}
-            placeholder={
-              dictation.recording
-                ? `J'écoute… ${secondsLabel(dictation.seconds)} (clic sur le micro pour arrêter)`
-                : dictation.processing
-                  ? "Transcription de la dictée…"
-                  : "Envoyer un message à Hermes… (/ pour les commandes)"
-            }
-            aria-label="Message pour Hermes"
-            rows={1}
-            disabled={disabled}
-            className="max-h-[200px] min-h-7 flex-1 resize-none bg-transparent py-1 text-base leading-relaxed placeholder:text-muted-foreground focus:outline-none disabled:opacity-40"
-          />
-          {dictation.supported ? (
-            <Button
-              type="button"
-              variant={dictation.recording ? "default" : "ghost"}
-              size="icon"
-              onClick={dictation.recording || dictation.processing ? dictation.stop : dictation.start}
-              disabled={disabled && !dictation.recording}
-              aria-label={
-                dictation.recording ? "Arrêter la dictée et transcrire" : "Dicter un message"
-              }
-              title={dictation.error ?? undefined}
-              className={`h-9 w-9 shrink-0 rounded-full ${
-                dictation.recording
-                  ? "bg-destructive text-hermes-foreground hover:bg-destructive/90"
-                  : dictation.processing
-                    ? "bg-muted text-muted-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-              }`}
-            >
-              {dictation.recording ? (
-                <span className="relative flex h-4 w-4 items-center justify-center">
-                  <span className="absolute inline-flex h-4 w-4 animate-ping rounded-full bg-white/60" />
-                  <Square className="relative h-3 w-3 fill-current" />
-                </span>
-              ) : dictation.processing ? (
-                <Loader2 className="h-4.5 w-4.5 animate-spin" />
-              ) : (
-                <Mic className="h-4.5 w-4.5" />
-              )}
-            </Button>
-          ) : null}
-          {isBusy ? (
-            <Button
-              type="button"
-              onClick={onStop}
-              size="icon"
-              aria-label="Arrêter la génération"
-              className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-            </Button>
-          ) : uploading || hasBlocking ? (
-            <Button
-              type="button"
-              size="icon"
-              disabled
-              aria-label="Envoi des pièces jointes en cours"
-              className="h-9 w-9 shrink-0 rounded-full bg-hermes-strong text-hermes-foreground"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              onClick={submit}
-              disabled={!canSend}
-              size="icon"
-              aria-label="Envoyer le message"
-              className="h-9 w-9 shrink-0 rounded-full bg-hermes-strong text-hermes-foreground transition-opacity hover:bg-hermes-strong/90 disabled:opacity-40"
-            >
-              <ArrowUp className="h-4.5 w-4.5" />
-            </Button>
-          )}
-        </div>
+        <ComposerSaisie
+          textareaRef={textareaRef}
+          fileInputRef={fileInputRef}
+          addFiles={addFiles}
+          disabled={disabled}
+          pending={pending}
+          value={value}
+          setSlashDismissed={setSlashDismissed}
+          setValue={setValue}
+          showSlash={showSlash}
+          slashMatches={slashMatches}
+          slashIndex={slashIndex}
+          setSlashIndex={setSlashIndex}
+          applyPrompt={applyPrompt}
+          dictation={dictation}
+          isBusy={isBusy}
+          onStop={onStop}
+          uploading={uploading}
+          hasBlocking={hasBlocking}
+          submit={submit}
+          canSend={canSend}
+        />
 
-        {/* Barre inférieure : modèle · aide clavier · bouclier · jauge.
-            Ordre immuable du groupe de droite — la jauge reste l'élément
-            le plus à droite. */}
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5 sm:px-4">
-          <div className="flex min-w-0 items-center gap-1">
-            {/* F-30 — le sélecteur de mode arrive en tête : un seul endroit
-                décide du traitement du prochain message. « Comparer » en est
-                la 4e entrée — l'ancienne bascule quitte la barre (F-17). */}
-            <ModePicker
-              mode={conversationMode}
-              config={conversationModeConfig}
-              models={models}
-              onSetMode={onSetConversationMode}
-              // Lot audit passe 2 : verrouillé pendant un tour (isBusy) — le
-              // service refuse désormais conversations:setMode en cours de
-              // déroulé ; l'UI suit pour ne pas proposer un choix refusé.
-              disabled={disabled || isBusy}
-            />
-            <ModelPicker
-              models={models}
-              selectedModel={selectedModel}
-              source={modelsSource}
-              mode={mode}
-              onSelect={onSelectModel}
-              effort={effort}
-              onEffortChange={onEffortChange}
-              expert={expert}
-              onExpertChange={onExpertChange}
-              // Lot audit passe 2 : même verrou que le sélecteur de mode.
-              disabled={disabled || isBusy}
-            />
-
-            {/* F-09 — capacités du tour : recherche web actionnable via les
-                clés de services ; agent et images attendent la gateway. */}
-            <span
-              className="mx-0.5 hidden h-5 w-px bg-border/60 sm:block"
-              aria-hidden="true"
-            />
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                // Revue P1-P7 (B2) : la bascule suit l'état RÉEL de la
-                // gateway — branchée, la recherche est gérée par l'agent
-                // Hermes (le service l'annonce dans le fil) ; hors ligne
-                // avec une clé Tavily/Exa, la recherche locale tourne.
-                if (mode === "gateway" || (webSearchAvailable && mode === "local"))
-                  onToggleWebSearch();
-              }}
-              aria-disabled={mode !== "gateway" && !(webSearchAvailable && mode === "local")}
-              aria-pressed={webSearch}
-              aria-label="Recherche web"
-              className={
-                webSearch
-                  ? "h-8 w-8 justify-center rounded-full bg-hermes/15 p-0 text-hermes-text hover:bg-hermes/25 disabled:opacity-40"
-                  : "h-8 w-8 justify-center rounded-full p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-              }
-            >
-              <Globe className="h-3.5 w-3.5 shrink-0" />
-            </Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[260px]">
-                  {mode !== "local"
-                    ? "Recherche web : gérée par le moteur Hermes quand la gateway est branchée"
-                    : webSearchAvailable
-                      ? webSearch
-                        ? "Couper la recherche web (Tavily/Exa)"
-                        : "Recherche web (Tavily/Exa) : les résultats sont injectés dans le contexte du tour, sources citées sous la réponse"
-                      : "Recherche web : ajoutez une clé Tavily ou Exa dans Paramètres → Clés de services"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-          </div>
-          <div className="flex items-center gap-1.5">
-            {/* Bouclier des autorisations — sans objet en moteur local (pas
-                d'outils) : même idiome que la recherche web — le bouton reste
-                survolable et le tooltip explique pourquoi il est inactif,
-                au lieu d'un bouton désactivé sans explication visible. */}
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (mode !== "gateway") return;
-                if (permissionsMode === "auto") onPermissionsChange("ask");
-                else setPermDialogOpen(true);
-              }}
-              aria-disabled={mode !== "gateway"}
-              aria-label="Autorisations de l'agent"
-              className={`h-9 w-[34px] shrink-0 rounded-full transition-colors ${
-                permissionsMode === "auto"
-                  ? "bg-warning/15 text-warning hover:bg-warning/25 dark:text-warning"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              } ${mode !== "gateway" ? "opacity-45" : ""}`}
-            >
-              <ShieldCheck className="h-4 w-4" />
-            </Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[260px]">
-                  {mode !== "gateway"
-                    ? "Autorisations de l'agent : actives quand le moteur Hermes est lancé (connexion automatique). Lancez le moteur puis revenez ici."
-                    : permissionsMode === "auto"
-                      ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
-                      : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/* Jauge de contexte — visible selon fork.context.gauge */}
-            {gaugeVisible ? (
-              <ContextGauge
-                usage={contextUsage}
-                historyCount={contextBase?.historyCount ?? 0}
-                historyCompacted={contextBase?.historyCompacted ?? false}
-                canCompact={canCompact}
-                compactRunning={compactRunning}
-                onCompact={onCompact}
-                onNewSession={onNewSession}
-              />
-            ) : null}
-          </div>
-        </div>
+        <ComposerBarre
+          conversationMode={conversationMode}
+          conversationModeConfig={conversationModeConfig}
+          onSetConversationMode={onSetConversationMode}
+          models={models}
+          disabled={disabled}
+          isBusy={isBusy}
+          selectedModel={selectedModel}
+          modelsSource={modelsSource}
+          mode={mode}
+          onSelectModel={onSelectModel}
+          effort={effort}
+          onEffortChange={onEffortChange}
+          expert={expert}
+          onExpertChange={onExpertChange}
+          webSearch={webSearch}
+          onToggleWebSearch={onToggleWebSearch}
+          webSearchAvailable={webSearchAvailable}
+          permissionsMode={permissionsMode}
+          onPermissionsChange={onPermissionsChange}
+          setPermDialogOpen={setPermDialogOpen}
+          gaugeVisible={gaugeVisible}
+          contextUsage={contextUsage}
+          contextBase={contextBase}
+          canCompact={canCompact}
+          compactRunning={compactRunning}
+          onCompact={onCompact}
+          onNewSession={onNewSession}
+        />
       </div>
 
-      {/* Bandeau « toutes permissions » : le signal survit au scroll et à l'oubli */}
-      {mode === "gateway" && permissionsMode === "auto" ? (
-        <div
-          className="mx-auto mt-2.5 flex w-full max-w-3xl items-center gap-2 rounded-xl bg-warning/12 px-3.5 py-2 text-[12.5px] font-medium"
-          role="status"
-        >
-          <ShieldCheck className="h-[15px] w-[15px] shrink-0 text-warning" />
-          Mode toutes permissions actif — l&apos;agent exécute sans confirmation
-          <button
-            type="button"
-            onClick={() => onPermissionsChange("ask")}
-            className="ml-auto shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11px] font-semibold text-warning underline underline-offset-2 dark:text-warning"
-          >
-            Désactiver
-          </button>
-        </div>
-      ) : null}
+      <ComposerAlertes
+        mode={mode}
+        permissionsMode={permissionsMode}
+        onPermissionsChange={onPermissionsChange}
+        permDialogOpen={permDialogOpen}
+        setPermDialogOpen={setPermDialogOpen}
+      />
 
-      {/* Armement explicite, jamais silencieux */}
-      <AlertDialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
-        <AlertDialogContent className="max-w-[340px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-[15px]">
-              <ShieldCheck className="h-[18px] w-[18px] text-warning" />
-              Autoriser toutes les actions ?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Hermes pourra exécuter <strong>terminal, fichiers et web sans confirmation</strong>.
-              Le mode se réinitialise à la prochaine session.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => onPermissionsChange("auto")}
-              className="bg-warning text-hermes-foreground hover:bg-warning/90"
-            >
-              Autoriser
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      {dictation.error ? (
-        <p className="mt-1.5 text-center text-[11px] text-destructive" role="alert">
-          {dictation.error}
-        </p>
-      ) : null}
-      <p className="mt-2 text-center text-[11px] text-muted-foreground">
-        Hermes Web · images, audio, vidéo et PDF acceptés · les réponses sont
-        générées par l&apos;agent — vérifiez les informations importantes.
-      </p>
+      <ComposerPied dictation={dictation} />
     </div>
   );
 }

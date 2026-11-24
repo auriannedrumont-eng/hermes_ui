@@ -2,9 +2,9 @@
 import json
 from pathlib import Path
 
-OUT = Path("/home/z/my-project/download/hermes_ui_crap")
+OUT = Path("docs/crap-2026-11")
 hotspots = json.loads((OUT / "hotspots.json").read_text(encoding="utf-8"))
-ROOT = Path("/home/z/my-project/repos/hermes_ui")
+ROOT = Path.cwd()
 
 parts = []
 for i, h in enumerate(hotspots, 1):

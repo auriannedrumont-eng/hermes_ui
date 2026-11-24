@@ -1,4 +1,4 @@
-"""Extrait les 45 fonctions de production CC>=30 avec spans et statistiques de décisions.
+"""Extrait les fonctions de production CC>=30 avec spans et statistiques de décisions.
 
 Utilise le parseur tree-sitter de crapper lui-même (venv crapper).
 """
@@ -7,11 +7,10 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "/home/z/my-project/crapper/src")
 from crapper.languages.typescript import functions_in_source  # noqa: E402
 
-ROOT = Path("/home/z/my-project/repos/hermes_ui")
-OUT = Path("/home/z/my-project/download/hermes_ui_crap")
+ROOT = Path.cwd()
+OUT = Path("docs/crap-2026-11")
 
 # ns → chemin : le namespace de crapper = chemin relatif sans "src/", points au lieu de /
 def ns_to_path(ns: str):
