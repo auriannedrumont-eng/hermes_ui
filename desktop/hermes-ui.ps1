@@ -1649,6 +1649,42 @@ function Add-AgentToPth {
     }
 }
 
+function Test-AgentOurs {
+    # ((100)) Le 9120 est occupé : est-ce NOTRE passerelle (même maison
+    # F:\hermes_web\data) ou celle d'une AUTRE installation ? Sans cette
+    # sonde d'identité, le lanceur « adoptait » une passerelle étrangère
+    # que l'app ne peut JAMAIS utiliser (maisons étanches, jetons
+    # différents) : message « l'interface l'adopte » au démarrage, puis
+    # « Hermes éteint » à l'écran sans explication (cas réel du 24/11 :
+    # la passerelle de F:\hermes tenait le port). La sonde d'État du
+    # lanceur (HERMES_HOME + attach --json) répond à la question :
+    # « ready » = à nous, « absent/not ready » = étrangère (la voisine
+    # ne délivre pas de ticket à notre maison). Sortie : 'ours',
+    # 'foreign' ou 'unknown' (sonde impossible — repli conservateur).
+    $py = $null
+    if ($Script:PortablePython -and (Test-Path $Script:PortablePython)) { $py = $Script:PortablePython }
+    else {
+        $venvPy = Join-Path $Root 'hermes-agent\.venv\Scripts\python.exe'
+        if (Test-Path $venvPy) { $py = $venvPy } elseif (Test-Command 'python') { $py = 'python' }
+    }
+    if (-not $py) { return 'unknown' }
+    $house = Join-Path $Root 'hermes-agent'
+    if (-not (Test-Path $house)) { return 'unknown' }
+    try {
+        $env:PYTHONIOENCODING = 'utf-8'
+        # hermes_cli n'est importable que DEPUIS la racine de l'agent —
+        # sans ce cwd, la sonde répond « unknown » à chaque fois (constaté
+        # au boot 11:36 : adopté sans verdict).
+        Push-Location $house
+        try {
+            $out = & $py -m hermes_cli.main gateway attach --json 2>&1 | Out-String
+        } finally { Pop-Location }
+        if ($out -match '"state"\s*:\s*"ready"') { return 'ours' }
+        if ($out -match '"state"\s*:\s*"absent"' -or $out -match 'not ready') { return 'foreign' }
+    } catch { }
+    return 'unknown'
+}
+
 function Start-AgentRuntime {
     # (77) LE LANCEUR ALLUME L'AGENT. Avant, il se bornait à SONDER le 9120
     # après avoir allumé interface et passerelle : un agent installé mais
@@ -1665,8 +1701,23 @@ function Start-AgentRuntime {
         return
     }
     if (Test-PortBusy 9120) {
-        Set-SanteMaillon 'agent' 'répond (9120) — adopté'
-        Log "• agent : déjà en marche sur le port 9120 — l'interface l'adopte."
+        # ((100)) Ne plus adopter à l'aveugle : identifier QUI tient le
+        # port. Une passerelle étrangère (autre installation Hermes) ne
+        # peut jamais servir l'app — l'annoncer clairement plutôt que
+        # promettre « adopté » puis afficher « Hermes éteint » sans
+        # explication.
+        $who = Test-AgentOurs
+        if ($who -eq 'ours') {
+            Set-SanteMaillon 'agent' 'répond (9120) — adopté'
+            Log "• agent : notre passerelle déjà en marche sur le port 9120 — l'interface l'adopte."
+        } elseif ($who -eq 'foreign') {
+            Set-SanteMaillon 'agent' "port 9120 tenu par une AUTRE installation — chat éteint"
+            Log "• agent : le port 9120 est tenu par la passerelle d'une AUTRE installation Hermes (pas celle de ce dossier)."
+            Log "  Le chat restera éteint tant qu'elle tourne : fermez l'autre installation Hermes, puis relancez Hermes-Web.bat."
+        } else {
+            Set-SanteMaillon 'agent' 'répond (9120) — identité non vérifiable'
+            Log "• agent : déjà en marche sur le port 9120 (identité non vérifiable) — l'interface l'adopte."
+        }
         return
     }
     # ((84)) Le python qui lance l'agent = celui où les dépendances sont
