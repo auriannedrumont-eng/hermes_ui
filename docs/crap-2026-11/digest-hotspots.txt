@@ -1,0 +1,1287 @@
+###  1. AgentMotorCard  CC=179  (749 lignes, src/components/settings/agent-motor-card.tsx:83-831)
+    entête fichier: // Carte « Hermes » (v3 — v0.5.1), maquette validée | // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire | // que la carte application (system-section.tsx). Ce
+```ts
+export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectGateway }: AgentMotorCardProps) {
+  const { toast } = useToast();
+  // Revue 95 : champs contrôlés du repli « autre poste » (advOpen existe
+  // déjà plus bas) + verdict de liaison.
+  const [advUrl, setAdvUrl] = useState("");
+  const [advToken, setAdvToken] = useState("");
+  const [advBusy, setAdvBusy] = useState(false);
+  const [state, setState] = useState<MotorState | null>(null);
+  const [journal, setJournal] = useState<JournalWire[]>([]);
+  const [log, setLog] = useState<string | null>(null);
+  const [logAt, setLogAt] = useState(0);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [advOpen, setAdvOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  // Lot audit 2026-11-21 : états pending + chien de garde des demandes
+  // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
+```
+
+###  2. useHermesChat  CC=166  (1024 lignes, src/hooks/use-hermes-chat.ts:72-1095)
+    entête fichier: // Hook principal : orchestre les conversations, la sélection de modèle, | // les pièces jointes multimédia et le streaming via socket.io
+```ts
+export function useHermesChat() {
+  // Garde anti double-émission de conversations:create (Lot 3, audit L3-5).
+  const creatingRef = useRef(false);
+
+  const { toast } = useToast();
+  const {
+    projects,
+    setProjects,
+    fetchProjects,
+    createProject,
+    renameProject,
+    deleteProject,
+    setProjectArchived,
+    reorderProjects,
+  } = useProjects();
+  /** Miroir ref de `projects` (F-59) : les écouteurs socket (projects:deleted)
+   *  ont besoin des sous-dossiers courants sans dépendre du tableau de deps. */
+  const projectsRef = useRef(projects);
+```
+
+###  3. runAssistantTurn  CC=147  (745 lignes, mini-services/hermes-chat/turn-runner.ts:407-1151)
+    entête fichier: // Tour assistant : moteur d'exécution — extrait d'index.ts (découpage | // 2026-11, cf. FORK.md §10). Contient runAssistantTurn, les registres des | // tours en vol (running, live
+```ts
+const runAssistantTurn = async (
+  conversationId: string,
+  opts: {
+    content: string;
+    attachments?: Attachment[];
+    modelId?: string | null;
+    settings?: TurnSettings;
+    /** F-09/F-12 : recherche web du tour (clés Tavily/Exa, moteur local). */
+    webSearch?: boolean;
+    /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
+    variant?: "a" | "b";
+    /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
+     *  réponse qu'il remplace (l'ancienne est conservée, inactive). */
+    versionGroup?: string;
+    /** Lot audit passe 2 : version affichée AVANT la régénération (capturée
+     *  par supersedeTrailingAssistant). En cas d'arrêt/échec à vide, c'est
+     *  CETTE version qui revient au fil — restoreLatestVersion réactivait
+     *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
+```
+
+###  4. Sidebar  CC=138  (906 lignes, src/components/chat/sidebar.tsx:115-1020)
+    entête fichier: // Sidebar : dossiers (arbre à un niveau, sous-dossiers repliables, | // drag & drop pour ranger et réordonner entre frères), recherche | // (dossiers + titres + contenu des messag
+```ts
+export function Sidebar({
+  conversations,
+  projects,
+  activeId,
+  mode,
+  serverModel,
+  engineProviders,
+  updateAvailable = null,
+  connected,
+  onNew,
+  onOpen,
+  onDelete,
+  onRename,
+  onTogglePin,
+  onSearchMessages,
+  onCreateProject,
+  onRenameProject,
+  onDeleteProject,
+```
+
+###  5. registerProvidersHandlers  CC=114  (290 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:102-391)
+    entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
+```ts
+function registerProvidersHandlers(socket: Socket) {
+
+// ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
+
+socket.on("providers:list", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ providers: ctx.providersWire() });
+});
+
+// Catalogue des fournisseurs connus (sélecteur d'ajout, v2.5) — z.ai y
+// figure DEUX fois : API standard (paiement au jeton) et GLM Coding
+// Plan (abonnement), deux portefeuilles étanches.
+socket.on("providers:catalog", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ catalog: ctx.knownProviderCatalog() });
+});
+
+socket.on(
+  "providers:add",
+  (
+```
+
+###  6. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
+    entête fichier: // Barre de saisie façon ChatGPT : textarea auto-redimensionnable, | // envoi/stop, pièces jointes (trombone, glisser-déposer, coller), | // sélecteur de modèle, dictée vocale, com
+```ts
+export function Composer({
+  disabled,
+  isBusy,
+  draftKey,
+  models,
+  modelsSource,
+  conversationMode,
+  conversationModeConfig,
+  onSetConversationMode,
+  webSearch,
+  onToggleWebSearch,
+  webSearchAvailable,
+  mode,
+  selectedModel,
+  onSelectModel,
+  effort,
+  onEffortChange,
+  expert,
+```
+
+###  7. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
+    entête fichier: // Page Stockage — explorateur déclaratif des documents générés (v0.3.0). | // Spec §4 : liste intégrale sans pagination, groupement par projet côté | // client, déroulé DÉRIVÉ (ja
+```ts
+export function StorageSection({ initialProject }: { initialProject?: string | null }) {
+  const [entries, setEntries] = useState<StorageEntry[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState("");
+  const [type, setType] = useState("Tous");
+  const [tri, setTri] = useState<SortKey>("taille");
+  const [projetOuvert, setProjetOuvert] = useState<string | null>(initialProject ?? null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [freedTotal, setFreedTotal] = useState<{ n: number; bytes: number }>({ n: 0, bytes: 0 });
+  const [toasts, setToasts] = useState<
+    Array<{
+      key: number;
+      title: string;
+      description: string;
+      tone: "ok" | "err" | "warn";
+      undo?: { token: string; bytes: number; n: number };
+      expireAt: number;
+```
+
+###  8. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
+    entête fichier: // Section « Système » — v3 (v0.5.1), maquette validée | // design/maquette-systeme-v3.html : DEUX cartes, une par programme | // (« L'application » / « Hermes »), une seule gramma
+```ts
+export function SystemSection({
+  connected = true,
+  updateAvailable = null,
+  appRevision: _appRevision = null,
+  onNavigateStorage,
+  onConnectGateway,
+}: SystemSectionProps) {
+  // ── État de vérification (à jour / disponible / erreur) ───────────────
+  const [majEtat, setMajEtat] = useState<"inconnu" | "ajour" | "disponible" | "erreur">("inconnu");
+  /** Instant de la dernière vérification RÉUSSIE (ISO — le libellé « aujourd'hui »
+   *  n'est plus affiché que si c'est vrai). */
+  const [majVerifieAt, setMajVerifieAt] = useState<string | null>(null);
+  const [majMotif, setMajMotif] = useState<string | null>(null);
+  const majAJour = majEtat === "ajour";
+
+  const majVerifieLabel = useMemo(() => {
+    if (!majVerifieAt) return null;
+    const d = new Date(majVerifieAt);
+```
+
+###  9. registerExtensionsHandlers  CC=95  (309 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:409-717)
+    entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
+```ts
+function registerExtensionsHandlers(socket: Socket) {
+
+socket.on("extensions:list", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ extensions: ctx.extensionsWire() });
+});
+
+// Import d'un dépôt GitHub : résolution réelle (infos, branche, tête)
+socket.on(
+  "extensions:add",
+  async (
+    payload: { kind?: string; source?: string; channel?: string },
+    cb?: (data: unknown) => void
+  ) => {
+    const kind = payload?.kind === "mcp" ? "mcp" : "repo";
+    const source = (payload?.source ?? "").trim();
+    if (!source) {
+      if (typeof cb === "function") cb({ error: "Source requise" });
+      return;
+```
+
+### 10. HermesWebPage  CC=82  (639 lignes, src/app/page.tsx:42-680)
+    entête fichier: // Hermes Web — interface de chat type ChatGPT pour l'agent Hermes de Nous Research. | // Layout : la conversation reste le chef d'orchestre ; l'artefact est un objet | // de premi
+```ts
+export default function HermesWebPage() {
+  // La page orchestre deux hooks : le chat (source de vérité) et les prompts
+  // système (F-11/F-19). Le prompt actif de la conversation est injecté dans
+  // la jauge de contexte du composer (poste « Prompt de conversation »).
+  const chat = useHermesChat();
+  const promptsApi = useSystemPrompts(chat.activeId);
+  // Mémoire utilisateur (F-18) — section Hermes du volet Paramètres.
+  const memoryApi = useMemory();
+  const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  /** Visionneuse plein écran (mobile uniquement). */
+  const [viewerOpen, setViewerOpen] = useState(false);
+  /** Sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Sheet « Prompt système de la conversation » (F-11). */
+  const [promptOpen, setPromptOpen] = useState(false);
+```
+
+### 11. useChatSocketEvents  CC=81  (507 lignes, src/hooks/use-chat-socket-events.ts:85-591)
+    entête fichier: // Écoute des événements socket du chat — extrait de use-hermes-chat.ts | // (audit CRAP 2026-11 : le useEffect de câblage faisait 462 lignes et portait | // l'essentiel de la comp
+```ts
+export function useChatSocketEvents(deps: ChatSocketEventsDeps) {
+  const {
+    setProjects,
+    fetchProjects,
+    projectsRef,
+    setConnected,
+    setServerInfo,
+    setUpdateState,
+    setScreenOutdated,
+    setConversations,
+    setActiveId,
+    setMessages,
+    setCompactInfo,
+    setCompacting,
+    activeIdRef,
+    updateToastShownRef,
+    screenOutdatedRef,
+    screenOutdatedDismissedRef,
+```
+
+### 12. registerTurnHandlers  CC=77  (279 lignes, mini-services/hermes-chat/handlers/conversations.ts:444-722)
+    entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
+```ts
+function registerTurnHandlers(socket: Socket) {
+socket.on(
+  "chat:send",
+  async (
+    payload: {
+      conversationId?: string;
+      content?: string;
+      model?: string;
+      attachments?: Attachment[];
+      effort?: string;
+      permissionsMode?: "ask" | "auto";
+      // Mode expert (F-22) — assaini avant l'envoi au moteur
+      temperature?: unknown;
+      maxTokens?: unknown;
+      seed?: unknown;
+      // Comparaison (F-17) : deux ids de modèles distincts
+      compare?: string[];
+      // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
+```
+
+### 13. runGatewayTurn  CC=77  (251 lignes, mini-services/hermes-chat/hermes-connector.ts:587-837)
+    entête fichier: // Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat : | // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent | //   Hermes suffit, rien à
+```ts
+  private async runGatewayTurn(
+    req: TurnRequest,
+    cb: TurnCallbacks
+  ): Promise<TurnOutcome> {
+    // Ticket one-use : sans gateway vivante, `attach --json` échoue →
+    // erreur claire (la re-sonde rebranchera au tour suivant). Minté
+    // ASYNCHRONE avant la promesse socket (revue 95) — jamais de boucle
+    // d'événements figée pendant les essais python.
+    const ticket = await mintGatewayTicket();
+    if (!ticket) {
+      throw new Error(
+        "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
+      );
+    }
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      // true = la gateway a annoncé la fin (message.complete). Une
+      // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
+```
+
+### 14. testProviderKey  CC=77  (191 lignes, mini-services/hermes-chat/providers.ts:650-840)
+    entête fichier: // Fournisseurs & clés + Extensions — logique du chantier « Paramètres v2.2 ». | // Le mini-service est le SEUL détenteur des secrets : il les stocke, les | // masque pour le clien
+```ts
+export async function testProviderKey(
+  name: string,
+  baseUrl: string | null | undefined,
+  secret: string | null,
+): Promise<KeyTestResult> {
+  const caps = providerCapabilities(name, baseUrl);
+  // Audit passe 3, F-06 : la baseUrl vient du client — le test de clé
+  // n'interroge que https, ou http strictement local (Ollama et compagnie).
+  // Interdit : http vers le réseau — le test ne doit pas servir de sonde.
+  if (baseUrl) {
+    try {
+      const u = new URL(baseUrl);
+      const isLocalHost =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
+      if (u.protocol !== "https:" && !(u.protocol === "http:" && isLocalHost)) {
+        return {
+          status: "error",
+          statusLabel: "adresse refusée : https requis (http admis sur localhost uniquement)",
+```
+
+### 15. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
+    entête fichier: // Section « Chats web » du volet Paramètres v4 — fournisseur « Chats IA web » | // (identifiant stable `webchat`, spec « Piloter des chats IA web »). Règles | // rendues ici plutô
+```ts
+export function WebchatSection() {
+  const [status, setStatus] = useState<WebchatStatusPayload | null>(null);
+  const [settings, setSettings] = useState<ServerSettings>({});
+  const [drafts, setDrafts] = useState<ServerSettings>({});
+  // Lot audit 2026-11-21 : la lecture était silencieuse — socket coupée à
+  // l'ouverture, les champs affichaient les DÉFAUTS comme si c'étaient la
+  // config réelle, et le premier « Enregistrer » réécrivait les 5 clés avec
+  // ces défauts (perte de config). `settingsLoaded` / `loadError` verrouillent
+  // l'enregistrement tant que la lecture n'est pas complète et honnête.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showAdv, setShowAdv] = useState(false);
+
+  const load = useCallback(() => {
+```
+
+### 16. buildMessageVersionsMethods  CC=73  (407 lignes, mini-services/hermes-chat/store-messages.ts:597-1003)
+    entête fichier: // Store — domaine messages — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
+```ts
+function buildMessageVersionsMethods(): Pick<
+  StoreMessagesMethods,
+  "countVersions" | "supersedeTrailingAssistant" | "setMessageVersion" |
+  "restoreLatestVersion" | "restoreVersionById" | "getMessage" |
+  "deleteMessage" | "purgeInactiveVersionsOf" | "deleteTrailingAssistant" |
+  "editUserMessageAndTruncate"
+> & ThisType<Store> {
+  return {
+    /** F-14 — nombre de versions d'un groupe (1 si inconnu). */
+    countVersions(group: string): number {
+      const r = this.db
+        .query("SELECT COUNT(*) AS n FROM messages WHERE version_group = ?")
+        .get(group) as any;
+      return r?.n ?? 0;
+    },
+
+    /** F-14 — retire DU FIL (sans supprimer) les réponses assistant en fin
+     *  de conversation : version_active=0, avec retro-complétion du groupe
+```
+
+### 17. ArtifactBody  CC=72  (308 lignes, src/components/chat/artifact-panel.tsx:93-400)
+    entête fichier: // Panneau artefact (bureau, split view) + visionneuse plein écran (mobile). | // Un rendu par type : code (coloration + numéros + wrap + diff), image/SVG | // (zoom), HTML (aperçu
+```ts
+function ArtifactBody({
+  artifact,
+  source,
+  sourceError,
+  onRetrySource,
+  streamingContent,
+  versions,
+  onRetry,
+  fetchVersions,
+}: {
+  artifact: Artifact;
+  source: string | null;
+  /** Lot audit passe 2 : le fetch du source a échoué (hook useArtifactSource). */
+  sourceError?: boolean;
+  /** Relance du chargement du source (bouton « Réessayer »). */
+  onRetrySource?: () => void;
+  streamingContent?: string;
+  versions: Artifact[];
+```
+
+### 18. createLlmPool  CC=69  (217 lignes, mini-services/hermes-chat/llm-pool.ts:431-647)
+    entête fichier: // Pools de clés fournisseurs → tours LLM réels (v2.3, cf. FORK.md §7.4). | // Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours | // partent sur l'API d
+```ts
+export function createLlmPool(store: Store): LlmPoolApi {
+  const {
+    pickKey,
+    activeLlmProviders,
+    providerModels,
+    listModels,
+    activeProviderNames,
+    invalidate,
+  } = createPoolCatalog(store);
+  // Tours LLM en vol — rempli par stallGuard à chaque lancement, vidé en
+  // finally à chaque fin ; alimente la section pool de /diagnostics (F-31ter).
+  const activeStreamEntries = new Set<StreamTraceEntry>();
+  // Garde d'inactivité de ce pool, liée au vivier ci-dessus (llm-streams.ts) :
+  // la mécanique de streaming est extraite, la fabrique reçoit le suivi live.
+  const stallGuard = stallGuardFor(activeStreamEntries);
+
+  // buildUserPayload et les deux tours streaming (openai + anthropic) vivent
+  // dans llm-streams.ts depuis la vague 2.
+```
+
+### 19. ProviderCard  CC=69  (442 lignes, src/components/settings/providers-section.tsx:92-533)
+    entête fichier: // Section « Fournisseurs » (LLM) et « Clés de services » du volet | // Paramètres v4 — porte-clés multi-clés, test réel exécuté par le service, | // stratégie d'ordre d'utilisatio
+```ts
+function ProviderCard({ provider, api }: { provider: ProviderView; api: ProvidersApi }) {
+  const { toast } = useToast();
+  const [showAddKey, setShowAddKey] = useState(false);
+  const [keyLabel, setKeyLabel] = useState("");
+  const [keySecret, setKeySecret] = useState("");
+  const [keyEndpoint, setKeyEndpoint] = useState("");
+  const [addingKey, setAddingKey] = useState(false);
+  const [showAdv, setShowAdv] = useState(false);
+  const [advEndpoint, setAdvEndpoint] = useState("");
+  const [savingBase, setSavingBase] = useState(false);
+  const [testing, setTesting] = useState<Set<string>>(new Set());
+  // Lot audit 2026-11-21 : suppressions gardées par ConfirmDestructiveDialog.
+  const [pendingRemoveKey, setPendingRemoveKey] = useState<{ id: string; label: string } | null>(null);
+  const [pendingRemoveProvider, setPendingRemoveProvider] = useState(false);
+  const status = providerCardStatus(provider);
+  const isLlm = provider.kind === "llm";
+  const endpoint = effectiveBaseUrl(provider, api);
+  const hasDefault = api.catalog.some((c) => c.name === provider.name);
+```
+
+### 20. registerConversationLifecycleHandlers  CC=66  (241 lignes, mini-services/hermes-chat/handlers/conversations.ts:40-280)
+    entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
+```ts
+function registerConversationLifecycleHandlers(socket: Socket) {
+socket.on("conversations:list", (cb?: (data: unknown) => void) => {
+  const conversations = ctx.store.listConversations();
+  if (typeof cb === "function") cb({ conversations });
+  else socket.emit("conversations:list", { conversations });
+});
+
+socket.on(
+  "conversations:create",
+  (
+    payload:
+      | { projectId?: string | null; mode?: string; modeConfig?: unknown }
+      | ((data: unknown) => void),
+    maybeCb?: (data: unknown) => void
+  ) => {
+    // Compat : emit("conversations:create", cb) sans payload
+    const cb = typeof payload === "function" ? payload : maybeCb;
+    const src = payload && typeof payload === "object" ? payload : {};
+```
+
+### 21. parseModelOptions  CC=66  (49 lignes, mini-services/hermes-chat/hermes-connector.ts:135-183)
+    entête fichier: // Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat : | // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent | //   Hermes suffit, rien à
+```ts
+export function parseModelOptions(data: any): ModelOption[] {
+  const out: ModelOption[] = [];
+  const pushModel = (m: any, provider?: string) => {
+    const id = typeof m === "string" ? m : (m?.id ?? m?.name ?? m?.model);
+    if (!id || typeof id !== "string") return;
+    if (out.some((x) => x.id === id)) return;
+    if (typeof m === "string") {
+      out.push({ id, label: id, provider: provider ?? "Gateway" });
+      return;
+    }
+    // Échelle d'effort : tableau de crans (off, low…), booléen (budget) ou rien
+    let efforts: string[] | undefined;
+    const rawEfforts = m?.efforts ?? m?.effort_options ?? m?.reasoning_efforts;
+    if (Array.isArray(rawEfforts) && rawEfforts.length > 0) {
+      efforts = rawEfforts.map(String);
+    } else if (rawEfforts === true) {
+      efforts = ["off", "on"];
+      // étiquette « budget » quand le provider expose un simple interrupteur
+```
+
+### 22. registerArtifactsSharesHandlers  CC=59  (170 lignes, mini-services/hermes-chat/handlers/artifacts-shares.ts:8-177)
+    entête fichier: // Handlers « artifacts-shares » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.stor
+```ts
+export function registerArtifactsSharesHandlers(socket: Socket) {
+
+// Toutes les versions d'une clé (sélecteur de version / diff du panneau)
+socket.on(
+  "artifact:versions",
+  (payload: { conversationId?: string; key?: string }, cb?: (data: unknown) => void) => {
+    const id = payload?.conversationId;
+    const key = payload?.key;
+    if (!id || !key) {
+      if (typeof cb === "function") cb({ versions: [] });
+      return;
+    }
+    const rows = ctx.store.listArtifactVersions(id, key);
+    const versions = rows.map((r) => ctx.wireArtifact(id, key, r));
+    if (typeof cb === "function") cb({ versions });
+  }
+);
+
+```
+
+### 23. streamAnthropicTurn  CC=57  (150 lignes, mini-services/hermes-chat/llm-streams.ts:295-444)
+    entête fichier: // Mécanique de streaming des tours LLM — extraite de createLlmPool (vague 2). | // Tout est PUR ici : aucune fermeture sur l'état du pool. La garde | // d'inactivité reçoit l'ense
+```ts
+export async function streamAnthropicTurn(
+  stallGuard: StreamGuardFactory,
+  endpoint: LlmEndpoint,
+  secret: string | null,
+  modelId: string,
+  req: TurnRequest,
+  cb: TurnCallbacks,
+): Promise<PoolTurnResult> {
+  const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
+  const { text, parts } = buildUserPayload(req, "anthropic");
+  const expert = req.settings ?? {};
+  const body: Record<string, unknown> = {
+    model: modelId,
+    system,
+    messages: [
+      ...req.history.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content: parts ?? text },
+    ],
+```
+
+### 24. ModelPicker  CC=57  (377 lignes, src/components/chat/model-picker.tsx:204-580)
+    entête fichier: // Sélecteur de modèle — popover cmdk épuré : déclencheur au NOM du modèle en | // cours (+ chevron ; pastille A/B en comparaison, suivie du nom du slot), | // recherche (nom, id, 
+```ts
+export function ModelPicker({
+  models,
+  selectedModel,
+  source,
+  mode,
+  disabled,
+  onSelect,
+  effort,
+  onEffortChange,
+  expert,
+  onExpertChange,
+  slotLabel,
+  bare = false,
+}: ModelPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  // Favoris partagés entre pickers (A/B du mode comparaison) : écriture locale
+```
+
+### 25. registerMessageAndStopHandlers  CC=56  (219 lignes, mini-services/hermes-chat/handlers/conversations.ts:726-944)
+    entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
+```ts
+function registerMessageAndStopHandlers(socket: Socket) {
+socket.on(
+  "message:edit",
+  async (
+    payload: {
+      conversationId?: string;
+      messageId?: string;
+      content?: string;
+      model?: string;
+      effort?: string;
+      permissionsMode?: "ask" | "auto";
+      // Mode expert (F-22) — assaini avant l'envoi au moteur
+      temperature?: unknown;
+      maxTokens?: unknown;
+      seed?: unknown;
+      // Comparaison (F-17) : relance les deux variantes après édition
+      compare?: string[];
+      // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
+```
+
+### 26. ExtensionRow  CC=54  (280 lignes, src/components/settings/extensions-section.tsx:39-318)
+    entête fichier: // Carte d'une extension (dépôt importé ou serveur MCP) — partagée par la | // section « Outils & extensions ». « Vérifier » et « Mettre à jour » | // interrogent réellement l'API 
+```ts
+export function ExtensionRow({
+  ext,
+  api,
+  commits,
+  onCommits,
+}: {
+  ext: ExtensionView;
+  api: ProvidersApi;
+  commits: ExtensionCommit[] | null;
+  onCommits: (id: string, commits: ExtensionCommit[] | null) => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<"check" | "update" | null>(null);
+  // Lot audit : garde sur la bascule (double-bascule rapide = deux événements
+  // contradictoires) + garde destructive sur la suppression.
+  const [toggling, setToggling] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState(false);
+```
+
+### 27. useChatStream  CC=54  (391 lignes, src/hooks/use-chat-stream.ts:42-432)
+    entête fichier: // Hook de stream — extrait de use-hermes-chat.ts (découpage 2026-11, | // FORK.md §10) : registre des streams en vol (F-17 variantes a/b), déroulé | // multi-voix vivant (F-30), e
+```ts
+export function useChatStream({ activeIdRef, setMessages, refreshConversations }: StreamDeps) {
+  // F-17 — comparaison : DEUX réponses streament en parallèle (variantes
+  // a/b). L'état vit dans une map par messageId ; `streaming` (première
+  // entrée active) reste l'indicateur d'occupation pour tout le hook.
+  // ── Store externe (bonus perf 2026-11) : les deltas à ~16 ms ne
+  // re-rendent plus la PAGE — seuls les consommateurs ciblés (MessageList)
+  // s'abonnent via useSyncExternalStore. Ce hook reste le SEUL écrivain.
+  const setStreamsRecord = streamStore.setStreamsRecord;
+  const setModeFlowLive = streamStore.setModeFlowLive;
+  const setTurnError = streamStore.setTurnError;
+  const setStallNotice = streamStore.setStallNotice;
+  // Attention : useStreamsRecord() re-rend à CHAQUE delta — ce hook est
+  // appelé par l'orchestrateur (page) : il ne doit suivre que les signaux
+  // LENTS. Le registre complet vit dans le store, lu par MessageList.
+  const streamsCount = useStreamsCount();
+  // `streaming` = identité figée du tour en vol (booléen d'occupation pour
+  // l'orchestrateur : !== null quand un tour court, sans suivre les deltas).
+  const streaming = useFirstStreamId();
+```
+
+### 28. registerProjectHandlers  CC=53  (157 lignes, mini-services/hermes-chat/handlers/conversations.ts:284-440)
+    entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
+```ts
+function registerProjectHandlers(socket: Socket) {
+// ── Projets : rangement des conversations par projet (fork) ───────────
+
+socket.on("projects:list", (cb?: (data: unknown) => void) => {
+  const projects = ctx.store.listProjects();
+  if (typeof cb === "function") cb({ projects });
+  else socket.emit("projects:list", { projects });
+});
+
+socket.on(
+  "projects:create",
+  (
+    payload: { name?: string; parentId?: string | null; diskPath?: string | null },
+    cb?: (data: unknown) => void
+  ) => {
+    const name = (payload?.name ?? "").trim();
+    if (!name) {
+      if (typeof cb === "function") cb({ error: "name requis" });
+```
+
+### 29. registerPromptHandlers  CC=50  (145 lignes, mini-services/hermes-chat/handlers/settings-system.ts:548-692)
+    entête fichier: // Handlers « settings-system » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store
+```ts
+function registerPromptHandlers(socket: Socket) {
+
+// ── Prompt système & instructions personnalisées (F-11 / F-19) ──────
+
+// Prompt actif d'une conversation (null si aucun)
+socket.on(
+  "system-prompt:get",
+  (payload: { conversationId?: string }, cb?: (data: unknown) => void) => {
+    const id = payload?.conversationId;
+    if (!id) {
+      if (typeof cb === "function") cb({ error: "conversationId requis" });
+      return;
+    }
+    if (typeof cb === "function") cb({ prompt: ctx.conversationPromptWire(id) });
+  }
+);
+
+
+```
+
+### 30. runAiStudio  CC=48  (219 lignes, mini-services/hermes-chat/webchat/flows.ts:343-561)
+    entête fichier: // Flux de pilotage par site (spec §5 « L'algorithme, commun aux trois sites » | // et annexes A/B/C). Rappels non négociables : | // - Attendre un ÉTAT, jamais une durée : toutes 
+```ts
+export async function runAiStudio(ctx: FlowCtx): Promise<FlowResult> {
+  const { page, fiche } = ctx;
+  ctx.onStep("Discussion neuve : about:blank, puis l'accueil, puis 0 tour");
+  await page.navigate("about:blank");
+  await sleep(800);
+  await page.navigate(fiche.url_accueil);
+  await waitFor(ctx, `!!(${fiche.compositeur_pret})`, "compositeur AI Studio prêt", 40_000);
+
+  // Bandeau de consentement éventuel (cliquer puis continuer).
+  const consentSrc = (fiche.bandeau_consentement ?? "").replace(/^\/(.*)\/[a-z]*$/i, "$1");
+  if (consentSrc) {
+    const clicked = await page.clickFinder(`(() => {
+      const re = new RegExp(${JSON.stringify(consentSrc)}, "i");
+      const btn = [...document.querySelectorAll("button")].find((b) => {
+        if (!b.offsetParent) return false;
+        return re.test((b.textContent || "").trim());
+      });
+      if (!btn) return null;
+```
+
+### 31. ModePicker  CC=48  (389 lignes, src/components/chat/mode-picker.tsx:182-570)
+    entête fichier: // Sélecteur de modes du compositeur (F-30) — la pastille qui décide comment | // le prochain message sera traité. Un seul décideur du traitement : premier | // contrôle du pied de
+```ts
+export function ModePicker({
+  mode,
+  config,
+  models,
+  onSetMode,
+  disabled,
+}: ModePickerProps) {
+  const [open, setOpen] = useState(false);
+  const [voicesOpen, setVoicesOpen] = useState(false);
+  /** Voix dont la liste de modèles est dépliée (une seule à la fois). */
+  const [openVoice, setOpenVoice] = useState<string | null>(null);
+  /** Liste du modèle du mode (chat/plan/code) dépliée. */
+  const [modelOpen, setModelOpen] = useState(false);
+
+  const def = modeDef(mode);
+  const current = useMemo<ModeConfig>(() => {
+    // Config effective : réglages par défaut du registre + config conversation
+    return {
+```
+
+### 32. streamOpenAiTurn  CC=47  (131 lignes, mini-services/hermes-chat/llm-streams.ts:162-292)
+    entête fichier: // Mécanique de streaming des tours LLM — extraite de createLlmPool (vague 2). | // Tout est PUR ici : aucune fermeture sur l'état du pool. La garde | // d'inactivité reçoit l'ense
+```ts
+export async function streamOpenAiTurn(
+  stallGuard: StreamGuardFactory,
+  endpoint: LlmEndpoint,
+  secret: string | null,
+  modelId: string,
+  req: TurnRequest,
+  cb: TurnCallbacks,
+): Promise<PoolTurnResult> {
+  const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
+  const { text, parts } = buildUserPayload(req, "openai");
+  const messages: any[] = [
+    { role: "system", content: system },
+    ...req.history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: parts ?? text },
+  ];
+  const expert = req.settings ?? {};
+  const body: Record<string, unknown> = {
+    model: modelId,
+```
+
+### 33. MessageList  CC=47  (396 lignes, src/components/chat/message-list.tsx:195-590)
+    entête fichier: // Liste des messages + état vide (accueil façon ChatGPT) + bouton retour en bas | // + rangée d'erreur persistante du dernier tour (F-04 : Réessayer / Masquer).
+```ts
+export function MessageList({
+  messages,
+  streams,
+  loadingHistory,
+  isBusy,
+  turnError,
+  stallNotice,
+  artifacts,
+  artifactStreams,
+  onSuggestion,
+  onRegenerate,
+  onRegenerateVariant,
+  onSetVersion,
+  onRetryError,
+  onDismissError,
+  onOpenSettings,
+  gatewayMode = null,
+  engineProviders = null,
+```
+
+### 34. VersionPopover  CC=43  (275 lignes, src/components/chat/version-popover.tsx:54-328)
+    entête fichier: // Journal des versions d'un fichier (F-26) — LE composant unique du | // versionnage : badge de la carte → popover ancré. Réutilisable tel quel | // quand l'espace projet existera
+```ts
+export function VersionPopover({ artifact, children }: VersionPopoverProps) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [versions, setVersions] = useState<Artifact[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [restoring, setRestoring] = useState(false);
+
+  /** Charge le journal à l'ouverture (événement artifact:versions existant). */
+  const fetchVersions = useCallback((): Promise<Artifact[]> => {
+    return new Promise((resolve) => {
+      getSocket().emit(
+        "artifact:versions",
+        { conversationId: artifact.conversationId, key: artifact.key },
+        (res: { versions?: Artifact[] } = {}) => resolve(res.versions ?? [])
+      );
+    });
+```
+
+### 35. useConversations  CC=42  (358 lignes, src/hooks/use-conversations.ts:60-417)
+    entête fichier: // CRUD conversations extrait de use-hermes-chat.ts (audit CRAP 2026-11, vague 3). | // Corps des callbacks VERBATIM — mêmes identités de dépendances, mêmes tableaux | // de deps. 
+```ts
+export function useConversations(deps: ConversationsDeps) {
+  const {
+    toast,
+    creatingRef,
+    pendingModeRef,
+    activeIdRef,
+    loadingForRef,
+    conversations,
+    setConversations,
+    setActiveId,
+    setMessages,
+    setLoadingHistory,
+    setTurnError,
+    setCompactInfo,
+    setCompacting,
+    setPendingMode,
+    resetStreams,
+    setStreamsRecord,
+```
+
+### 36. buildMessagesCoreMethods  CC=41  (99 lignes, mini-services/hermes-chat/store-messages.ts:496-594)
+    entête fichier: // Store — domaine messages — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
+```ts
+function buildMessagesCoreMethods(): Pick<
+  StoreMessagesMethods,
+  "getMessages" | "appendMessage"
+> & ThisType<Store> {
+  return {
+    getMessages(conversationId: string): ChatMessage[] {
+      // F-14 : le fil vivant ne montre que la version ACTIVE de chaque
+      // réponse (version_active NULL = message jamais régénéré).
+      const rows = this.db
+        .query(
+          "SELECT * FROM messages WHERE conversation_id = ? AND (version_active IS NULL OR version_active = 1) ORDER BY created_at ASC, rowid ASC"
+        )
+        .all(conversationId) as any[];
+      const counts = new Map<string, number>();
+      const vrows = this.db
+        .query(
+          "SELECT version_group AS g, COUNT(*) AS n FROM messages WHERE conversation_id = ? AND version_group IS NOT NULL GROUP BY version_group"
+        )
+```
+
+### 37. buildConversationMethods  CC=40  (228 lignes, mini-services/hermes-chat/store-messages.ts:266-493)
+    entête fichier: // Store — domaine messages — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
+```ts
+function buildConversationMethods(): Pick<
+  StoreMessagesMethods,
+  "listConversations" | "createConversation" | "deleteConversation" |
+  "renameConversation" | "getConversation" | "getConversationModeState" |
+  "setConversationMode" | "getConversationMotorSession" |
+  "setConversationMotorSession" | "setPinned" | "touchConversation"
+> & ThisType<Store> {
+  return {
+    listConversations(): ConversationMeta[] {
+      const rows = this.db
+        .query(
+          `SELECT c.id, c.title, c.created_at, c.updated_at, c.pinned, c.project_id, c.mode, c.mode_rounds, c.mode_config,
+                  COUNT(m.id) AS message_count,
+                  (SELECT content FROM messages m2 WHERE m2.conversation_id = c.id AND m2.role = 'user' AND (m2.version_active IS NULL OR m2.version_active = 1) ORDER BY m2.created_at DESC LIMIT 1) AS preview
+           FROM conversations c
+           LEFT JOIN messages m ON m.conversation_id = c.id AND (m.version_active IS NULL OR m.version_active = 1)
+           GROUP BY c.id
+           ORDER BY c.pinned DESC, c.updated_at DESC`
+```
+
+### 38. ModesSection  CC=40  (661 lignes, src/components/settings/modes-section.tsx:511-1171)
+    entête fichier: // Section « Modes de chat » du volet Paramètres (F-30) — les réglages PAR | // DÉFAUT des sept modes, une carte par mode dans l'ordre du sélecteur. | // La maquette fait foi : des
+```ts
+export function ModesSection({
+  models,
+  connected = true,
+}: {
+  models: ModelOption[];
+  /** État socket transmis par le panneau racine — une section « consignes »
+   *  tout juste lue doit pouvoir dire POURQUOI elle est en attente. */
+  connected?: boolean;
+}) {
+  const { toast } = useToast();
+  const [rev, setRev] = useState(0);
+  /** Surcharges des consignes côté service (chargées à l'ouverture). */
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [promptsLoaded, setPromptsLoaded] = useState(false);
+  // Lot audit 2026-11-21 : lecture jamais acquittée (service muet) —
+  // avant, 13 textareas restaient désactivés sans la moindre explication.
+  const [promptsError, setPromptsError] = useState(false);
+  // M-7 (revue 2026-11-19) : true dès la première édition locale — le
+```
+
+### 39. SingleTabGuard  CC=40  (224 lignes, src/components/single-tab-guard.tsx:88-311)
+    entête fichier: // Garde « un seul onglet » (2026-11-15) — demande de l'utilisatrice : « que | // le lanceur détecte si un onglet Hermes est déjà ouvert et qu'il ferme ou | // relance sur ce même 
+```ts
+export function SingleTabGuard() {
+  const [duplicate, setDuplicate] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [closeRefused, setCloseRefused] = useState(false);
+  const pathname = usePathname();
+
+  // Revue 2026-11-19, M-6 (F) : la page de partage publique /shared/<token>
+  // ne participe pas à l'exclusivité d'onglet. Elle est sans session ni état :
+  // ouvrir son propre lien de partage (vérification avant envoi, parcours
+  // normal) faisait de l'onglet de partage un « doublon » — bandeau plein
+  // écran, tentative de fermeture, et surtout reloadPrimary() qui relançait
+  // l'onglet APPLICATION. La garde s'installe donc seulement hors /shared.
+  const guardActive = pathname === null || !pathname.startsWith("/shared");
+
+  // Tentative de fermeture automatique du doublon : si la page est encore
+  // là 1,5 s après l'appel, le navigateur a refusé (page ouverte par le
+  // système, pas par un script) — le bandeau le dit honnêtement.
+  useEffect(() => {
+```
+
+### 40. useChatSettings  CC=39  (222 lignes, src/hooks/use-chat-settings.ts:31-252)
+    entête fichier: // Hook réglages du compositeur — extrait de use-hermes-chat.ts (découpage | // 2026-11, FORK.md §10) : modèles, effort, mode expert (F-22), autorisations, | // recherche web (F-09
+```ts
+export function useChatSettings() {
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [modelsSource, setModelsSource] = useState<ModelsResult["source"] | null>(null);
+  const [selectedModel, setSelectedModelState] = useState<string | null>(() =>
+    readClientSetting<string | null>(MODEL_SETTING_KEY)
+  );
+  /** Effort de raisonnement (valeur brute du fournisseur, persisté). */
+  const [effort, setEffortState] = useState<string | null>(() =>
+    readClientSetting<string>(EFFORT_SETTING_KEY)
+  );
+  // ── Mode expert (F-22) : température, plafond de sortie, graine ─────
+  /** Réglages expert persistés (champs absents = valeur par défaut). */
+  const [expert, setExpertState] = useState<ExpertSettings>(() => {
+    // Mode expert (F-22) : champs individuels, absents = défaut du fournisseur
+    const savedTemperature = readClientSetting<number | null>(EXPERT_TEMPERATURE_KEY);
+    const savedMaxTokens = readClientSetting<number | null>(EXPERT_MAX_TOKENS_KEY);
+    const savedSeed = readClientSetting<number | null>(EXPERT_SEED_KEY);
+    return {
+```
+
+### 41. AddProviderPanel  CC=37  (161 lignes, src/components/settings/providers-section.tsx:537-697)
+    entête fichier: // Section « Fournisseurs » (LLM) et « Clés de services » du volet | // Paramètres v4 — porte-clés multi-clés, test réel exécuté par le service, | // stratégie d'ordre d'utilisatio
+```ts
+function AddProviderPanel({
+  kind,
+  api,
+  onClose,
+}: {
+  kind: ProviderKind;
+  api: ProvidersApi;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const entries = api.catalog.filter((c) => c.kind === kind);
+  // « __pending__ » le temps que le catalogue arrive du service (socket).
+  const [preset, setPreset] = useState<string>("__pending__");
+  const [endpoint, setEndpoint] = useState<string>("");
+
+  // Ajustement d'état pendant le rendu (motif React officiel) : à l'arrivée
+  // du catalogue (prop), on sème la première entrée — un effet appelant
+  // setState synchronement est interdit par la règle react-hooks.
+```
+
+### 42. buildArtifacts  CC=36  (358 lignes, mini-services/hermes-chat/store-artifacts.ts:59-416)
+    entête fichier: // Store — domaine artifacts — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au protot
+```ts
+export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
+  return {
+    // ── Artefacts ──────────────────────────────────────────────────────────
+
+    /** Insère une version d'artefact.
+     *  F-26 — dédoublonnage : une ré-émission au contenu strictement identique
+     *  de la version courante (`ready`) ne crée PAS de version, on renvoie la
+     *  ligne existante (le tracker réécrira le même contenu sans effet).
+     *  `label` / `restoredFrom` ne servent qu'aux versions créées hors flux
+     *  (restauration) — le flux de streaming ne les passe jamais. */
+    insertArtifact(a: {
+      id?: string;
+      conversationId: string;
+      messageId: string;
+      key: string;
+      kind: ArtifactKind;
+      name: string;
+      language?: string | null;
+```
+
+### 43. buildSettings  CC=36  (426 lignes, mini-services/hermes-chat/store-settings.ts:86-511)
+    entête fichier: // Store — domaine settings — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
+```ts
+export function buildSettings(): StoreSettingsMethods & ThisType<Store> {
+  return {
+    // ── Prompt système & presets (F-11 / F-19) ──────────────────────────────
+
+    /** Prompt actif d'une conversation (null si aucun). */
+    getConversationPrompt(conversationId: string): SystemPromptRow | null {
+      const r = this.db
+        .query(
+          "SELECT id, scope, conversation_id, title, content, created_at, updated_at FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?"
+        )
+        .get(conversationId) as any;
+      return r ? (r as SystemPromptRow) : null;
+    },
+
+    /** Définit le prompt d'une conversation (crée ou remplace). */
+    setConversationPrompt(
+      conversationId: string,
+      content: string,
+```
+
+### 44. main  CC=36  (182 lignes, mini-services/hermes-chat/webchat/driver.ts:68-249)
+    entête fichier: // Pilote d'un chat IA web — un processus par tour, UNE ligne JSON sur stdout | // (contrat de la spec §4) : | //   { ok, site, url, text?, files?: [{name, bytes}], refused?, elaps
+```ts
+async function main(): Promise<number> {
+  const started = Date.now();
+  const parsed = parseArgs();
+  if ("error" in parsed) {
+    console.log(JSON.stringify({ ok: false, error: parsed.error, elapsed_s: 0 }));
+    return 2;
+  }
+  const args = parsed;
+  const fiche = FICHES[args.site];
+  const finish = (payload: Record<string, unknown>, code: number): number => {
+    console.log(
+      JSON.stringify({ elapsed_s: Math.round((Date.now() - started) / 100) / 10, ...payload })
+    );
+    return code;
+  };
+
+  // 0. Un site non vérifié est INDISPONIBLE, pas cassé (spec §6).
+  if (!fiche.verifie) {
+```
+
+### 45. ProfilesSection  CC=36  (289 lignes, src/components/settings/profiles-section.tsx:36-324)
+    entête fichier: // Section « Profils » du volet Paramètres v4 (v2.4) — des préréglages | // complets (modèle, effort, permissions, recherche web, mode expert) | // applicables en un clic. La LISTE
+```ts
+export function ProfilesSection() {
+  const { profiles, loaded, error } = useChatProfiles();
+  const { toast } = useToast();
+  // Id du profil appliqué — clé client interne, suivie en direct via le bus.
+  const [appliedId, setAppliedId] = useState<string | null>(() =>
+    readClientSetting<string | null>(APPLIED_KEY)
+  );
+  useEffect(
+    () =>
+      onSettingsChanged(({ key, value }) => {
+        if (key === APPLIED_KEY) setAppliedId(typeof value === "string" ? value : null);
+      }),
+    []
+  );
+
+  // Création : nom + capture des réglages courants au moment du clic.
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+```
+
+### 46. PromptPanelBody  CC=36  (267 lignes, src/components/settings/system-prompt-panel.tsx:86-352)
+    entête fichier: // Panneau « Prompt système de la conversation » (F-11) — Sheet 460 px depuis | // la droite (même langue que l'ancien sheet Paramètres phase 1 : le chat reste | // visible, la con
+```ts
+function PromptPanelBody({
+  prompt,
+  presets,
+  conversationTitle,
+  onSave,
+  onClear,
+  onCreatePreset,
+}: {
+  prompt: ConversationPrompt | null;
+  presets: SystemPromptPreset[];
+  conversationTitle: string | null;
+  onSave: (content: string, presetTitle?: string | null) => Promise<boolean>;
+  onClear: () => Promise<boolean>;
+  onCreatePreset: (title: string, content: string) => Promise<SystemPromptPreset | null>;
+}) {
+  // Brouillon initialisé depuis l'état serveur (remontée à l'ouverture).
+  const [draft, setDraft] = useState(prompt?.content ?? "");
+  const [presetTitle, setPresetTitle] = useState<string | null>(prompt?.presetTitle ?? null);
+```
+
+### 47. useSystemPrompts  CC=36  (287 lignes, src/hooks/use-system-prompts.ts:30-316)
+    entête fichier: // Hook « prompt système & instructions personnalisées » — F-11 / F-19 | // (FORK.md §7.7). Consomme le singleton socket du chat : | //  - prompt actif de la conversation ouverte (
+```ts
+export function useSystemPrompts(activeConversationId: string | null) {
+  const { toast } = useToast();
+  const [prompt, setPrompt] = useState<ConversationPrompt | null>(null);
+  const [presets, setPresets] = useState<SystemPromptPreset[]>([]);
+  const [customInstructions, setCustomInstructions] = useState<string | null>(
+    null
+  );
+  /** Limite de caractères des instructions globales (renvoyée par le service). */
+  const [customMaxChars, setCustomMaxChars] = useState<number>(4000);
+
+  // Charge l'état à la connexion / au changement de conversation active.
+  useEffect(() => {
+    const socket = getSocket();
+    const refresh = () => {
+      socket.emit("system-prompts:list", (res: { presets?: SystemPromptPreset[] } = {}) => {
+        if (Array.isArray(res.presets)) setPresets(res.presets);
+      });
+      socket.emit(
+```
+
+### 48. createPoolCatalog  CC=35  (140 lignes, mini-services/hermes-chat/llm-pool.ts:290-429)
+    entête fichier: // Pools de clés fournisseurs → tours LLM réels (v2.3, cf. FORK.md §7.4). | // Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours | // partent sur l'API d
+```ts
+function createPoolCatalog(store: Store) {
+  // Cache des listes par fournisseur (vidé par invalidate()).
+  const modelsCache = new Map<string, ModelOption[] | null>();
+  // Adresses déjà signalées (évite les logs en boucle).
+  const warned = new Set<string>();
+
+  /** Lignes de clés adaptées au contrat de pickActiveKey (providers.ts). */
+  function keyCandidates(row: ProviderRow): KeyRow[] {
+    return store.listKeyRows(row.id);
+  }
+
+  function pickKey(row: ProviderRow): KeyRow | null {
+    const keys = keyCandidates(row).map((k) => ({
+      id: k.id,
+      status: k.status as import("./types").KeyStatus,
+      position: k.position,
+      usedCount: k.used_count,
+      raw: k,
+```
+
+### 49. registerSanteSettingsHandlers  CC=34  (107 lignes, mini-services/hermes-chat/handlers/settings-system.ts:209-315)
+    entête fichier: // Handlers « settings-system » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store
+```ts
+function registerSanteSettingsHandlers(socket: Socket) {
+
+// Revue P1-P7 (B6) : le manifeste du dernier démarrage n'était relayé
+// QUE dans helloPayload (connexion initiale) — system:update-state ne le
+// porte jamais, donc la carte « Dernier démarrage » restait null à vie.
+// Lecture à la demande au montage de la carte.
+socket.on("system:sante-manifeste", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ manifeste: readSanteManifeste() });
+});
+
+// ── Réglages serveur (persistés, cf. FORK.md §6) ────────────────────
+
+socket.on(
+  "settings:get",
+  (payload: { key?: string }, cb?: (data: unknown) => void) => {
+    const key = String(payload?.key ?? "").trim();
+    if (!key) {
+      // (audit 2026-11-21) La vue liste ne doit JAMAIS exposer les clés
+```
+
+### 50. runWebchatTurn  CC=34  (127 lignes, mini-services/hermes-chat/webchat/engine.ts:126-252)
+    entête fichier: // Intégration côté service (spec §6) — les chats IA web sont un FOURNISSEUR | // DE MODÈLES À PART, identifiant stable `webchat`, pour que les autres écrans | // les distinguent d
+```ts
+export async function runWebchatTurn(opts: {
+  modelId: string;
+  prompt: string;
+  store: WebchatSettingsReader;
+  cb: WebchatTurnCallbacks;
+}): Promise<WebchatTurnResult> {
+  const parsed = parseWebchatModelId(opts.modelId);
+  if (!parsed) throw new Error(`id de modèle webchat invalide : ${opts.modelId}`);
+  const { site } = parsed;
+  const fiche = FICHES[site];
+  const config = readWebchatConfig(opts.store);
+
+  // Site non vérifié : refus explicite AVANT de toucher au navigateur.
+  if (!fiche.verifie) {
+    throw new Error(
+      `${fiche.label} est indisponible : ses sélecteurs n'ont pas encore été relevés ` +
+        `(fiche verifie=false — voir Paramètres → Chats web).`
+    );
+```
+
+### 51. runZai  CC=34  (147 lignes, mini-services/hermes-chat/webchat/flows.ts:136-282)
+    entête fichier: // Flux de pilotage par site (spec §5 « L'algorithme, commun aux trois sites » | // et annexes A/B/C). Rappels non négociables : | // - Attendre un ÉTAT, jamais une durée : toutes 
+```ts
+export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
+  const { page, fiche } = ctx;
+  ctx.onStep("Attente du compositeur (accueil = nouvelle tâche — jamais « New Chat »)");
+  await waitFor(ctx, `!!(${fiche.compositeur_pret})`, "compositeur z.ai prêt", 40_000);
+
+  // B. Taper et envoyer — vérifier le vidage du compositeur (≤ 12 essais).
+  ctx.onStep("Insertion de la consigne et envoi");
+  let sent = false;
+  for (let attempt = 1; attempt <= 12 && !sent; attempt++) {
+    // Revue P1-P7 : le textarea est VIDÉ avant chaque essai — insertText
+    // s'ajoutait au contenu resté d'un envoi raté : jusqu'à 12 répétitions
+    // du prompt dans le champ.
+    await page.evaluate(
+      `(() => { const t = document.querySelector('textarea'); if (t) { t.focus(); t.value = ""; t.dispatchEvent(new Event("input", { bubbles: true })); } })()`
+    );
+    await page.insertText(ctx.prompt);
+    await page.click(fiche.sel_envoyer);
+    // Le textarea doit se vider dans les 6 s (la page re-rend son compositeur
+```
+
+### 52. ChatHeader  CC=34  (309 lignes, src/components/chat/chat-header.tsx:84-392)
+    entête fichier: // En-tête : fil d'Ariane (dossier › sous-dossier › conversation, F-59), | // export, partage public, statut, thème
+```ts
+export function ChatHeader({
+  activeConversation,
+  projects = [],
+  mode,
+  connected,
+  hasMessages,
+  hasPrompt = false,
+  onOpenPrompt,
+  share,
+  onShareCreate,
+  onShareRevoke,
+  onExport,
+  onOpenSidebar,
+  sidebarHidden = false,
+  onToggleSidebar,
+}: ChatHeaderProps) {
+  // Copie du lien : feedback inline « Lien copié » (toast inutile ici)
+  const [copied, setCopied] = useState(false);
+```
+
+### 53. AttachDiskDialog  CC=32  (194 lignes, src/components/chat/attach-disk-dialog.tsx:29-222)
+    entête fichier: // Dialogue « Ajouter un dossier de mon disque » (F-59 J5, maquette v6 📁↓). | // Liste les répertoires via GET /disk/list (service HTTP 3004, jeton requis, | // BORNÉ AU HOME côté 
+```ts
+export function AttachDiskDialog({
+  open,
+  onOpenChange,
+  projects,
+  onAttach,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Dossiers existants : un chemin déjà lié apparaît désactivé. */
+  projects: Project[];
+  /** Crée le dossier lié (projects:create { name, diskPath }) côté parent. */
+  onAttach: (name: string, diskPath: string) => Promise<Project | null>;
+}) {
+  const [listing, setListing] = useState<DiskListing | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState<string | null>(null);
+
+```
+
+### 54. testZaiSurface  CC=30  (97 lignes, mini-services/hermes-chat/providers.ts:547-643)
+    entête fichier: // Fournisseurs & clés + Extensions — logique du chantier « Paramètres v2.2 ». | // Le mini-service est le SEUL détenteur des secrets : il les stocke, les | // masque pour le clien
+```ts
+async function testZaiSurface(
+  base: string,
+  secret: string | null,
+): Promise<{ result: KeyTestResult; networkFailure: boolean }> {
+  const planLabel = /\/api\/coding\//.test(base) ? " (Coding Plan)" : "";
+  try {
+    const res = await fetch(`${base}/models`, { redirect: "error",
+      method: "GET",
+      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+      signal: AbortSignal.timeout(7000),
+    });
+    if (res.status === 200) {
+      let json: unknown = null;
+      try {
+        json = await res.json();
+      } catch {
+        /* corps non JSON — pas grave */
+      }
+```
+
+### 55. ArtifactCard  CC=30  (177 lignes, src/components/chat/artifact-card.tsx:88-264)
+    entête fichier: // Carte artefact inline dans le message : compacte, cliquable, vivante. | // États : génération (squelette + étapes, code qui streame dans la carte), | // rendu en cours (Chrome),
+```ts
+export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: ArtifactCardProps) {
+  const [imgError, setImgError] = useState(false);
+  const isGenerating = artifact.status === "generating";
+  const isRendering = artifact.status === "rendering";
+  const isError = artifact.status === "error";
+  const showStream =
+    isGenerating && streamingContent !== undefined && streamingContent.length > 0;
+  const hasThumb = !!artifact.thumbnailUrl && !imgError;
+
+  return (
+    <div className="group/art w-full max-w-[420px] overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:border-hermes/50 hover:shadow-md">
+      {/* En-tête : icône, nom, version, statut — Revue P1-P7 : la zone
+          cliquable est un VRAI bouton qui ne contient plus les actions —
+          l'ancien <div role="button"> englobait des <Button> (contrôles
+          interactifs imbriqués). Les actions sont des SŒURS. */}
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <button
+          type="button"
+```
+
+### 56. MemoryCard  CC=30  (171 lignes, src/components/settings/memory-card.tsx:26-196)
+    entête fichier: // Mémoire utilisateur (F-18) — carte de la section Hermes du volet v4 : | // consultable, éditable, effaçable. Notes persistées côté service sous | // `hermes.memory.notes`, activ
+```ts
+export function MemoryCard({
+  state,
+  onSetEnabled,
+  onSetAuto,
+  onSaveNotes,
+}: MemoryCardProps) {
+  // Lot 3 (audit L3-2) : brouillon matérialisé UNIQUEMENT sur frappe —
+  // l'initialisation par effet figeait « "" » avant la réponse socket et la
+  // valeur serveur n'était plus jamais suivie (effacement involontaire au
+  // premier « Enregistrer »). draft === null = « suit la valeur du service ».
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Lot audit : verrou des bascules (clics rapides = émissions contradictoires).
+  const [toggling, setToggling] = useState(false);
+
+  const notesValue = draft ?? state?.notes ?? "";
+  const maxChars = state?.maxChars ?? 12_000;
+  const remaining = maxChars - notesValue.length;
+```

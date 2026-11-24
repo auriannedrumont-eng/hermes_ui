@@ -44,9 +44,16 @@ async function main() {
 
   console.log("[2] use-hermes-chat.ts : ack conversations:open (L1-5)");
   const hook = read("src/hooks/use-hermes-chat.ts");
-  const openIdx = hook.indexOf('"conversations:open"');
+  // Audit CRAP 2026-11 : le câblage socket (onConnect/onHello/onArtifact*/
+  // onMessage*…) vit désormais dans use-chat-socket-events.ts, corps verbatim.
+  const socketEvents = read("src/hooks/use-chat-socket-events.ts");
+  // Vague 3 : le CRUD conversations (create/open/delete/rename/pin/fork/
+  // search/move) vit dans use-conversations.ts, corps verbatim — l'ack de
+  // conversations:open et ses gardes sont vérifiés LÀ où le handler EST.
+  const conversationsHook = read("src/hooks/use-conversations.ts");
+  const openIdx = conversationsHook.indexOf('"conversations:open"');
   check("l'ouverture de conversation émet conversations:open", openIdx >= 0);
-  const ackWindow = hook.slice(openIdx, openIdx + 3600);
+  const ackWindow = conversationsHook.slice(openIdx, openIdx + 3600);
   // Fenêtre large : le corps de l'ack porte aussi le re-semis des tours en
   // vol (ré-attache « quitter puis revenir » : contenu accumulé + déroulé
   // multi-voix, ~2 000 car.) — l'invariant vérifié reste la POSITION
@@ -72,8 +79,10 @@ async function main() {
 
   console.log("[3] handlers stream:*/mode:flow/artifact:* : garde activeIdRef");
   // Découpage 2026-11 (FORK.md §10) : les handlers stream:*/mode:flow vivent
-  // dans use-chat-stream.ts, les handlers conversationnels restent dans
-  // l'orchestrateur — la garde activeIdRef est vérifiée là où le handler EST.
+  // dans use-chat-stream.ts. Audit CRAP 2026-11 : les handlers conversationnels
+  // (artefacts, messages) suivent le câblage socket dans
+  // use-chat-socket-events.ts — la garde activeIdRef est vérifiée là où le
+  // handler EST.
   const streamHook = read("src/hooks/use-chat-stream.ts");
   const guarded: { name: string; file: string }[] = [
     { name: "onStreamStart", file: "stream" },
@@ -84,16 +93,16 @@ async function main() {
     { name: "onStreamDone", file: "stream" },
     { name: "onStreamError", file: "stream" },
     { name: "onModeFlow", file: "stream" },
-    { name: "onArtifactDelta", file: "hook" },
-    { name: "onArtifactCreated", file: "hook" },
-    { name: "onArtifactUpdated", file: "hook" },
-    { name: "onMessageAppended", file: "hook" },
-    { name: "onMessagesRemoved", file: "hook" },
-    { name: "onMessagesSuperseded", file: "hook" },
-    { name: "onMessagesRefreshed", file: "hook" },
+    { name: "onArtifactDelta", file: "events" },
+    { name: "onArtifactCreated", file: "events" },
+    { name: "onArtifactUpdated", file: "events" },
+    { name: "onMessageAppended", file: "events" },
+    { name: "onMessagesRemoved", file: "events" },
+    { name: "onMessagesSuperseded", file: "events" },
+    { name: "onMessagesRefreshed", file: "events" },
   ];
   for (const { name: h, file } of guarded) {
-    const target = file === "stream" ? streamHook : hook;
+    const target = file === "stream" ? streamHook : file === "events" ? socketEvents : hook;
     const m = new RegExp(`const ${h} = \\((?:[^{]|\\{[^}]*\\})*\\)\\s*=>\\s*\\{`).exec(target);
     if (!m) {
       check(`handler ${h} présent`, false, "introuvable — signature changée ?");
@@ -104,13 +113,13 @@ async function main() {
     check(`handler ${h} filtre par activeIdRef`, body.includes("activeIdRef.current"));
   }
 
-  console.log("[4] use-hermes-chat.ts : écran vieux — comparaison révision bundle ↔ service (§9 (61))");
+  console.log("[4] use-chat-socket-events.ts : écran vieux — comparaison révision bundle ↔ service (§9 (61))");
   const revLib = read("src/lib/build-revision.ts");
   check("BUILD_REVISION est lu depuis NEXT_PUBLIC_BUILD_REVISION",
     revLib.includes("NEXT_PUBLIC_BUILD_REVISION"));
-  const helloIdx = hook.indexOf("const onHello");
-  check("le hook traite le hello", helloIdx >= 0);
-  const helloWindow = hook.slice(helloIdx, helloIdx + 1800);
+  const helloIdx = socketEvents.indexOf("const onHello");
+  check("le câblage socket traite le hello", helloIdx >= 0);
+  const helloWindow = socketEvents.slice(helloIdx, helloIdx + 1800);
   check("onHello compare appRevision à BUILD_REVISION",
     helloWindow.includes("BUILD_REVISION") && helloWindow.includes("appRevision"));
   check("la comparaison exige les deux révisions présentes (jamais de bandeau sur supposition)",

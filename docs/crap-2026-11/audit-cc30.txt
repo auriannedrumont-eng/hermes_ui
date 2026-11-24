@@ -1,0 +1,366 @@
+AUDIT CRAP — hermes_ui — les 44 fonctions de production CC ≥ 30
+================================================================
+Date : 2026-11-24 · Outil : crapper (unclebob) · CC mesurée par tree-sitter
+Formule : CRAP = CC² × (1 − couverture)³ + CC
+Seuils Uncle Bob : ≤ 5 risque faible · 5-30 à surveiller · > 30 complexe et sous-testé
+Couverture au moment de l'audit : 0 % mesurée côté bun (suite invisible de c8) ;
+une mesure partielle Vitest accompagne ce fichier (couverture-reelle.txt).
+
+────────────────────────────────────────────────────────────────────────────────
+SYNTHÈSE
+────────────────────────────────────────────────────────────────────────────────
+44 fonctions CC ≥ 30 : 17 backend (mini-services/hermes-chat) · 27 frontend (src/).
+Cinq familles de complexité dominent :
+
+  A. Fonctions d'enregistrement socket.io monolithiques — un seul corps qui pose
+     20 à 40 socket.on() avec leurs couches de compat (payload|callback),
+     validations et re-émissions. conversations (CC 261), providers-extensions
+     (239), settings-system (157), artifacts-shares (59).
+  B. Hooks React géants — useHermesChat (CC 287, 1 682 lignes) et ses frères
+     déjà partiellement extraits (use-chat-stream, use-chat-settings : le
+     découpage 2026-11 a commencé, il faut continuer).
+  C. Composants Paramètres à dizaines d'états — AgentMotorCard (179),
+     StorageSection (105), SystemSection (102), WebchatSection (75),
+     ProviderCard (69) : 8 à 15 useState + effets + menus dans UN corps.
+  D. Builders de store à ternaires massifs — buildMessages (186, 239 ternaires),
+     buildArtifacts (36, 98), buildSettings (36, 109) : la densité vient des
+     mappages ligne→objet défensifs (row ?, JSON.parse ?), pas d'algorithme dur.
+  E. Flux de pilotage navigateur (webchat) — runAiStudio (48), runZai (34) :
+     attentes d'état, essais multiples, bandeaux de consentement.
+
+Chevauchement avec les dettes DÉJÀ consignées par le projet (docs/ETAT.md,
+ROADMAP-LOTS) — l'audit CRAP confirme au mètre :
+  · Lot 1 « fuite streams fantômes (llm-pool) » → createLlmPool CC 218.
+  · Lot 1 « race conversations:open » → registerConversationsHandlers CC 261.
+  · Lot 4 « pas de tests frontend automatisés » → 27 hotspots src/ sans filet.
+  · Lot 6 « découpage index.ts » → déjà amorcé, mais les fonctions extraites
+    restent monolithiques (le découpage a déplacé la complexité, pas réduit).
+
+────────────────────────────────────────────────────────────────────────────────
+MÉTHODE
+────────────────────────────────────────────────────────────────────────────────
+Chaque fiche : rôle réel du code, moteurs de complexité chiffrés (comptage par
+type de décision sur le span exact de la fonction), recommandation d'extraction
+concrète, priorité P1/P2/P3.
+P1 = intersecte une dette connue ou bloque la testabilité · P2 = gros composant
+UI restructurable sans risque fonctionnel · P3 = CC 30-50, garde propre.
+
+────────────────────────────────────────────────────────────────────────────────
+TABLEAU DES 44 HOTSPOTS (trié par CC)
+────────────────────────────────────────────────────────────────────────────────
+ CC   lignes  zone      fonction                          priorité
+ 287   1682   front     useHermesChat                     P1
+ 261    955   back      registerConversationsHandlers     P1
+ 239    693   back      registerProvidersExtensionsHand.  P1
+ 218    709   back      createLlmPool                     P1
+ 186    976   back      buildMessages                     P2
+ 179    749   front     AgentMotorCard                    P2
+ 157    571   back      registerSettingsSystemHandlers    P1
+ 147    745   back      runAssistantTurn                  P1
+ 138    906   front     Sidebar                           P2
+ 110    622   front     Composer                          P2
+ 105    646   front     StorageSection                    P2
+ 102    477   front     SystemSection                     P2
+  82    639   front     HermesWebPage                     P2
+  77    251   back      runGatewayTurn                    P2
+  77    191   back      testProviderKey                   P2
+  75    417   front     WebchatSection                    P2
+  72    308   front     ArtifactBody                      P2
+  69    442   front     ProviderCard                      P2
+  66     49   back      parseModelOptions                 P1
+  59    170   back      registerArtifactsSharesHandlers   P3
+  57    377   front     ModelPicker                       P3
+  54    280   front     ExtensionRow                      P3
+  54    391   front     useChatStream                     P2
+  48    219   back      runAiStudio                       P3
+  48    389   front     ModePicker                        P3
+  47    396   front     MessageList                       P3
+  43    275   front     VersionPopover                    P3
+  40    661   front     ModesSection                      P3
+  40    224   front     SingleTabGuard                    P3
+  39    222   front     useChatSettings                   P3
+  37    161   front     AddProviderPanel                  P3
+  36    358   back      buildArtifacts                    P3
+  36    426   back      buildSettings                     P3
+  36    182   back      webchat/driver main               P3
+  36    289   front     ProfilesSection                   P3
+  36    267   front     PromptPanelBody                   P3
+  36    287   front     useSystemPrompts                  P3
+  34    127   back      runWebchatTurn                    P3
+  34    147   back      runZai                            P3
+  34    309   front     ChatHeader                        P3
+  32    194   front     AttachDiskDialog                  P3
+  30     97   back      testZaiSurface                    P3
+  30    171   front     ArtifactCard                      P3
+  30    171   front     MemoryCard                        P3
+
+════════════════════════════════════════════════════════════════════════════════
+FICHES — BACKEND (mini-services/hermes-chat) — 17 fonctions
+════════════════════════════════════════════════════════════════════════════════
+
+1. registerConversationsHandlers — CC 261 · 955 l · if:134 ?.:60 ?:39 ||:15 · P1
+   handlers/conversations.ts:29
+   Rôle : TOUTE l'API socket « conversations » (list/create/delete/rename,
+   projets, dossiers imbriqués, archives, messages, recherche) dans un seul
+   corps qui pose ~30 socket.on().
+   Moteurs : couche de compat payload|callback répétée à chaque handler
+   (`typeof cb === "function"` × N), validations payload manuelles, re-émissions
+   broadcast. La race `conversations:open` du Lot 1 vit ici.
+   Recommandation : découper en sous-registres par domaine — conversations CRUD,
+   projets/arbre, messages, recherche — chacun une fonction `register*(socket)`
+   dans son fichier ; extraire la couche callback en helper `reply(cb, data)`.
+   Les 4 suites test-projects-*.ts + test-project-tree.ts valident sans risque.
+
+2. registerProvidersExtensionsHandlers — CC 239 · 693 l · if:122 ?:44 · P1
+   handlers/providers-extensions.ts:8
+   Rôle : hello, catalogue modèles (avec repli « moteur muet » + groupe webchat),
+   porte-clés fournisseurs, extensions GitHub/MCP.
+   Moteurs : replis d'erreurs systématiques (try/catch + cb par défaut), tests
+   de clés en ligne, masquage des secrets.
+   Recommandation : même traitement — sous-registres models / providers / keys /
+   extensions ; la logique de repli catalogue va dans models.ts (déjà pur).
+
+3. createLlmPool — CC 218 · 709 l · if:69 ?:66 ??:26 &&:25 · P1
+   llm-pool.ts:312
+   Rôle : factory à closure du pool de clés → tours réels : sélection de clé,
+   cache modèles, stallGuard, streams en vol, invalidation.
+   Moteurs : TOUT le pool est UNE fonction (les sous-fonctions sont des closures
+   internes → tree-sitter les compte dedans) ; états parallèles (Map/Set) sans
+   machine à états explicite. La dette « streams fantômes » du Lot 1 est ici.
+   Recommandation : sortir les closures en fonctions de module pures
+   (pickKey, buildHeaders, backoff), typer une machine d'état de stream
+   (idle→connecting→streaming→closing) ; les tests Vitest cibleront ces unités.
+
+4. buildMessages — CC 186 · 976 l · ternaire:239 ??:62 if:39 · P2
+   store-messages.ts:124
+   Rôle : domaine messages+projets du store SQLite (pattern declaration
+   merging : objet de méthodes renvoyé par une factory).
+   Moteurs : 239 ternaires = mappages défensifs row→objet (`r ? x : null`,
+   JSON.parse gardé). Aucun algorithme dur : c'est du relationnel bavard.
+   Recommandation : centraliser les accès row→objet dans des mappers partagés
+   (rowToMessage existe déjà — généraliser), garder SQL+mapping en deux temps.
+   Testable dès qu'un Store jetable est fourni (bun:sqlite → à isoler derrière
+   une interface pour Vitest/Node).
+
+5. registerSettingsSystemHandlers — CC 157 · 571 l · if:82 · P1
+   handlers/settings-system.ts:202
+   Rôle : réglages serveur persistés (hermes.*/fork.*), santé/moteur, mise à jour
+   interface, prompts système.
+   Moteurs : validation clé/valeur répétée, garde « ne jamais exposer les clés
+   secrètes en liste », relayage de manifestes.
+   Recommandation : un registre par thème (settings, sante, prompts) + un
+   validateur de réglages partagé (une table clé→validateur au lieu de if par clé).
+
+6. runAssistantTurn — CC 147 · 745 l · ternaire:69 ??:24 ||:23 · P1
+   turn-runner.ts:407
+   Rôle : moteur d'exécution d'un tour : modes, variantes a/b (F-17), groupes de
+   versions (F-14), recherche web (F-09), abort, persistance du fil.
+   Moteurs : chaque feature ajoute ses embranchements au même corps — c'est LE
+   point de dilution de la complexité du backend.
+   Recommandation : pipeline d'étapes (prepare → engine → persist) avec une
+   structure TurnContext ; extraire chaque mode (débat/conseil/auto) en module ;
+   cible de tests unitaires prioritaire — la suite E2E couvre le bout en bout
+   mais rien ne pinse les branches internes.
+
+7. runGatewayTurn — CC 77 · 251 l · if:22 ?.:21 ?:19 · P2
+   hermes-connector.ts:586
+   Rôle : un tour via la gateway : ticket one-use, promesse socket, garde
+   « fin annoncée » vs fermeture brutale, timeouts.
+   Moteurs : settling double (resolve/reject + guards), re-attach des tours en vol.
+   Recommandation : extraire la promesse d'attente en helper réutilisable
+   (waitForComplete) ; la machine settle est testable avec un faux WebSocket.
+
+8. testProviderKey — CC 77 · 191 l · &&:21 ?:19 if:18 · P2
+   providers.ts:650
+   Rôle : sonde de clé réelle : garde https/localhost (anti-sonde réseau),
+   capacités par fournisseur, interprétation des statuts HTTP.
+   Moteurs : URL safety + per-provider branching.
+   Recommandation : extraire `assertTestableUrl(url)` (pur, 15 décisions, testable
+   immédiatement) ; garder la sonde HTTP seule. Les 4 corps 429 du suite
+   test-429-reasons.ts montrent que la logique en aval est déjà éprouvée.
+
+9. parseModelOptions — CC 66 · 49 l · ?.:28 ?:23 ??:20 · P1 (densité 1,35/ligne)
+   hermes-connector.ts:134 (privée — non exportée)
+   Rôle : normalise n'importe quel catalogue moteur (strings, objets id/name/
+   model, efforts en tableau/booléen) en ModelOption[], avec dédup.
+   Moteurs : défense maximale contre des formes de données inconnues — 66
+   décisions dans 49 lignes, la densité la plus élevée du repo.
+   Recommandation : EXPORTER la fonction (1 mot-clé) et la pincer par tests
+   Vitest — c'est le meilleur rapport effort/sécurité de tout l'audit ; ensuite
+   découper en normalizeId / normalizeEfforts / dedup.
+
+10. registerArtifactsSharesHandlers — CC 59 · 170 l · if:34 · P3
+   handlers/artifacts-shares.ts:8
+   Rôle : versions d'artefacts, diff, partage public lecture seule.
+   Recommandation : OK en l'état après passage au helper reply() commun ;
+   garde payload déjà propre.
+
+11. buildArtifacts — CC 36 · 358 l · ternaire:98 · P3
+   store-artifacts.ts:59 — même famille D que buildMessages (98 ternaires de
+   mappage). Le dédoublonnage F-26 (ré-émission identique = pas de version) est
+   la seule logique sensible : à pincer par test en priorité.
+
+12. buildSettings — CC 36 · 426 l · ternaire:109 · P3
+   store-settings.ts:86 — même famille D. La lecture « liste ne révèle jamais
+   les clés » est la seule règle de sécurité du fichier : à tester.
+
+13. webchat/driver main — CC 36 · 182 l · if:13 ?:11 · P3
+   webchat/driver.ts:68 — CLI d'un tour webchat : parseArgs, fiches, codes de
+   sortie JSON. Déjà en pipeline court ; garder tel quel, tester parseArgs.
+
+14. runAiStudio — CC 48 · 219 l · if:28 ||:17 &&:13 · P3
+   webchat/flows.ts:343 — pilotage navigateur AI Studio : consentement, essais,
+   attentes d'état. La spec impose « attendre un état, jamais une durée » — la
+   complexité est inhérente au domaine. Extraire les sélecteurs JS injectés en
+   constantes typées rendrait le flux lisible.
+
+15. runWebchatTurn — CC 34 · 127 l · ?:14 · P3
+   webchat/engine.ts:126 — orchestre fiche+driver+flux. Le refus site non
+   vérifié AVANT le navigateur est la bonne garde : à tester.
+
+16. runZai — CC 34 · 147 l · if:15 &&:11 · P3
+   webchat/flows.ts:136 — boucle 12 essais d'envoi avec vidage du textarea (la
+   revue P1-P7 a corrigé la répétition du prompt). Inhément au domaine.
+
+17. testZaiSurface — CC 30 · 97 l · ?:10 &&:7 · P3
+   providers.ts:547 — sonde surface z.ai (/models, coding plan). Pincer les
+   statuts 200/401/429/HTML par tests HTTP factices.
+
+════════════════════════════════════════════════════════════════════════════════
+FICHES — FRONTEND (src/) — 27 fonctions
+════════════════════════════════════════════════════════════════════════════════
+
+18. useHermesChat — CC 287 · 1682 l · if:106 ?:90 ??:57 ?.:46 · P1
+   src/hooks/use-hermes-chat.ts:70
+   Rôle : le chef d'orchestre client — conversations CRUD, projets/dossiers,
+   uploads, artefacts, wiring socket, toasts. Le hook le plus lourd du repo.
+   Moteurs : toutes les préoccupations restantes après les extractions de
+   novembre (use-chat-stream, use-chat-settings) vivent encore ici ; garde anti
+   double-émission, miroirs ref pour écouteurs socket.
+   Recommandation : CONTINUER le découpage commencé (le précedent existe) —
+   extraire use-conversations.ts (CRUD+liste), use-projects-socket.ts
+   (écouteurs projects:*) et use-attachments-wiring.ts ; l'API publique du hook
+   ne change pas, la page n'est pas touchée. Filet : tsc ×3 + suite autonome.
+
+19. AgentMotorCard — CC 179 · 749 l · ?:90 &&:28 if:24 · P2
+   src/components/settings/agent-motor-card.tsx:83
+   Rôle : LA carte moteur (liaison, version, maj assistée, carnet de bord,
+   diagnostic, repli autre poste) — 15+ useState dans un seul composant.
+   Recommandation : extraire trois sous-cartes — MotorUpdateCard (maj + carnet),
+   MotorDiagDialog, MotorFallbackForm ; le journal (JournalWire) devient un
+   composant pur testable.
+
+20. Sidebar — CC 138 · 906 l · ?:67 if:34 · P2
+   src/components/chat/sidebar.tsx:115
+   Rôle : arbre dossiers/sous-dossiers, drag & drop, recherche, archives,
+   densité, menus contextuels.
+   Moteurs : rendu récursif + dnd + 6 menus d'actions dans un corps.
+   Recommandation : extraire ProjectRow (rendu d'une ligne + menu) et
+   useSidebarTree (filtrage/recherche → fonction pure testable).
+
+21. Composer — CC 110 · 622 l · ?:37 if:27 &&:18 · P2
+   src/components/chat/composer.tsx:113
+   Rôle : barre de saisie : auto-resize, uploads, dictée, brouillons, modes.
+   Recommandation : extraire use-composer-drafts (brouillons par clé — le bug
+   M-3 ouvert de la revue 11-19 vit ici) et UploadTray.
+
+22. StorageSection — CC 105 · 646 l · ?:48 &&:24 · P2
+   src/components/settings/storage-section.tsx:162
+   Rôle : explorateur de documents générés : liste, groupe, tri, toasts undo.
+   Moteurs : filtres déclaratifs + pipeline d'undo local.
+   Recommandation : extraire le filtre/tri en fonction pure (testable) et le
+   système de toasts undo en hook dédié.
+
+23. SystemSection — CC 102 · 477 l · ?:50 · P2
+   system-section.tsx:86 — deux cartes programmes + vérif maj. Extraire
+   AppUpdateCard ; les libellés de dates (useMemo) deviennent des helpers purs.
+
+24. HermesWebPage — CC 82 · 639 l · if:35 · P2
+   src/app/page.tsx:42 — orchestrateur racine : branche les hooks et sheets.
+   Recommandation : accepté tel quel tant que les hooks extraits maigrissent ;
+   limiter la page au câblage (≤ 200 l) à terme.
+
+25. WebchatSection — CC 75 · 417 l · ?:44 · P2
+   webchat-section.tsx:68 — garde settingsLoaded/loadError (perte de config
+   corrigée en lot audit) à préserver au découpage ; extraire le formulaire.
+
+26. ArtifactBody — CC 72 · 308 l · ?:37 · P2
+   artifact-panel.tsx:93 — un rendu par type d'artefact (code/image/html/
+   markdown/csv/json/svg/pdf). Découpage naturel : un composant par type +
+   switch court. Chaque renderer devient isolable et testable.
+
+27. ProviderCard — CC 69 · 442 l · if:28 ?:26 · P2
+   providers-section.tsx:92 — porte-clés multi-clés + gardes destructives.
+   Extraire KeyRowCard ; providerCardStatus/effectiveBaseUrl sont déjà purs.
+
+28. ModelPicker — CC 57 · 377 l · ?:30 · P3 — favoris partagés A/B ; extraire
+   le filtrage cmdk en fonction pure.
+
+29. ExtensionRow — CC 54 · 280 l · ?:29 · P3 — gardes bascule/destructive à
+   conserver telles quelles.
+
+30. useChatStream — CC 54 · 391 l · if:29 · P2
+   use-chat-stream.ts:42 — registre des streams via store externe
+   (useSyncExternalStore) : l'architecture est bonne, la complexité vient du
+   multi-voix F-30. À couvrir par tests de store (stream-store est pur ?).
+
+31. ModePicker — CC 48 · 389 l · ?:29 · P3 — config effective = fusion défauts
+   registre + conversation : extraire cette fusion en pure (elle existe côté
+   modes.ts) — vérifier la dette Lot 3 « ModePicker écrase debateParallel ».
+
+32. MessageList — CC 47 · 396 l · ?:18 · P3 — mémoïsations perf déjà en place ;
+   extraire EmptyState et ErrorRow.
+
+33. VersionPopover — CC 43 · 275 l · ?:22 · P3 — fetchVersions/restore : extraire
+   use-artifact-versions.
+
+34. ModesSection — CC 40 · 661 l · ?:15 · P3 — 13 textareas + gardes lecture
+   (promptsLoaded/Error) : extraire ModePromptCard.
+
+35. SingleTabGuard — CC 40 · 224 l · catch:9 · P3 — Web Locks + fermeture
+   refusée : la complexité est domain-driven, garde M-6 à ne pas casser.
+
+36. useChatSettings — CC 39 · 222 l · if:17 · P3 — persistance expert F-22 ;
+   déjà propre après extraction, stable.
+
+37. AddProviderPanel — CC 37 · 161 l · ?:19 · P3 — ajustement d'état pendant le
+   rendu (motif React officiel) : laisser tel quel.
+
+38. ProfilesSection — CC 36 · 289 l · P3 — capture de réglages courants au clic :
+   extraire la capture en pure.
+
+39. PromptPanelBody — CC 36 · 267 l · ?:16 · P3 — brouillon + presets : stable.
+
+40. useSystemPrompts — CC 36 · 287 l · if:25 · P3 — chargements socket en effet ;
+   regrouper en un useSocketQuery générique à terme.
+
+41. ChatHeader — CC 34 · 309 l · ?:24 · P3 — fil d'Ariane : extraire en pure
+   (breadcrumbsOf(project, sub, title)).
+
+42. AttachDiskDialog — CC 32 · 194 l · P3 — navigation disque bornée HOME ;
+   la garde serveur est la vraie sécurité, l'UI peut maigrir.
+
+43. ArtifactCard — CC 30 · 171 l · ?:21 · P3 — les états sont déjà des booléens
+   dérivés ; bon exemple de garde P1-P7 (zone cliquable = bouton réel).
+
+44. MemoryCard — CC 30 · 171 l · P3 — la sémantique draft===null (suivre le
+   service) issue du Lot 3 est délicate : à pincer par un test de hook.
+
+════════════════════════════════════════════════════════════════════════════════
+PLAN D'ATTAQUE PROPOSÉ (vagues, chacune validée par tsc ×3 + suite autonome)
+════════════════════════════════════════════════════════════════════════════════
+Vague 0 — testabilité immédiate (quelques heures)
+  · Exporter parseModelOptions + tests Vitest (hermes-connector).
+  · Vitest + @vitest/coverage-v8 dans mini-services : modes, prompts, models,
+    fiches/paths webchat, chat-protocol → premières vraies couvertures.
+Vague 1 — dettes Lot 1 confirmées par CRAP (1-2 j)
+  · createLlmPool : sorties des closures pures + machine d'état de stream.
+  · registerConversationsHandlers : 4 sous-registres + reply() helper.
+  · runAssistantTurn : pipeline d'étapes.
+Vague 2 — hooks et cartes (2-3 j, une entité par PR)
+  · useHermesChat : use-conversations + use-projects-socket + attachments.
+  · AgentMotorCard en 3 sous-cartes ; ArtifactBody par type.
+Vague 3 — famille D (2 j)
+  · Mappers row→objet partagés dans les stores ; Store jetable derrière
+    interface pour tests Node ; tests des règles sensibles (F-26, masquage).
+Filet permanent : ./crapper --threshold 30 en CI après la vague 0.

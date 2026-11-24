@@ -199,7 +199,14 @@ function binaireNavigateur(raw: string): boolean {
   );
 }
 
-export function registerSettingsSystemHandlers(socket: Socket) {
+// registerSettingsSystemHandlers ne pose plus 27 socket.on() dans un seul
+// corps : sept sous-registres thématiques, appelés dans l'ordre d'origine
+// du fichier (27 socket.on, tous à nom d'événement distinct). Corps des
+// handlers VERBATIM — seules les accolades
+// d'encadrement changent. Les aides module (révision git, sonde GitHub,
+// état de mise à jour, garde-fous settings:set) restent au niveau module.
+
+function registerSanteSettingsHandlers(socket: Socket) {
 
 // Revue P1-P7 (B6) : le manifeste du dernier démarrage n'était relayé
 // QUE dans helloPayload (connexion initiale) — system:update-state ne le
@@ -305,6 +312,10 @@ socket.on(
 );
 
 
+}
+
+function registerGatewayHandlers(socket: Socket) {
+
 // ── Gateway Hermes (Paramètres → Système) : brancher l'agent réel ───
 // URL ws:// ou http(s):// (le /api/ws est ajouté au besoin côté connecteur)
 // + jeton facultatif. Chaîne vide = débranchement. Persisté dans settings :
@@ -401,6 +412,10 @@ socket.on(
 );
 
 
+}
+
+function registerUpdateAndRenderCacheHandlers(socket: Socket) {
+
 // ── Mise à jour depuis l'interface : demande + JOURNAL LIVE ────────────
 // Dépose un drapeau que le lanceur (desktop/hermes-ui.ps1 | .sh — boucle
 // de surveillance) ramasse : arrêt propre, mise à jour GitHub,
@@ -464,6 +479,10 @@ socket.on("system:clearRenderCache", (cb?: (data: unknown) => void) => {
     cb({ ...ctx.chromeProfileStats(), removed, kept });
 });
 
+}
+
+function registerWebchatPilotHandlers(socket: Socket) {
+
 // ── Chats IA web (fournisseur webchat) : sondes et navigateur de pilotage ──
 // Le profil est DÉDIÉ à l'application : l'utilisateur se connecte aux sites
 // UNE fois, à la main (bouton « Ouvrir le navigateur ») — le code ne saisit
@@ -523,6 +542,10 @@ socket.on("webchat:close", async (cb?: (data: unknown) => void) => {
   const closed = await ctx.killPilotBrowser(info.pid, config.profileDir);
   if (typeof cb === "function") cb({ ok: true, closed });
 });
+
+}
+
+function registerPromptHandlers(socket: Socket) {
 
 // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────
 
@@ -666,6 +689,10 @@ socket.on(
 );
 
 
+}
+
+function registerCustomInstructionsHandlers(socket: Socket) {
+
 // Instructions personnalisées globales (F-19) — registre serveur §6
 socket.on(
   "custom-instructions:get",
@@ -696,6 +723,10 @@ socket.on(
   }
 );
 
+
+}
+
+function registerMemoryAndUpdateCheckHandlers(socket: Socket) {
 
 // ── Mémoire utilisateur (F-18) — consultable, éditable, effaçable ───
 // Notes persistantes injectées dans les instructions du tour tant que la
@@ -769,4 +800,14 @@ socket.on(
   }
 );
 
+}
+
+export function registerSettingsSystemHandlers(socket: Socket) {
+  registerSanteSettingsHandlers(socket);
+  registerGatewayHandlers(socket);
+  registerUpdateAndRenderCacheHandlers(socket);
+  registerWebchatPilotHandlers(socket);
+  registerPromptHandlers(socket);
+  registerCustomInstructionsHandlers(socket);
+  registerMemoryAndUpdateCheckHandlers(socket);
 }

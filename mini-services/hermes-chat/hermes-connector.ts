@@ -130,8 +130,9 @@ export function toHttpBase(url: string): string {
   return base.replace(/\/$/, "");
 }
 
-/** Extrait tolérant d'une liste de modèles depuis la réponse de /api/model/options. */
-function parseModelOptions(data: any): ModelOption[] {
+/** Extrait tolérant d'une liste de modèles depuis la réponse de /api/model/options.
+ *  Exporté (audit CRAP 2026-11) pour être pincé par des tests unitaires Vitest. */
+export function parseModelOptions(data: any): ModelOption[] {
   const out: ModelOption[] = [];
   const pushModel = (m: any, provider?: string) => {
     const id = typeof m === "string" ? m : (m?.id ?? m?.name ?? m?.model);

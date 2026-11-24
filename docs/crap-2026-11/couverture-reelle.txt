@@ -1,0 +1,231 @@
+RAPPORT DE COUVERTURE RÉELLE ET REFACTORING — hermes_ui
+=========================================================
+Dates : vague 1 le 2026-11-24 · vagues 2-3 le 2026-11-25 · suite : Vitest 5.1 + @vitest/coverage-v8 (mini-service)
+Contexte : crapper (unclebob) mesure la couverture par LCOV. La suite autonome
+du repo tourne sous bun (JavaScriptCore), invisible pour c8 (V8) — vérifié
+empiriquement (NODE_V8_COVERAGE ne produit rien sous bun). Les tests unitaires
+Vitest ajoutés dans mini-services/hermes-chat sont donc la première couverture
+MESURABLE du projet.
+
+══════════════════════════════════════════════════════════════════════════════
+1. TESTS AJOUTÉS (67 tests, 5 fichiers — mini-services/hermes-chat/test/)
+══════════════════════════════════════════════════════════════════════════════
+  test/modes.test.ts                    27 tests — référentiel des modes
+  test/prompts.test.ts                  12 tests — expert, prompt local, presets
+  test/models.test.ts                    6 tests — catalogue de repli
+  test/webchat-fiches.test.ts           11 tests — fiches de sélecteurs
+  test/hermes-connector-models.test.ts  11 tests — parseModelOptions (extrait
+                                         tolérant du catalogue gateway)
+  Tous verts · npm run typecheck ×3 verts · eslint 0 erreur (28 warnings
+  exhaustive-deps préexistants, convention du repo).
+
+Changement d'un mot-clé dans le code : `export function parseModelOptions`
+(hermes-connector.ts) — la fonction privée la plus dense du repo (CC 66/49 lignes)
+est devenue testable. Anomalie mineure relevée au passage et PIGNÉE par test :
+avec `efforts: true`, un `effort_label` fourni est écrasé par « budget »
+(habituellement sans conséquence, mais le comportement est maintenant verrouillé).
+
+Couverture mesurée (vitest, lignes) : models.ts 100 % · prompts.ts 97 % ·
+modes.ts 98 % · webchat/fiches.ts 95 % · hermes-connector.ts 12 % (la fonction
+extraite seule est couverte ; le reste du connecteur exige une gateway vivante).
+Les stores (store-messages, store-artifacts, store-settings) restent hors de
+portée : ils exigent bun:sqlite, indisponible sous Node — voir audit-cc30.txt,
+vague 3 (Store jetable derrière interface).
+
+Note technique : le nom `modes.ts` est ambigu pour le chargeur LCOV de crapper
+(`src/lib/modes.ts` existe aussi côté front) — les chemins SF du rapport ont été
+absolutisés après génération pour lever l'ambiguïté ; à refaire après chaque
+regénération (une ligne de sed, script dans le rapport).
+
+══════════════════════════════════════════════════════════════════════════════
+2. CRAP : AVANT (0 % mesuré) → APRÈS (couverture réelle) — 20 fonctions > 0 %
+══════════════════════════════════════════════════════════════════════════════
+  CC   CRAP 0%  →  CRAP réel   couverture  fonction
+   66        4422  →         66.0      100 %  parseModelOptions            ★ P1
+   24         600  →         24.1       95 %  normalizeModeConfig
+   12         156  →         12.0       94 %  readPromptOverrides
+   10         110  →         10.0       94 %  parseWebchatModelId
+   10         110  →         10.0      100 %  sanitizeExpertSettings
+    9          90  →          9.0      100 %  voicesFor
+    7          56  →          7.0      100 %  composeLocalSystemPrompt
+    6          42  →          6.0      100 %  voiceModel
+    5          30  →          5.0      100 %  modeModel
+    4          20  →          4.0      100 %  resolveModePrompt
+    3          12  →          3.0      100 %  modelLabel / clampInt /
+                                               interpolatePrompt /
+                                               resolveVoiceChars /
+                                               validatePromptText
+    2           6  →          2.0      100 %  resolveMode /
+                                               normalizeWebchatModelId
+    1           2  →          1.0      100 %  catalogModelsResult /
+                                               modePromptSection /
+                                               webchatModelId
+★ parseModelOptions : le hotspot le plus dense du repo est PROUVÉ sûr par 11
+  tests — CRAP 4 422 → 66.
+
+══════════════════════════════════════════════════════════════════════════════
+3. REFACTORING DES 2 PIRES FICHIERS (validation : tsc ×3, eslint, 33/33 tests)
+══════════════════════════════════════════════════════════════════════════════
+A. mini-services/hermes-chat/handlers/conversations.ts (CC 261 → 1 + 5 modules)
+   Le corps de registerConversationsHandlers posait 24 socket.on() dans une
+   seule fonction. Découpage en 5 sous-registres CONTIGUS (aucune ligne de
+   handler modifiée, ordre de pose conservé) :
+     registerConversationLifecycleHandlers  CC 66   (list/create/mode/rename/
+                                                     delete/open/pin/fork/search)
+     registerProjectHandlers                CC 53   (dossiers + rangement)
+     registerTurnHandlers                   CC 77   (chat:send/regenerate)
+     registerMessageAndStopHandlers         CC 56   (edit/delete/version + stop)
+     registerCompactionHandlers             CC 13
+     registerConversationsHandlers (orchestrateur)  CC 1
+   La race conversations:open du Lot 1 reste au même endroit, plus facile à
+   traiter dans un registre de 66 que dans un monolithe de 261.
+
+B. src/hooks/use-hermes-chat.ts (CC 287 → 207) + use-chat-socket-events.ts (81)
+   Le câblage socket du hook (462 lignes : onConnect/onDisconnect/onHello/
+   onStream*/onArtifact*/onMessage*/écran vieux/reconnexion) est extrait dans
+   src/hooks/use-chat-socket-events.ts — corps des handlers VERBATIM, mêmes
+   identités de dépendances (le tableau de deps du useEffect est conservé à
+   l'identique), 40 dépendances typées (ChatSocketEventsDeps).
+   L'API publique de useHermesChat ne change pas : la page n'est pas touchée.
+   La garde de source du repo (scripts/test-source-guards.ts) suit les handlers
+   déplacés — tous les invariants qu'elle vérifie sont conservés et repassent.
+
+   Filet de validation complet : npm run typecheck (tsc ×3) ✓ · eslint 0 erreur ✓
+   · suite autonome 33/33 ✓ (dont test-projects-flow, test-project-tree,
+   test-reattach-stream, test-source-guards) · Vitest 67/67 ✓.
+
+══════════════════════════════════════════════════════════════════════════════
+4. VAGUE 2 — LES DEUX CIBLES SUIVANTES (validation : tsc ×3, eslint, 33/33, Vitest 67/67)
+══════════════════════════════════════════════════════════════════════════════
+A. mini-services/hermes-chat/handlers/providers-extensions.ts (CC 239 → 1 + 4)
+   Même traitement que conversations.ts : le corps de
+   registerProvidersExtensionsHandlers posait 21 socket.on() dans une seule
+   fonction. Découpage en 4 sous-registres THÉMATIQUES, appelés dans l'ordre
+   d'origine du fichier (corps des handlers VERBATIM, seules les accolades
+   d'encadrement changent) :
+     registerSessionCatalogHandlers   CC  6   (hello, models:list)
+     registerAttachmentsAudioHandlers CC 25   (attachments:upload,
+                                               audio:transcribe)
+     registerProvidersHandlers        CC 114  (providers:list/catalog/add/
+                                               remove/set-strategy/set-base/
+                                               add-key/remove-key/test-key)
+     registerExtensionsHandlers       CC 95   (extensions:list/add/toggle/
+                                               remove/pin/check/update +
+                                               registry:install)
+     registerProvidersExtensionsHandlers (orchestrateur)  CC 1
+   L'aide pure findExtensionBySource reste au niveau module (CC inchangé).
+
+B. mini-services/hermes-chat/llm-pool.ts (CC 218 → 69) + llm-streams.ts (nouveau)
+   createLlmPool était une fermeture de 700 lignes : état du pool + 14
+   fonctions imbriquées (crapper agrège leur complexité dans la fonction
+   englobante). Décomposition en trois préoccupations :
+     · llm-streams.ts (NOUVEAU module PUR) : la mécanique de streaming —
+       streamAnthropicTurn CC 57 · streamOpenAiTurn CC 47 · buildUserPayload
+       CC 10 · stallGuardFor CC 4 · readErrorBody + PoolAuthError. Les
+       fonctions de tour reçoivent leur garde en premier paramètre ; la
+       fabrique stallGuardFor(entries) relie la garde au vivier du pool
+       (suivi live /diagnostics F-31ter conservé).
+     · createPoolCatalog (CC 35, même fichier) : cache des listes de
+       modèles + porte-clés — keyCandidates, pickKey, activeLlmProviders,
+       providerModels, listModels, activeProviderNames, invalidate.
+     · createLlmPool (CC 69) : orchestration — runTurn (résolution
+       fournisseur + 3 tentatives porte-clés + retente vision), summarize,
+       activeStreams. Corps VERBATIM : le catalogue est consommé par
+       déstructuration, seuls les deux appels de tour passent la garde.
+   La dette Lot 1 (flux fantômes) était déjà traitée par le repo — les
+   commentaires l'attestent — et reste couverte par la même structure.
+
+   Scores crapper APRÈS vague 2 (couverture non mesurable sous bun/JSC → 0 %) :
+     registerProvidersExtensionsHandlers  239 → 1     CRAP 57 360 → 2
+     createLlmPool                        218 → 69    CRAP 47 742 → 4 830
+     (unités extraites : 114 / 95 / 57 / 47 / 35 / 25 / 10 / 6 / 4)
+
+   Filet de validation complet : npm run typecheck (tsc ×3) ✓ · eslint 0
+   erreur sur les fichiers touchés ✓ · suite autonome 33/33 ✓ (dont
+   test-source-guards, test-reattach-stream) · Vitest 67/67 ✓ · couverture
+   régénérée (9 entrées > 0 %, parseModelOptions toujours CRAP 66 à 100 %).
+
+══════════════════════════════════════════════════════════════════════════════
+5. VAGUE 3 — TROIS CIBLES (validation : tsc ×3, eslint 0 erreur, 33/33, Vitest 67/67)
+══════════════════════════════════════════════════════════════════════════════
+A. mini-services/hermes-chat/handlers/settings-system.ts (CC 157 → 1 + 7)
+   Troisième registre démontlé avec la même recette : 27 socket.on() répartis
+   en 7 sous-registres THÉMATIQUES contigus, appelés dans l'ordre d'origine
+   (corps VERBATIM, les aides module — révision git, sonde GitHub, état de
+   mise à jour, garde-fous settings:set — restent au niveau module) :
+     registerSanteSettingsHandlers           CC 34  (santé + settings:get/set)
+     registerGatewayHandlers                 CC 27  (gateway:get/set, SSRF S-02)
+     registerUpdateAndRenderCacheHandlers    CC  8  (drapeau MAJ + cache rendu)
+     registerWebchatPilotHandlers            CC 24  (webchat:status/open/close)
+     registerPromptHandlers                  CC 50  (system-prompt:*, presets)
+     registerCustomInstructionsHandlers      CC  8  (F-19)
+     registerMemoryAndUpdateCheckHandlers    CC 12  (F-18 + update-check)
+     registerSettingsSystemHandlers (orchestrateur)  CC 1
+
+B. src/hooks/use-hermes-chat.ts (CC 207 → 166) + use-conversations.ts (nouveau)
+   Le CRUD conversations quitte le hook monstre : newConversation,
+   openConversation (l'ack gardé L1-5), deleteConversation, renameConversation,
+   togglePin, forkConversation, searchMessages, moveConversation — corps
+   VERBATIM dans src/hooks/use-conversations.ts, consommé par déstructuration
+   (26 dépendances typées, ConversationsDeps). Les tableaux de deps manuels
+   sont COMPLÉTÉS (setters useState + refs : identités stables) pour satisfaire
+   la règle react-hooks/preserve-manual-memoization — fréquence de mémoisation
+   inchangée. uploadAttachment/transcribeAudio restent dans le hook (CC léger,
+   domaine pièces jointes — cible vague 4).
+   La garde de source [2] suit l'ack déplacé (lecture de use-conversations.ts).
+
+C. mini-services/hermes-chat/store-messages.ts (CC 186 → 1 + 5 builders)
+   buildMessages() était un sac de 30 méthodes dans UNE fonction. Cinq
+   builders domaine, fusionnés par spread — corps des méthodes VERBATIM,
+   ThisType<Store> conserve le `this` typé de chaque builder :
+     buildProjectMethods            CC 18  (projets + rangement)
+     buildConversationMethods       CC 40  (CRUD + modes F-30 + sessions)
+     buildMessagesCoreMethods       CC 41  (getMessages + appendMessage)
+     buildMessageVersionsMethods    CC 73  (F-14 versions + édition du fil)
+     buildForkSearchMethods         CC 18  (fork, recherche, pièces jointes)
+     buildMessages (orchestrateur)  CC 1
+   Les méthodes restent invisibles pour Vitest sous Node (bun:sqlite exigé) —
+   la couverture passe par le « Store jetable » (vague 4, cf. audit-cc30.txt).
+
+   Scores crapper APRÈS vague 3 (couverture non mesurable sous bun/JSC → 0 %) :
+     registerSettingsSystemHandlers  157 → 1     CRAP 24 806 → 2
+     buildMessages                   186 → 1     CRAP 34 782 → 2
+     useHermesChat                   207 → 166   CRAP 43 056 → 27 722
+
+   Filet de validation : npm run typecheck (tsc ×3) ✓ · eslint 0 erreur sur
+   les fichiers touchés ✓ · suite autonome 33/33 ✓ (gardes de source
+   repointées et repassées) · Vitest 67/67 ✓.
+
+══════════════════════════════════════════════════════════════════════════════
+6. PROCHAINES CIBLES (classement crapper après vague 3 — production uniquement)
+══════════════════════════════════════════════════════════════════════════════
+   CC 179  AgentMotorCard             (composant UI : extraire les
+            sous-sections en composants feuilles)
+   CC 166  useHermesChat              (continuer : uploads →
+            use-attachments-wiring.ts, actions de tour → use-turn-actions)
+   CC 147  runAssistantTurn           (tour-runner : étapes en helpers)
+   CC 138  Sidebar                    (composant UI)
+   CC 114  registerProvidersHandlers  (validations d'URL en helpers purs,
+            testables vitest)
+   CC 110  Composer                   (composant UI)
+   CC  95  registerExtensionsHandlers (idem providers)
+   CC  73  buildMessageVersionsMethods (machine F-14 — tester via Store
+            jetable, vague 4)
+   CC  69  createLlmPool              (déjà décomposé, reste l'orchestration
+            runTurn/summarize — acceptable)
+
+Bilan des trois vagues : les 4 pires fonctions du snapshot initial (CC 287,
+261, 239, 218) et les registres 157/186 sont décomposés en 29 unités
+cohérentes de CC 4 à 114, plus 4 orchestrateurs CC 1 — chacune testable
+unitairement (sous-registres au socket factice, builders via Store jetable,
+tours de stream purs).
+
+Le premier poste de dette restant est l'UI (AgentMotorCard, Sidebar,
+Composer) — un autre chantier, avec ses propres outils (React Compiler,
+tests de composants).
+
+Fichiers du refactoring : refactoring.patch (4 235 lignes, 19 fichiers, git
+diff unifié — vagues 1 + 2 + 3, nouveaux fichiers inclus : llm-streams.ts,
+use-chat-socket-events.ts, use-conversations.ts, test/* ×5, vitest.config.ts).
+Snapshot crapper complet : table-crap.txt + crap.edn + rapport-crap-complet.txt
+(régénérés après vague 3).

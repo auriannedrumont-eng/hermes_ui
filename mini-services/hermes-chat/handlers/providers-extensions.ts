@@ -5,7 +5,12 @@
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
 
-export function registerProvidersExtensionsHandlers(socket: Socket) {
+// registerProvidersExtensionsHandlers ne pose plus 21 socket.on() dans un
+// seul corps : quatre sous-registres thématiques, appelés dans l'ordre
+// d'origine du fichier. Corps des handlers VERBATIM — seules les accolades
+// d'encadrement changent.
+
+function registerSessionCatalogHandlers(socket: Socket) {
 
 socket.on("hello", (cb?: (info: unknown) => void) => {
   if (typeof cb === "function") cb(ctx.helloPayload());
@@ -30,6 +35,10 @@ socket.on("models:list", async (cb?: (data: unknown) => void) => {
       });
   }
 });
+
+}
+
+function registerAttachmentsAudioHandlers(socket: Socket) {
 
 socket.on(
   "attachments:upload",
@@ -87,6 +96,10 @@ socket.on(
   }
 );
 
+
+}
+
+function registerProvidersHandlers(socket: Socket) {
 
 // ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
 
@@ -375,6 +388,8 @@ socket.on(
 );
 
 
+}
+
 // ── Extensions : dépôts importés + serveurs MCP ───────────────────
 
 /** Lot audit 2026-11-21 : déduplication — coller deux fois la même source
@@ -390,6 +405,8 @@ function findExtensionBySource(
     .listExtensionRows()
     .some((e) => e.kind === kind && (e.source ?? "").toLowerCase() === source.toLowerCase());
 }
+
+function registerExtensionsHandlers(socket: Socket) {
 
 socket.on("extensions:list", (cb?: (data: unknown) => void) => {
   if (typeof cb === "function") cb({ extensions: ctx.extensionsWire() });
@@ -697,4 +714,11 @@ socket.on(
   }
 );
 
+}
+
+export function registerProvidersExtensionsHandlers(socket: Socket) {
+  registerSessionCatalogHandlers(socket);
+  registerAttachmentsAudioHandlers(socket);
+  registerProvidersHandlers(socket);
+  registerExtensionsHandlers(socket);
 }

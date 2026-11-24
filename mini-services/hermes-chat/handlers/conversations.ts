@@ -26,8 +26,18 @@ function validDiskPath(raw: unknown): string | null {
   }
 }
 
-export function registerConversationsHandlers(socket: Socket) {
 
+// ── Découpage interne (audit CRAP 2026-11) ────────────────────────────────
+// registerConversationsHandlers ne pose plus 24 socket.on() dans un seul
+// corps : cinq sous-registres, un par domaine, chacun appelé dans l'ordre
+// source d'origine. Les blocs sont VERBATIM (aucune ligne de handler modifiée) ;
+// seuls les corps englobants changent. Le comportement à l'enregistrement,
+// l'ordre de pose et les identifiants ctx.* sont inchangés.
+
+/** Cycle de vie du fil : lister, créer, changer de mode, renommer, supprimer,
+ *  ouvrir (avec historique + tour en vol), épingler, créer un fork, chercher,
+ *  lister les artefacts d'une conversation. */
+function registerConversationLifecycleHandlers(socket: Socket) {
 socket.on("conversations:list", (cb?: (data: unknown) => void) => {
   const conversations = ctx.store.listConversations();
   if (typeof cb === "function") cb({ conversations });
@@ -267,6 +277,11 @@ socket.on(
 );
 
 
+}
+
+/** Projets & rangement : dossiers (créer/renommer/archiver/supprimer/réordonner,
+ *  liaison disque bornée au HOME) et rangement d'une conversation dans un dossier. */
+function registerProjectHandlers(socket: Socket) {
 // ── Projets : rangement des conversations par projet (fork) ───────────
 
 socket.on("projects:list", (cb?: (data: unknown) => void) => {
@@ -422,6 +437,11 @@ socket.on(
 
 
 
+}
+
+/** Tours de chat : envoi et régénération (mode expert, recherche web,
+ *  variantes de comparaison, versions). */
+function registerTurnHandlers(socket: Socket) {
 socket.on(
   "chat:send",
   async (
@@ -699,6 +719,11 @@ socket.on(
 
 
 // Modifie un message utilisateur et relance le tour depuis ce point
+}
+
+/** Messages & contrôle du tour : édition, suppression, sélection de version,
+ *  arrêt du tour en vol. */
+function registerMessageAndStopHandlers(socket: Socket) {
 socket.on(
   "message:edit",
   async (
@@ -916,6 +941,10 @@ socket.on("chat:stop", (payload: { conversationId?: string }, cb?: (data: unknow
   if (typeof cb === "function") cb({ ok: true, stopped: had });
 });
 
+}
+
+/** Compaction du contexte (chantier « Composer v2 »). */
+function registerCompactionHandlers(socket: Socket) {
 // ── Compaction du contexte (chantier « Composer v2 ») ─────────────────
 // Résume l'historique de la conversation et conserve la synthèse en tête
 // de session : l'affichage reste intact, seul ce qui part au modèle change.
@@ -980,4 +1009,14 @@ socket.on(
   }
 );
 
+}
+
+/** Point d'entrée inchangé (câblé par index.ts) : pose les 24 socket.on du
+ *  domaine conversations, dans l'ordre source d'origine. */
+export function registerConversationsHandlers(socket: Socket) {
+  registerConversationLifecycleHandlers(socket);
+  registerProjectHandlers(socket);
+  registerTurnHandlers(socket);
+  registerMessageAndStopHandlers(socket);
+  registerCompactionHandlers(socket);
 }

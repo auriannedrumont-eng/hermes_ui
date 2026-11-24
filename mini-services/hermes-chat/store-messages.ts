@@ -121,7 +121,15 @@ export interface StoreMessagesMethods {
   conversationAttachments(conversationId: string): Attachment[];
 }
 
-export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+// buildMessages n'est plus un sac de 30 méthodes dans UNE fonction : cinq
+// builders domaine, fusionnés par spread (vague 3). Corps des méthodes
+// VERBATIM — ThisType<Store> conserve le `this` typé de chaque builder.
+function buildProjectMethods(): Pick<
+  StoreMessagesMethods,
+  "listProjects" | "getProject" | "createProject" | "renameProject" |
+  "deleteProject" | "setProjectDiskPath" | "setProjectArchived" |
+  "reorderProjects" | "moveConversation"
+> & ThisType<Store> {
   return {
     // ── Projets : rangement des conversations ─────────────────────────
 
@@ -251,6 +259,18 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
         .run(projectId, conversationId);
       return this.getConversation(conversationId);
     },
+  };
+}
+
+// ── Conversations : CRUD, modes (F-30), sessions moteur, épinglage ────
+function buildConversationMethods(): Pick<
+  StoreMessagesMethods,
+  "listConversations" | "createConversation" | "deleteConversation" |
+  "renameConversation" | "getConversation" | "getConversationModeState" |
+  "setConversationMode" | "getConversationMotorSession" |
+  "setConversationMotorSession" | "setPinned" | "touchConversation"
+> & ThisType<Store> {
+  return {
     listConversations(): ConversationMeta[] {
       const rows = this.db
         .query(
@@ -469,6 +489,15 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       }
       return this.getConversation(id);
     },
+  };
+}
+
+// ── Messages cœur : fil vivant + ajout ────────────────────────────────
+function buildMessagesCoreMethods(): Pick<
+  StoreMessagesMethods,
+  "getMessages" | "appendMessage"
+> & ThisType<Store> {
+  return {
     getMessages(conversationId: string): ChatMessage[] {
       // F-14 : le fil vivant ne montre que la version ACTIVE de chaque
       // réponse (version_active NULL = message jamais régénéré).
@@ -561,6 +590,18 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       return { ...msg, id, createdAt } as ChatMessage;
     },
 
+  };
+}
+
+// ── Versions du fil (F-14), maintenance et édition des messages ───────
+function buildMessageVersionsMethods(): Pick<
+  StoreMessagesMethods,
+  "countVersions" | "supersedeTrailingAssistant" | "setMessageVersion" |
+  "restoreLatestVersion" | "restoreVersionById" | "getMessage" |
+  "deleteMessage" | "purgeInactiveVersionsOf" | "deleteTrailingAssistant" |
+  "editUserMessageAndTruncate"
+> & ThisType<Store> {
+  return {
     /** F-14 — nombre de versions d'un groupe (1 si inconnu). */
     countVersions(group: string): number {
       const r = this.db
@@ -958,6 +999,15 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       };
     },
 
+  };
+}
+
+// ── Branches (fork), recherche plein-texte, pièces jointes du fil ──────
+function buildForkSearchMethods(): Pick<
+  StoreMessagesMethods,
+  "forkConversation" | "searchMessages" | "conversationAttachments"
+> & ThisType<Store> {
+  return {
     /** Duplique une conversation jusqu'à un message donné (branche / fork). */
     forkConversation(
       conversationId: string,
@@ -1095,5 +1145,15 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       }
       return out;
     }
+  };
+}
+
+export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+  return {
+    ...buildProjectMethods(),
+    ...buildConversationMethods(),
+    ...buildMessagesCoreMethods(),
+    ...buildMessageVersionsMethods(),
+    ...buildForkSearchMethods(),
   };
 }

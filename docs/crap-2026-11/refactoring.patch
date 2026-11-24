@@ -1,0 +1,4235 @@
+diff --git a/mini-services/hermes-chat/bun.lock b/mini-services/hermes-chat/bun.lock
+index 9774b68..4ba9667 100644
+--- a/mini-services/hermes-chat/bun.lock
++++ b/mini-services/hermes-chat/bun.lock
+@@ -10,46 +10,186 @@
+         "z-ai-web-dev-sdk": "^0.0.18",
+       },
+       "devDependencies": {
++        "@vitest/coverage-v8": "^5.1.1",
+         "bun-types": "^1.4.4",
+         "socket.io-client": "^4.8.4",
++        "vitest": "^5.1.1",
+       },
+     },
+   },
+   "packages": {
++    "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.15", "", {}, "sha512-C2FuapQ2Kh1OnVHAoLi5rD3GBJ8COb9Q609T6HEpLqaBAo560PDP5OxBE5dCI/h951MBO/+bCUYU5SZ+8ZlV+w=="],
++
++    "@babel/helper-validator-identifier": ["@babel/helper-validator-identifier@7.29.7", "", {}, "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg=="],
++
++    "@babel/parser": ["@babel/parser@7.29.15", "", { "dependencies": { "@babel/types": "^7.29.15" }, "bin": "./bin/babel-parser.js" }, "sha512-RpKWyisHoP81twtSCgmE02iU0RnPcq1DN5bBEbpUePrjA9Q3wXhufnCJrrayPpoZieqFh3zyZQqwtSK0gGccRA=="],
++
++    "@babel/types": ["@babel/types@7.29.15", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.15", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-/XKpKDakL//LZ66bq1XsZOswuqeI5MZqPLDu18o3XdkU1fNJ7bdPtzgnc4ZNS+bBGHV0FJG8jjb8SwcC3nNVQQ=="],
++
++    "@bcoe/v8-coverage": ["@bcoe/v8-coverage@1.0.2", "", {}, "sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA=="],
++
++    "@emnapi/core": ["@emnapi/core@2.0.0-beta.2", "", { "dependencies": { "@emnapi/wasi-threads": "2.2.0", "tslib": "^2.4.0" } }, "sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A=="],
++
++    "@emnapi/runtime": ["@emnapi/runtime@2.0.0-beta.2", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-JcrSPzPvZuNZvJqPTF9Fw25LbOJ8avzFVlaf2grmH4Cku0oGP47tRgqPZadcfj3YoZMHkFVnCYFbQM8I+i5QEw=="],
++
++    "@emnapi/wasi-threads": ["@emnapi/wasi-threads@2.2.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-JP7OYH38Q7+pyTAe14raZHLQIK7BDKbdwji+Xi3pcd/6QkJYQH3SX4wu6EplGrGJWRepoNzedfm0G3B9Z4e9Rw=="],
++
++    "@jridgewell/resolve-uri": ["@jridgewell/resolve-uri@3.1.3", "", {}, "sha512-lhTtjtoEArWBjismtfS761S9Hlyn+nIZqOZVYoZ1Xn82PMNMVnk+jj/NhC4fAXGTs7ydONcJiR5vyQBTMDu27g=="],
++
++    "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
++
++    "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
++
++    "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.6", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || 2.0.0-beta.2", "@emnapi/runtime": "^1.7.1 || 2.0.0-beta.2" } }, "sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw=="],
++
++    "@oxc-project/types": ["@oxc-project/types@0.156.0", "", {}, "sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw=="],
++
++    "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.19", "", { "os": "android", "cpu": "arm" }, "sha512-e+Ebe0WT+9tbXmNKPIiC8YrWAHYwug3m6i4p3rZGGulfZri1jtI4HslT+OZnFf/OIHowWF71DTlHwXBP2SiA7A=="],
++
++    "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.2.19", "", { "os": "android", "cpu": "arm64" }, "sha512-hOombrTJ+szt2ciEzS7oCA78lMPBgF5UMQWCJIyNfnrI7GLl8HYoFqCnpL2gcPOaXMqryGCU5ExdQKyDDcC+yA=="],
++
++    "@rolldown/binding-darwin-arm64": ["@rolldown/binding-darwin-arm64@1.2.19", "", { "os": "darwin", "cpu": "arm64" }, "sha512-XoMA2pwCKGTQzUjPgtRwkedH4WmXhdIPKT6l6oOxd1PUbNodGI6DcBekgN7EC//+x3pfBYX/qL1gNmZAqivw5g=="],
++
++    "@rolldown/binding-darwin-x64": ["@rolldown/binding-darwin-x64@1.2.19", "", { "os": "darwin", "cpu": "x64" }, "sha512-zo8EsSSwMZCY/e+fRnGaX02YGgvJD0yvhNi/9hpGPA2MJ9ZF8dPCw75UGfpI6OpQ/myR/dIYmogRvqiZD0TrXg=="],
++
++    "@rolldown/binding-freebsd-x64": ["@rolldown/binding-freebsd-x64@1.2.19", "", { "os": "freebsd", "cpu": "x64" }, "sha512-O8ISAOfI1nj7AuBPd30FSF47z7f7lzlk5poQVGgiikvQuGEBFYvW8ki+UEnT+YJPnNGjQzn304klt4O9FUE7mA=="],
++
++    "@rolldown/binding-linux-arm-gnueabihf": ["@rolldown/binding-linux-arm-gnueabihf@1.2.19", "", { "os": "linux", "cpu": "arm" }, "sha512-/lYCba5NO0yq4S0jGMH8QTBtkvQxoXjoQWzF5BcWp9MjB9jxVRD1GQDNofkVjcOj30DWyhLIN/4Oe60JKzaONw=="],
++
++    "@rolldown/binding-linux-arm64-gnu": ["@rolldown/binding-linux-arm64-gnu@1.2.19", "", { "os": "linux", "cpu": "arm64" }, "sha512-pm/apFMBnSbFb3O6nG5pHO1iqHhZrjGDFEjSm+ot9J17XXPvH9L90y5h+jgfHCE+Qdlsvy8qKEcU4VKxgjD+vA=="],
++
++    "@rolldown/binding-linux-arm64-musl": ["@rolldown/binding-linux-arm64-musl@1.2.19", "", { "os": "linux", "cpu": "arm64" }, "sha512-K1SmQp3FFichn8oqrNIwvFoZ5wcvjC7goBzpaMNvLf9FZc+QB/QvLmnpJZgAAGHiD980tP8FZZnXk2K94rvlxg=="],
++
++    "@rolldown/binding-linux-ppc64-gnu": ["@rolldown/binding-linux-ppc64-gnu@1.2.19", "", { "os": "linux", "cpu": "ppc64" }, "sha512-I0xwD57jP/3A7+5UPZin2w8Y7XHEmEM5zqpYZOcQ45MlNW6tUJUziymV3yRr7rL4vwyfEcRsRksC4a7Kc08p5Q=="],
++
++    "@rolldown/binding-linux-s390x-gnu": ["@rolldown/binding-linux-s390x-gnu@1.2.19", "", { "os": "linux", "cpu": "s390x" }, "sha512-BrtEHT24SNXj9HiXqy+s/kXiSiQGt6EKCPUlRirAoIioVxKGnbXBUEkbZASAei7iZJB0/Ynm+0JP00Ipx7AnSw=="],
++
++    "@rolldown/binding-linux-x64-gnu": ["@rolldown/binding-linux-x64-gnu@1.2.19", "", { "os": "linux", "cpu": "x64" }, "sha512-rm75/9DkHKeU2WnA8w4X94WGYgLlDCFCfkQC+4bguVJmC/jvDRv2B+2wLOYhyE0fVuv7//Ckk39OoOufyCu76Q=="],
++
++    "@rolldown/binding-linux-x64-musl": ["@rolldown/binding-linux-x64-musl@1.2.19", "", { "os": "linux", "cpu": "x64" }, "sha512-irh/4+iYFM4GAzpluDErgjz89bj6NDtqqMAG/6O1LG38Ed3NpyebzCpcVNkFW8uhy+/3/BocUvnXDR33CXWe9A=="],
++
++    "@rolldown/binding-openharmony-arm64": ["@rolldown/binding-openharmony-arm64@1.2.19", "", { "os": "none", "cpu": "arm64" }, "sha512-+KWTWNoPt+CfSq94CiceWu3yPE+QzkaG+phPyz9G60tmZLwfQkcA4AeksafzvJAw4pvg1mcd5a1TkUqVv0s4JA=="],
++
++    "@rolldown/binding-wasm32-wasi": ["@rolldown/binding-wasm32-wasi@1.2.19", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.6" }, "cpu": "none" }, "sha512-7EH+skOsl5qpWnK0vzamgJFhOv1cwxQpsxm8tI883K9fur5c27p8q87fzEO6BbBPabA2/+s/zR63/pLc137iOg=="],
++
++    "@rolldown/binding-win32-arm64-msvc": ["@rolldown/binding-win32-arm64-msvc@1.2.19", "", { "os": "win32", "cpu": "arm64" }, "sha512-3Q1Yg1Q7tEvBWoZf5rFvG/GKZQPgwfru+p4wBajDfJFBs0SHCpL++dfTjW9gyAKd1T7ZpIYvdaUax7Pa/IhFVQ=="],
++
++    "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.19", "", { "os": "win32", "cpu": "x64" }, "sha512-y/sqRRc6d7hECzOFc5n3LSeqctmIp9mMjY1Kq4s14uLPd/LZ4z7i1zrW6fMtp2mPeuQIC4e6ULMcwQzMomqQag=="],
++
++    "@rolldown/pluginutils": ["@rolldown/pluginutils@1.1.1", "", {}, "sha512-glFIJDvLNDtJhT9qrMFWLPbvS+skxgt4L0K8Ei2YtnhPysAJnsI7nyxSJxKj4ADeKX0OLjC4ntRkwpLOoS3rwA=="],
++
+     "@socket.io/component-emitter": ["@socket.io/component-emitter@3.1.2", "", {}, "sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA=="],
+ 
++    "@tybys/wasm-util": ["@tybys/wasm-util@0.10.5", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA=="],
++
++    "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
++
+     "@types/cors": ["@types/cors@2.8.19", "", { "dependencies": { "@types/node": "*" } }, "sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg=="],
+ 
++    "@types/deep-eql": ["@types/deep-eql@4.0.2", "", {}, "sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw=="],
++
++    "@types/estree": ["@types/estree@1.0.10", "", {}, "sha512-lTyOMnOcmRBzdCv6/4zUZCrEhV0xrqQiUZBZtVcbmLHBXKLnN8q89v/wKRF/Q0HbwVsqbIG3o5HDoFl9sduM+g=="],
++
+     "@types/node": ["@types/node@26.6.6", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog=="],
+ 
+     "@types/ws": ["@types/ws@8.18.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w=="],
+ 
++    "@vitest/coverage-v8": ["@vitest/coverage-v8@5.1.1", "", { "dependencies": { "@bcoe/v8-coverage": "^1.0.2", "@vitest/istanbul-lib-coverage": "^2.1.0", "@vitest/istanbul-lib-report": "^2.1.0", "ast-v8-to-istanbul": "^1.0.7", "magicast": "^0.5.5", "obug": "^3.0.0", "std-env": "^4.3.0", "tinyrainbow": "^3.2.0" }, "peerDependencies": { "@vitest/browser": "5.1.1", "vitest": "5.1.1" }, "optionalPeers": ["@vitest/browser"] }, "sha512-xL4NkbVx/UqqDHaXSOyvB8qsSoLQ+dVNGR9H2Bh/4ggQtmaPFNPUC9gZQwKZePLOQ6WDcgwXVnPulFW9eCHt0w=="],
++
++    "@vitest/istanbul-lib-coverage": ["@vitest/istanbul-lib-coverage@2.1.1", "", {}, "sha512-pF9nMHHuyQzyEXdkWX3d4wElEKjymfL5TEoofegJn/jK2WjmTLOcJKfJ7/YwYGYdbZf8Ebrt4VDUoBPiTuO9zg=="],
++
++    "@vitest/istanbul-lib-report": ["@vitest/istanbul-lib-report@2.1.1", "", { "dependencies": { "@vitest/istanbul-lib-coverage": "2.1.1" } }, "sha512-Qba+8OpQQAbWrmq3u1olh6jqE/vyW4OYJe6TLrrTBpXhjJhbY7Os69wyVvMQmNA64KJhGd5nQ/c7l4io8tPCHQ=="],
++
++    "@vitest/mocker": ["@vitest/mocker@5.1.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.31", "@vitest/spy": "5.1.1", "estree-walker": "^3.0.3", "magic-string": "^1.4.5" }, "peerDependencies": { "msw": "^2.4.9 || ^3.0.0", "vite": "^6.0.0 || ^7.0.0 || ^8.0.0" }, "optionalPeers": ["msw", "vite"] }, "sha512-b2OgTB4+3ImWIVafXKazJXwLKwQxUNnix6b3xUvUTMh7RyXlrtzoxfZr8aEz9zkHOMAS4K5lu3TvFWoiVeVTQg=="],
++
++    "@vitest/spy": ["@vitest/spy@5.1.1", "", {}, "sha512-6K8C6alQG1/Yc8/ZI22iJS7JEsxPdVzqtqDq+/xM4Z0mGVykemMVjLhqMy/q6/IHYG3kKD8hKSwRen/ZdyI9vQ=="],
++
+     "accepts": ["accepts@1.3.8", "", { "dependencies": { "mime-types": "~2.1.34", "negotiator": "0.6.3" } }, "sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw=="],
+ 
++    "assertion-error": ["assertion-error@2.0.1", "", {}, "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA=="],
++
++    "ast-v8-to-istanbul": ["ast-v8-to-istanbul@1.0.8", "", { "dependencies": { "@jridgewell/trace-mapping": "^0.3.31", "estree-walker": "^3.0.3", "js-tokens": "^10.0.0" } }, "sha512-lPdpagk13ANXV+HClJEpCZM7kUsl5XcvgqKzZhaj6Ve1ZFICcY2sGhAN1n1vT0tML6EclT7bfVgTxqL57Gkpow=="],
++
+     "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
+ 
++    "chai": ["chai@6.3.0", "", {}, "sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg=="],
++
+     "cookie": ["cookie@0.7.2", "", {}, "sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w=="],
+ 
+     "cors": ["cors@2.8.6", "", { "dependencies": { "object-assign": "^4", "vary": "^1" } }, "sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw=="],
+ 
+     "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" }, "peerDependencies": { "supports-color": "*" }, "optionalPeers": ["supports-color"] }, "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA=="],
+ 
++    "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
++
+     "engine.io": ["engine.io@6.6.11", "", { "dependencies": { "@types/cors": "^2.8.12", "@types/node": ">=10.0.0", "@types/ws": "^8.5.12", "accepts": "~1.3.4", "cookie": "~0.7.2", "cors": "~2.8.5", "debug": "~4.4.1", "engine.io-parser": "~5.2.1", "ws": "~8.21.0" } }, "sha512-z34mGpLoY/82ZbkX1LqGMIaf3wjVMPL6gVC681QDqnmzJ26synI8qAE32P+a7UazmpJZ8UGrFIeAavgRfXzYrg=="],
+ 
+     "engine.io-client": ["engine.io-client@6.6.8", "", { "dependencies": { "@socket.io/component-emitter": "~3.1.0", "debug": "~4.4.1", "engine.io-parser": "~5.2.1", "ws": "~8.21.0", "xmlhttprequest-ssl": "~2.1.1" } }, "sha512-DPN6+2uNi3A2cbSR3gqJepLVOnSQmbaJT4USgU+TgGPczEqLQT0i6t05jHrf4TT6rcxABrGp/1As0FyqwIZlGg=="],
+ 
+     "engine.io-parser": ["engine.io-parser@5.2.3", "", {}, "sha512-HqD3yTBfnBxIrbnM1DoD6Pcq8NECnh8d4As1Qgh0z5Gg3jRRIqijury0CL3ghu/edArpUYiYqQiDUQBIs4np3Q=="],
+ 
++    "es-module-lexer": ["es-module-lexer@2.3.2", "", {}, "sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw=="],
++
++    "estree-walker": ["estree-walker@3.0.3", "", { "dependencies": { "@types/estree": "^1.0.0" } }, "sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g=="],
++
++    "expect-type": ["expect-type@1.4.0", "", {}, "sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA=="],
++
++    "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
++
++    "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
++
++    "js-tokens": ["js-tokens@10.0.1", "", {}, "sha512-XMt+uh+yEs6srFvEb/pEe4IMvbtoXVdNxF7lZFU+I9sdWI641L97L+gXQMTGm1x3RjPUVizNVjHueclXr0U7sw=="],
++
++    "lightningcss": ["lightningcss@1.33.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.33.0", "lightningcss-darwin-arm64": "1.33.0", "lightningcss-darwin-x64": "1.33.0", "lightningcss-freebsd-x64": "1.33.0", "lightningcss-linux-arm-gnueabihf": "1.33.0", "lightningcss-linux-arm64-gnu": "1.33.0", "lightningcss-linux-arm64-musl": "1.33.0", "lightningcss-linux-x64-gnu": "1.33.0", "lightningcss-linux-x64-musl": "1.33.0", "lightningcss-win32-arm64-msvc": "1.33.0", "lightningcss-win32-x64-msvc": "1.33.0" } }, "sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA=="],
++
++    "lightningcss-android-arm64": ["lightningcss-android-arm64@1.33.0", "", { "os": "android", "cpu": "arm64" }, "sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg=="],
++
++    "lightningcss-darwin-arm64": ["lightningcss-darwin-arm64@1.33.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Sciaz8eenNTKn9b3t7+xr0ipTp9YxKQY4npwQ3mrRuL0BAVHBLyZxofhaKBAVtzmtRZ/zTyo0/to4B1uWG/Djg=="],
++
++    "lightningcss-darwin-x64": ["lightningcss-darwin-x64@1.33.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-Z5UPAxzrjlWNNyGy6i65cJzzvgJ5D3T6wMvs+gWpY9d7qRhANrxqAp6LhxIgZhWEw18RfJTGcRxjuLIBr+m8XQ=="],
++
++    "lightningcss-freebsd-x64": ["lightningcss-freebsd-x64@1.33.0", "", { "os": "freebsd", "cpu": "x64" }, "sha512-QQM/Ti/hQajJwCY+RiWuCZ9sdtI/XQk7nDK5vC8kkdwixezOlDgvDx7+RT+QjK6FcFT4MpsuoBnHIo/O3StRRg=="],
++
++    "lightningcss-linux-arm-gnueabihf": ["lightningcss-linux-arm-gnueabihf@1.33.0", "", { "os": "linux", "cpu": "arm" }, "sha512-N7FVBe6iS24MlM6R/4RBTxGhQheZGs7tiQ9U32UtF75NzP5Q7xWPRqLBCKxlRQRk3rY1jCIPLzx7WzOhuUIRLQ=="],
++
++    "lightningcss-linux-arm64-gnu": ["lightningcss-linux-arm64-gnu@1.33.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-j2v/itmy4HlNxlc6voKXYgBqNi0Ng2LShg4z7GufpEgs05P+2suBVyi9I6YHq5uoVFx9ETin3eCEhLVyXGQnKg=="],
++
++    "lightningcss-linux-arm64-musl": ["lightningcss-linux-arm64-musl@1.33.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-yiO5ROMuYQgXbC60yjZU5CYSFZGKXL0HFATXt9mHJn1+zW55oCtMI9NfcVhYLMFDL7gV7oBPon/EmMMGg2OvtQ=="],
++
++    "lightningcss-linux-x64-gnu": ["lightningcss-linux-x64-gnu@1.33.0", "", { "os": "linux", "cpu": "x64" }, "sha512-ar+Ju7LmcN0Jo4FpL4hpFybwNG9/3A/Br5KW2n2jyODg3MEZXaDYADdemoNS+BDNfMgKvylJLj4S5tyRActuAg=="],
++
++    "lightningcss-linux-x64-musl": ["lightningcss-linux-x64-musl@1.33.0", "", { "os": "linux", "cpu": "x64" }, "sha512-RYiYbkokw0trfKqqzfF55lginwEPrD3OJDfTuJzFs1MK6iFnDenaz1fqLLtX4ITG3OktJQXOeTaw1awrBAlZPw=="],
++
++    "lightningcss-win32-arm64-msvc": ["lightningcss-win32-arm64-msvc@1.33.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-1K+MPfLSFVpphzpdbfkhlWk6wBrTObBzS2T6db10PNOZgR9GoVsAWzwNyuhUYYbTp23j+4RrncfujZ4uAzXvwA=="],
++
++    "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.33.0", "", { "os": "win32", "cpu": "x64" }, "sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA=="],
++
++    "magic-string": ["magic-string@1.4.5", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w=="],
++
++    "magicast": ["magicast@0.5.5", "", { "dependencies": { "@babel/parser": "^7.29.7", "@babel/types": "^7.29.7", "source-map-js": "^1.2.1" } }, "sha512-UicdXN8zQ3JHlxVq+28afMXPr1z7WNY6+7EJnzTdQWkTAlMLF5fNCCKxJHBQwGaNGR11581EiQmQzx73+MvszA=="],
++
+     "mime-db": ["mime-db@1.52.0", "", {}, "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg=="],
+ 
+     "mime-types": ["mime-types@2.1.35", "", { "dependencies": { "mime-db": "1.52.0" } }, "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw=="],
+ 
+     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
+ 
++    "nanoid": ["nanoid@3.3.20", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ=="],
++
+     "negotiator": ["negotiator@0.6.3", "", {}, "sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg=="],
+ 
+     "object-assign": ["object-assign@4.1.1", "", {}, "sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg=="],
+ 
++    "obug": ["obug@3.0.0", "", {}, "sha512-5vvB5+W7ePv+p3uqxi+RcW1XAzLW0/hxt3/4X4Lc4qHudzOhmBiBwOY6DRob4WnanAEGvNcLjF+KNOufrUoEQw=="],
++
++    "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
++
++    "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
++
++    "postcss": ["postcss@8.5.33", "", { "dependencies": { "nanoid": "^3.3.20", "picocolors": "^1.1.1", "source-map-js": "^1.2.2" } }, "sha512-RVHEU9/Pp1Fnjr/MpAJsZoADukCKhfIi15OunEYiGktIkYLkPVvC1sioWolGDS7XByMTx9m/IGbro0Js13zhnQ=="],
++
++    "rolldown": ["rolldown@1.2.19", "", { "dependencies": { "@oxc-project/types": "=0.156.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.19", "@rolldown/binding-android-arm64": "1.2.19", "@rolldown/binding-darwin-arm64": "1.2.19", "@rolldown/binding-darwin-x64": "1.2.19", "@rolldown/binding-freebsd-x64": "1.2.19", "@rolldown/binding-linux-arm-gnueabihf": "1.2.19", "@rolldown/binding-linux-arm64-gnu": "1.2.19", "@rolldown/binding-linux-arm64-musl": "1.2.19", "@rolldown/binding-linux-ppc64-gnu": "1.2.19", "@rolldown/binding-linux-s390x-gnu": "1.2.19", "@rolldown/binding-linux-x64-gnu": "1.2.19", "@rolldown/binding-linux-x64-musl": "1.2.19", "@rolldown/binding-openharmony-arm64": "1.2.19", "@rolldown/binding-wasm32-wasi": "1.2.19", "@rolldown/binding-win32-arm64-msvc": "1.2.19", "@rolldown/binding-win32-x64-msvc": "1.2.19" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-QIiV1J9d0pzN4jeeTH4sjPy0AZ6cAy2cG0ExeoE1+U8Rvj+hR3gYkokx0YbeUNGlZqiQJJ2utcETe0oKXwzsuA=="],
++
+     "socket.io": ["socket.io@4.8.4", "", { "dependencies": { "accepts": "~1.3.4", "cors": "~2.8.5", "debug": "~4.4.1", "engine.io": "~6.6.0", "socket.io-adapter": "~2.5.2", "socket.io-parser": "~4.2.4" } }, "sha512-9ZV9zg8vN8hO3Y25DhR7nUkJ1VDnBhq5O/JrXhFT9s6+F0gqytSASTHVfCFc2mJXaTfARroErplXlzFWwETZqQ=="],
+ 
+     "socket.io-adapter": ["socket.io-adapter@2.5.8", "", { "dependencies": { "debug": "~4.4.1", "ws": "~8.21.0" } }, "sha512-6Oy52pbg+kvdCVvjcN+FnY7BvxZ7cIHNScbvztT/It5d0vbwoJoVZmF2gjJmnV0/4WlXRfG15zc45ySk9Ah8bw=="],
+@@ -58,10 +198,30 @@
+ 
+     "socket.io-parser": ["socket.io-parser@4.2.7", "", { "dependencies": { "@socket.io/component-emitter": "~3.1.0", "debug": "~4.4.1" } }, "sha512-IH/iSeO9T6gz1KkFleGDWkG9N3dl4jXVYUtMhIqH10Md0ttMer8nUNWiP1DKuNrybD2xBrixLJdCC9J6ECoYkg=="],
+ 
++    "source-map-js": ["source-map-js@1.2.4", "", {}, "sha512-J7ZjMvHd9O1fcT/5V09QWaaSl2BbWx3F6O08spde82Namf9UB0GxRVIPiNbVsdKkoizHiSpTodo3vp2bAy91MA=="],
++
++    "std-env": ["std-env@4.3.0", "", {}, "sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag=="],
++
++    "tinybench": ["tinybench@6.2.5", "", {}, "sha512-b/8GRMdnY4cqkfCLyaFpTGIv1qwfi3oT0mWaepwT++6Z/ZrYehNfZZ2JDKVLKGhNoEkS3IIB1ELtCT0XS5DtOA=="],
++
++    "tinyexec": ["tinyexec@1.3.1", "", {}, "sha512-GCvB3aoys96IuDFBMcTB46JOR6mdMtAToqwiW8JlWhsoh1mhHi/xn9ss/Dg7N555GiJyEt2qzoG/NHCwM6h1EA=="],
++
++    "tinyglobby": ["tinyglobby@0.2.17", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g=="],
++
++    "tinyrainbow": ["tinyrainbow@3.2.0", "", {}, "sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A=="],
++
++    "tslib": ["tslib@2.9.1", "", {}, "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA=="],
++
+     "undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
+ 
+     "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
+ 
++    "vite": ["vite@8.3.8", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.7", "postcss": "^8.5.32", "rolldown": "~1.2.18", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.7.1 || ^0.8.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-LzOn3h9rG/0vhLdXrV4yJ4QFA9eEoqCl+Yx+kGJd7aB9w6nfNgVHKSYwLPZUHrz4ZGa+t+kXjV9itvcHDLQouA=="],
++
++    "vitest": ["vitest@5.1.1", "", { "dependencies": { "@types/chai": "^5.2.2", "@vitest/mocker": "5.1.1", "chai": "^6.3.0", "es-module-lexer": "^2.3.2", "expect-type": "^1.4.0", "magic-string": "^1.4.5", "obug": "^3.0.0", "picomatch": "^4.0.7", "std-env": "^4.3.0", "tinybench": "^6.2.3", "tinyexec": "^1.3.1", "tinyglobby": "^0.2.17", "why-is-node-running": "3.2.1" }, "peerDependencies": { "@edge-runtime/vm": "*", "@opentelemetry/api": "^1.9.0", "@types/node": "^22.0.0 || >=24.0.0", "@vitest/browser-playwright": "5.1.1", "@vitest/browser-preview": "5.1.1", "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0", "@vitest/coverage-istanbul": "5.1.1", "@vitest/coverage-v8": "5.1.1", "@vitest/ui": "5.1.1", "happy-dom": "*", "jsdom": "*", "vite": "^6.4.0 || ^7.0.0 || ^8.0.0" }, "optionalPeers": ["@edge-runtime/vm", "@opentelemetry/api", "@types/node", "@vitest/browser-playwright", "@vitest/browser-preview", "@vitest/browser-webdriverio", "@vitest/coverage-istanbul", "@vitest/coverage-v8", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "./vitest.mjs" } }, "sha512-trVmzUFOSraCZcI3uZIMD5FqBh4atFkC/XuJP/IU7qtyQay0FCs3Ia+0QiQ2JJwGyWG/xrcBoJNel2+O7kEZ0g=="],
++
++    "why-is-node-running": ["why-is-node-running@3.2.1", "", { "bin": { "why-is-node-running": "cli.js" } }, "sha512-Tb2FUhB4vUsGQlfSquQLYkApkuPAFQXGFzxWKHHumVz2dK+X1RUm/HnID4+TfIGYJ1kTcwOaCk/buYCEJr6YjQ=="],
++
+     "ws": ["ws@8.22.2", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-/rEZ2ejown2N5gxVTHUu9bVVC7ttu0/Tgzf5hbTOixR3Fs7mbbXgn2DbdbcKgJOmpQMtrIUWivtYuVMnp/W/yA=="],
+ 
+     "xmlhttprequest-ssl": ["xmlhttprequest-ssl@2.1.2", "", {}, "sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ=="],
+diff --git a/mini-services/hermes-chat/handlers/conversations.ts b/mini-services/hermes-chat/handlers/conversations.ts
+index 51abbe7..6b5639c 100644
+--- a/mini-services/hermes-chat/handlers/conversations.ts
++++ b/mini-services/hermes-chat/handlers/conversations.ts
+@@ -26,8 +26,18 @@ function validDiskPath(raw: unknown): string | null {
+   }
+ }
+ 
+-export function registerConversationsHandlers(socket: Socket) {
+ 
++// ── Découpage interne (audit CRAP 2026-11) ────────────────────────────────
++// registerConversationsHandlers ne pose plus 24 socket.on() dans un seul
++// corps : cinq sous-registres, un par domaine, chacun appelé dans l'ordre
++// source d'origine. Les blocs sont VERBATIM (aucune ligne de handler modifiée) ;
++// seuls les corps englobants changent. Le comportement à l'enregistrement,
++// l'ordre de pose et les identifiants ctx.* sont inchangés.
++
++/** Cycle de vie du fil : lister, créer, changer de mode, renommer, supprimer,
++ *  ouvrir (avec historique + tour en vol), épingler, créer un fork, chercher,
++ *  lister les artefacts d'une conversation. */
++function registerConversationLifecycleHandlers(socket: Socket) {
+ socket.on("conversations:list", (cb?: (data: unknown) => void) => {
+   const conversations = ctx.store.listConversations();
+   if (typeof cb === "function") cb({ conversations });
+@@ -267,6 +277,11 @@ socket.on(
+ );
+ 
+ 
++}
++
++/** Projets & rangement : dossiers (créer/renommer/archiver/supprimer/réordonner,
++ *  liaison disque bornée au HOME) et rangement d'une conversation dans un dossier. */
++function registerProjectHandlers(socket: Socket) {
+ // ── Projets : rangement des conversations par projet (fork) ───────────
+ 
+ socket.on("projects:list", (cb?: (data: unknown) => void) => {
+@@ -422,6 +437,11 @@ socket.on(
+ 
+ 
+ 
++}
++
++/** Tours de chat : envoi et régénération (mode expert, recherche web,
++ *  variantes de comparaison, versions). */
++function registerTurnHandlers(socket: Socket) {
+ socket.on(
+   "chat:send",
+   async (
+@@ -699,6 +719,11 @@ socket.on(
+ 
+ 
+ // Modifie un message utilisateur et relance le tour depuis ce point
++}
++
++/** Messages & contrôle du tour : édition, suppression, sélection de version,
++ *  arrêt du tour en vol. */
++function registerMessageAndStopHandlers(socket: Socket) {
+ socket.on(
+   "message:edit",
+   async (
+@@ -916,6 +941,10 @@ socket.on("chat:stop", (payload: { conversationId?: string }, cb?: (data: unknow
+   if (typeof cb === "function") cb({ ok: true, stopped: had });
+ });
+ 
++}
++
++/** Compaction du contexte (chantier « Composer v2 »). */
++function registerCompactionHandlers(socket: Socket) {
+ // ── Compaction du contexte (chantier « Composer v2 ») ─────────────────
+ // Résume l'historique de la conversation et conserve la synthèse en tête
+ // de session : l'affichage reste intact, seul ce qui part au modèle change.
+@@ -981,3 +1010,13 @@ socket.on(
+ );
+ 
+ }
++
++/** Point d'entrée inchangé (câblé par index.ts) : pose les 24 socket.on du
++ *  domaine conversations, dans l'ordre source d'origine. */
++export function registerConversationsHandlers(socket: Socket) {
++  registerConversationLifecycleHandlers(socket);
++  registerProjectHandlers(socket);
++  registerTurnHandlers(socket);
++  registerMessageAndStopHandlers(socket);
++  registerCompactionHandlers(socket);
++}
+diff --git a/mini-services/hermes-chat/handlers/providers-extensions.ts b/mini-services/hermes-chat/handlers/providers-extensions.ts
+index 0c8b050..9a43eab 100644
+--- a/mini-services/hermes-chat/handlers/providers-extensions.ts
++++ b/mini-services/hermes-chat/handlers/providers-extensions.ts
+@@ -5,7 +5,12 @@
+ import type { Socket } from "socket.io";
+ import { ctx } from "./context";
+ 
+-export function registerProvidersExtensionsHandlers(socket: Socket) {
++// registerProvidersExtensionsHandlers ne pose plus 21 socket.on() dans un
++// seul corps : quatre sous-registres thématiques, appelés dans l'ordre
++// d'origine du fichier. Corps des handlers VERBATIM — seules les accolades
++// d'encadrement changent.
++
++function registerSessionCatalogHandlers(socket: Socket) {
+ 
+ socket.on("hello", (cb?: (info: unknown) => void) => {
+   if (typeof cb === "function") cb(ctx.helloPayload());
+@@ -31,6 +36,10 @@ socket.on("models:list", async (cb?: (data: unknown) => void) => {
+   }
+ });
+ 
++}
++
++function registerAttachmentsAudioHandlers(socket: Socket) {
++
+ socket.on(
+   "attachments:upload",
+   async (
+@@ -88,6 +97,10 @@ socket.on(
+ );
+ 
+ 
++}
++
++function registerProvidersHandlers(socket: Socket) {
++
+ // ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
+ 
+ socket.on("providers:list", (cb?: (data: unknown) => void) => {
+@@ -375,6 +388,8 @@ socket.on(
+ );
+ 
+ 
++}
++
+ // ── Extensions : dépôts importés + serveurs MCP ───────────────────
+ 
+ /** Lot audit 2026-11-21 : déduplication — coller deux fois la même source
+@@ -391,6 +406,8 @@ function findExtensionBySource(
+     .some((e) => e.kind === kind && (e.source ?? "").toLowerCase() === source.toLowerCase());
+ }
+ 
++function registerExtensionsHandlers(socket: Socket) {
++
+ socket.on("extensions:list", (cb?: (data: unknown) => void) => {
+   if (typeof cb === "function") cb({ extensions: ctx.extensionsWire() });
+ });
+@@ -698,3 +715,10 @@ socket.on(
+ );
+ 
+ }
++
++export function registerProvidersExtensionsHandlers(socket: Socket) {
++  registerSessionCatalogHandlers(socket);
++  registerAttachmentsAudioHandlers(socket);
++  registerProvidersHandlers(socket);
++  registerExtensionsHandlers(socket);
++}
+diff --git a/mini-services/hermes-chat/handlers/settings-system.ts b/mini-services/hermes-chat/handlers/settings-system.ts
+index b08cdd0..3873ea1 100644
+--- a/mini-services/hermes-chat/handlers/settings-system.ts
++++ b/mini-services/hermes-chat/handlers/settings-system.ts
+@@ -199,7 +199,14 @@ function binaireNavigateur(raw: string): boolean {
+   );
+ }
+ 
+-export function registerSettingsSystemHandlers(socket: Socket) {
++// registerSettingsSystemHandlers ne pose plus 27 socket.on() dans un seul
++// corps : sept sous-registres thématiques, appelés dans l'ordre d'origine
++// du fichier (27 socket.on, tous à nom d'événement distinct). Corps des
++// handlers VERBATIM — seules les accolades
++// d'encadrement changent. Les aides module (révision git, sonde GitHub,
++// état de mise à jour, garde-fous settings:set) restent au niveau module.
++
++function registerSanteSettingsHandlers(socket: Socket) {
+ 
+ // Revue P1-P7 (B6) : le manifeste du dernier démarrage n'était relayé
+ // QUE dans helloPayload (connexion initiale) — system:update-state ne le
+@@ -305,6 +312,10 @@ socket.on(
+ );
+ 
+ 
++}
++
++function registerGatewayHandlers(socket: Socket) {
++
+ // ── Gateway Hermes (Paramètres → Système) : brancher l'agent réel ───
+ // URL ws:// ou http(s):// (le /api/ws est ajouté au besoin côté connecteur)
+ // + jeton facultatif. Chaîne vide = débranchement. Persisté dans settings :
+@@ -401,6 +412,10 @@ socket.on(
+ );
+ 
+ 
++}
++
++function registerUpdateAndRenderCacheHandlers(socket: Socket) {
++
+ // ── Mise à jour depuis l'interface : demande + JOURNAL LIVE ────────────
+ // Dépose un drapeau que le lanceur (desktop/hermes-ui.ps1 | .sh — boucle
+ // de surveillance) ramasse : arrêt propre, mise à jour GitHub,
+@@ -464,6 +479,10 @@ socket.on("system:clearRenderCache", (cb?: (data: unknown) => void) => {
+     cb({ ...ctx.chromeProfileStats(), removed, kept });
+ });
+ 
++}
++
++function registerWebchatPilotHandlers(socket: Socket) {
++
+ // ── Chats IA web (fournisseur webchat) : sondes et navigateur de pilotage ──
+ // Le profil est DÉDIÉ à l'application : l'utilisateur se connecte aux sites
+ // UNE fois, à la main (bouton « Ouvrir le navigateur ») — le code ne saisit
+@@ -524,6 +543,10 @@ socket.on("webchat:close", async (cb?: (data: unknown) => void) => {
+   if (typeof cb === "function") cb({ ok: true, closed });
+ });
+ 
++}
++
++function registerPromptHandlers(socket: Socket) {
++
+ // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────
+ 
+ // Prompt actif d'une conversation (null si aucun)
+@@ -666,6 +689,10 @@ socket.on(
+ );
+ 
+ 
++}
++
++function registerCustomInstructionsHandlers(socket: Socket) {
++
+ // Instructions personnalisées globales (F-19) — registre serveur §6
+ socket.on(
+   "custom-instructions:get",
+@@ -697,6 +724,10 @@ socket.on(
+ );
+ 
+ 
++}
++
++function registerMemoryAndUpdateCheckHandlers(socket: Socket) {
++
+ // ── Mémoire utilisateur (F-18) — consultable, éditable, effaçable ───
+ // Notes persistantes injectées dans les instructions du tour tant que la
+ // mémoire est active. Jamais un mot-clé magique : la composition reste
+@@ -770,3 +801,13 @@ socket.on(
+ );
+ 
+ }
++
++export function registerSettingsSystemHandlers(socket: Socket) {
++  registerSanteSettingsHandlers(socket);
++  registerGatewayHandlers(socket);
++  registerUpdateAndRenderCacheHandlers(socket);
++  registerWebchatPilotHandlers(socket);
++  registerPromptHandlers(socket);
++  registerCustomInstructionsHandlers(socket);
++  registerMemoryAndUpdateCheckHandlers(socket);
++}
+diff --git a/mini-services/hermes-chat/hermes-connector.ts b/mini-services/hermes-chat/hermes-connector.ts
+index be94a73..85e4da6 100644
+--- a/mini-services/hermes-chat/hermes-connector.ts
++++ b/mini-services/hermes-chat/hermes-connector.ts
+@@ -130,8 +130,9 @@ export function toHttpBase(url: string): string {
+   return base.replace(/\/$/, "");
+ }
+ 
+-/** Extrait tolérant d'une liste de modèles depuis la réponse de /api/model/options. */
+-function parseModelOptions(data: any): ModelOption[] {
++/** Extrait tolérant d'une liste de modèles depuis la réponse de /api/model/options.
++ *  Exporté (audit CRAP 2026-11) pour être pincé par des tests unitaires Vitest. */
++export function parseModelOptions(data: any): ModelOption[] {
+   const out: ModelOption[] = [];
+   const pushModel = (m: any, provider?: string) => {
+     const id = typeof m === "string" ? m : (m?.id ?? m?.name ?? m?.model);
+diff --git a/mini-services/hermes-chat/llm-pool.ts b/mini-services/hermes-chat/llm-pool.ts
+index 0681854..d520c5d 100644
+--- a/mini-services/hermes-chat/llm-pool.ts
++++ b/mini-services/hermes-chat/llm-pool.ts
+@@ -13,23 +13,21 @@
+ // clé ne quitte ce module, seuls les ids/vues masquées circulent.
+ import type { KeyRow, ProviderRow, Store } from "./store";
+ import type { ModelOption, ModelsResult, ProviderStrategy } from "./types";
+-import {
+-  LOCAL_BASE_PROMPT,
+-  attachmentNote,
+-  parseSseLine,
+-  type TurnCallbacks,
+-  type TurnRequest,
+-} from "./local-engine";
++import type { TurnCallbacks, TurnRequest } from "./local-engine";
+ import {
+   pickActiveKey,
+   providerCapabilities,
+   looksLikeZaiJwt,
+-  explainQuotaError,
+   applyExplicitBase,
+   ZAI_CODING_BASE,
+   ZAI_STANDARD_BASE,
+ } from "./providers";
+-import { readAttachmentDataUrl } from "./uploads";
++import {
++  PoolAuthError,
++  stallGuardFor,
++  streamAnthropicTurn,
++  streamOpenAiTurn,
++} from "./llm-streams";
+ 
+ // ── Types publics du pool ─────────────────────────────────────────────
+ 
+@@ -54,7 +52,7 @@ export interface PoolTurnResult {
+ 
+ /** Contrat consommé par le connecteur (hermes-connector.ts). */
+ /** Tour LLM en vol — suivi interne, alimenté à chaque octet par la garde. */
+-interface StreamTraceEntry {
++export interface StreamTraceEntry {
+   provider: string;
+   model: string;
+   startedAt: number;
+@@ -91,7 +89,7 @@ export interface LlmPoolApi {
+ 
+ // ── Endpoints LLM connus ───────────────────────────────────────────────
+ 
+-interface LlmEndpoint {
++export interface LlmEndpoint {
+   base: string;
+   style: "openai" | "anthropic";
+   auth: "bearer" | "x-api-key" | "none";
+@@ -242,19 +240,8 @@ function routeZaiCoding(endpoint: LlmEndpoint, secret: string | null): LlmEndpoi
+   }
+ }
+ 
+-// ── Erreurs du pool ────────────────────────────────────────────────────
+-
+-/** Erreur d'authentification : la clé est déclassée puis une autre est tentée. */
+-class PoolAuthError extends Error {
+-  constructor(
+-    message: string,
+-    readonly exhausted: boolean,
+-    readonly keyLabel: string,
+-  ) {
+-    super(message);
+-    this.name = "PoolAuthError";
+-  }
+-}
++// PoolAuthError — erreur d'authentification : la clé est déclassée puis une
++// autre est tentée — vit dans llm-streams.ts depuis la vague 2 (importé).
+ 
+ // ── Aides d'analyse des réponses ────────────────────────────────────────
+ 
+@@ -284,22 +271,9 @@ function parseModelList(json: unknown, provider: string): ModelOption[] {
+   return out;
+ }
+ 
+-/** Message d'erreur lisible depuis un corps d'API (JSON ou texte). */
+-async function readErrorBody(res: Response): Promise<string> {
+-  const raw = await res.text().catch(() => "");
+-  try {
+-    const j = JSON.parse(raw) as any;
+-    const msg = j?.error?.message ?? j?.message ?? j?.detail;
+-    if (typeof msg === "string" && msg) return msg.slice(0, 200);
+-  } catch {
+-    /* corps non JSON */
+-  }
+-  return raw.slice(0, 200) || `(corps vide)`;
+-}
+-
+-// Traduction des 429 partagée avec le test de clé (providers.ts) —
+-// `long` accompagne l'erreur du tour, `short` étiquette la carte clé.
+-const rateLimitWhy = explainQuotaError;
++// readErrorBody (message d'erreur lisible depuis un corps d'API) et
++// rateLimitWhy (traduction des 429 partagée avec providers.ts) suivent les
++// tours streaming dans llm-streams.ts depuis la vague 2.
+ 
+ /** Modèle de repli pour un tour multimodal, si la liste en expose un. */
+ const VISION_MODEL = /(-v\b|vision|glm-4v|glm-4\.5v|glm-4\.6v)/i;
+@@ -309,12 +283,13 @@ function isVisionModel(id: string): boolean {
+ 
+ // ── Construction du pool ───────────────────────────────────────────────
+ 
+-export function createLlmPool(store: Store): LlmPoolApi {
++// Catalogue fournisseurs + porte-clés, extrait de createLlmPool (vague 2) :
++// cache des listes de modèles, résolution de clé par stratégie, listes
++// vivantes. Les tours (runTurn/summarize) restent dans createLlmPool et
++// consomment ce catalogue par déstructuration — corps inchangés.
++function createPoolCatalog(store: Store) {
+   // Cache des listes par fournisseur (vidé par invalidate()).
+   const modelsCache = new Map<string, ModelOption[] | null>();
+-  // Tours LLM en vol — rempli par stallGuard à chaque lancement, vidé en
+-  // finally à chaque fin ; alimente la section pool de /diagnostics (F-31ter).
+-  const activeStreamEntries = new Set<StreamTraceEntry>();
+   // Adresses déjà signalées (évite les logs en boucle).
+   const warned = new Set<string>();
+ 
+@@ -427,375 +402,50 @@ export function createLlmPool(store: Store): LlmPoolApi {
+     return result;
+   }
+ 
+-  /** Contenu utilisateur du tour (texte + note des pièces jointes, ou
+-   *  content parts multimodal quand le tour porte des images). */
+-  function buildUserPayload(
+-    req: TurnRequest,
+-    style: "openai" | "anthropic",
+-  ): { text: string; parts: unknown[] | null } {
+-    const images = (req.attachments ?? []).filter((a) => a.kind === "image");
+-    const textContent = req.content + attachmentNote(req.attachments ?? []);
+-    if (images.length === 0) return { text: textContent, parts: null };
+-    const parts: any[] = [{ type: "text", text: req.content.trim() || "Décris et analyse ces images." }];
+-    let added = 0;
+-    for (const img of images.slice(0, 4)) {
+-      const dataUrl = readAttachmentDataUrl(img.url);
+-      if (!dataUrl) continue;
+-      if (style === "anthropic") {
+-        const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+-        if (!m) continue;
+-        parts.push({
+-          type: "image",
+-          source: { type: "base64", media_type: m[1], data: m[2] },
+-        });
+-      } else {
+-        parts.push({ type: "image_url", image_url: { url: dataUrl } });
+-      }
+-      added++;
++  // ── listModels : listes vivantes des fournisseurs actifs ─────────────
++
++  async function listModels(): Promise<ModelsResult | null> {
++    const actives = activeLlmProviders();
++    const models: ModelOption[] = [];
++    for (const a of actives) {
++      const list = await providerModels(a.row, a.endpoint);
++      if (list) models.push(...list);
+     }
+-    return added > 0 ? { text: textContent, parts } : { text: textContent, parts: null };
++    if (models.length === 0) return null;
++    return { models, defaultModel: models[0].id, source: "providers" };
+   }
+ 
+-  // Garde d'inactivité des tours fournisseur : la gateway a son timeout de
+-  // tour (180 s) et le webchat son délai global de pilote — sans garde, une
+-  // connexion fournisseur qui s'enraye (aucune réponse, ou des octets qui
+-  // cessent) bloque le tour indéfiniment. C'est une garde d'INACTIVITÉ : le
+-  // minuteur repart à chaque octet reçu — une réponse longue mais vivante
+-  // reste licite, un fournisseur muet est coupé avec un motif parlant.
+-  // Surcharge par env pour les preuves (jamais en production).
+-  const TURN_STALL_TIMEOUT_MS = Math.max(
+-    5_000,
+-    Number(process.env.HERMES_TURN_STALL_MS) || 120_000,
+-  );
+-
+-  /** Signal combiné pour un tour streaming : annulation utilisateur (cb.signal)
+-   *  + minuteur d'inactivité. reset() repart le minuteur (octet reçu) ;
+-   *  done() nettoie à la fin du tour. Le déclenchement annule le fetch avec un
+-   *  motif parlant — l'erreur remonte telle quelle jusqu'à l'interface. */
+-  function stallGuard(signal: AbortSignal, stallMs: number, label: string, modelId: string) {
+-    const controller = new AbortController();
+-    const onUserAbort = () => controller.abort(signal.reason);
+-    if (signal.aborted) onUserAbort();
+-    else signal.addEventListener("abort", onUserAbort, { once: true });
+-    // Suivi live (F-31ter) : l'entrée existe du lancement au nettoyage (done,
+-    // en finally) — /diagnostics la lit pour trancher lent vs mort en vol.
+-    const entry: StreamTraceEntry = {
+-      provider: label,
+-      model: modelId,
+-      startedAt: Date.now(),
+-      lastByteAt: Date.now(),
+-      bytes: 0,
+-    };
+-    activeStreamEntries.add(entry);
+-    let timer: ReturnType<typeof setTimeout> | undefined;
+-    const arm = () => {
+-      if (timer) clearTimeout(timer);
+-      timer = setTimeout(() => {
+-        controller.abort(
+-          new Error(
+-            `${label} : plus aucun octet reçu depuis ${Math.round(stallMs / 1000)} s — tour abandonné (garde d'inactivité)`,
+-          ),
+-        );
+-      }, stallMs);
+-    };
+-    arm();
+-    return {
+-      signal: controller.signal,
+-      reset(bytes = 0) {
+-        entry.lastByteAt = Date.now();
+-        entry.bytes += bytes;
+-        arm();
+-      },
+-      done() {
+-        if (timer) clearTimeout(timer);
+-        activeStreamEntries.delete(entry);
+-        signal.removeEventListener("abort", onUserAbort);
+-      },
+-    };
++  function activeProviderNames(): string[] {
++    const names = new Set<string>();
++    for (const { endpoint } of activeLlmProviders()) names.add(endpoint.providerLabel);
++    return [...names];
+   }
+ 
+-  /** POST {base}/chat/completions en streaming (style openai). */
+-  async function streamOpenAiTurn(
+-    endpoint: LlmEndpoint,
+-    secret: string | null,
+-    modelId: string,
+-    req: TurnRequest,
+-    cb: TurnCallbacks,
+-  ): Promise<PoolTurnResult> {
+-    const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
+-    const { text, parts } = buildUserPayload(req, "openai");
+-    const messages: any[] = [
+-      { role: "system", content: system },
+-      ...req.history.map((m) => ({ role: m.role, content: m.content })),
+-      { role: "user", content: parts ?? text },
+-    ];
+-    const expert = req.settings ?? {};
+-    const body: Record<string, unknown> = {
+-      model: modelId,
+-      messages,
+-      stream: true,
+-      // z.ai (les deux portefeuilles) : l'effort « off » coupe explicitement
+-      // le raisonnement GLM ; toute autre valeur laisse le défaut du modèle
+-      // (aucun risque d'erreur sur les modèles non-raisonnement).
+-      ...((endpoint.providerLabel === "z.ai" ||
+-        endpoint.providerLabel === "z.ai Coding Plan") &&
+-      req.settings?.reasoningEffort === "off"
+-        ? { thinking: { type: "disabled" } }
+-        : {}),
+-      ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
+-      ...(expert.maxTokens !== undefined ? { max_tokens: expert.maxTokens } : {}),
+-      ...(expert.seed !== undefined ? { seed: expert.seed } : {}),
+-    };
+-
+-    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
+-    let res: Response;
+-    try {
+-      res = await fetch(`${endpoint.base}/chat/completions`, { redirect: "error",
+-        method: "POST",
+-        headers: {
+-          "Content-Type": "application/json",
+-          ...(endpoint.auth === "bearer" && secret ? { Authorization: `Bearer ${secret}` } : {}),
+-          ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
+-          ...(endpoint.extraHeaders ?? {}),
+-        },
+-        body: JSON.stringify(body),
+-        signal: guard.signal,
+-      });
+-      // Les erreurs HTTP passent par ce try : lancées hors try, elles laissent
+-      // l'entrée du garde à vie dans activeStreamEntries (flux fantôme éternel
+-      // dans /diagnostics, timer qui fuit).
+-      if (!res.ok) {
+-        const detail = await readErrorBody(res);
+-        if (res.status === 401 || res.status === 403)
+-          throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
+-        if (res.status === 429) {
+-          const why = rateLimitWhy(detail);
+-          throw new PoolAuthError(
+-            `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
+-            true,
+-            why.short,
+-          );
+-        }
+-        throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
+-      }
+-      if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
+-    } catch (err) {
+-      guard.done();
+-      throw err;
+-    }
+-    // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
+-    // pour la lecture du flux.
+-    guard.reset();
+-
+-    let content = "";
+-    let reasoning = "";
+-    let model = modelId;
+-    let usage: TurnUsage | undefined;
+-    let buffer = "";
+-    const decoder = new TextDecoder();
+-    const reader = res.body.getReader();
+-
+-    const consume = (line: string) => {
+-      const data = parseSseLine(line.trim());
+-      if (!data) return;
+-      if (typeof data.model === "string" && data.model) model = data.model;
+-      const u = data.usage;
+-      if (u && typeof u === "object") {
+-        usage = {
+-          input: typeof u.prompt_tokens === "number" ? u.prompt_tokens : u.input_tokens,
+-          output: typeof u.completion_tokens === "number" ? u.completion_tokens : u.output_tokens,
+-          cost: typeof u.cost === "number" ? u.cost : undefined,
+-        };
+-      }
+-      const d = data.choices?.[0]?.delta;
+-      if (!d) return;
+-      const r = d.reasoning_content ?? d.reasoning;
+-      if (typeof r === "string" && r) {
+-        reasoning += r;
+-        cb.onReasoning(r);
+-      }
+-      if (typeof d.content === "string" && d.content) {
+-        content += d.content;
+-        cb.onDelta(d.content);
+-      }
+-    };
+-
+-    try {
+-      for (;;) {
+-        if (cb.signal.aborted) break;
+-        const { done, value } = await reader.read();
+-        if (done) break;
+-        guard.reset(value.byteLength);
+-        buffer += decoder.decode(value, { stream: true });
+-        const lines = buffer.split("\n");
+-        buffer = lines.pop() ?? "";
+-        for (const line of lines) consume(line);
+-      }
+-      // Fin de flux sans \n final (revue 95) : le résidu du buffer — le
+-      // dernier jeton ou l'objet usage de la dernière trame SSE — était
+-      // perdu si le serveur clôturait le flux sans sauter de ligne.
+-      if (buffer.trim()) consume(buffer);
+-    } catch (err) {
+-      // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
+-      // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
+-      // parlant remonte tel quel.
+-      if (!cb.signal.aborted) throw err;
+-    } finally {
+-      guard.done();
+-    }
+-    return { content, reasoning, model, provider: endpoint.providerLabel, usage };
++  function invalidate(): void {
++    modelsCache.clear();
+   }
+ 
+-  /** POST {base}/messages en streaming (style anthropic). */
+-  async function streamAnthropicTurn(
+-    endpoint: LlmEndpoint,
+-    secret: string | null,
+-    modelId: string,
+-    req: TurnRequest,
+-    cb: TurnCallbacks,
+-  ): Promise<PoolTurnResult> {
+-    const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
+-    const { text, parts } = buildUserPayload(req, "anthropic");
+-    const expert = req.settings ?? {};
+-    const body: Record<string, unknown> = {
+-      model: modelId,
+-      system,
+-      messages: [
+-        ...req.history.map((m) => ({ role: m.role, content: m.content })),
+-        { role: "user", content: parts ?? text },
+-      ],
+-      stream: true,
+-      // Anthropic exige un plafond de sortie.
+-      max_tokens: expert.maxTokens !== undefined ? expert.maxTokens : 4096,
+-      ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
+-    };
++  return { pickKey, activeLlmProviders, providerModels, listModels, activeProviderNames, invalidate };
++}
+ 
+-    const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
+-    let res: Response;
+-    try {
+-      res = await fetch(`${endpoint.base}/messages`, { redirect: "error",
+-        method: "POST",
+-        headers: {
+-          "Content-Type": "application/json",
+-          ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
+-          ...(endpoint.extraHeaders ?? {}),
+-        },
+-        body: JSON.stringify(body),
+-        signal: guard.signal,
+-      });
+-      // Les erreurs HTTP passent par ce try : lancées hors try, elles laissent
+-      // l'entrée du garde à vie dans activeStreamEntries (flux fantôme éternel
+-      // dans /diagnostics, timer qui fuit).
+-      if (!res.ok) {
+-        const detail = await readErrorBody(res);
+-        if (res.status === 401 || res.status === 403)
+-          throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
+-        if (res.status === 429) {
+-          const why = rateLimitWhy(detail);
+-          throw new PoolAuthError(
+-            `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
+-            true,
+-            why.short,
+-          );
+-        }
+-        throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
+-      }
+-      if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
+-    } catch (err) {
+-      guard.done();
+-      throw err;
+-    }
+-    // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
+-    // pour la lecture du flux.
+-    guard.reset();
+-
+-    let content = "";
+-    let reasoning = "";
+-    let model = modelId;
+-    let usage: TurnUsage | undefined;
+-    let buffer = "";
+-    const decoder = new TextDecoder();
+-    const reader = res.body.getReader();
+-
+-    const consume = (line: string) => {
+-      const data = parseSseLine(line.trim());
+-      if (!data) return;
+-      if (typeof data.model === "string" && data.model) model = data.model;
+-      switch (data.type) {
+-        // message_start porte usage.input_tokens (jetons du prompt) et le
+-        // modèle réellement servi — l'ignorer laissait l'usage Anthropic
+-        // sans entrée « input » jusqu'au message_delta final (F-21).
+-        case "message_start": {
+-          if (typeof data.message?.model === "string" && data.message.model) {
+-            model = data.message.model;
+-          }
+-          const u = data.message?.usage;
+-          if (u && typeof u === "object") {
+-            usage = {
+-              input: typeof u.input_tokens === "number" ? u.input_tokens : usage?.input,
+-              output: typeof u.output_tokens === "number" ? u.output_tokens : usage?.output,
+-              cost: usage?.cost,
+-            };
+-          }
+-          break;
+-        }
+-        case "content_block_delta": {
+-          const d = data.delta ?? {};
+-          if (typeof d.thinking === "string" && d.thinking) {
+-            reasoning += d.thinking;
+-            cb.onReasoning(d.thinking);
+-          }
+-          if (typeof d.text === "string" && d.text) {
+-            content += d.text;
+-            cb.onDelta(d.text);
+-          }
+-          break;
+-        }
+-        case "message_delta": {
+-          const u = data.usage;
+-          if (u && typeof u === "object") {
+-            usage = {
+-              input: typeof u.input_tokens === "number" ? u.input_tokens : usage?.input,
+-              output: typeof u.output_tokens === "number" ? u.output_tokens : usage?.output,
+-              cost: usage?.cost,
+-            };
+-          }
+-          break;
+-        }
+-        case "error":
+-          throw new Error(
+-            `${endpoint.providerLabel} : ${String(data.error?.message ?? "erreur de flux")}`
+-          );
+-        default:
+-          break;
+-      }
+-    };
++export function createLlmPool(store: Store): LlmPoolApi {
++  const {
++    pickKey,
++    activeLlmProviders,
++    providerModels,
++    listModels,
++    activeProviderNames,
++    invalidate,
++  } = createPoolCatalog(store);
++  // Tours LLM en vol — rempli par stallGuard à chaque lancement, vidé en
++  // finally à chaque fin ; alimente la section pool de /diagnostics (F-31ter).
++  const activeStreamEntries = new Set<StreamTraceEntry>();
++  // Garde d'inactivité de ce pool, liée au vivier ci-dessus (llm-streams.ts) :
++  // la mécanique de streaming est extraite, la fabrique reçoit le suivi live.
++  const stallGuard = stallGuardFor(activeStreamEntries);
+ 
+-    try {
+-      for (;;) {
+-        if (cb.signal.aborted) break;
+-        const { done, value } = await reader.read();
+-        if (done) break;
+-        guard.reset(value.byteLength);
+-        buffer += decoder.decode(value, { stream: true });
+-        const lines = buffer.split("\n");
+-        buffer = lines.pop() ?? "";
+-        for (const line of lines) consume(line);
+-      }
+-      // Fin de flux sans \n final (revue 95) : le résidu du buffer — le
+-      // dernier jeton ou l'objet usage de la dernière trame SSE — était
+-      // perdu si le serveur clôturait le flux sans sauter de ligne.
+-      if (buffer.trim()) consume(buffer);
+-    } catch (err) {
+-      // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
+-      // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
+-      // parlant remonte tel quel.
+-      if (!cb.signal.aborted) throw err;
+-    } finally {
+-      guard.done();
+-    }
+-    return { content, reasoning, model, provider: endpoint.providerLabel, usage };
+-  }
++  // buildUserPayload et les deux tours streaming (openai + anthropic) vivent
++  // dans llm-streams.ts depuis la vague 2.
+ 
+   // ── runTurn : résolution fournisseur + porte-clés ────────────────────
+ 
+@@ -858,8 +508,8 @@ export function createLlmPool(store: Store): LlmPoolApi {
+       try {
+         const result =
+           turnEndpoint.style === "anthropic"
+-            ? await streamAnthropicTurn(turnEndpoint, secret, modelId, req, cb)
+-            : await streamOpenAiTurn(turnEndpoint, secret, modelId, req, cb);
++            ? await streamAnthropicTurn(stallGuard, turnEndpoint, secret, modelId, req, cb)
++            : await streamOpenAiTurn(stallGuard, turnEndpoint, secret, modelId, req, cb)
+         if (key) store.markKeyUsed(key.id);
+         console.log(
+           `[hermes-chat] tour fournisseur : ${chosen.endpoint.providerLabel}/${result.model}` +
+@@ -900,19 +550,6 @@ export function createLlmPool(store: Store): LlmPoolApi {
+     );
+   }
+ 
+-  // ── listModels : listes vivantes des fournisseurs actifs ─────────────
+-
+-  async function listModels(): Promise<ModelsResult | null> {
+-    const actives = activeLlmProviders();
+-    const models: ModelOption[] = [];
+-    for (const a of actives) {
+-      const list = await providerModels(a.row, a.endpoint);
+-      if (list) models.push(...list);
+-    }
+-    if (models.length === 0) return null;
+-    return { models, defaultModel: models[0].id, source: "providers" };
+-  }
+-
+   // ── summarize : compaction via le pool (repli SDK sinon) ─────────────
+ 
+   async function summarize(
+@@ -994,16 +631,6 @@ export function createLlmPool(store: Store): LlmPoolApi {
+     return null;
+   }
+ 
+-  function invalidate(): void {
+-    modelsCache.clear();
+-  }
+-
+-  function activeProviderNames(): string[] {
+-    const names = new Set<string>();
+-    for (const { endpoint } of activeLlmProviders()) names.add(endpoint.providerLabel);
+-    return [...names];
+-  }
+-
+   /** Instantané des tours LLM en vol (F-31ter) — vide une fois le vol fini. */
+   function activeStreams(): PoolStreamSnapshot[] {
+     const now = Date.now();
+diff --git a/mini-services/hermes-chat/llm-streams.ts b/mini-services/hermes-chat/llm-streams.ts
+new file mode 100644
+index 0000000..77d520c
+--- /dev/null
++++ b/mini-services/hermes-chat/llm-streams.ts
+@@ -0,0 +1,444 @@
++// Mécanique de streaming des tours LLM — extraite de createLlmPool (vague 2).
++// Tout est PUR ici : aucune fermeture sur l'état du pool. La garde
++// d'inactivité reçoit l'ensemble des streams en vol (suivi live /diagnostics,
++// F-31ter) via la fabrique stallGuardFor ; les fonctions de tour reçoivent
++// leur garde en premier paramètre. Le porte-clés, le cache des listes et le
++// routage restent dans llm-pool.ts.
++import type { LlmEndpoint, PoolTurnResult, StreamTraceEntry, TurnUsage } from "./llm-pool";
++import {
++  LOCAL_BASE_PROMPT,
++  attachmentNote,
++  parseSseLine,
++  type TurnCallbacks,
++  type TurnRequest,
++} from "./local-engine";
++import { explainQuotaError } from "./providers";
++import { readAttachmentDataUrl } from "./uploads";
++
++// ── Garde d'inactivité des tours fournisseur ────────────────────────────
++// La gateway a son timeout de tour (180 s) et le webchat son délai global de
++// pilote — sans garde, une connexion fournisseur qui s'enraye (aucune
++// réponse, ou des octets qui cessent) bloque le tour indéfiniment. C'est une
++// garde d'INACTIVITÉ : le minuteur repart à chaque octet reçu — une réponse
++// longue mais vivante reste licite, un fournisseur muet est coupé avec un
++// motif parlant.
++// Surcharge par env pour les preuves (jamais en production).
++export const TURN_STALL_TIMEOUT_MS = Math.max(
++  5_000,
++  Number(process.env.HERMES_TURN_STALL_MS) || 120_000,
++);
++
++/** Garde renvoyée par stallGuardFor : signal combiné + suivi d'activité. */
++export interface StreamGuard {
++  signal: AbortSignal;
++  reset(bytes?: number): void;
++  done(): void;
++}
++
++/** Fabrique de gardes, liée au vivier de streams d'un pool. */
++export type StreamGuardFactory = (
++  signal: AbortSignal,
++  stallMs: number,
++  label: string,
++  modelId: string,
++) => StreamGuard;
++
++/** Signal combiné pour un tour streaming : annulation utilisateur (cb.signal)
++ *  + minuteur d'inactivité. reset() repart le minuteur (octet reçu) ;
++ *  done() nettoie à la fin du tour. Le déclenchement annule le fetch avec un
++ *  motif parlant — l'erreur remonte telle quelle jusqu'à l'interface. */
++export function stallGuardFor(
++  activeStreamEntries: Set<StreamTraceEntry>,
++): StreamGuardFactory {
++  function stallGuard(signal: AbortSignal, stallMs: number, label: string, modelId: string) {
++    const controller = new AbortController();
++    const onUserAbort = () => controller.abort(signal.reason);
++    if (signal.aborted) onUserAbort();
++    else signal.addEventListener("abort", onUserAbort, { once: true });
++    // Suivi live (F-31ter) : l'entrée existe du lancement au nettoyage (done,
++    // en finally) — /diagnostics la lit pour trancher lent vs mort en vol.
++    const entry: StreamTraceEntry = {
++      provider: label,
++      model: modelId,
++      startedAt: Date.now(),
++      lastByteAt: Date.now(),
++      bytes: 0,
++    };
++    activeStreamEntries.add(entry);
++    let timer: ReturnType<typeof setTimeout> | undefined;
++    const arm = () => {
++      if (timer) clearTimeout(timer);
++      timer = setTimeout(() => {
++        controller.abort(
++          new Error(
++            `${label} : plus aucun octet reçu depuis ${Math.round(stallMs / 1000)} s — tour abandonné (garde d'inactivité)`,
++          ),
++        );
++      }, stallMs);
++    };
++    arm();
++    return {
++      signal: controller.signal,
++      reset(bytes = 0) {
++        entry.lastByteAt = Date.now();
++        entry.bytes += bytes;
++        arm();
++      },
++      done() {
++        if (timer) clearTimeout(timer);
++        activeStreamEntries.delete(entry);
++        signal.removeEventListener("abort", onUserAbort);
++      },
++    };
++  }
++  return stallGuard;
++}
++
++// ── Erreurs du pool ────────────────────────────────────────────────────
++
++/** Erreur d'authentification : la clé est déclassée puis une autre est tentée. */
++export class PoolAuthError extends Error {
++  constructor(
++    message: string,
++    readonly exhausted: boolean,
++    readonly keyLabel: string,
++  ) {
++    super(message);
++    this.name = "PoolAuthError";
++  }
++}
++
++/** Message d'erreur lisible depuis un corps d'API (JSON ou texte). */
++async function readErrorBody(res: Response): Promise<string> {
++  const raw = await res.text().catch(() => "");
++  try {
++    const j = JSON.parse(raw) as any;
++    const msg = j?.error?.message ?? j?.message ?? j?.detail;
++    if (typeof msg === "string" && msg) return msg.slice(0, 200);
++  } catch {
++    /* corps non JSON */
++  }
++  return raw.slice(0, 200) || `(corps vide)`;
++}
++
++// Traduction des 429 partagée avec le test de clé (providers.ts) —
++// `long` accompagne l'erreur du tour, `short` étiquette la carte clé.
++const rateLimitWhy = explainQuotaError;
++
++// ── Contenu utilisateur ────────────────────────────────────────────────
++
++/** Contenu utilisateur du tour (texte + note des pièces jointes, ou
++ *  content parts multimodal quand le tour porte des images). */
++export function buildUserPayload(
++  req: TurnRequest,
++  style: "openai" | "anthropic",
++): { text: string; parts: unknown[] | null } {
++  const images = (req.attachments ?? []).filter((a) => a.kind === "image");
++  const textContent = req.content + attachmentNote(req.attachments ?? []);
++  if (images.length === 0) return { text: textContent, parts: null };
++  const parts: any[] = [{ type: "text", text: req.content.trim() || "Décris et analyse ces images." }];
++  let added = 0;
++  for (const img of images.slice(0, 4)) {
++    const dataUrl = readAttachmentDataUrl(img.url);
++    if (!dataUrl) continue;
++    if (style === "anthropic") {
++      const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
++      if (!m) continue;
++      parts.push({
++        type: "image",
++        source: { type: "base64", media_type: m[1], data: m[2] },
++      });
++    } else {
++      parts.push({ type: "image_url", image_url: { url: dataUrl } });
++    }
++    added++;
++  }
++  return added > 0 ? { text: textContent, parts } : { text: textContent, parts: null };
++}
++
++// ── Tours streaming ────────────────────────────────────────────────────
++
++/** POST {base}/chat/completions en streaming (style openai). */
++export async function streamOpenAiTurn(
++  stallGuard: StreamGuardFactory,
++  endpoint: LlmEndpoint,
++  secret: string | null,
++  modelId: string,
++  req: TurnRequest,
++  cb: TurnCallbacks,
++): Promise<PoolTurnResult> {
++  const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
++  const { text, parts } = buildUserPayload(req, "openai");
++  const messages: any[] = [
++    { role: "system", content: system },
++    ...req.history.map((m) => ({ role: m.role, content: m.content })),
++    { role: "user", content: parts ?? text },
++  ];
++  const expert = req.settings ?? {};
++  const body: Record<string, unknown> = {
++    model: modelId,
++    messages,
++    stream: true,
++    // z.ai (les deux portefeuilles) : l'effort « off » coupe explicitement
++    // le raisonnement GLM ; toute autre valeur laisse le défaut du modèle
++    // (aucun risque d'erreur sur les modèles non-raisonnement).
++    ...((endpoint.providerLabel === "z.ai" ||
++      endpoint.providerLabel === "z.ai Coding Plan") &&
++    req.settings?.reasoningEffort === "off"
++      ? { thinking: { type: "disabled" } }
++      : {}),
++    ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
++    ...(expert.maxTokens !== undefined ? { max_tokens: expert.maxTokens } : {}),
++    ...(expert.seed !== undefined ? { seed: expert.seed } : {}),
++  };
++
++  const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
++  let res: Response;
++  try {
++    res = await fetch(`${endpoint.base}/chat/completions`, { redirect: "error",
++      method: "POST",
++      headers: {
++        "Content-Type": "application/json",
++        ...(endpoint.auth === "bearer" && secret ? { Authorization: `Bearer ${secret}` } : {}),
++        ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
++        ...(endpoint.extraHeaders ?? {}),
++      },
++      body: JSON.stringify(body),
++      signal: guard.signal,
++    });
++    // Les erreurs HTTP passent par ce try : lancées hors try, elles laissent
++    // l'entrée du garde à vie dans activeStreamEntries (flux fantôme éternel
++    // dans /diagnostics, timer qui fuit).
++    if (!res.ok) {
++      const detail = await readErrorBody(res);
++      if (res.status === 401 || res.status === 403)
++        throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
++      if (res.status === 429) {
++        const why = rateLimitWhy(detail);
++        throw new PoolAuthError(
++          `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
++          true,
++          why.short,
++        );
++      }
++      throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
++    }
++    if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
++  } catch (err) {
++    guard.done();
++    throw err;
++  }
++  // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
++  // pour la lecture du flux.
++  guard.reset();
++
++  let content = "";
++  let reasoning = "";
++  let model = modelId;
++  let usage: TurnUsage | undefined;
++  let buffer = "";
++  const decoder = new TextDecoder();
++  const reader = res.body.getReader();
++
++  const consume = (line: string) => {
++    const data = parseSseLine(line.trim());
++    if (!data) return;
++    if (typeof data.model === "string" && data.model) model = data.model;
++    const u = data.usage;
++    if (u && typeof u === "object") {
++      usage = {
++        input: typeof u.prompt_tokens === "number" ? u.prompt_tokens : u.input_tokens,
++        output: typeof u.completion_tokens === "number" ? u.completion_tokens : u.output_tokens,
++        cost: typeof u.cost === "number" ? u.cost : undefined,
++      };
++    }
++    const d = data.choices?.[0]?.delta;
++    if (!d) return;
++    const r = d.reasoning_content ?? d.reasoning;
++    if (typeof r === "string" && r) {
++      reasoning += r;
++      cb.onReasoning(r);
++    }
++    if (typeof d.content === "string" && d.content) {
++      content += d.content;
++      cb.onDelta(d.content);
++    }
++  };
++
++  try {
++    for (;;) {
++      if (cb.signal.aborted) break;
++      const { done, value } = await reader.read();
++      if (done) break;
++      guard.reset(value.byteLength);
++      buffer += decoder.decode(value, { stream: true });
++      const lines = buffer.split("\n");
++      buffer = lines.pop() ?? "";
++      for (const line of lines) consume(line);
++    }
++    // Fin de flux sans \n final (revue 95) : le résidu du buffer — le
++    // dernier jeton ou l'objet usage de la dernière trame SSE — était
++    // perdu si le serveur clôturait le flux sans sauter de ligne.
++    if (buffer.trim()) consume(buffer);
++  } catch (err) {
++    // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
++    // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
++    // parlant remonte tel quel.
++    if (!cb.signal.aborted) throw err;
++  } finally {
++    guard.done();
++  }
++  return { content, reasoning, model, provider: endpoint.providerLabel, usage };
++}
++
++/** POST {base}/messages en streaming (style anthropic). */
++export async function streamAnthropicTurn(
++  stallGuard: StreamGuardFactory,
++  endpoint: LlmEndpoint,
++  secret: string | null,
++  modelId: string,
++  req: TurnRequest,
++  cb: TurnCallbacks,
++): Promise<PoolTurnResult> {
++  const system = req.systemPrompt ?? LOCAL_BASE_PROMPT;
++  const { text, parts } = buildUserPayload(req, "anthropic");
++  const expert = req.settings ?? {};
++  const body: Record<string, unknown> = {
++    model: modelId,
++    system,
++    messages: [
++      ...req.history.map((m) => ({ role: m.role, content: m.content })),
++      { role: "user", content: parts ?? text },
++    ],
++    stream: true,
++    // Anthropic exige un plafond de sortie.
++    max_tokens: expert.maxTokens !== undefined ? expert.maxTokens : 4096,
++    ...(expert.temperature !== undefined ? { temperature: expert.temperature } : {}),
++  };
++
++  const guard = stallGuard(cb.signal, TURN_STALL_TIMEOUT_MS, endpoint.providerLabel, modelId);
++  let res: Response;
++  try {
++    res = await fetch(`${endpoint.base}/messages`, { redirect: "error",
++      method: "POST",
++      headers: {
++        "Content-Type": "application/json",
++        ...(endpoint.auth === "x-api-key" && secret ? { "x-api-key": secret } : {}),
++        ...(endpoint.extraHeaders ?? {}),
++      },
++      body: JSON.stringify(body),
++      signal: guard.signal,
++    });
++    // Les erreurs HTTP passent par ce try : lancées hors try, elles laissent
++    // l'entrée du garde à vie dans activeStreamEntries (flux fantôme éternel
++    // dans /diagnostics, timer qui fuit).
++    if (!res.ok) {
++      const detail = await readErrorBody(res);
++      if (res.status === 401 || res.status === 403)
++        throw new PoolAuthError(`clé refusée par ${endpoint.providerLabel} (HTTP ${res.status})`, false, "clé refusée à l'usage");
++      if (res.status === 429) {
++        const why = rateLimitWhy(detail);
++        throw new PoolAuthError(
++          `limite ${endpoint.providerLabel} atteinte (HTTP 429)${why.long ? ` — ${why.long}` : ""}`,
++          true,
++          why.short,
++        );
++      }
++      throw new Error(`${endpoint.providerLabel} a répondu HTTP ${res.status} : ${detail}`);
++    }
++    if (!res.body) throw new Error(`${endpoint.providerLabel} : flux vide`);
++  } catch (err) {
++    guard.done();
++    throw err;
++  }
++  // Les en-têtes sont arrivés : le fournisseur vit — le minuteur repart
++  // pour la lecture du flux.
++  guard.reset();
++
++  let content = "";
++  let reasoning = "";
++  let model = modelId;
++  let usage: TurnUsage | undefined;
++  let buffer = "";
++  const decoder = new TextDecoder();
++  const reader = res.body.getReader();
++
++  const consume = (line: string) => {
++    const data = parseSseLine(line.trim());
++    if (!data) return;
++    if (typeof data.model === "string" && data.model) model = data.model;
++    switch (data.type) {
++      // message_start porte usage.input_tokens (jetons du prompt) et le
++      // modèle réellement servi — l'ignorer laissait l'usage Anthropic
++      // sans entrée « input » jusqu'au message_delta final (F-21).
++      case "message_start": {
++        if (typeof data.message?.model === "string" && data.message.model) {
++          model = data.message.model;
++        }
++        const u = data.message?.usage;
++        if (u && typeof u === "object") {
++          usage = {
++            input: typeof u.input_tokens === "number" ? u.input_tokens : usage?.input,
++            output: typeof u.output_tokens === "number" ? u.output_tokens : usage?.output,
++            cost: usage?.cost,
++          };
++        }
++        break;
++      }
++      case "content_block_delta": {
++        const d = data.delta ?? {};
++        if (typeof d.thinking === "string" && d.thinking) {
++          reasoning += d.thinking;
++          cb.onReasoning(d.thinking);
++        }
++        if (typeof d.text === "string" && d.text) {
++          content += d.text;
++          cb.onDelta(d.text);
++        }
++        break;
++      }
++      case "message_delta": {
++        const u = data.usage;
++        if (u && typeof u === "object") {
++          usage = {
++            input: typeof u.input_tokens === "number" ? u.input_tokens : usage?.input,
++            output: typeof u.output_tokens === "number" ? u.output_tokens : usage?.output,
++            cost: usage?.cost,
++          };
++        }
++        break;
++      }
++      case "error":
++        throw new Error(
++          `${endpoint.providerLabel} : ${String(data.error?.message ?? "erreur de flux")}`
++        );
++      default:
++        break;
++    }
++  };
++
++  try {
++    for (;;) {
++      if (cb.signal.aborted) break;
++      const { done, value } = await reader.read();
++      if (done) break;
++      guard.reset(value.byteLength);
++      buffer += decoder.decode(value, { stream: true });
++      const lines = buffer.split("\n");
++      buffer = lines.pop() ?? "";
++      for (const line of lines) consume(line);
++    }
++    // Fin de flux sans \n final (revue 95) : le résidu du buffer — le
++    // dernier jeton ou l'objet usage de la dernière trame SSE — était
++    // perdu si le serveur clôturait le flux sans sauter de ligne.
++    if (buffer.trim()) consume(buffer);
++  } catch (err) {
++    // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
++    // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
++    // parlant remonte tel quel.
++    if (!cb.signal.aborted) throw err;
++  } finally {
++    guard.done();
++  }
++  return { content, reasoning, model, provider: endpoint.providerLabel, usage };
++}
+diff --git a/mini-services/hermes-chat/package.json b/mini-services/hermes-chat/package.json
+index 03097d5..feeb93a 100644
+--- a/mini-services/hermes-chat/package.json
++++ b/mini-services/hermes-chat/package.json
+@@ -3,7 +3,8 @@
+   "version": "1.0.0",
+   "private": true,
+   "scripts": {
+-    "dev": "bun --hot index.ts"
++    "dev": "bun --hot index.ts",
++    "test": "vitest run"
+   },
+   "dependencies": {
+     "socket.io": "^4.8.1",
+@@ -11,7 +12,9 @@
+     "z-ai-web-dev-sdk": "^0.0.18"
+   },
+   "devDependencies": {
++    "@vitest/coverage-v8": "^5.1.1",
+     "bun-types": "^1.4.4",
+-    "socket.io-client": "^4.8.4"
++    "socket.io-client": "^4.8.4",
++    "vitest": "^5.1.1"
+   }
+ }
+diff --git a/mini-services/hermes-chat/store-messages.ts b/mini-services/hermes-chat/store-messages.ts
+index 1a7ff79..dba3c07 100644
+--- a/mini-services/hermes-chat/store-messages.ts
++++ b/mini-services/hermes-chat/store-messages.ts
+@@ -121,7 +121,15 @@ export interface StoreMessagesMethods {
+   conversationAttachments(conversationId: string): Attachment[];
+ }
+ 
+-export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
++// buildMessages n'est plus un sac de 30 méthodes dans UNE fonction : cinq
++// builders domaine, fusionnés par spread (vague 3). Corps des méthodes
++// VERBATIM — ThisType<Store> conserve le `this` typé de chaque builder.
++function buildProjectMethods(): Pick<
++  StoreMessagesMethods,
++  "listProjects" | "getProject" | "createProject" | "renameProject" |
++  "deleteProject" | "setProjectDiskPath" | "setProjectArchived" |
++  "reorderProjects" | "moveConversation"
++> & ThisType<Store> {
+   return {
+     // ── Projets : rangement des conversations ─────────────────────────
+ 
+@@ -251,6 +259,18 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+         .run(projectId, conversationId);
+       return this.getConversation(conversationId);
+     },
++  };
++}
++
++// ── Conversations : CRUD, modes (F-30), sessions moteur, épinglage ────
++function buildConversationMethods(): Pick<
++  StoreMessagesMethods,
++  "listConversations" | "createConversation" | "deleteConversation" |
++  "renameConversation" | "getConversation" | "getConversationModeState" |
++  "setConversationMode" | "getConversationMotorSession" |
++  "setConversationMotorSession" | "setPinned" | "touchConversation"
++> & ThisType<Store> {
++  return {
+     listConversations(): ConversationMeta[] {
+       const rows = this.db
+         .query(
+@@ -469,6 +489,15 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+       }
+       return this.getConversation(id);
+     },
++  };
++}
++
++// ── Messages cœur : fil vivant + ajout ────────────────────────────────
++function buildMessagesCoreMethods(): Pick<
++  StoreMessagesMethods,
++  "getMessages" | "appendMessage"
++> & ThisType<Store> {
++  return {
+     getMessages(conversationId: string): ChatMessage[] {
+       // F-14 : le fil vivant ne montre que la version ACTIVE de chaque
+       // réponse (version_active NULL = message jamais régénéré).
+@@ -561,6 +590,18 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+       return { ...msg, id, createdAt } as ChatMessage;
+     },
+ 
++  };
++}
++
++// ── Versions du fil (F-14), maintenance et édition des messages ───────
++function buildMessageVersionsMethods(): Pick<
++  StoreMessagesMethods,
++  "countVersions" | "supersedeTrailingAssistant" | "setMessageVersion" |
++  "restoreLatestVersion" | "restoreVersionById" | "getMessage" |
++  "deleteMessage" | "purgeInactiveVersionsOf" | "deleteTrailingAssistant" |
++  "editUserMessageAndTruncate"
++> & ThisType<Store> {
++  return {
+     /** F-14 — nombre de versions d'un groupe (1 si inconnu). */
+     countVersions(group: string): number {
+       const r = this.db
+@@ -958,6 +999,15 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+       };
+     },
+ 
++  };
++}
++
++// ── Branches (fork), recherche plein-texte, pièces jointes du fil ──────
++function buildForkSearchMethods(): Pick<
++  StoreMessagesMethods,
++  "forkConversation" | "searchMessages" | "conversationAttachments"
++> & ThisType<Store> {
++  return {
+     /** Duplique une conversation jusqu'à un message donné (branche / fork). */
+     forkConversation(
+       conversationId: string,
+@@ -1097,3 +1147,13 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
+     }
+   };
+ }
++
++export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
++  return {
++    ...buildProjectMethods(),
++    ...buildConversationMethods(),
++    ...buildMessagesCoreMethods(),
++    ...buildMessageVersionsMethods(),
++    ...buildForkSearchMethods(),
++  };
++}
+diff --git a/mini-services/hermes-chat/test/hermes-connector-models.test.ts b/mini-services/hermes-chat/test/hermes-connector-models.test.ts
+new file mode 100644
+index 0000000..e5b05ab
+--- /dev/null
++++ b/mini-services/hermes-chat/test/hermes-connector-models.test.ts
+@@ -0,0 +1,108 @@
++// Tests de parseModelOptions (hermes-connector.ts) — l'extrait tolérant du
++// catalogue gateway : fonction exportée par l'audit CRAP 2026-11 pour être
++// pincée ici (densité de décisions la plus élevée du repo : CC 66 / 49 lignes).
++import { describe, expect, it } from "vitest";
++import { parseModelOptions } from "../hermes-connector";
++
++describe("formes plates", () => {
++  it("chaînes brutes → provider « Gateway »", () => {
++    expect(parseModelOptions({ models: ["m1", "m2"] })).toEqual([
++      { id: "m1", label: "m1", provider: "Gateway", description: undefined, efforts: undefined, effortLabel: undefined, contextWindow: undefined },
++      { id: "m2", label: "m2", provider: "Gateway", description: undefined, efforts: undefined, effortLabel: undefined, contextWindow: undefined },
++    ]);
++  });
++
++  it("objets : id ?? name ?? model, libellé replié sur l'id", () => {
++    expect(parseModelOptions({ models: [{ id: "a", label: "A" }, { name: "b" }, { model: "c" }] })).toEqual([
++      { id: "a", label: "A", provider: "Gateway", description: undefined, efforts: undefined, effortLabel: undefined, contextWindow: undefined },
++      { id: "b", label: "b", provider: "Gateway", description: undefined, efforts: undefined, effortLabel: undefined, contextWindow: undefined },
++      { id: "c", label: "c", provider: "Gateway", description: undefined, efforts: undefined, effortLabel: undefined, contextWindow: undefined },
++    ]);
++  });
++
++  it("déduplication par id", () => {
++    const out = parseModelOptions({ models: ["m1", { id: "m1" }, "m2", { name: "m2" }] });
++    expect(out.map((m) => m.id)).toEqual(["m1", "m2"]);
++  });
++
++  it("id non chaîne ou vide → ignoré silencieusement", () => {
++    expect(parseModelOptions({ models: [null, 42, {}, { id: "" }, { id: 7 }] })).toEqual([]);
++  });
++});
++
++describe("formes imbriquées (providers)", () => {
++  it("data.providers[].models avec nom de provider", () => {
++    const out = parseModelOptions({
++      providers: [{ name: "Nous", models: [{ id: "h4", label: "Hermes 4" }] }],
++    });
++    expect(out).toEqual([
++      { id: "h4", label: "Hermes 4", provider: "Nous", description: undefined, efforts: undefined, effortLabel: undefined, contextWindow: undefined },
++    ]);
++  });
++
++  it("data.result.providers et model_options acceptés aussi", () => {
++    const out = parseModelOptions({
++      result: { providers: [{ id: "p1", model_options: ["x"] }] },
++    });
++    expect(out[0].id).toBe("x");
++    expect(out[0].provider).toBe("p1");
++  });
++
++  it("chaîne plate data.options acceptée, doublon inter-formes dédupliqué", () => {
++    const out = parseModelOptions({
++      providers: [{ name: "Nous", models: ["h4"] }],
++      options: ["h4", "h5"],
++    });
++    expect(out.map((m) => m.id)).toEqual(["h4", "h5"]);
++    expect(out[0].provider).toBe("Nous");
++  });
++});
++
++describe("efforts — échelle, interrupteur budget, ou rien", () => {
++  it("tableau de crans → mappé en chaînes", () => {
++    const out = parseModelOptions({ models: [{ id: "a", efforts: ["off", "low"] }] });
++    expect(out[0].efforts).toEqual(["off", "low"]);
++    expect(out[0].effortLabel).toBeUndefined();
++  });
++
++  it("effort_options et reasoning_efforts acceptés comme synonymes", () => {
++    expect(parseModelOptions({ models: [{ id: "a", effort_options: [1, 2] }] })[0].efforts).toEqual(["1", "2"]);
++    expect(parseModelOptions({ models: [{ id: "a", reasoning_efforts: ["min"] }] })[0].efforts).toEqual(["min"]);
++  });
++
++  it("booléen true → interrupteur [off, on] + étiquette « budget »", () => {
++    const out = parseModelOptions({ models: [{ id: "a", efforts: true }] });
++    expect(out[0].efforts).toEqual(["off", "on"]);
++    expect(out[0].effortLabel).toBe("budget");
++  });
++
++  it("effortLabel explicite respecté ; avec efforts=true, effort_label est ÉCRASÉ par « budget » (anomalie mineure relevée à l'audit, comportement pincé tel quel)", () => {
++    expect(parseModelOptions({ models: [{ id: "a", efforts: true, effort_label: "Nous Portal" }] })[0].effortLabel).toBe("budget");
++    expect(parseModelOptions({ models: [{ id: "a", efforts: true, effortLabel: "déjà posé" }] })[0].effortLabel).toBe("déjà posé");
++  });
++});
++
++describe("context window et description", () => {
++  it("context_window / contextWindow / context_length numériques > 0", () => {
++    expect(parseModelOptions({ models: [{ id: "a", context_window: 128000 }] })[0].contextWindow).toBe(128000);
++    expect(parseModelOptions({ models: [{ id: "a", context_length: 32000 }] })[0].contextWindow).toBe(32000);
++    expect(parseModelOptions({ models: [{ id: "a", contextWindow: -5 }] })[0].contextWindow).toBeUndefined();
++    expect(parseModelOptions({ models: [{ id: "a", context_window: "128k" }] })[0].contextWindow).toBeUndefined();
++  });
++
++  it("configured=false → description « Non configuré »", () => {
++    expect(parseModelOptions({ models: [{ id: "a", configured: false }] })[0].description).toBe("Non configuré");
++    expect(parseModelOptions({ models: [{ id: "a", description: "libre" }] })[0].description).toBe("libre");
++  });
++});
++
++describe("entrées non exploitables", () => {
++  it("data vide, sans modèles, ou formes non-tableau → liste vide", () => {
++    expect(parseModelOptions(undefined)).toEqual([]);
++    expect(parseModelOptions(null)).toEqual([]);
++    expect(parseModelOptions({})).toEqual([]);
++    expect(parseModelOptions({ models: "pas un tableau" })).toEqual([]);
++    expect(parseModelOptions({ providers: "pas un tableau" })).toEqual([]);
++    expect(parseModelOptions({ providers: [{ name: "p" }] })).toEqual([]);
++  });
++});
+diff --git a/mini-services/hermes-chat/test/models.test.ts b/mini-services/hermes-chat/test/models.test.ts
+new file mode 100644
+index 0000000..0a5ae15
+--- /dev/null
++++ b/mini-services/hermes-chat/test/models.test.ts
+@@ -0,0 +1,51 @@
++// Tests du catalogue de repli (models.ts) — l'invariant qui porte le design :
++// le modèle PAR DÉFAUT doit toujours être un modèle DU catalogue (jamais un
++// webchat, jamais un id fantôme), sinon le repli « moteur muet » est menteur.
++import { describe, expect, it } from "vitest";
++import {
++  DEFAULT_MODEL_ID,
++  MODEL_CATALOG,
++  catalogModelsResult,
++  modelLabel,
++} from "../models";
++
++describe("MODEL_CATALOG", () => {
++  it("5 modèles Hermes, ids uniques, tous Nous Research", () => {
++    expect(MODEL_CATALOG).toHaveLength(5);
++    const ids = MODEL_CATALOG.map((m) => m.id);
++    expect(new Set(ids).size).toBe(5);
++    for (const m of MODEL_CATALOG) expect(m.provider).toBe("Nous Research");
++  });
++
++  it("chaque modèle porte l'échelle d'effort du portail et une fenêtre de contexte", () => {
++    for (const m of MODEL_CATALOG) {
++      expect(m.efforts).toEqual(["off", "standard", "élevé"]);
++      expect(m.effortLabel).toBe("Nous Portal");
++      expect(m.contextWindow).toBe(128_000);
++    }
++  });
++
++  it("INVARIANT : le modèle par défaut appartient au catalogue", () => {
++    expect(DEFAULT_MODEL_ID).toBe("hermes-4-70b");
++    expect(MODEL_CATALOG.some((m) => m.id === DEFAULT_MODEL_ID)).toBe(true);
++  });
++});
++
++describe("catalogModelsResult — le repli honnête « moteur muet »", () => {
++  it("source catalogue, modèle par défaut, liste complète", () => {
++    const result = catalogModelsResult();
++    expect(result.source).toBe("catalogue");
++    expect(result.defaultModel).toBe(DEFAULT_MODEL_ID);
++    expect(result.models).toBe(MODEL_CATALOG);
++  });
++});
++
++describe("modelLabel", () => {
++  it("id connu → libellé, id inconnu → brut, vide → chaîne vide", () => {
++    expect(modelLabel("hermes-4-70b")).toBe("Hermes 4 70B");
++    expect(modelLabel("patate-inconnue")).toBe("patate-inconnue");
++    expect(modelLabel(null)).toBe("");
++    expect(modelLabel(undefined)).toBe("");
++    expect(modelLabel("")).toBe("");
++  });
++});
+diff --git a/mini-services/hermes-chat/test/modes.test.ts b/mini-services/hermes-chat/test/modes.test.ts
+new file mode 100644
+index 0000000..ba5b49d
+--- /dev/null
++++ b/mini-services/hermes-chat/test/modes.test.ts
+@@ -0,0 +1,217 @@
++// Tests du référentiel des modes (modes.ts) — comportements dérivés du code :
++// valeur inconnue → chat, bornes appliquées (jamais de refus muet),
++// consignes résolues à chaque envoi avec interpolation au moment du tour.
++import { describe, expect, it } from "vitest";
++import {
++  AUTO_RETRIES_MAX,
++  CONVERSATION_MODES,
++  COUNCIL_MEMBERS_MAX,
++  COUNCIL_MEMBERS_MIN,
++  DEBATE_ROUNDS_MAX,
++  DEBATE_ROUNDS_MIN,
++  DEFAULT_PROMPTS,
++  MAX_MODE_PROMPT_CHARS,
++  MODE_LABELS,
++  MODE_PROMPT_KEYS,
++  MODE_PROMPTS_KEY,
++  VOICE_CHARS_DEFAULT,
++  VOICE_CHARS_KEY,
++  interpolatePrompt,
++  modePromptSection,
++  normalizeModeConfig,
++  readPromptOverrides,
++  resolveMode,
++  resolveModePrompt,
++  resolveVoiceChars,
++  voiceModel,
++  voicesFor,
++  modeModel,
++  type ModeConfig,
++} from "../modes";
++
++const fakeStore = (raw: string | null) => ({ getSetting: (_: string) => raw });
++
++describe("resolveMode", () => {
++  it("laisse passer un mode connu", () => {
++    expect(resolveMode("debate")).toBe("debate");
++    expect(resolveMode("council")).toBe("council");
++  });
++
++  it("retombe sur chat pour TOUTE valeur inconnue (jamais d'écran cassé)", () => {
++    expect(resolveMode("DEBAT")).toBe("chat");
++    expect(resolveMode("patate")).toBe("chat");
++    expect(resolveMode(42)).toBe("chat");
++    expect(resolveMode(null)).toBe("chat");
++    expect(resolveMode(undefined)).toBe("chat");
++    expect(resolveMode({})).toBe("chat");
++  });
++
++  it("expose exactement les 7 modes et leurs libellés", () => {
++    expect(CONVERSATION_MODES).toHaveLength(7);
++    for (const mode of CONVERSATION_MODES) expect(MODE_LABELS[mode]).toBeTruthy();
++  });
++});
++
++describe("normalizeModeConfig — bornes appliquées, jamais de refus muet", () => {
++  it("objet absent ou non objet → config vide", () => {
++    expect(normalizeModeConfig(undefined)).toEqual({});
++    expect(normalizeModeConfig(null)).toEqual({});
++    expect(normalizeModeConfig("chat")).toEqual({});
++  });
++
++  it("clamp les tours du débat dans 3–10", () => {
++    expect(normalizeModeConfig({ rounds: 7 }).rounds).toBe(7);
++    expect(normalizeModeConfig({ rounds: 99 }).rounds).toBe(DEBATE_ROUNDS_MAX);
++    expect(normalizeModeConfig({ rounds: 1 }).rounds).toBe(DEBATE_ROUNDS_MIN);
++    expect(normalizeModeConfig({ rounds: "7" }).rounds).toBe(7);
++    expect(normalizeModeConfig({ rounds: 3.6 }).rounds).toBe(4);
++  });
++
++  it("clamp les membres du conseil dans 2–5", () => {
++    expect(normalizeModeConfig({ members: 12 }).members).toBe(COUNCIL_MEMBERS_MAX);
++    expect(normalizeModeConfig({ members: 0 }).members).toBe(COUNCIL_MEMBERS_MIN);
++  });
++
++  it("clamp les reprises auto dans 0–3, non numérique → repli 2", () => {
++    expect(normalizeModeConfig({ retries: 10 }).retries).toBe(AUTO_RETRIES_MAX);
++    expect(normalizeModeConfig({ retries: -1 }).retries).toBe(0);
++    expect(normalizeModeConfig({ retries: "abc" }).retries).toBe(2);
++  });
++
++  it("les booléens non-booléens sont ignorés", () => {
++    expect(normalizeModeConfig({ autoDebate: "true" }).autoDebate).toBeUndefined();
++    expect(normalizeModeConfig({ debateParallel: 1 }).debateParallel).toBeUndefined();
++    expect(normalizeModeConfig({ autoDebate: false }).autoDebate).toBe(false);
++  });
++
++  it("normalise les ids webchat au format fusionné (legacy webchat:<site>:<mode> accepté)", () => {
++    const cfg = normalizeModeConfig({
++      model: { chat: "webchat:zai:answer" },
++      voices: { debate: { sceptique: "webchat:aistudio:answer" } },
++    });
++    expect(cfg.model?.chat).toBe("webchat:zai");
++    expect(cfg.voices?.debate?.sceptique).toBe("webchat:aistudio");
++  });
++
++  it("un modèle non webchat passe inchangé, une valeur vide → null", () => {
++    const cfg = normalizeModeConfig({ model: { chat: "hermes-4-70b", plan: "   " } });
++    expect(cfg.model?.chat).toBe("hermes-4-70b");
++    expect(cfg.model?.plan).toBeNull();
++  });
++
++  it("une map de voix non-objet est ignorée", () => {
++    const cfg = normalizeModeConfig({ voices: { debate: "pas une map" } });
++    expect(cfg.voices?.debate).toBeUndefined();
++  });
++});
++
++describe("voicesFor — miroir de « qui travaille »", () => {
++  it("débat : 4 voix fixes", () => {
++    const ids = voicesFor("debate", null).map((v) => v.id);
++    expect(ids).toEqual(["sceptique", "pragmatique", "innovateur", "juge"]);
++  });
++
++  it("conseil : N membres + président, membres clampés 2–5", () => {
++    expect(voicesFor("council", { members: 3 } as ModeConfig)).toHaveLength(4);
++    expect(voicesFor("council", null).map((v) => v.id)).toEqual([
++      "membre-a",
++      "membre-b",
++      "president",
++    ]);
++    expect(voicesFor("council", { members: 99 } as ModeConfig)).toHaveLength(COUNCIL_MEMBERS_MAX + 1);
++  });
++
++  it("comparaison : voix A et B", () => {
++    expect(voicesFor("compare", null).map((v) => v.id)).toEqual(["a", "b"]);
++  });
++
++  it("auto : débat de cadrage présent sauf autoDebate=false", () => {
++    const defaut = voicesFor("auto", {} as ModeConfig).map((v) => v.id);
++    expect(defaut).toEqual(["debat", "plan", "code", "test"]);
++    const sansDebat = voicesFor("auto", { autoDebate: false } as ModeConfig).map((v) => v.id);
++    expect(sansDebat).toEqual(["plan", "code", "test"]);
++  });
++
++  it("modes sans voix → tableau vide", () => {
++    expect(voicesFor("chat", null)).toEqual([]);
++    expect(voicesFor("plan", null)).toEqual([]);
++    expect(voicesFor("code", null)).toEqual([]);
++  });
++});
++
++describe("voiceModel / modeModel", () => {
++  const config: ModeConfig = {
++    voices: { debate: { sceptique: "webchat:zai", juge: "   " } },
++    model: { chat: "hermes-4-70b" },
++  };
++  it("choix par conversation, blanc = null (suit le fil)", () => {
++    expect(voiceModel("debate", config, "sceptique")).toBe("webchat:zai");
++    expect(voiceModel("debate", config, "juge")).toBeNull();
++    expect(voiceModel("debate", null, "sceptique")).toBeNull();
++    expect(modeModel(config, "chat")).toBe("hermes-4-70b");
++    expect(modeModel(config, "plan")).toBeNull();
++  });
++});
++
++describe("consignes : lecture des surcharges et résolution au tour", () => {
++  it("13 consignes par défaut, clés uniques", () => {
++    expect(MODE_PROMPT_KEYS).toHaveLength(13);
++    expect(new Set(MODE_PROMPT_KEYS).size).toBe(13);
++    expect(MODE_PROMPTS_KEY).toBe("hermes.modes.prompts");
++    expect(MAX_MODE_PROMPT_CHARS).toBe(4_000);
++  });
++
++  it("store muet ou JSON invalide → défauts, jamais de plantage", () => {
++    expect(readPromptOverrides(fakeStore(null))).toEqual({});
++    expect(readPromptOverrides(fakeStore("{ pas du json"))).toEqual({});
++    expect(readPromptOverrides(fakeStore("42"))).toEqual({});
++  });
++
++  it("surcharge : clés inconnues filtrées, texte trop long filtré, texte valide gardé", () => {
++    // Structure réelle : { mode: { voix: texte } } — une clé plate « plan.main »
++    // au premier niveau est ignorée (map non-objet).
++    const raw = JSON.stringify({
++      plan: { main: "Plan sur-mesure" },
++      inconnu: { main: "fantôme" },
++      debate: { conseiller: "x".repeat(MAX_MODE_PROMPT_CHARS + 1) },
++    });
++    expect(readPromptOverrides(fakeStore(raw))).toEqual({ "plan.main": "Plan sur-mesure" });
++  });
++
++  it("une clé plate au premier niveau (pas {mode:{voix}}) est ignorée", () => {
++    const raw = JSON.stringify({ "plan.main": "Plan modifié" });
++    expect(readPromptOverrides(fakeStore(raw))).toEqual({});
++  });
++
++  it("resolveModePrompt : surcharge d'abord, défaut sinon, vide → null", () => {
++    const override = JSON.stringify({ plan: { main: "Plan modifié" } });
++    expect(resolveModePrompt(fakeStore(override), "plan.main")).toBe("Plan modifié");
++    expect(resolveModePrompt(fakeStore(null), "plan.main")).toBe(DEFAULT_PROMPTS["plan.main"]);
++    expect(resolveModePrompt(fakeStore(null), "chat.main")).toBeNull();
++    expect(resolveModePrompt(fakeStore(null), "inexistant.main")).toBeNull();
++  });
++
++  it("interpolation : mots-clés remplacés, inconnus laissés tels quels", () => {
++    expect(interpolatePrompt("{angle} en {tours} tours", { angle: "coût", tours: 3 })).toBe(
++      "coût en 3 tours",
++    );
++    expect(interpolatePrompt("{patate}", { angle: "x" })).toBe("{patate}");
++    expect(interpolatePrompt("{membres}", {})).toBe("{membres}");
++  });
++
++  it("resolveVoiceChars : défaut, non numérique, bornes 500–8000", () => {
++    expect(resolveVoiceChars(fakeStore(null))).toBe(VOICE_CHARS_DEFAULT);
++    expect(resolveVoiceChars(fakeStore("abc"))).toBe(VOICE_CHARS_DEFAULT);
++    expect(resolveVoiceChars(fakeStore("5000"))).toBe(5000);
++    expect(resolveVoiceChars(fakeStore("999999"))).toBe(8000);
++    expect(resolveVoiceChars(fakeStore("100"))).toBe(500);
++    expect(resolveVoiceChars(fakeStore("1500.6"))).toBe(1501);
++    expect(VOICE_CHARS_KEY).toBe("hermes.modes.voiceChars");
++  });
++
++  it("modePromptSection : en-tête libellé + corps", () => {
++    expect(modePromptSection("Plan", "Fais un plan")).toBe(
++      "Mode « Plan » actif pour cette conversation :\nFais un plan",
++    );
++  });
++});
+diff --git a/mini-services/hermes-chat/test/prompts.test.ts b/mini-services/hermes-chat/test/prompts.test.ts
+new file mode 100644
+index 0000000..3369453
+--- /dev/null
++++ b/mini-services/hermes-chat/test/prompts.test.ts
+@@ -0,0 +1,118 @@
++// Tests de prompts.ts — sanitizeExpertSettings (garde contre Number(null)=0),
++// composition du systemPrompt local, presets semés.
++import { describe, expect, it } from "vitest";
++import {
++  MAX_CUSTOM_INSTRUCTIONS_CHARS,
++  MAX_MEMORY_CHARS,
++  MAX_PROMPT_CHARS,
++  MEMORY_NOTES_KEY,
++  SEED_PRESETS,
++  composeLocalSystemPrompt,
++  sanitizeExpertSettings,
++  validatePromptText,
++} from "../prompts";
++
++describe("sanitizeExpertSettings — null/vide = champ ignoré, jamais 0 actif", () => {
++  it("entrée absente → objet vide", () => {
++    expect(sanitizeExpertSettings(undefined)).toEqual({});
++    expect(sanitizeExpertSettings(null)).toEqual({});
++    expect(sanitizeExpertSettings({})).toEqual({});
++  });
++
++  it("temperature bornée 0–1, chaîne numérique acceptée", () => {
++    expect(sanitizeExpertSettings({ temperature: 0.7 }).temperature).toBe(0.7);
++    expect(sanitizeExpertSettings({ temperature: "0.7" }).temperature).toBe(0.7);
++    expect(sanitizeExpertSettings({ temperature: 1.5 }).temperature).toBe(1);
++    expect(sanitizeExpertSettings({ temperature: -0.5 }).temperature).toBe(0);
++  });
++
++  it("maxTokens borné 1–8192, arrondi", () => {
++    expect(sanitizeExpertSettings({ maxTokens: "100.4" }).maxTokens).toBe(100);
++    expect(sanitizeExpertSettings({ maxTokens: 0 }).maxTokens).toBe(1);
++    expect(sanitizeExpertSettings({ maxTokens: 99_999 }).maxTokens).toBe(8192);
++  });
++
++  it("seed borné 0–2^31-1, arrondi", () => {
++    expect(sanitizeExpertSettings({ seed: 4_294_967_296 }).seed).toBe(2 ** 31 - 1);
++    expect(sanitizeExpertSettings({ seed: -3 }).seed).toBe(0);
++    expect(sanitizeExpertSettings({ seed: 10.9 }).seed).toBe(11);
++  });
++
++  it("null, undefined, chaîne vide, non-fini → champ ABSENT (pas 0)", () => {
++    const out = sanitizeExpertSettings({
++      temperature: null,
++      maxTokens: "",
++      seed: Number.NaN,
++    });
++    expect(out).toEqual({});
++  });
++});
++
++describe("composeLocalSystemPrompt — sections dans l'ordre, absentes omises", () => {
++  it("base seule", () => {
++    expect(composeLocalSystemPrompt({ base: "BASE" })).toBe("BASE");
++  });
++
++  it("ordre stable : mémoire, instructions, prompt de conversation (jointes par une ligne vide)", () => {
++    const out = composeLocalSystemPrompt({
++      base: "BASE",
++      memoryNotes: "note mémoire",
++      customInstructions: "instruction",
++      conversationPrompt: "prompt conversation",
++    });
++    expect(out).toBe(
++      [
++        "BASE",
++        "Mémoire de l'utilisateur (ce qu'Hermes retient des échanges) :\nnote mémoire",
++        "Instructions personnalisées de l'utilisateur :\ninstruction",
++        "Prompt système de cette conversation :\nprompt conversation",
++      ].join("\n\n"),
++    );
++  });
++
++  it("sections vides ou blanches omises", () => {
++    const out = composeLocalSystemPrompt({
++      base: "BASE",
++      memoryNotes: "   ",
++      customInstructions: null,
++    });
++    expect(out).toBe("BASE");
++    expect(out).not.toContain("Mémoire");
++    expect(out).not.toContain("Instructions");
++  });
++});
++
++describe("presets semés et limites", () => {
++  it("5 presets, titres et contenus non vides, vitrine présente", () => {
++    expect(SEED_PRESETS).toHaveLength(5);
++    for (const p of SEED_PRESETS) {
++      expect(p.title.trim()).toBeTruthy();
++      expect(p.content.trim()).toBeTruthy();
++    }
++    expect(SEED_PRESETS.map((p) => p.title)).toContain("Vitrine d'artefacts");
++  });
++
++  it("limites documentées", () => {
++    expect(MAX_MEMORY_CHARS).toBe(12_000);
++    expect(MAX_PROMPT_CHARS).toBe(12_000);
++    expect(MAX_CUSTOM_INSTRUCTIONS_CHARS).toBe(4_000);
++    expect(MEMORY_NOTES_KEY).toBe("hermes.memory.notes");
++  });
++});
++
++describe("validatePromptText — erreur FR courte ou null", () => {
++  it("vide ou blanc → erreur", () => {
++    expect(validatePromptText("", 4000)).toBe("Le prompt ne peut pas être vide");
++    expect(validatePromptText("   ", 4000)).toBe("Le prompt ne peut pas être vide");
++  });
++
++  it("trop long → erreur avec la limite formatée", () => {
++    expect(validatePromptText("x".repeat(4001), 4000)).toBe(
++      `Trop long (max ${Number(4000).toLocaleString("fr-FR")} caractères)`,
++    );
++  });
++
++  it("texte valide → null", () => {
++    expect(validatePromptText("  un prompt  ", 4000)).toBeNull();
++  });
++});
+diff --git a/mini-services/hermes-chat/test/webchat-fiches.test.ts b/mini-services/hermes-chat/test/webchat-fiches.test.ts
+new file mode 100644
+index 0000000..86f3d7b
+--- /dev/null
++++ b/mini-services/hermes-chat/test/webchat-fiches.test.ts
+@@ -0,0 +1,79 @@
++// Tests des fiches webchat (webchat/fiches.ts) — les sélecteurs sont des
++// DONNÉES ; les invariants testés ici sont ceux que la spec §6 impose :
++// un site non vérifié est INDISPONIBLE, l'id de modèle webchat est UNE
++// entrée par site (format fusionné), le format legacy reste lisible.
++import { describe, expect, it } from "vitest";
++import {
++  FICHES,
++  normalizeWebchatModelId,
++  parseWebchatModelId,
++  webchatModelId,
++  type WebchatSiteId,
++} from "../webchat/fiches";
++
++const SITES: WebchatSiteId[] = ["zai", "aistudio", "gemini-app"];
++
++describe("FICHES — invariants de structure", () => {
++  it("trois sites exactement", () => {
++    expect(Object.keys(FICHES).sort()).toEqual(SITES.sort());
++  });
++
++  it("z.ai et AI Studio vérifiés, gemini-app en attente de relevé", () => {
++    expect(FICHES.zai.verifie).toBe(true);
++    expect(FICHES.aistudio.verifie).toBe(true);
++    expect(FICHES["gemini-app"].verifie).toBe(false);
++  });
++
++  it("un site vérifié porte des sélecteurs, un site non vérifié reste vide sans mentir", () => {
++    expect(FICHES.zai.sel_compositeur).toBeTruthy();
++    expect(FICHES.zai.compositeur_pret).toBeTruthy();
++    expect(FICHES["gemini-app"].sel_compositeur).toBe("");
++    expect(FICHES["gemini-app"].compositeur_pret).toBe("");
++  });
++
++  it("modes exposés : z.ai answer+build, les autres answer seul", () => {
++    expect(FICHES.zai.modes).toEqual(["answer", "build"]);
++    expect(FICHES.aistudio.modes).toEqual(["answer"]);
++    expect(FICHES["gemini-app"].modes).toEqual(["answer"]);
++  });
++});
++
++describe("parseWebchatModelId", () => {
++  it("format fusionné webchat:<site>", () => {
++    expect(parseWebchatModelId("webchat:zai")).toEqual({ site: "zai" });
++    expect(parseWebchatModelId("webchat:aistudio")).toEqual({ site: "aistudio" });
++  });
++
++  it("format legacy webchat:<site>:<mode> accepté si le mode est exposé", () => {
++    expect(parseWebchatModelId("webchat:zai:answer")).toEqual({ site: "zai" });
++    expect(parseWebchatModelId("webchat:zai:build")).toEqual({ site: "zai" });
++  });
++
++  it("legacy refusé si le mode n'est pas exposé par la fiche", () => {
++    expect(parseWebchatModelId("webchat:aistudio:build")).toBeNull();
++    expect(parseWebchatModelId("webchat:gemini-app:build")).toBeNull();
++  });
++
++  it("site inconnu, mode invalide, non webchat, vide → null", () => {
++    expect(parseWebchatModelId("webchat:patate")).toBeNull();
++    expect(parseWebchatModelId("webchat:zai:patate")).toBeNull();
++    expect(parseWebchatModelId("webchat:")).toBeNull();
++    expect(parseWebchatModelId("hermes-4-70b")).toBeNull();
++    expect(parseWebchatModelId("webchat:zai:answer:extra")).toBeNull();
++    expect(parseWebchatModelId(null)).toBeNull();
++    expect(parseWebchatModelId(undefined)).toBeNull();
++    expect(parseWebchatModelId("")).toBeNull();
++  });
++});
++
++describe("webchatModelId / normalizeWebchatModelId", () => {
++  it("construction de l'id fusionné", () => {
++    expect(webchatModelId("zai")).toBe("webchat:zai");
++    expect(webchatModelId("gemini-app")).toBe("webchat:gemini-app");
++  });
++
++  it("normalisation : legacy → fusion, id non webchat inchangé", () => {
++    expect(normalizeWebchatModelId("webchat:zai:answer")).toBe("webchat:zai");
++    expect(normalizeWebchatModelId("hermes-4-70b")).toBe("hermes-4-70b");
++  });
++});
+diff --git a/mini-services/hermes-chat/vitest.config.ts b/mini-services/hermes-chat/vitest.config.ts
+new file mode 100644
+index 0000000..2547ac1
+--- /dev/null
++++ b/mini-services/hermes-chat/vitest.config.ts
+@@ -0,0 +1,20 @@
++import { defineConfig } from "vitest/config";
++
++// Audit CRAP 2026-11 — première couverture réelle du mini-service.
++// Les tests unitaires vivent dans test/ ; ils ne couvrent que les modules
++// purs testables sous Node (les stores exigent bun:sqlite, hors Vitest).
++// Crapper (vitest --coverage) surcharge reportsDirectory/reporter/include
++// par ses propres drapeaux CLI — cette config reste la base du `npm test`.
++export default defineConfig({
++  test: {
++    include: ["test/**/*.test.ts"],
++    coverage: {
++      provider: "v8",
++      reporter: ["lcov", "text"],
++      reportsDirectory: "../../target/coverage/typescript/mini-services__hermes-chat",
++      include: ["modes.ts", "prompts.ts", "models.ts", "hermes-connector.ts", "webchat/fiches.ts", "webchat/paths.ts", "shared/chat-protocol.ts"],
++      exclude: ["test/**", "node_modules/**"],
++      reportOnFailure: true,
++    },
++  },
++});
+diff --git a/scripts/test-source-guards.ts b/scripts/test-source-guards.ts
+index b56c032..c839d98 100644
+--- a/scripts/test-source-guards.ts
++++ b/scripts/test-source-guards.ts
+@@ -44,9 +44,16 @@ async function main() {
+ 
+   console.log("[2] use-hermes-chat.ts : ack conversations:open (L1-5)");
+   const hook = read("src/hooks/use-hermes-chat.ts");
+-  const openIdx = hook.indexOf('"conversations:open"');
++  // Audit CRAP 2026-11 : le câblage socket (onConnect/onHello/onArtifact*/
++  // onMessage*…) vit désormais dans use-chat-socket-events.ts, corps verbatim.
++  const socketEvents = read("src/hooks/use-chat-socket-events.ts");
++  // Vague 3 : le CRUD conversations (create/open/delete/rename/pin/fork/
++  // search/move) vit dans use-conversations.ts, corps verbatim — l'ack de
++  // conversations:open et ses gardes sont vérifiés LÀ où le handler EST.
++  const conversationsHook = read("src/hooks/use-conversations.ts");
++  const openIdx = conversationsHook.indexOf('"conversations:open"');
+   check("l'ouverture de conversation émet conversations:open", openIdx >= 0);
+-  const ackWindow = hook.slice(openIdx, openIdx + 3600);
++  const ackWindow = conversationsHook.slice(openIdx, openIdx + 3600);
+   // Fenêtre large : le corps de l'ack porte aussi le re-semis des tours en
+   // vol (ré-attache « quitter puis revenir » : contenu accumulé + déroulé
+   // multi-voix, ~2 000 car.) — l'invariant vérifié reste la POSITION
+@@ -72,8 +79,10 @@ async function main() {
+ 
+   console.log("[3] handlers stream:*/mode:flow/artifact:* : garde activeIdRef");
+   // Découpage 2026-11 (FORK.md §10) : les handlers stream:*/mode:flow vivent
+-  // dans use-chat-stream.ts, les handlers conversationnels restent dans
+-  // l'orchestrateur — la garde activeIdRef est vérifiée là où le handler EST.
++  // dans use-chat-stream.ts. Audit CRAP 2026-11 : les handlers conversationnels
++  // (artefacts, messages) suivent le câblage socket dans
++  // use-chat-socket-events.ts — la garde activeIdRef est vérifiée là où le
++  // handler EST.
+   const streamHook = read("src/hooks/use-chat-stream.ts");
+   const guarded: { name: string; file: string }[] = [
+     { name: "onStreamStart", file: "stream" },
+@@ -84,16 +93,16 @@ async function main() {
+     { name: "onStreamDone", file: "stream" },
+     { name: "onStreamError", file: "stream" },
+     { name: "onModeFlow", file: "stream" },
+-    { name: "onArtifactDelta", file: "hook" },
+-    { name: "onArtifactCreated", file: "hook" },
+-    { name: "onArtifactUpdated", file: "hook" },
+-    { name: "onMessageAppended", file: "hook" },
+-    { name: "onMessagesRemoved", file: "hook" },
+-    { name: "onMessagesSuperseded", file: "hook" },
+-    { name: "onMessagesRefreshed", file: "hook" },
++    { name: "onArtifactDelta", file: "events" },
++    { name: "onArtifactCreated", file: "events" },
++    { name: "onArtifactUpdated", file: "events" },
++    { name: "onMessageAppended", file: "events" },
++    { name: "onMessagesRemoved", file: "events" },
++    { name: "onMessagesSuperseded", file: "events" },
++    { name: "onMessagesRefreshed", file: "events" },
+   ];
+   for (const { name: h, file } of guarded) {
+-    const target = file === "stream" ? streamHook : hook;
++    const target = file === "stream" ? streamHook : file === "events" ? socketEvents : hook;
+     const m = new RegExp(`const ${h} = \\((?:[^{]|\\{[^}]*\\})*\\)\\s*=>\\s*\\{`).exec(target);
+     if (!m) {
+       check(`handler ${h} présent`, false, "introuvable — signature changée ?");
+@@ -104,13 +113,13 @@ async function main() {
+     check(`handler ${h} filtre par activeIdRef`, body.includes("activeIdRef.current"));
+   }
+ 
+-  console.log("[4] use-hermes-chat.ts : écran vieux — comparaison révision bundle ↔ service (§9 (61))");
++  console.log("[4] use-chat-socket-events.ts : écran vieux — comparaison révision bundle ↔ service (§9 (61))");
+   const revLib = read("src/lib/build-revision.ts");
+   check("BUILD_REVISION est lu depuis NEXT_PUBLIC_BUILD_REVISION",
+     revLib.includes("NEXT_PUBLIC_BUILD_REVISION"));
+-  const helloIdx = hook.indexOf("const onHello");
+-  check("le hook traite le hello", helloIdx >= 0);
+-  const helloWindow = hook.slice(helloIdx, helloIdx + 1800);
++  const helloIdx = socketEvents.indexOf("const onHello");
++  check("le câblage socket traite le hello", helloIdx >= 0);
++  const helloWindow = socketEvents.slice(helloIdx, helloIdx + 1800);
+   check("onHello compare appRevision à BUILD_REVISION",
+     helloWindow.includes("BUILD_REVISION") && helloWindow.includes("appRevision"));
+   check("la comparaison exige les deux révisions présentes (jamais de bandeau sur supposition)",
+diff --git a/src/hooks/use-chat-socket-events.ts b/src/hooks/use-chat-socket-events.ts
+new file mode 100644
+index 0000000..9c20772
+--- /dev/null
++++ b/src/hooks/use-chat-socket-events.ts
+@@ -0,0 +1,591 @@
++// Écoute des événements socket du chat — extrait de use-hermes-chat.ts
++// (audit CRAP 2026-11 : le useEffect de câblage faisait 462 lignes et portait
++// l'essentiel de la complexité du hook principal, CC 287).
++// Corps des handlers VERBATIM ; les identifiants capturés arrivent par deps,
++// déstructurés en tête — aucune autre modification. Le tableau de dépendances
++// du useEffect est conservé à l'identique (mêmes identités, mêmes ré-abonnements).
++"use client";
++
++import { useEffect } from "react";
++import type { Dispatch, RefObject, SetStateAction } from "react";
++import { getSocket } from "@/lib/socket";
++import { streamStore } from "@/lib/stream-store";
++import { BUILD_REVISION } from "@/lib/build-revision";
++import { useProjects } from "@/hooks/use-projects";
++import { useChatStream } from "@/hooks/use-chat-stream";
++import { useArtifactsPanel } from "@/hooks/use-artifacts-panel";
++import { useToast } from "@/hooks/use-toast";
++import type {
++  Artifact,
++  ChatMessage,
++  CompactInfo,
++  ConversationMeta,
++  Project,
++  ServerHello,
++  UpdateCheckResult,
++} from "@/lib/chat-types";
++
++type ProjectsApi = ReturnType<typeof useProjects>;
++type StreamApi = ReturnType<typeof useChatStream>;
++type ArtifactsApi = ReturnType<typeof useArtifactsPanel>;
++type ToastFn = ReturnType<typeof useToast>["toast"];
++
++/** Dépendances du câblage socket : tout identifiant du hook principal utilisé
++ *  par les handlers, passé tel quel (identités conservées). */
++export type ChatSocketEventsDeps = {
++  // ── Projets (useProjects) + miroir ref ─────────────────────────────────
++  setProjects: ProjectsApi["setProjects"];
++  fetchProjects: ProjectsApi["fetchProjects"];
++  projectsRef: RefObject<Project[]>;
++  // ── État direct du hook principal ──────────────────────────────────────
++  setConnected: Dispatch<SetStateAction<boolean>>;
++  setServerInfo: Dispatch<SetStateAction<ServerHello | null>>;
++  setUpdateState: Dispatch<SetStateAction<UpdateCheckResult | null>>;
++  setScreenOutdated: Dispatch<SetStateAction<string | null>>;
++  setConversations: Dispatch<SetStateAction<ConversationMeta[]>>;
++  setActiveId: Dispatch<SetStateAction<string | null>>;
++  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
++  setCompactInfo: Dispatch<SetStateAction<CompactInfo | null>>;
++  setCompacting: Dispatch<SetStateAction<boolean>>;
++  // ── Refs du hook principal ─────────────────────────────────────────────
++  activeIdRef: RefObject<string | null>;
++  updateToastShownRef: RefObject<boolean>;
++  screenOutdatedRef: RefObject<string | null>;
++  screenOutdatedDismissedRef: RefObject<string | null>;
++  wasDisconnectedRef: RefObject<boolean>;
++  resyncConversationRef: RefObject<(id: string) => void>;
++  // ── Rappels du hook principal ──────────────────────────────────────────
++  fetchModels: () => void;
++  refreshConversations: () => void;
++  toast: ToastFn;
++} & Pick<
++  StreamApi,
++  | "setTurnError"
++  | "resetStreams"
++  | "bumpActivity"
++  | "onStreamStart"
++  | "onStreamDelta"
++  | "onStreamReasoning"
++  | "onStreamStatus"
++  | "onStreamTool"
++  | "onStreamDone"
++  | "onStreamError"
++  | "onModeFlow"
++> &
++  Pick<
++    ArtifactsApi,
++    | "setArtifacts"
++    | "setStreamingArtifacts"
++    | "setPanelOpen"
++    | "setPanelArtifactId"
++    | "panelKeyRef"
++    | "fetchArtifacts"
++  >;
++
++export function useChatSocketEvents(deps: ChatSocketEventsDeps) {
++  const {
++    setProjects,
++    fetchProjects,
++    projectsRef,
++    setConnected,
++    setServerInfo,
++    setUpdateState,
++    setScreenOutdated,
++    setConversations,
++    setActiveId,
++    setMessages,
++    setCompactInfo,
++    setCompacting,
++    activeIdRef,
++    updateToastShownRef,
++    screenOutdatedRef,
++    screenOutdatedDismissedRef,
++    wasDisconnectedRef,
++    resyncConversationRef,
++    fetchModels,
++    refreshConversations,
++    toast,
++    setTurnError,
++    resetStreams,
++    bumpActivity,
++    onStreamStart,
++    onStreamDelta,
++    onStreamReasoning,
++    onStreamStatus,
++    onStreamTool,
++    onStreamDone,
++    onStreamError,
++    onModeFlow,
++    setArtifacts,
++    setStreamingArtifacts,
++    setPanelOpen,
++    setPanelArtifactId,
++    panelKeyRef,
++    fetchArtifacts,
++  } = deps;
++
++  useEffect(() => {
++    const socket = getSocket();
++
++    const onConnect = () => {
++      setConnected(true);
++      // Lot 3 (audit L3-5) : reconnexion arrivée à temps — le verdict
++      // « connexion perdue » programmé n'a plus lieu d'être.
++      if (disconnectTimer) {
++        clearTimeout(disconnectTimer);
++        disconnectTimer = null;
++      }
++      socket.emit("hello", (info: ServerHello) => setServerInfo(info));
++      refreshConversations();
++      fetchProjects();
++      fetchModels();
++      // v0.3.3 : réveil — le service vérifie de lui-même (démarrage + 6 h),
++      // mais une coupure peut avoir manqué une diffusion : demander l'état
++      // au retour, pour que le point orange apparaisse sans délai.
++      socket.emit("system:update-check", (state?: unknown) => {
++        if (state && typeof state === "object") setUpdateState(state as UpdateCheckResult);
++      });
++      // Reprise après coupure : la PREMIÈRE connexion n'a rien à
++      // resynchroniser (aucune conversation ouverte), une RECONNEXION
++      // recharge la conversation active — messages persistés, état de
++      // compaction, tours en vol (re-semis serveur, contenu accumulé sans
++      // trou) et cartes d'artefacts. La bannière « connexion perdue »
++      // part avec (openConversation fait setTurnError(null)).
++      if (wasDisconnectedRef.current) {
++        wasDisconnectedRef.current = false;
++        const active = activeIdRef.current;
++        if (active) resyncConversationRef.current(active);
++      }
++    };
++    // Lot 3 (audit L3-5) : une déconnexion BRÈVE (réseau qui tremble) se
++    // rétablit seule — le tour continue côté service et les événements
++    // reprennent au reconnect (les handlers restent attachés). Le verdict
++    // « connexion perdue, rien n'arrivera davantage » n'est prononcé que si
++    // la coupure PERSISTE 4 s ; sinon l'utilisateur voyait une erreur
++    // définitive fausse puis la réponse arriver quand même.
++    let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
++    const onDisconnect = () => {
++      setConnected(false);
++      // Reprise après coupure : la prochaine connexion est une
++      // REconnexion — elle resynchronisera la conversation active.
++      wasDisconnectedRef.current = true;
++      if (disconnectTimer) clearTimeout(disconnectTimer);
++      disconnectTimer = setTimeout(() => {
++        disconnectTimer = null;
++        // F-31 : si un tour était en vol, l'utilisateur a le droit de savoir
++        // POURQUOI l'écran retombe — avant, le flux disparaissait en silence
++        // et le déroulé restait « en cours » sans fin ni erreur.
++        // M-11 (revue) : plus de setState dans l'updater — lecture directe
++        // du store (get()), erreur affichée PUIS vidage scellé : les deltas
++        // d'un tour mort ne peuvent plus s'y raccrober après la coupure.
++        const inFlight = Object.keys(streamStore.get().streamsRecord)[0];
++        if (inFlight) {
++          setTurnError({
++            messageId: inFlight,
++            error:
++              "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
++              "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
++              "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
++          });
++        }
++        resetStreams();
++      }, 4000);
++    };
++    // v2.4 : le service rediffuse le hello quand le porte-clés change —
++    // la carte de statut de la sidebar suit l état réel du moteur en direct.
++    // v0.3.3 : le hello porte aussi update (état de mise à jour vérifié
++    // par le service lui-même) — fusion ici, source unique côté front.
++    const onHello = (info: ServerHello) => {
++      setServerInfo(info);
++      if (info && typeof info.update === "object" && info.update !== null) {
++        setUpdateState(info.update);
++      }
++      // §9 (61) : comparaison révision bundle ↔ révision service. Un côté
++      // vide (build sans git, service sans dépôt) → pas de comparaison,
++      // jamais de bandeau sur une supposition. Divergence → bandeau tant
++      // que cette révision n'a pas été fermée ou la page rechargée ;
++      // ré-égalité (rechargement réussi) → le bandeau tombe.
++      const theirs = info?.appRevision ?? null;
++      if (BUILD_REVISION && theirs) {
++        const outdated =
++          theirs !== BUILD_REVISION &&
++          screenOutdatedDismissedRef.current !== theirs;
++        screenOutdatedRef.current = outdated ? theirs : null;
++        setScreenOutdated(outdated ? theirs : null);
++      }
++    };
++
++    // v0.3.3 : état de mise à jour poussé par le service (6 h) — le point
++    // orange suit sans ouvrir la page Système. Toast UNE fois par session
++    // (au PREMIER passage à « disponible » uniquement).
++    const onUpdateState = (state?: unknown) => {
++      if (!state || typeof state !== "object") return;
++      const u = state as UpdateCheckResult;
++      setUpdateState(u);
++      if (u.available && !updateToastShownRef.current) {
++        updateToastShownRef.current = true;
++        toast({
++          title: "Mise à jour disponible",
++          description:
++            "Une nouvelle version de Hermes est prête. Ouvrez Paramètres → Système pour l'installer.",
++        });
++      }
++    };
++    socket.on("system:update-state", onUpdateState);
++
++    const onConversationsDeleted = (p: { id: string }) => {
++      setConversations((prev) => prev.filter((c) => c.id !== p.id));
++      if (activeIdRef.current === p.id) {
++        setActiveId(null);
++        setMessages([]);
++        setTurnError(null);
++        setCompactInfo(null);
++        setArtifacts([]);
++        setStreamingArtifacts({});
++        setPanelOpen(false);
++        setPanelArtifactId(null);
++        panelKeyRef.current = null;
++      }
++    };
++
++    // Compaction terminée côté service : le résumé est en tête de session,
++    // la jauge et le popover reflètent le nouveau contexte envoyé au modèle.
++    const onConversationCompacted = (p: { conversationId: string; compact?: CompactInfo }) => {
++      // (audit 2026-11-21) la compaction est terminée où qu'elle soit : on
++      // lève le spinner AVANT le garde d'activité, sinon un ack/broadcast
++      // arrivé pendant qu'une autre conversation est affichée le laissait
++      // bloqué à true (plus rien ne le repassait à false).
++      setCompacting(false);
++      if (p.conversationId !== activeIdRef.current) return;
++      setCompactInfo(p.compact ?? null);
++      if (p.compact) {
++        toast({
++          title: "Contexte compacté",
++          description: `${p.compact.summarizedCount} messages résumés — le fil continue dans la même session.`,
++        });
++      }
++    };
++
++    // ── Artefacts : naissance, stream du source, mises à jour ──────────
++    const onArtifactCreated = (p: {
++      conversationId: string;
++      messageId: string;
++      artifact: Artifact;
++    }) => {
++      if (p.conversationId !== activeIdRef.current || !p.artifact) return;
++      const a = p.artifact;
++      setArtifacts((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
++      setStreamingArtifacts((prev) => ({ ...prev, [a.key]: prev[a.key] ?? "" }));
++      // Ouverture automatique du panneau à la naissance d'un artefact
++      panelKeyRef.current = a.key;
++      setPanelArtifactId(a.id);
++      setPanelOpen(true);
++    };
++
++    const onArtifactDelta = (p: { conversationId: string; key: string; delta: string }) => {
++      if (p.conversationId !== activeIdRef.current) return;
++      setStreamingArtifacts((prev) => ({
++        ...prev,
++        [p.key]: (prev[p.key] ?? "") + (p.delta ?? ""),
++      }));
++    };
++
++    const onArtifactUpdated = (p: { conversationId: string; artifact: Artifact }) => {
++      if (p.conversationId !== activeIdRef.current || !p.artifact) return;
++      const a = p.artifact;
++      setArtifacts((prev) => {
++        const idx = prev.findIndex((x) => x.id === a.id);
++        if (idx >= 0) {
++          const next = [...prev];
++          next[idx] = a;
++          return next;
++        }
++        return [...prev, a];
++      });
++      // Fin de génération : le source streamé laisse place au contenu final
++      if (a.status !== "generating") {
++        setStreamingArtifacts((prev) => {
++          if (!(a.key in prev)) return prev;
++          const next = { ...prev };
++          delete next[a.key];
++          return next;
++        });
++      }
++      // Le panneau suit la dernière version de l'artefact affiché
++      if (panelKeyRef.current === a.key) {
++        setPanelArtifactId(a.id);
++      }
++    };
++
++    // Le serveur confirme la persistance du message utilisateur :
++    // remplace le message optimiste (id local-) par l'id réel.
++    const onMessageAppended = (p: { conversationId: string; message: ChatMessage }) => {
++      if (p.conversationId !== activeIdRef.current || !p.message) return;
++      setMessages((prev) => {
++        const idx = [...prev].reverse().findIndex(
++          (m) => m.role === "user" && m.id.startsWith("local-")
++        );
++        if (idx < 0) {
++          return prev.some((m) => m.id === p.message.id) ? prev : [...prev, p.message];
++        }
++        const realIdx = prev.length - 1 - idx;
++        const next = [...prev];
++        next[realIdx] = p.message;
++        return next;
++      });
++    };
++
++    // Suppression d'un message (broadcast)
++    const onMessageDeleted = (p: { conversationId: string; messageId: string }) => {
++      if (p.conversationId !== activeIdRef.current) return;
++      setMessages((prev) => prev.filter((m) => m.id !== p.messageId));
++    };
++
++    // Messages supprimés côté serveur (régénération)
++    const onMessagesRemoved = (p: { conversationId: string; messageIds: string[] }) => {
++      if (p.conversationId !== activeIdRef.current) return;
++      const ids = new Set(p.messageIds);
++      setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
++    };
++
++    // Message modifié + tronqué (broadcast d'une autre session)
++    const onMessageUpdated = (p: {
++      conversationId: string;
++      message: ChatMessage;
++      removedIds: string[];
++    }) => {
++      if (p.conversationId !== activeIdRef.current || !p.message) return;
++      const ids = new Set(p.removedIds ?? []);
++      setMessages((prev) =>
++        prev.map((m) => (m.id === p.message.id ? p.message : m)).filter((m) => !ids.has(m.id))
++      );
++    };
++
++    // Conversation épinglée (broadcast)
++    const onConversationsPinned = (p: { conversation: ConversationMeta }) => {
++      if (!p.conversation) return;
++      setConversations((prev) =>
++        prev
++          .map((c) => (c.id === p.conversation.id ? { ...c, pinned: p.conversation.pinned } : c))
++          .sort(
++            (a, b) =>
++              Number(!!b.pinned) - Number(!!a.pinned) ||
++              b.updatedAt.localeCompare(a.updatedAt)
++          )
++      );
++    };
++
++    // Nouvelle conversation créée (fork depuis une autre session)
++    const onConversationsCreated = (p: { conversation: ConversationMeta }) => {
++      if (!p.conversation) return;
++      setConversations((prev) =>
++        prev.some((c) => c.id === p.conversation.id) ? prev : [p.conversation, ...prev]
++      );
++    };
++
++    // Renommage (broadcast d'une autre session) : le titre de la liste
++    // suivait uniquement dans la fenêtre qui avait renommé.
++    const onConversationsRenamed = (p: { conversation?: ConversationMeta }) => {
++      if (!p.conversation) return;
++      const conv = p.conversation;
++      setConversations((prev) =>
++        prev.map((c) => (c.id === conv.id ? { ...c, title: conv.title } : c))
++      );
++    };
++
++    // ── Projets : synchronisation multi-sessions ───────────────────
++    const onProjectCreated = (p: { project?: Project }) => {
++      if (!p.project) return;
++      const project = p.project;
++      setProjects((prev) =>
++        prev.some((x) => x.id === project.id) ? prev : [...prev, project]
++      );
++    };
++
++    const onProjectRenamed = (p: { project?: Project }) => {
++      if (!p.project) return;
++      const project = p.project;
++      setProjects((prev) => prev.map((x) => (x.id === project.id ? project : x)));
++    };
++
++    const onProjectDeleted = (p: { id: string; projects?: Project[] }) => {
++      // F-59 : le dossier et ses sous-dossiers (un niveau) disparaissent —
++      // leurs conversations retombent dans « Sans projet ». Les ids affectés
++      // sont calculés AVANT le remplacement éventuel de la liste.
++      const children = new Set(
++        projectsRef.current.filter((x) => x.parentId === p.id).map((x) => x.id)
++      );
++      setConversations((prev) =>
++        prev.map((c) =>
++          c.projectId && (c.projectId === p.id || children.has(c.projectId))
++            ? { ...c, projectId: null }
++            : c
++        )
++      );
++      // Le broadcast emporte la liste complète à jour (sous-dossiers promus
++      // racine côté service) : on la remplace, sinon fallback filtrage.
++      if (Array.isArray(p.projects)) setProjects(p.projects);
++      else setProjects((prev) => prev.filter((x) => x.id !== p.id && !children.has(x.id)));
++    };
++
++    const onProjectsReordered = (p: { projects?: Project[] }) => {
++      if (Array.isArray(p.projects)) setProjects(p.projects);
++    };
++
++    // F-60 : un dossier a changé d'état (archivé/désarchivé) ici ou dans une
++    // autre session — le broadcast emporte la liste complète à jour
++    // (propagation aux sous-dossiers faite côté service).
++    const onProjectUpdated = (p: { projects?: Project[] }) => {
++      if (Array.isArray(p.projects)) setProjects(p.projects);
++    };
++
++    const onConversationMoved = (p: { conversation?: ConversationMeta }) => {
++      if (!p.conversation) return;
++      const moved = p.conversation;
++      setConversations((prev) =>
++        prev.map((c) => (c.id === moved.id ? { ...c, projectId: moved.projectId ?? null } : c))
++      );
++    };
++
++    // v2.3 : le porte-clés a changé côté service (clé ajoutée/retirée/testée)
++    // — les listes vivantes sont rechargées, la sélection s'aligne dessus.
++    const onModelsChanged = () => fetchModels();
++
++    // F-30 — mode changé (depuis cette session ou une autre) : toutes les
++    // fenêtres suivent la conversation en direct.
++    const onConversationMode = (p: {
++      conversationId: string;
++      conversation?: ConversationMeta;
++    }) => {
++      if (p.conversation) {
++        const conv = p.conversation;
++        setConversations((prev) =>
++          prev.some((c) => c.id === conv.id)
++            ? prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c))
++            : prev
++        );
++      }
++    };
++    // F-31 : tout événement entrant est un signe de vie du service — un seul
++    // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
++    // F-31 : tout événement entrant est un signe de vie du service — un seul
++    // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
++    // (bumpActivity vit dans use-chat-stream.ts : notice dérivée au rendu.)
++    const onAnyActivity = () => bumpActivity();
++    socket.onAny(onAnyActivity);
++
++    socket.on("connect", onConnect);
++    socket.on("disconnect", onDisconnect);
++    socket.on("hello", onHello);
++    socket.on("stream:start", onStreamStart);
++    socket.on("stream:delta", onStreamDelta);
++    socket.on("stream:reasoning", onStreamReasoning);
++    socket.on("stream:status", onStreamStatus);
++    socket.on("stream:tool", onStreamTool);
++    socket.on("stream:done", onStreamDone);
++    socket.on("stream:error", onStreamError);
++    socket.on("conversations:deleted", onConversationsDeleted);
++    socket.on("conversation:compacted", onConversationCompacted);
++    socket.on("message:appended", onMessageAppended);
++    socket.on("message:deleted", onMessageDeleted);
++    socket.on("messages:removed", onMessagesRemoved);
++    // F-14 : réponse remplacée par une nouvelle version (régénération)
++    // et fil rediffusé après bascule de version affichée.
++    const onMessagesSuperseded = (p: { conversationId: string; messageIds: string[] }) => {
++      if (p.conversationId !== activeIdRef.current) return;
++      const ids = new Set(p.messageIds);
++      setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
++    };
++    const onMessagesRefreshed = (p: {
++      conversationId: string;
++      messages: ChatMessage[];
++      compact?: CompactInfo | null;
++    }) => {
++      if (p.conversationId !== activeIdRef.current) return;
++      setMessages(p.messages ?? []);
++      // F-14 (compaction) : le fil rediffusé emporte l'état de compaction
++      // quand le service le fournit (y compris null = résumé invalidé —
++      // la jauge repart honnêtement à zéro).
++      if ("compact" in p) setCompactInfo(p.compact ?? null);
++    };
++    socket.on("messages:superseded", onMessagesSuperseded);
++    socket.on("messages:refreshed", onMessagesRefreshed);
++    socket.on("message:updated", onMessageUpdated);
++    socket.on("conversations:pinned", onConversationsPinned);
++    socket.on("conversations:created", onConversationsCreated);
++    socket.on("conversations:renamed", onConversationsRenamed);
++    socket.on("projects:created", onProjectCreated);
++    socket.on("projects:renamed", onProjectRenamed);
++    socket.on("projects:deleted", onProjectDeleted);
++    socket.on("projects:reordered", onProjectsReordered);
++    socket.on("projects:updated", onProjectUpdated);
++    socket.on("conversations:moved", onConversationMoved);
++    socket.on("artifact:created", onArtifactCreated);
++    socket.on("artifact:delta", onArtifactDelta);
++    socket.on("artifact:updated", onArtifactUpdated);
++    socket.on("models:changed", onModelsChanged);
++    socket.on("mode:flow", onModeFlow);
++    socket.on("conversations:mode", onConversationMode);
++    // Loi « jamais bloqué » (2026-11-22) : la pile prévient AVANT de
++    // s'arrêter (drapeau d'arrêt propre du lanceur) — chaque tour en vol
++    // reçoit sa clôture, l'écran annonce la relance au lieu de sembler
++    // mourir en silence. Les verrous clients se relâchent d'eux-mêmes
++    // (événements terminaux + vigie de silence en filet).
++    const onSystemStopping = (p: { reason?: string; at?: string }) => {
++      toast({
++        title: "Hermes est relancé",
++        description:
++          "Mise à jour ou redémarrage : les réponses en cours sont clôturées proprement, l'écran se débloque tout seul.",
++      });
++    };
++    socket.on("system:stopping", onSystemStopping);
++
++    if (socket.connected) onConnect();
++
++    return () => {
++      // Revue P1-P7 : le verdict « connexion perdue » programmé ne survit
++      // pas au démontage du grand effet — l'ancien code ne nettoyait pas
++      // disconnectTimer ici : un setState pouvait partir sur un hook mort.
++      if (disconnectTimer) {
++        clearTimeout(disconnectTimer);
++        disconnectTimer = null;
++      }
++      socket.offAny(onAnyActivity);
++      socket.off("connect", onConnect);
++      socket.off("disconnect", onDisconnect);
++      socket.off("hello", onHello);
++      socket.off("system:update-state", onUpdateState);
++      socket.off("system:stopping", onSystemStopping);
++      socket.off("stream:start", onStreamStart);
++      socket.off("stream:delta", onStreamDelta);
++      socket.off("stream:reasoning", onStreamReasoning);
++      socket.off("stream:status", onStreamStatus);
++      socket.off("stream:tool", onStreamTool);
++      socket.off("stream:done", onStreamDone);
++      socket.off("stream:error", onStreamError);
++      socket.off("conversations:deleted", onConversationsDeleted);
++      socket.off("conversation:compacted", onConversationCompacted);
++      socket.off("message:appended", onMessageAppended);
++      socket.off("message:deleted", onMessageDeleted);
++      socket.off("messages:removed", onMessagesRemoved);
++      socket.off("messages:superseded", onMessagesSuperseded);
++      socket.off("messages:refreshed", onMessagesRefreshed);
++      socket.off("message:updated", onMessageUpdated);
++      socket.off("conversations:pinned", onConversationsPinned);
++      socket.off("conversations:created", onConversationsCreated);
++      socket.off("conversations:renamed", onConversationsRenamed);
++      socket.off("projects:created", onProjectCreated);
++      socket.off("projects:renamed", onProjectRenamed);
++      socket.off("projects:deleted", onProjectDeleted);
++      socket.off("projects:reordered", onProjectsReordered);
++      socket.off("projects:updated", onProjectUpdated);
++      socket.off("conversations:moved", onConversationMoved);
++      socket.off("artifact:created", onArtifactCreated);
++      socket.off("artifact:delta", onArtifactDelta);
++      socket.off("artifact:updated", onArtifactUpdated);
++      socket.off("models:changed", onModelsChanged);
++      socket.off("mode:flow", onModeFlow);
++      socket.off("conversations:mode", onConversationMode);
++    };
++  }, [refreshConversations, fetchProjects, fetchModels, fetchArtifacts]);
++}
+diff --git a/src/hooks/use-conversations.ts b/src/hooks/use-conversations.ts
+new file mode 100644
+index 0000000..2d95f99
+--- /dev/null
++++ b/src/hooks/use-conversations.ts
+@@ -0,0 +1,417 @@
++// CRUD conversations extrait de use-hermes-chat.ts (audit CRAP 2026-11, vague 3).
++// Corps des callbacks VERBATIM — mêmes identités de dépendances, mêmes tableaux
++// de deps. useHermesChat consomme les actions par déstructuration : l'API
++// publique du hook ne change pas, la page n'est pas touchée.
++"use client";
++
++import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
++import { getSocket } from "@/lib/socket";
++import { readClientSetting } from "@/lib/settings";
++import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
++import { useToast } from "@/hooks/use-toast";
++import { useChatStream } from "@/hooks/use-chat-stream";
++import { useArtifactsPanel } from "@/hooks/use-artifacts-panel";
++import type {
++  ChatMessage,
++  CompactInfo,
++  ConversationMeta,
++  SearchHit,
++  ToolEvent,
++} from "@/lib/chat-types";
++
++type StreamApi = ReturnType<typeof useChatStream>;
++type ArtifactsApi = ReturnType<typeof useArtifactsPanel>;
++type ToastFn = ReturnType<typeof useToast>["toast"];
++
++/** Dépendances du CRUD conversations : tout identifiant du hook principal
++ *  utilisé par les callbacks, passé tel quel (identités conservées). */
++export type ConversationsDeps = {
++  toast: ToastFn;
++  creatingRef: RefObject<boolean>;
++  pendingModeRef: RefObject<{ mode: ConversationMode; config: ModeConfig } | null>;
++  activeIdRef: RefObject<string | null>;
++  loadingForRef: RefObject<string | null>;
++  conversations: ConversationMeta[];
++  setConversations: Dispatch<SetStateAction<ConversationMeta[]>>;
++  setActiveId: Dispatch<SetStateAction<string | null>>;
++  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
++  setLoadingHistory: Dispatch<SetStateAction<boolean>>;
++  setCompactInfo: Dispatch<SetStateAction<CompactInfo | null>>;
++  setCompacting: Dispatch<SetStateAction<boolean>>;
++  setPendingMode: Dispatch<SetStateAction<{ mode: ConversationMode; config: ModeConfig } | null>>;
++} & Pick<
++  StreamApi,
++  | "setTurnError"
++  | "resetStreams"
++  | "setStreamsRecord"
++  | "setModeFlowLive"
++  | "bumpActivity"
++> &
++  Pick<
++    ArtifactsApi,
++    | "setArtifacts"
++    | "setStreamingArtifacts"
++    | "setPanelOpen"
++    | "setPanelArtifactId"
++    | "panelKeyRef"
++    | "fetchArtifacts"
++  >;
++
++export function useConversations(deps: ConversationsDeps) {
++  const {
++    toast,
++    creatingRef,
++    pendingModeRef,
++    activeIdRef,
++    loadingForRef,
++    conversations,
++    setConversations,
++    setActiveId,
++    setMessages,
++    setLoadingHistory,
++    setTurnError,
++    setCompactInfo,
++    setCompacting,
++    setPendingMode,
++    resetStreams,
++    setStreamsRecord,
++    setModeFlowLive,
++    bumpActivity,
++    setPanelOpen,
++    setPanelArtifactId,
++    panelKeyRef,
++    setArtifacts,
++    setStreamingArtifacts,
++    fetchArtifacts,
++  } = deps;
++
++  const newConversation = useCallback(
++    async (projectId?: string | null): Promise<string | null> => {
++      const socket = getSocket();
++      // Lot 3 (audit L3-5) : garde anti double-émission — un double-clic sur
++      // « Nouvelle conversation » avant l'ack créait DEUX conversations.
++      if (creatingRef.current) return null;
++      creatingRef.current = true;
++      return new Promise((resolve) => {
++        // (audit 2026-11-21) chien de garde : si l'ack n'arrive jamais
++        // (service tué net, coupure socket au moment du clic), creatingRef
++        // restait vrai pour toujours — plus aucune création possible, sans
++        // aucun message. On libère au bout de 10 s.
++        const watchdog = setTimeout(() => {
++          if (!creatingRef.current) return;
++          creatingRef.current = false;
++          toast({
++            title: "Création impossible",
++            description: "Le service n'a pas répondu — vérifiez la connexion puis réessayez.",
++            variant: "destructive",
++          });
++          resolve(null);
++        }, 10_000);
++        // F-30 : le mode des nouvelles conversations = choix « nouveau » de la
++        // pastille, sinon le réglage hermes.modes.defaultMode. Le service le
++        // résout et le borne (valeur inconnue → chat).
++        const pending = pendingModeRef.current;
++        const mode =
++          pending?.mode ?? resolveMode(readClientSetting<string>("hermes.modes.defaultMode"));
++        socket.emit(
++          "conversations:create",
++          {
++            projectId: projectId ?? null,
++            ...(mode !== "chat" ? { mode, modeConfig: pending?.config } : {}),
++          },
++          (res: { conversation?: ConversationMeta }) => {
++            clearTimeout(watchdog);
++            if (res.conversation) {
++              activeIdRef.current = res.conversation.id;
++              setConversations((prev) => [res.conversation as ConversationMeta, ...prev]);
++              setActiveId(res.conversation.id);
++              setMessages([]);
++              setTurnError(null);
++              setCompactInfo(null);
++              setModeFlowLive(null);
++              setPendingMode(null);
++              // (audit 2026-11-21) un squelette d'historique resté en attente
++              // sur l'ancienne conversation ne doit pas survivre au fil vierge.
++              loadingForRef.current = null;
++              setLoadingHistory(false);
++              creatingRef.current = false;
++              resolve(res.conversation.id);
++            } else {
++              creatingRef.current = false;
++              resolve(null);
++            }
++          }
++        );
++      });
++    },
++    // Vague 3 : la liste couvre TOUTES les valeurs réactives du corps (le
++    // compilateur React l'exige quand les deps traversent la frontière du
++    // hook) — ce sont des setters useState et des refs : identités stables,
++    // le callback garde la même fréquence de re-création qu'avant.
++    [
++      toast,
++      creatingRef,
++      pendingModeRef,
++      activeIdRef,
++      loadingForRef,
++      setConversations,
++      setActiveId,
++      setMessages,
++      setTurnError,
++      setCompactInfo,
++      setModeFlowLive,
++      setLoadingHistory,
++      setPendingMode,
++    ]
++  );
++
++  const openConversation = useCallback(
++    (id: string) => {
++      const socket = getSocket();
++      setLoadingHistory(true);
++      loadingForRef.current = id;
++      activeIdRef.current = id;
++      setActiveId(id);
++      // M-11 (revue 2026-11-19) : frontière étanche — resetStreams vide le
++      // store ET le scelle : les deltas d'un ancien tour arrivant après le
++      // changement de conversation ne peuvent plus reconstruire d'accumulation
++      // orpheline. La ré-attache ci-dessous (tours en vol) et le prochain
++      // stream:start rouvrent explicitement.
++      resetStreams();
++      setTurnError(null);
++      setCompactInfo(null);
++      // (audit 2026-11-21) le spinner « Compaction… » appartient à la
++      // conversation quittée : sans reset, un broadcast reçu pendant qu'une
++      // AUTRE conversation est ouverte (filtré par activeIdRef) le laissait
++      // collé jusqu'au rechargement.
++      setCompacting(false);
++      setModeFlowLive(null);
++      setPendingMode(null);
++      // Le panneau appartient à la conversation : on le referme au changement
++      setPanelOpen(false);
++      setPanelArtifactId(null);
++      panelKeyRef.current = null;
++      setArtifacts([]);
++      setStreamingArtifacts({});
++      socket.emit(
++        "conversations:open",
++        { id },
++        (res: {
++          conversationId: string;
++          messages: ChatMessage[];
++          compact?: CompactInfo | null;
++          /** Ré-attache : tours en vol de cette conversation (contenu accumulé). */
++          live?: {
++            messageId: string;
++            variant?: "a" | "b";
++            content?: string;
++            reasoning?: string;
++            status?: string | null;
++            toolEvents?: ToolEvent[];
++            modeFlow?: import("@/lib/chat-types").ModeFlowRow[];
++          }[];
++        } = {} as any) => {
++          // Garde de course (Lot 1, audit L1-5) : l'ack compare à la
++          // conversation ACTIVE (activeIdRef), pas à la closure — navigation
++          // A→B→C rapide, l'ack tardif de A ne doit rien écrire dans le fil
++          // de C ni couper prématurément son spinner d'historique.
++          // (audit 2026-11-21) Le squelette ne doit jamais rester collé :
++          // on n'écrit le fil que si la conversation est toujours active,
++          // mais on lève le spinner dès que CET ack correspond au chargement
++          // en cours — sinon un ack écarté (navigation A→B, nouvelle
++          // conversation, suppression pendant le chargement) laissait
++          // loadingHistory vrai pour toujours.
++          if (loadingForRef.current === id) {
++            loadingForRef.current = null;
++            setLoadingHistory(false);
++          }
++          if (id !== activeIdRef.current) return;
++          if (res.conversationId === id) {
++            setMessages(res.messages ?? []);
++            setCompactInfo(res.compact ?? null);
++            // Ré-attache des tours en vol : quitter puis revenir pendant une
++            // génération a effacé l'état de stream local (setStreamsRecord({})
++            // au changement) et le message n'est pas encore persisté — sans
++            // re-semis, les deltas suivants étaient jetés (pas d'entrée) et le
++            // tour paraissait mort. Le service renvoie le contenu accumulé ;
++            // les deltas suivants s'y raccordent sans trou ni doublon.
++            for (const t of res.live ?? []) {
++              if (!t?.messageId) continue;
++              // reopen (M-11) : la ré-attache est une réouverture EXPPLICITE
++              // du store scellé par resetStreams() au changement — ce sont
++              // des tours vivants de CETTE conversation, pas des orphelins.
++              setStreamsRecord(
++                (prev) =>
++                  prev[t.messageId]
++                    ? prev
++                    : {
++                        ...prev,
++                        [t.messageId]: {
++                          messageId: t.messageId,
++                          conversationId: id,
++                          variant: t.variant,
++                          content: t.content ?? "",
++                          reasoning: t.reasoning ?? "",
++                          status: t.status ?? null,
++                          toolEvents: t.toolEvents ?? [],
++                        },
++                      },
++                { reopen: true }
++              );
++              // Ré-attache du déroulé multi-voix (débat/conseil/auto, F-30) :
++              // sans re-semis, le bloc des voix disparaît au retour dans la
++              // conversation et ne revient qu'au prochain mode:flow (voix
++              // suivante) ou à la persistance en fin de tour. Les lignes sont
++              // poussées complètes à chaque émission : remplacement en bloc.
++              if (t.modeFlow?.length) {
++                setModeFlowLive({ messageId: t.messageId, rows: t.modeFlow });
++              }
++            }
++            // Revue P1-P7 (B14) : un tour ré-attaché est un signe de vie —
++            // après F5, lastActivityRef vaut 0 (socket.onAny ne voit pas
++            // les acks) et la vigie tuait le tour VIVANT au premier tick.
++            if (res.live?.length) bumpActivity();
++          }
++        }
++      );
++      fetchArtifacts(id);
++    },
++    // (même règle : deps complètes — setters/refs à identité stable)
++    [
++      setLoadingHistory,
++      loadingForRef,
++      activeIdRef,
++      setActiveId,
++      resetStreams,
++      setTurnError,
++      setCompactInfo,
++      setCompacting,
++      setModeFlowLive,
++      setPendingMode,
++      setPanelOpen,
++      setPanelArtifactId,
++      panelKeyRef,
++      setArtifacts,
++      setStreamingArtifacts,
++      setMessages,
++      setStreamsRecord,
++      bumpActivity,
++      fetchArtifacts,
++    ]
++  );
++
++  const deleteConversation = useCallback((id: string) => {
++    getSocket().emit("conversations:delete", { id });
++  }, []);
++
++  const renameConversation = useCallback(
++    (id: string, title: string) => {
++      const socket = getSocket();
++      socket.emit("conversations:rename", { id, title }, (res: { conversation?: ConversationMeta }) => {
++        if (res.conversation) {
++          setConversations((prev) =>
++            prev.map((c) => (c.id === id ? { ...c, title: res.conversation!.title } : c))
++          );
++        }
++      });
++    },
++    // (deps complètes : setter useState à identité stable)
++    [setConversations]
++  );
++
++  /** Épingle / détache une conversation. */
++  const togglePin = useCallback(
++    (id: string) => {
++      const current = conversations.find((c) => c.id === id);
++      const pinned = !current?.pinned;
++      getSocket().emit(
++        "conversations:pin",
++        { id, pinned },
++        (res: { conversation?: ConversationMeta }) => {
++          if (res?.conversation) {
++            const conv = res.conversation;
++            setConversations((prev) =>
++              prev
++                .map((c) => (c.id === conv.id ? { ...c, pinned: conv.pinned } : c))
++                .sort(
++                  (a, b) =>
++                    Number(!!b.pinned) - Number(!!a.pinned) ||
++                    b.updatedAt.localeCompare(a.updatedAt)
++                )
++            );
++          }
++        }
++      );
++    },
++    // (deps complètes : état + setter, tous deux réactifs ici)
++    [conversations, setConversations]
++  );
++
++  /** Duplique la conversation active (entière ou jusqu'à un message). */
++  const forkConversation = useCallback(
++    async (fromMessageId?: string): Promise<string | null> => {
++      const conversationId = activeIdRef.current;
++      if (!conversationId) return null;
++      return new Promise((resolve) => {
++        getSocket().emit(
++          "conversations:fork",
++          { conversationId, fromMessageId },
++          (res: { conversation?: ConversationMeta }) => {
++            if (res?.conversation) {
++              resolve(res.conversation.id);
++            } else {
++              resolve(null);
++            }
++          }
++        );
++      });
++    },
++    // (dep complète : ref du hook parent — identité stable)
++    [activeIdRef]
++  );
++
++  /** Recherche plein-texte dans les messages de toutes les conversations. */
++  const searchMessages = useCallback((query: string): Promise<SearchHit[]> => {
++    const q = query.trim();
++    if (q.length < 2) return Promise.resolve([]);
++    return new Promise((resolve) => {
++      getSocket().emit(
++        "conversations:search",
++        { query: q },
++        (res: { results?: SearchHit[] } = {}) => {
++          resolve(res.results ?? []);
++        }
++      );
++    });
++  }, []);
++
++  /** Déplace une conversation vers un projet (null = « Sans projet »). */
++  const moveConversation = useCallback((id: string, projectId: string | null) => {
++    getSocket().emit(
++      "conversations:move",
++      { id, projectId },
++      (res: { conversation?: ConversationMeta } = {}) => {
++        if (res.conversation) {
++          const moved = res.conversation;
++          setConversations((prev) =>
++            prev.map((c) =>
++              c.id === id ? { ...c, projectId: moved.projectId ?? null } : c
++            )
++          );
++        }
++      }
++    );
++    // (dep complète : setter useState à identité stable)
++  }, [setConversations]);
++
++  return {
++    newConversation,
++    openConversation,
++    deleteConversation,
++    renameConversation,
++    togglePin,
++    forkConversation,
++    searchMessages,
++    moveConversation,
++  };
++}
+diff --git a/src/hooks/use-hermes-chat.ts b/src/hooks/use-hermes-chat.ts
+index 4490f29..ac66345 100644
+--- a/src/hooks/use-hermes-chat.ts
++++ b/src/hooks/use-hermes-chat.ts
+@@ -13,6 +13,8 @@ import { useProjects } from "@/hooks/use-projects";
+ import { useChatSettings } from "@/hooks/use-chat-settings";
+ import { useArtifactsPanel } from "@/hooks/use-artifacts-panel";
+ import { useChatStream } from "@/hooks/use-chat-stream";
++import { useChatSocketEvents } from "@/hooks/use-chat-socket-events";
++import { useConversations } from "@/hooks/use-conversations";
+ import {
+   contextWindowOf,
+   estimateTokens,
+@@ -403,647 +405,86 @@ export function useHermesChat() {
+   const wasDisconnectedRef = useRef(false);
+   const resyncConversationRef = useRef<(id: string) => void>(() => {});
+ 
+-  useEffect(() => {
+-    const socket = getSocket();
+-
+-    const onConnect = () => {
+-      setConnected(true);
+-      // Lot 3 (audit L3-5) : reconnexion arrivée à temps — le verdict
+-      // « connexion perdue » programmé n'a plus lieu d'être.
+-      if (disconnectTimer) {
+-        clearTimeout(disconnectTimer);
+-        disconnectTimer = null;
+-      }
+-      socket.emit("hello", (info: ServerHello) => setServerInfo(info));
+-      refreshConversations();
+-      fetchProjects();
+-      fetchModels();
+-      // v0.3.3 : réveil — le service vérifie de lui-même (démarrage + 6 h),
+-      // mais une coupure peut avoir manqué une diffusion : demander l'état
+-      // au retour, pour que le point orange apparaisse sans délai.
+-      socket.emit("system:update-check", (state?: unknown) => {
+-        if (state && typeof state === "object") setUpdateState(state as UpdateCheckResult);
+-      });
+-      // Reprise après coupure : la PREMIÈRE connexion n'a rien à
+-      // resynchroniser (aucune conversation ouverte), une RECONNEXION
+-      // recharge la conversation active — messages persistés, état de
+-      // compaction, tours en vol (re-semis serveur, contenu accumulé sans
+-      // trou) et cartes d'artefacts. La bannière « connexion perdue »
+-      // part avec (openConversation fait setTurnError(null)).
+-      if (wasDisconnectedRef.current) {
+-        wasDisconnectedRef.current = false;
+-        const active = activeIdRef.current;
+-        if (active) resyncConversationRef.current(active);
+-      }
+-    };
+-    // Lot 3 (audit L3-5) : une déconnexion BRÈVE (réseau qui tremble) se
+-    // rétablit seule — le tour continue côté service et les événements
+-    // reprennent au reconnect (les handlers restent attachés). Le verdict
+-    // « connexion perdue, rien n'arrivera davantage » n'est prononcé que si
+-    // la coupure PERSISTE 4 s ; sinon l'utilisateur voyait une erreur
+-    // définitive fausse puis la réponse arriver quand même.
+-    let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+-    const onDisconnect = () => {
+-      setConnected(false);
+-      // Reprise après coupure : la prochaine connexion est une
+-      // REconnexion — elle resynchronisera la conversation active.
+-      wasDisconnectedRef.current = true;
+-      if (disconnectTimer) clearTimeout(disconnectTimer);
+-      disconnectTimer = setTimeout(() => {
+-        disconnectTimer = null;
+-        // F-31 : si un tour était en vol, l'utilisateur a le droit de savoir
+-        // POURQUOI l'écran retombe — avant, le flux disparaissait en silence
+-        // et le déroulé restait « en cours » sans fin ni erreur.
+-        // M-11 (revue) : plus de setState dans l'updater — lecture directe
+-        // du store (get()), erreur affichée PUIS vidage scellé : les deltas
+-        // d'un tour mort ne peuvent plus s'y raccrober après la coupure.
+-        const inFlight = Object.keys(streamStore.get().streamsRecord)[0];
+-        if (inFlight) {
+-          setTurnError({
+-            messageId: inFlight,
+-            error:
+-              "Connexion au service perdue pendant le tour (service arrêté, planté ou réseau coupé) " +
+-              "— rien n'arrivera davantage. La reconnexion est automatique : attendez quelques secondes, " +
+-              "puis réessayez. Le panneau ?debug=1 fournit le diagnostic complet.",
+-          });
+-        }
+-        resetStreams();
+-      }, 4000);
+-    };
+-    // v2.4 : le service rediffuse le hello quand le porte-clés change —
+-    // la carte de statut de la sidebar suit l état réel du moteur en direct.
+-    // v0.3.3 : le hello porte aussi update (état de mise à jour vérifié
+-    // par le service lui-même) — fusion ici, source unique côté front.
+-    const onHello = (info: ServerHello) => {
+-      setServerInfo(info);
+-      if (info && typeof info.update === "object" && info.update !== null) {
+-        setUpdateState(info.update);
+-      }
+-      // §9 (61) : comparaison révision bundle ↔ révision service. Un côté
+-      // vide (build sans git, service sans dépôt) → pas de comparaison,
+-      // jamais de bandeau sur une supposition. Divergence → bandeau tant
+-      // que cette révision n'a pas été fermée ou la page rechargée ;
+-      // ré-égalité (rechargement réussi) → le bandeau tombe.
+-      const theirs = info?.appRevision ?? null;
+-      if (BUILD_REVISION && theirs) {
+-        const outdated =
+-          theirs !== BUILD_REVISION &&
+-          screenOutdatedDismissedRef.current !== theirs;
+-        screenOutdatedRef.current = outdated ? theirs : null;
+-        setScreenOutdated(outdated ? theirs : null);
+-      }
+-    };
+-
+-    // v0.3.3 : état de mise à jour poussé par le service (6 h) — le point
+-    // orange suit sans ouvrir la page Système. Toast UNE fois par session
+-    // (au PREMIER passage à « disponible » uniquement).
+-    const onUpdateState = (state?: unknown) => {
+-      if (!state || typeof state !== "object") return;
+-      const u = state as UpdateCheckResult;
+-      setUpdateState(u);
+-      if (u.available && !updateToastShownRef.current) {
+-        updateToastShownRef.current = true;
+-        toast({
+-          title: "Mise à jour disponible",
+-          description:
+-            "Une nouvelle version de Hermes est prête. Ouvrez Paramètres → Système pour l'installer.",
+-        });
+-      }
+-    };
+-    socket.on("system:update-state", onUpdateState);
+-
+-    const onConversationsDeleted = (p: { id: string }) => {
+-      setConversations((prev) => prev.filter((c) => c.id !== p.id));
+-      if (activeIdRef.current === p.id) {
+-        setActiveId(null);
+-        setMessages([]);
+-        setTurnError(null);
+-        setCompactInfo(null);
+-        setArtifacts([]);
+-        setStreamingArtifacts({});
+-        setPanelOpen(false);
+-        setPanelArtifactId(null);
+-        panelKeyRef.current = null;
+-      }
+-    };
+-
+-    // Compaction terminée côté service : le résumé est en tête de session,
+-    // la jauge et le popover reflètent le nouveau contexte envoyé au modèle.
+-    const onConversationCompacted = (p: { conversationId: string; compact?: CompactInfo }) => {
+-      // (audit 2026-11-21) la compaction est terminée où qu'elle soit : on
+-      // lève le spinner AVANT le garde d'activité, sinon un ack/broadcast
+-      // arrivé pendant qu'une autre conversation est affichée le laissait
+-      // bloqué à true (plus rien ne le repassait à false).
+-      setCompacting(false);
+-      if (p.conversationId !== activeIdRef.current) return;
+-      setCompactInfo(p.compact ?? null);
+-      if (p.compact) {
+-        toast({
+-          title: "Contexte compacté",
+-          description: `${p.compact.summarizedCount} messages résumés — le fil continue dans la même session.`,
+-        });
+-      }
+-    };
+-
+-    // ── Artefacts : naissance, stream du source, mises à jour ──────────
+-    const onArtifactCreated = (p: {
+-      conversationId: string;
+-      messageId: string;
+-      artifact: Artifact;
+-    }) => {
+-      if (p.conversationId !== activeIdRef.current || !p.artifact) return;
+-      const a = p.artifact;
+-      setArtifacts((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
+-      setStreamingArtifacts((prev) => ({ ...prev, [a.key]: prev[a.key] ?? "" }));
+-      // Ouverture automatique du panneau à la naissance d'un artefact
+-      panelKeyRef.current = a.key;
+-      setPanelArtifactId(a.id);
+-      setPanelOpen(true);
+-    };
+-
+-    const onArtifactDelta = (p: { conversationId: string; key: string; delta: string }) => {
+-      if (p.conversationId !== activeIdRef.current) return;
+-      setStreamingArtifacts((prev) => ({
+-        ...prev,
+-        [p.key]: (prev[p.key] ?? "") + (p.delta ?? ""),
+-      }));
+-    };
+-
+-    const onArtifactUpdated = (p: { conversationId: string; artifact: Artifact }) => {
+-      if (p.conversationId !== activeIdRef.current || !p.artifact) return;
+-      const a = p.artifact;
+-      setArtifacts((prev) => {
+-        const idx = prev.findIndex((x) => x.id === a.id);
+-        if (idx >= 0) {
+-          const next = [...prev];
+-          next[idx] = a;
+-          return next;
+-        }
+-        return [...prev, a];
+-      });
+-      // Fin de génération : le source streamé laisse place au contenu final
+-      if (a.status !== "generating") {
+-        setStreamingArtifacts((prev) => {
+-          if (!(a.key in prev)) return prev;
+-          const next = { ...prev };
+-          delete next[a.key];
+-          return next;
+-        });
+-      }
+-      // Le panneau suit la dernière version de l'artefact affiché
+-      if (panelKeyRef.current === a.key) {
+-        setPanelArtifactId(a.id);
+-      }
+-    };
+-
+-    // Le serveur confirme la persistance du message utilisateur :
+-    // remplace le message optimiste (id local-) par l'id réel.
+-    const onMessageAppended = (p: { conversationId: string; message: ChatMessage }) => {
+-      if (p.conversationId !== activeIdRef.current || !p.message) return;
+-      setMessages((prev) => {
+-        const idx = [...prev].reverse().findIndex(
+-          (m) => m.role === "user" && m.id.startsWith("local-")
+-        );
+-        if (idx < 0) {
+-          return prev.some((m) => m.id === p.message.id) ? prev : [...prev, p.message];
+-        }
+-        const realIdx = prev.length - 1 - idx;
+-        const next = [...prev];
+-        next[realIdx] = p.message;
+-        return next;
+-      });
+-    };
+-
+-    // Suppression d'un message (broadcast)
+-    const onMessageDeleted = (p: { conversationId: string; messageId: string }) => {
+-      if (p.conversationId !== activeIdRef.current) return;
+-      setMessages((prev) => prev.filter((m) => m.id !== p.messageId));
+-    };
+-
+-    // Messages supprimés côté serveur (régénération)
+-    const onMessagesRemoved = (p: { conversationId: string; messageIds: string[] }) => {
+-      if (p.conversationId !== activeIdRef.current) return;
+-      const ids = new Set(p.messageIds);
+-      setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
+-    };
+-
+-    // Message modifié + tronqué (broadcast d'une autre session)
+-    const onMessageUpdated = (p: {
+-      conversationId: string;
+-      message: ChatMessage;
+-      removedIds: string[];
+-    }) => {
+-      if (p.conversationId !== activeIdRef.current || !p.message) return;
+-      const ids = new Set(p.removedIds ?? []);
+-      setMessages((prev) =>
+-        prev.map((m) => (m.id === p.message.id ? p.message : m)).filter((m) => !ids.has(m.id))
+-      );
+-    };
+-
+-    // Conversation épinglée (broadcast)
+-    const onConversationsPinned = (p: { conversation: ConversationMeta }) => {
+-      if (!p.conversation) return;
+-      setConversations((prev) =>
+-        prev
+-          .map((c) => (c.id === p.conversation.id ? { ...c, pinned: p.conversation.pinned } : c))
+-          .sort(
+-            (a, b) =>
+-              Number(!!b.pinned) - Number(!!a.pinned) ||
+-              b.updatedAt.localeCompare(a.updatedAt)
+-          )
+-      );
+-    };
+-
+-    // Nouvelle conversation créée (fork depuis une autre session)
+-    const onConversationsCreated = (p: { conversation: ConversationMeta }) => {
+-      if (!p.conversation) return;
+-      setConversations((prev) =>
+-        prev.some((c) => c.id === p.conversation.id) ? prev : [p.conversation, ...prev]
+-      );
+-    };
+-
+-    // Renommage (broadcast d'une autre session) : le titre de la liste
+-    // suivait uniquement dans la fenêtre qui avait renommé.
+-    const onConversationsRenamed = (p: { conversation?: ConversationMeta }) => {
+-      if (!p.conversation) return;
+-      const conv = p.conversation;
+-      setConversations((prev) =>
+-        prev.map((c) => (c.id === conv.id ? { ...c, title: conv.title } : c))
+-      );
+-    };
+-
+-    // ── Projets : synchronisation multi-sessions ───────────────────
+-    const onProjectCreated = (p: { project?: Project }) => {
+-      if (!p.project) return;
+-      const project = p.project;
+-      setProjects((prev) =>
+-        prev.some((x) => x.id === project.id) ? prev : [...prev, project]
+-      );
+-    };
+-
+-    const onProjectRenamed = (p: { project?: Project }) => {
+-      if (!p.project) return;
+-      const project = p.project;
+-      setProjects((prev) => prev.map((x) => (x.id === project.id ? project : x)));
+-    };
+-
+-    const onProjectDeleted = (p: { id: string; projects?: Project[] }) => {
+-      // F-59 : le dossier et ses sous-dossiers (un niveau) disparaissent —
+-      // leurs conversations retombent dans « Sans projet ». Les ids affectés
+-      // sont calculés AVANT le remplacement éventuel de la liste.
+-      const children = new Set(
+-        projectsRef.current.filter((x) => x.parentId === p.id).map((x) => x.id)
+-      );
+-      setConversations((prev) =>
+-        prev.map((c) =>
+-          c.projectId && (c.projectId === p.id || children.has(c.projectId))
+-            ? { ...c, projectId: null }
+-            : c
+-        )
+-      );
+-      // Le broadcast emporte la liste complète à jour (sous-dossiers promus
+-      // racine côté service) : on la remplace, sinon fallback filtrage.
+-      if (Array.isArray(p.projects)) setProjects(p.projects);
+-      else setProjects((prev) => prev.filter((x) => x.id !== p.id && !children.has(x.id)));
+-    };
+-
+-    const onProjectsReordered = (p: { projects?: Project[] }) => {
+-      if (Array.isArray(p.projects)) setProjects(p.projects);
+-    };
+-
+-    // F-60 : un dossier a changé d'état (archivé/désarchivé) ici ou dans une
+-    // autre session — le broadcast emporte la liste complète à jour
+-    // (propagation aux sous-dossiers faite côté service).
+-    const onProjectUpdated = (p: { projects?: Project[] }) => {
+-      if (Array.isArray(p.projects)) setProjects(p.projects);
+-    };
+-
+-    const onConversationMoved = (p: { conversation?: ConversationMeta }) => {
+-      if (!p.conversation) return;
+-      const moved = p.conversation;
+-      setConversations((prev) =>
+-        prev.map((c) => (c.id === moved.id ? { ...c, projectId: moved.projectId ?? null } : c))
+-      );
+-    };
+-
+-    // v2.3 : le porte-clés a changé côté service (clé ajoutée/retirée/testée)
+-    // — les listes vivantes sont rechargées, la sélection s'aligne dessus.
+-    const onModelsChanged = () => fetchModels();
+-
+-    // F-30 — mode changé (depuis cette session ou une autre) : toutes les
+-    // fenêtres suivent la conversation en direct.
+-    const onConversationMode = (p: {
+-      conversationId: string;
+-      conversation?: ConversationMeta;
+-    }) => {
+-      if (p.conversation) {
+-        const conv = p.conversation;
+-        setConversations((prev) =>
+-          prev.some((c) => c.id === conv.id)
+-            ? prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c))
+-            : prev
+-        );
+-      }
+-    };
+-    // F-31 : tout événement entrant est un signe de vie du service — un seul
+-    // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
+-    // F-31 : tout événement entrant est un signe de vie du service — un seul
+-    // point de mesure pour tous les canaux (stream:*, mode:flow, hello…).
+-    // (bumpActivity vit dans use-chat-stream.ts : notice dérivée au rendu.)
+-    const onAnyActivity = () => bumpActivity();
+-    socket.onAny(onAnyActivity);
+-
+-    socket.on("connect", onConnect);
+-    socket.on("disconnect", onDisconnect);
+-    socket.on("hello", onHello);
+-    socket.on("stream:start", onStreamStart);
+-    socket.on("stream:delta", onStreamDelta);
+-    socket.on("stream:reasoning", onStreamReasoning);
+-    socket.on("stream:status", onStreamStatus);
+-    socket.on("stream:tool", onStreamTool);
+-    socket.on("stream:done", onStreamDone);
+-    socket.on("stream:error", onStreamError);
+-    socket.on("conversations:deleted", onConversationsDeleted);
+-    socket.on("conversation:compacted", onConversationCompacted);
+-    socket.on("message:appended", onMessageAppended);
+-    socket.on("message:deleted", onMessageDeleted);
+-    socket.on("messages:removed", onMessagesRemoved);
+-    // F-14 : réponse remplacée par une nouvelle version (régénération)
+-    // et fil rediffusé après bascule de version affichée.
+-    const onMessagesSuperseded = (p: { conversationId: string; messageIds: string[] }) => {
+-      if (p.conversationId !== activeIdRef.current) return;
+-      const ids = new Set(p.messageIds);
+-      setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
+-    };
+-    const onMessagesRefreshed = (p: {
+-      conversationId: string;
+-      messages: ChatMessage[];
+-      compact?: CompactInfo | null;
+-    }) => {
+-      if (p.conversationId !== activeIdRef.current) return;
+-      setMessages(p.messages ?? []);
+-      // F-14 (compaction) : le fil rediffusé emporte l'état de compaction
+-      // quand le service le fournit (y compris null = résumé invalidé —
+-      // la jauge repart honnêtement à zéro).
+-      if ("compact" in p) setCompactInfo(p.compact ?? null);
+-    };
+-    socket.on("messages:superseded", onMessagesSuperseded);
+-    socket.on("messages:refreshed", onMessagesRefreshed);
+-    socket.on("message:updated", onMessageUpdated);
+-    socket.on("conversations:pinned", onConversationsPinned);
+-    socket.on("conversations:created", onConversationsCreated);
+-    socket.on("conversations:renamed", onConversationsRenamed);
+-    socket.on("projects:created", onProjectCreated);
+-    socket.on("projects:renamed", onProjectRenamed);
+-    socket.on("projects:deleted", onProjectDeleted);
+-    socket.on("projects:reordered", onProjectsReordered);
+-    socket.on("projects:updated", onProjectUpdated);
+-    socket.on("conversations:moved", onConversationMoved);
+-    socket.on("artifact:created", onArtifactCreated);
+-    socket.on("artifact:delta", onArtifactDelta);
+-    socket.on("artifact:updated", onArtifactUpdated);
+-    socket.on("models:changed", onModelsChanged);
+-    socket.on("mode:flow", onModeFlow);
+-    socket.on("conversations:mode", onConversationMode);
+-    // Loi « jamais bloqué » (2026-11-22) : la pile prévient AVANT de
+-    // s'arrêter (drapeau d'arrêt propre du lanceur) — chaque tour en vol
+-    // reçoit sa clôture, l'écran annonce la relance au lieu de sembler
+-    // mourir en silence. Les verrous clients se relâchent d'eux-mêmes
+-    // (événements terminaux + vigie de silence en filet).
+-    const onSystemStopping = (p: { reason?: string; at?: string }) => {
+-      toast({
+-        title: "Hermes est relancé",
+-        description:
+-          "Mise à jour ou redémarrage : les réponses en cours sont clôturées proprement, l'écran se débloque tout seul.",
+-      });
+-    };
+-    socket.on("system:stopping", onSystemStopping);
+-
+-    if (socket.connected) onConnect();
+-
+-    return () => {
+-      // Revue P1-P7 : le verdict « connexion perdue » programmé ne survit
+-      // pas au démontage du grand effet — l'ancien code ne nettoyait pas
+-      // disconnectTimer ici : un setState pouvait partir sur un hook mort.
+-      if (disconnectTimer) {
+-        clearTimeout(disconnectTimer);
+-        disconnectTimer = null;
+-      }
+-      socket.offAny(onAnyActivity);
+-      socket.off("connect", onConnect);
+-      socket.off("disconnect", onDisconnect);
+-      socket.off("hello", onHello);
+-      socket.off("system:update-state", onUpdateState);
+-      socket.off("system:stopping", onSystemStopping);
+-      socket.off("stream:start", onStreamStart);
+-      socket.off("stream:delta", onStreamDelta);
+-      socket.off("stream:reasoning", onStreamReasoning);
+-      socket.off("stream:status", onStreamStatus);
+-      socket.off("stream:tool", onStreamTool);
+-      socket.off("stream:done", onStreamDone);
+-      socket.off("stream:error", onStreamError);
+-      socket.off("conversations:deleted", onConversationsDeleted);
+-      socket.off("conversation:compacted", onConversationCompacted);
+-      socket.off("message:appended", onMessageAppended);
+-      socket.off("message:deleted", onMessageDeleted);
+-      socket.off("messages:removed", onMessagesRemoved);
+-      socket.off("messages:superseded", onMessagesSuperseded);
+-      socket.off("messages:refreshed", onMessagesRefreshed);
+-      socket.off("message:updated", onMessageUpdated);
+-      socket.off("conversations:pinned", onConversationsPinned);
+-      socket.off("conversations:created", onConversationsCreated);
+-      socket.off("conversations:renamed", onConversationsRenamed);
+-      socket.off("projects:created", onProjectCreated);
+-      socket.off("projects:renamed", onProjectRenamed);
+-      socket.off("projects:deleted", onProjectDeleted);
+-      socket.off("projects:reordered", onProjectsReordered);
+-      socket.off("projects:updated", onProjectUpdated);
+-      socket.off("conversations:moved", onConversationMoved);
+-      socket.off("artifact:created", onArtifactCreated);
+-      socket.off("artifact:delta", onArtifactDelta);
+-      socket.off("artifact:updated", onArtifactUpdated);
+-      socket.off("models:changed", onModelsChanged);
+-      socket.off("mode:flow", onModeFlow);
+-      socket.off("conversations:mode", onConversationMode);
+-    };
+-  }, [refreshConversations, fetchProjects, fetchModels, fetchArtifacts]);
++  useChatSocketEvents({
++    setProjects,
++    fetchProjects,
++    projectsRef,
++    setConnected,
++    setServerInfo,
++    setUpdateState,
++    setScreenOutdated,
++    setConversations,
++    setActiveId,
++    setMessages,
++    setCompactInfo,
++    setCompacting,
++    activeIdRef,
++    updateToastShownRef,
++    screenOutdatedRef,
++    screenOutdatedDismissedRef,
++    wasDisconnectedRef,
++    resyncConversationRef,
++    fetchModels,
++    refreshConversations,
++    toast,
++    setTurnError,
++    resetStreams,
++    bumpActivity,
++    onStreamStart,
++    onStreamDelta,
++    onStreamReasoning,
++    onStreamStatus,
++    onStreamTool,
++    onStreamDone,
++    onStreamError,
++    onModeFlow,
++    setArtifacts,
++    setStreamingArtifacts,
++    setPanelOpen,
++    setPanelArtifactId,
++    panelKeyRef,
++    fetchArtifacts,
++  });
+ 
+   // --- Actions ---
+-  const newConversation = useCallback(
+-    async (projectId?: string | null): Promise<string | null> => {
+-      const socket = getSocket();
+-      // Lot 3 (audit L3-5) : garde anti double-émission — un double-clic sur
+-      // « Nouvelle conversation » avant l'ack créait DEUX conversations.
+-      if (creatingRef.current) return null;
+-      creatingRef.current = true;
+-      return new Promise((resolve) => {
+-        // (audit 2026-11-21) chien de garde : si l'ack n'arrive jamais
+-        // (service tué net, coupure socket au moment du clic), creatingRef
+-        // restait vrai pour toujours — plus aucune création possible, sans
+-        // aucun message. On libère au bout de 10 s.
+-        const watchdog = setTimeout(() => {
+-          if (!creatingRef.current) return;
+-          creatingRef.current = false;
+-          toast({
+-            title: "Création impossible",
+-            description: "Le service n'a pas répondu — vérifiez la connexion puis réessayez.",
+-            variant: "destructive",
+-          });
+-          resolve(null);
+-        }, 10_000);
+-        // F-30 : le mode des nouvelles conversations = choix « nouveau » de la
+-        // pastille, sinon le réglage hermes.modes.defaultMode. Le service le
+-        // résout et le borne (valeur inconnue → chat).
+-        const pending = pendingModeRef.current;
+-        const mode =
+-          pending?.mode ?? resolveMode(readClientSetting<string>("hermes.modes.defaultMode"));
+-        socket.emit(
+-          "conversations:create",
+-          {
+-            projectId: projectId ?? null,
+-            ...(mode !== "chat" ? { mode, modeConfig: pending?.config } : {}),
+-          },
+-          (res: { conversation?: ConversationMeta }) => {
+-            clearTimeout(watchdog);
+-            if (res.conversation) {
+-              activeIdRef.current = res.conversation.id;
+-              setConversations((prev) => [res.conversation as ConversationMeta, ...prev]);
+-              setActiveId(res.conversation.id);
+-              setMessages([]);
+-              setTurnError(null);
+-              setCompactInfo(null);
+-              setModeFlowLive(null);
+-              setPendingMode(null);
+-              // (audit 2026-11-21) un squelette d'historique resté en attente
+-              // sur l'ancienne conversation ne doit pas survivre au fil vierge.
+-              loadingForRef.current = null;
+-              setLoadingHistory(false);
+-              creatingRef.current = false;
+-              resolve(res.conversation.id);
+-            } else {
+-              creatingRef.current = false;
+-              resolve(null);
+-            }
+-          }
+-        );
+-      });
+-    },
+-    [toast]
+-  );
+-
+-  const openConversation = useCallback(
+-    (id: string) => {
+-      const socket = getSocket();
+-      setLoadingHistory(true);
+-      loadingForRef.current = id;
+-      activeIdRef.current = id;
+-      setActiveId(id);
+-      // M-11 (revue 2026-11-19) : frontière étanche — resetStreams vide le
+-      // store ET le scelle : les deltas d'un ancien tour arrivant après le
+-      // changement de conversation ne peuvent plus reconstruire d'accumulation
+-      // orpheline. La ré-attache ci-dessous (tours en vol) et le prochain
+-      // stream:start rouvrent explicitement.
+-      resetStreams();
+-      setTurnError(null);
+-      setCompactInfo(null);
+-      // (audit 2026-11-21) le spinner « Compaction… » appartient à la
+-      // conversation quittée : sans reset, un broadcast reçu pendant qu'une
+-      // AUTRE conversation est ouverte (filtré par activeIdRef) le laissait
+-      // collé jusqu'au rechargement.
+-      setCompacting(false);
+-      setModeFlowLive(null);
+-      setPendingMode(null);
+-      // Le panneau appartient à la conversation : on le referme au changement
+-      setPanelOpen(false);
+-      setPanelArtifactId(null);
+-      panelKeyRef.current = null;
+-      setArtifacts([]);
+-      setStreamingArtifacts({});
+-      socket.emit(
+-        "conversations:open",
+-        { id },
+-        (res: {
+-          conversationId: string;
+-          messages: ChatMessage[];
+-          compact?: CompactInfo | null;
+-          /** Ré-attache : tours en vol de cette conversation (contenu accumulé). */
+-          live?: {
+-            messageId: string;
+-            variant?: "a" | "b";
+-            content?: string;
+-            reasoning?: string;
+-            status?: string | null;
+-            toolEvents?: ToolEvent[];
+-            modeFlow?: import("@/lib/chat-types").ModeFlowRow[];
+-          }[];
+-        } = {} as any) => {
+-          // Garde de course (Lot 1, audit L1-5) : l'ack compare à la
+-          // conversation ACTIVE (activeIdRef), pas à la closure — navigation
+-          // A→B→C rapide, l'ack tardif de A ne doit rien écrire dans le fil
+-          // de C ni couper prématurément son spinner d'historique.
+-          // (audit 2026-11-21) Le squelette ne doit jamais rester collé :
+-          // on n'écrit le fil que si la conversation est toujours active,
+-          // mais on lève le spinner dès que CET ack correspond au chargement
+-          // en cours — sinon un ack écarté (navigation A→B, nouvelle
+-          // conversation, suppression pendant le chargement) laissait
+-          // loadingHistory vrai pour toujours.
+-          if (loadingForRef.current === id) {
+-            loadingForRef.current = null;
+-            setLoadingHistory(false);
+-          }
+-          if (id !== activeIdRef.current) return;
+-          if (res.conversationId === id) {
+-            setMessages(res.messages ?? []);
+-            setCompactInfo(res.compact ?? null);
+-            // Ré-attache des tours en vol : quitter puis revenir pendant une
+-            // génération a effacé l'état de stream local (setStreamsRecord({})
+-            // au changement) et le message n'est pas encore persisté — sans
+-            // re-semis, les deltas suivants étaient jetés (pas d'entrée) et le
+-            // tour paraissait mort. Le service renvoie le contenu accumulé ;
+-            // les deltas suivants s'y raccordent sans trou ni doublon.
+-            for (const t of res.live ?? []) {
+-              if (!t?.messageId) continue;
+-              // reopen (M-11) : la ré-attache est une réouverture EXPPLICITE
+-              // du store scellé par resetStreams() au changement — ce sont
+-              // des tours vivants de CETTE conversation, pas des orphelins.
+-              setStreamsRecord(
+-                (prev) =>
+-                  prev[t.messageId]
+-                    ? prev
+-                    : {
+-                        ...prev,
+-                        [t.messageId]: {
+-                          messageId: t.messageId,
+-                          conversationId: id,
+-                          variant: t.variant,
+-                          content: t.content ?? "",
+-                          reasoning: t.reasoning ?? "",
+-                          status: t.status ?? null,
+-                          toolEvents: t.toolEvents ?? [],
+-                        },
+-                      },
+-                { reopen: true }
+-              );
+-              // Ré-attache du déroulé multi-voix (débat/conseil/auto, F-30) :
+-              // sans re-semis, le bloc des voix disparaît au retour dans la
+-              // conversation et ne revient qu'au prochain mode:flow (voix
+-              // suivante) ou à la persistance en fin de tour. Les lignes sont
+-              // poussées complètes à chaque émission : remplacement en bloc.
+-              if (t.modeFlow?.length) {
+-                setModeFlowLive({ messageId: t.messageId, rows: t.modeFlow });
+-              }
+-            }
+-            // Revue P1-P7 (B14) : un tour ré-attaché est un signe de vie —
+-            // après F5, lastActivityRef vaut 0 (socket.onAny ne voit pas
+-            // les acks) et la vigie tuait le tour VIVANT au premier tick.
+-            if (res.live?.length) bumpActivity();
+-          }
+-        }
+-      );
+-      fetchArtifacts(id);
+-    },
+-    [fetchArtifacts, bumpActivity]
+-  );
++  // CRUD conversations extrait dans use-conversations.ts (vague 3) —
++  // appelé ici : il consomme les setters du stream et du panneau, déjà
++  // créés plus haut. Corps des callbacks verbatim de l'autre côté.
++  const {
++    newConversation,
++    openConversation,
++    deleteConversation,
++    renameConversation,
++    togglePin,
++    forkConversation,
++    searchMessages,
++    moveConversation,
++  } = useConversations({
++    toast,
++    creatingRef,
++    pendingModeRef,
++    activeIdRef,
++    loadingForRef,
++    conversations,
++    setConversations,
++    setActiveId,
++    setMessages,
++    setLoadingHistory,
++    setTurnError,
++    setCompactInfo,
++    setCompacting,
++    setPendingMode,
++    resetStreams,
++    setStreamsRecord,
++    setModeFlowLive,
++    bumpActivity,
++    setPanelOpen,
++    setPanelArtifactId,
++    panelKeyRef,
++    setArtifacts,
++    setStreamingArtifacts,
++    fetchArtifacts,
++  });
+ 
+   // Reprise après coupure (voir onConnect) : le handler de reconnexion
+   // appelle la dernière identité du chargeur de conversation via le ref.
+@@ -1051,21 +492,6 @@ export function useHermesChat() {
+     resyncConversationRef.current = openConversation;
+   }, [openConversation]);
+ 
+-  const deleteConversation = useCallback((id: string) => {
+-    getSocket().emit("conversations:delete", { id });
+-  }, []);
+-
+-  const renameConversation = useCallback((id: string, title: string) => {
+-    const socket = getSocket();
+-    socket.emit("conversations:rename", { id, title }, (res: { conversation?: ConversationMeta }) => {
+-      if (res.conversation) {
+-        setConversations((prev) =>
+-          prev.map((c) => (c.id === id ? { ...c, title: res.conversation!.title } : c))
+-        );
+-      }
+-    });
+-  }, []);
+-
+   /** Envoie un fichier au service (base64) et renvoie la pièce jointe enregistrée. */
+   const uploadAttachment = useCallback(async (file: File): Promise<Attachment | null> => {
+     if (file.size > MAX_ATTACHMENT_BYTES) {
+@@ -1409,70 +835,6 @@ export function useHermesChat() {
+     [openConversation]
+   );
+ 
+-  /** Épingle / détache une conversation. */
+-  const togglePin = useCallback(
+-    (id: string) => {
+-      const current = conversations.find((c) => c.id === id);
+-      const pinned = !current?.pinned;
+-      getSocket().emit(
+-        "conversations:pin",
+-        { id, pinned },
+-        (res: { conversation?: ConversationMeta }) => {
+-          if (res?.conversation) {
+-            const conv = res.conversation;
+-            setConversations((prev) =>
+-              prev
+-                .map((c) => (c.id === conv.id ? { ...c, pinned: conv.pinned } : c))
+-                .sort(
+-                  (a, b) =>
+-                    Number(!!b.pinned) - Number(!!a.pinned) ||
+-                    b.updatedAt.localeCompare(a.updatedAt)
+-                )
+-            );
+-          }
+-        }
+-      );
+-    },
+-    [conversations]
+-  );
+-
+-  /** Duplique la conversation active (entière ou jusqu'à un message). */
+-  const forkConversation = useCallback(
+-    async (fromMessageId?: string): Promise<string | null> => {
+-      const conversationId = activeIdRef.current;
+-      if (!conversationId) return null;
+-      return new Promise((resolve) => {
+-        getSocket().emit(
+-          "conversations:fork",
+-          { conversationId, fromMessageId },
+-          (res: { conversation?: ConversationMeta }) => {
+-            if (res?.conversation) {
+-              resolve(res.conversation.id);
+-            } else {
+-              resolve(null);
+-            }
+-          }
+-        );
+-      });
+-    },
+-    []
+-  );
+-
+-  /** Recherche plein-texte dans les messages de toutes les conversations. */
+-  const searchMessages = useCallback((query: string): Promise<SearchHit[]> => {
+-    const q = query.trim();
+-    if (q.length < 2) return Promise.resolve([]);
+-    return new Promise((resolve) => {
+-      getSocket().emit(
+-        "conversations:search",
+-        { query: q },
+-        (res: { results?: SearchHit[] } = {}) => {
+-          resolve(res.results ?? []);
+-        }
+-      );
+-    });
+-  }, []);
+-
+   /** Transcrit un audio base64 en texte (dictée vocale). */
+   const transcribeAudio = useCallback(
+     (dataBase64: string, mime = "audio/webm"): Promise<string> =>
+@@ -1491,24 +853,6 @@ export function useHermesChat() {
+ 
+   // (actions projets : vit dans use-projects.ts)
+ 
+-  /** Déplace une conversation vers un projet (null = « Sans projet »). */
+-  const moveConversation = useCallback((id: string, projectId: string | null) => {
+-    getSocket().emit(
+-      "conversations:move",
+-      { id, projectId },
+-      (res: { conversation?: ConversationMeta } = {}) => {
+-        if (res.conversation) {
+-          const moved = res.conversation;
+-          setConversations((prev) =>
+-            prev.map((c) =>
+-              c.id === id ? { ...c, projectId: moved.projectId ?? null } : c
+-            )
+-          );
+-        }
+-      }
+-    );
+-  }, []);
+-
+   // ── Compaction & nouvelle session (chantier « Composer v2 ») ──────────
+ 
+   /** Lance la compaction de la conversation active (résumé en tête de session). */

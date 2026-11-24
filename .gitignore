@@ -62,6 +62,12 @@ server.log
 /db-test-*/
 desktop/runtime/
 desktop/logs/
+# métriques crapper et couverture v8 générées localement (audit 2026-11)
+/.metrics/
+/target/
+# exception audit CRAP 2026-11 : les tests Vitest du mini-service sont
+# versionnés malgré le motif « test » nu ci-dessus
+!mini-services/hermes-chat/test/
 
 # installation portable auto-installee par Hermes-Web.bat (1er demarrage)
 tools/
