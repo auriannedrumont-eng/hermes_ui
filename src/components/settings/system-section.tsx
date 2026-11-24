@@ -83,6 +83,284 @@ interface UpdateCheckRes {
 
 const JALONS = ["Demande envoyée", "Téléchargement", "Installation", "Vérification"];
 
+// ── Découpage en feuilles (chantier CRAP vague 7 UI, 2026-11-24) ────────
+// Le composant SystemSection (CC 102 au crapper) est démonté : deux
+// feuilles appelées dans l'ordre du rendu, corps déplacés VERBATIM (aucune
+// ligne de JSX ni de handler modifiée — les closures deviennent des props
+// typées du même nom), par chirurgie ancrée (ce script, versionné) :
+//   SystemEnteteApp — l'en-tête de la carte application : ton et libellé de
+//                     la pastille dérivés (appTone/appLabel), phrase d'état,
+//                     actions (Recharger / Mettre à jour / Réessayer /
+//                     Vérifier maintenant / Vérification…) ;
+//   SystemFilApp    — le fil live de la carte application (LE cœur de la
+//                     v3) : jalons, phrases horodatées qui respirent,
+//                     reconnexion, garde-fou « aucune nouvelle depuis
+//                     30 s ».
+// Tout l'état reste dans l'orchestrateur (SystemSection) : sonde unique
+// prodeMajCheck, journal MAJ (appliqueJournal, majFetch), updateNow, effets
+// de relais / garde-fou / reprise, fil dérivé et ses âges. Les callbacks
+// (updateNow, prodeMajCheck, ageLigne) descendent en props. Structure DOM
+// inchangée (mêmes nœuds dans le même ordre) ; props publiques de
+// SystemSection inchangées. SystemFilApp (enfant racine = un ternaire JSX)
+// est enveloppée dans un fragment — aucun nœud DOM ajouté.
+
+/** Feuille 1 — l'en-tête de la carte application : ton et libellé de la
+ *  pastille dérivés de l'état MAJ (appTone/appLabel, §maquette v3), phrase
+ *  d'état, actions. Corps déplacé VERBATIM de l'orchestrateur (chantier
+ *  CRAP vague 7 UI, 2026-11-24) ; la sonde prodeMajCheck et updateNow
+ *  restent au parent et descendent en props. */
+interface SystemEnteteAppProps {
+  majDone: null | "ok" | "erreur";
+  majActif: boolean;
+  majEtat: "inconnu" | "ajour" | "disponible" | "erreur";
+  majMotif: string | null;
+  majVerifieLabel: string | null;
+  majFinA: string | null;
+  updating: boolean;
+  updateNow: () => void;
+  prodeMajCheck: (silencieux?: boolean) => void;
+}
+
+function SystemEnteteApp({
+  majDone,
+  majActif,
+  majEtat,
+  majMotif,
+  majVerifieLabel,
+  majFinA,
+  updating,
+  updateNow,
+  prodeMajCheck,
+}: SystemEnteteAppProps) {
+  // ── La pastille de la carte application ─────────────────────
+  const appTone: "ok" | "warn" | "err" | "off" | "busy" =
+    majDone === "ok"
+      ? "ok"
+      : majActif
+        ? "busy"
+        : majEtat === "disponible"
+          ? "warn"
+          : majEtat === "erreur"
+            ? "err"
+            : majEtat === "ajour"
+              ? "ok"
+              : "busy";
+  const appLabel =
+    majDone === "ok"
+      ? "Mise à jour installée"
+      : majActif
+        ? "Mise à jour en cours…"
+        : majEtat === "disponible"
+          ? "Mise à jour disponible"
+          : majEtat === "erreur"
+            ? "Vérification impossible"
+            : majEtat === "ajour"
+              ? "À jour"
+              : "Vérification…";
+  return (
+          <div className="flex flex-wrap items-start justify-between gap-x-3.5 gap-y-2 max-[560px]:flex-col max-[560px]:items-stretch">
+            <div className="min-w-[200px] flex-1">
+              <h2 id="t-app" className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
+                L&apos;application <Pastille tone={appTone} label={appLabel} />
+              </h2>
+              <p className="fil mt-1 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
+                {majDone === "ok" ? (
+                  <>
+                    Terminé à <b>{majFinA ?? majVerifieLabel ?? "—"}</b> —
+                    rechargez la page pour découvrir la nouvelle version. Vos conversations et
+                    réglages sont intacts.
+                  </>
+                ) : majActif ? (
+                  <>Pas besoin d&apos;attendre ici&nbsp;: tout se fait tout seul.</>
+                ) : majEtat === "disponible" ? (
+                  <>
+                    Une nouvelle version est prête. Un clic, et tout se fait tout seul
+                    (1 à 2 minutes, davantage si l&apos;application doit être reconstruite —
+                    c&apos;est annoncé dans le fil).
+                  </>
+                ) : majEtat === "erreur" ? (
+                  <>
+                    Impossible de vérifier les mises à jour ({majMotif ?? "cause inconnue"}).
+                    Vérifiez votre connexion internet, puis réessayez.
+                  </>
+                ) : majEtat === "ajour" ? (
+                  <>
+                    Dernière vérification&nbsp;: {majVerifieLabel ?? "à une heure inconnue"}. Votre
+                    version est la plus récente.
+                  </>
+                ) : (
+                  <>Vérification de la disponibilité d&apos;une nouvelle version…</>
+                )}
+              </p>
+            </div>
+
+            {/* Lot audit : classe Tailwind corrompue réparée —
+                « max-[560px]:stretch » et « max-[560px]:*: » (variante
+                inachevée, retour à la ligne dans la chaîne) n'existaient pas ;
+                l'intention responsive < 560 px est rétablie. */}
+            <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
+              {majDone === "ok" ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => window.location.reload()}
+                  className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
+                >
+                  Recharger la page
+                </Button>
+              ) : majActif ? null : majEtat === "disponible" ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={updateNow}
+                  disabled={updating}
+                  className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {updating ? "Envoi…" : "Mettre à jour"}
+                </Button>
+              ) : majEtat === "erreur" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => prodeMajCheck()}
+                  className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+                >
+                  Réessayer
+                </Button>
+              ) : majEtat === "ajour" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => prodeMajCheck()}
+                  className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
+                >
+                  Vérifier maintenant
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled
+                  className="h-8 cursor-not-allowed rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground opacity-40"
+                >
+                  Vérification…
+                </Button>
+              )}
+            </div>
+          </div>
+  );
+}
+
+/** Feuille 2 — le fil live de la carte application (LE cœur de la v3) :
+ *  jalons, phrases horodatées qui respirent, reconnexion, garde-fou
+ *  « aucune nouvelle depuis 30 s ». Corps déplacé VERBATIM de
+ *  l'orchestrateur (chantier CRAP vague 7 UI, 2026-11-24) ; le fil dérivé
+ *  (parseFil), jalonCourant et les âges restent calculés au parent. */
+interface SystemFilAppProps {
+  majActif: boolean;
+  majDone: null | "ok" | "erreur";
+  majEtat: "inconnu" | "ajour" | "disponible" | "erreur";
+  fil: FilLigne[];
+  jalonCourant: number;
+  majReconnect: boolean;
+  majStale: boolean;
+  majAttendGitHub: boolean;
+  ageJournal: number | null;
+  ageLigne: (l: FilLigne) => string | null;
+}
+
+function SystemFilApp({
+  majActif,
+  majDone,
+  majEtat,
+  fil,
+  jalonCourant,
+  majReconnect,
+  majStale,
+  majAttendGitHub,
+  ageJournal,
+  ageLigne,
+}: SystemFilAppProps) {
+  return (
+    <>
+          {majActif || majDone !== null ? (
+            <div className="mt-3 overflow-hidden rounded-[10px] border border-border">
+              <div className="flex flex-wrap items-center gap-2.5 px-3.5 pb-0.5 pt-2.5">
+                {jalonsHtml(JALONS, jalonCourant)}
+              </div>
+              <div className="mt-2 border-t border-border bg-background px-3.5 pb-3 pt-2.5">
+                {/* Les dernières lignes du fil (les 6 plus récentes — le
+                    début reste dans la fenêtre « Hermes Web » si besoin). */}
+                <div className="flex flex-col gap-1">
+                  {fil.slice(-6).map((l, i, arr) => (
+                    <p
+                      key={i}
+                      className={
+                        "flex items-baseline gap-2.5 text-[12.5px] " +
+                        (l.classe === "cur" || (l.classe === "" && i === arr.length - 1 && majDone === null)
+                          ? "text-foreground before:inline-block before:size-[6px] before:flex-none before:rounded-full before:bg-hermes before:align-[1px] before:animate-pulse before:content-['']"
+                          : l.classe === "ok"
+                            ? "text-foreground before:mr-0 before:font-bold before:text-success before:content-['✓']"
+                            : l.classe === "ko"
+                              ? "text-foreground before:mr-0 before:font-bold before:text-destructive before:content-['✕']"
+                              : "text-muted-foreground")
+                      }
+                    >
+                      {l.heure ? (
+                        <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground opacity-80">
+                          {l.heure}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 flex-1">{l.texte}</span>
+                      {majDone === null && i === arr.length - 1 && l.heure ? (
+                        <span className="flex-none text-[11px] text-muted-foreground">{ageLigne(l)}</span>
+                      ) : null}
+                    </p>
+                  ))}
+                </div>
+
+                {/* Reconnexion : la pile relance par la mise à jour. */}
+                {majReconnect && majDone === null ? (
+                  <p className="mt-2 text-[11.5px] text-muted-foreground" role="status">
+                    La connexion coupe et revient — c&apos;est prévu pendant le redémarrage.
+                  </p>
+                ) : null}
+
+                {/* Garde-fou maquette : le silence, dit honnêtement. */}
+                {majStale && majDone === null ? (
+                  <div
+                    role="alert"
+                    className="mt-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12px] font-medium leading-relaxed text-warning"
+                  >
+                    Aucune nouvelle depuis {majAttendGitHub ? "45" : "30"} secondes
+                    {ageJournal ? ` (dernière écriture il y a ${ageJournal} s)` : ""}. Ce n&apos;est
+                    probablement rien — certaines étapes sont longues. Mais si rien ne bouge
+                    d&apos;ici une minute&nbsp;: regardez si la fenêtre «&nbsp;Hermes Web&nbsp;»
+                    (le petit programme qui installe les mises à jour) attend une réponse de
+                    votre part.
+                  </div>
+                ) : null}
+
+                {majDone === null && !majStale && !majReconnect ? (
+                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                    Le déroulé complet vit dans la fenêtre «&nbsp;Hermes Web&nbsp;» — ici, l&apos;essentiel en direct.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : majEtat === "disponible" ? (
+            /* État disponible sans journal : ce que le lanceur fera. */
+            <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
+              La mise à jour est installée par le petit programme «&nbsp;Hermes Web&nbsp;» qui a
+              lancé l&apos;application&nbsp;: il prend la demande dans les 15&nbsp;secondes, met tout
+              à jour, puis relance tout seul. Si vous aviez modifié des fichiers de
+              l&apos;application, ils sont mis de côté dans une sauvegarde datée — jamais perdus.
+            </p>
+          ) : null}
+    </>
+  );
+}
+
 export function SystemSection({
   connected = true,
   updateAvailable = null,
@@ -334,32 +612,6 @@ export function SystemSection({
   /** Âge du journal entier : mtimeMs (horloge du service, audit A-2). */
   const ageJournal = majLogAt > 0 ? Math.max(1, Math.round((tick - majLogAt) / 1000)) : null;
 
-  // ── La pastille de la carte application ─────────────────────
-  const appTone: "ok" | "warn" | "err" | "off" | "busy" =
-    majDone === "ok"
-      ? "ok"
-      : majActif
-        ? "busy"
-        : majEtat === "disponible"
-          ? "warn"
-          : majEtat === "erreur"
-            ? "err"
-            : majEtat === "ajour"
-              ? "ok"
-              : "busy";
-  const appLabel =
-    majDone === "ok"
-      ? "Mise à jour installée"
-      : majActif
-        ? "Mise à jour en cours…"
-        : majEtat === "disponible"
-          ? "Mise à jour disponible"
-          : majEtat === "erreur"
-            ? "Vérification impossible"
-            : majEtat === "ajour"
-              ? "À jour"
-              : "Vérification…";
-
   return (
     <section aria-label="Système" className="mx-auto w-full max-w-[880px]">
       <h1 className="text-[19px] font-bold tracking-tight">Système</h1>
@@ -374,173 +626,33 @@ export function SystemSection({
           aria-labelledby="t-app"
           className="rounded-xl border border-border bg-card px-4 py-4"
         >
-          <div className="flex flex-wrap items-start justify-between gap-x-3.5 gap-y-2 max-[560px]:flex-col max-[560px]:items-stretch">
-            <div className="min-w-[200px] flex-1">
-              <h2 id="t-app" className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
-                L&apos;application <Pastille tone={appTone} label={appLabel} />
-              </h2>
-              <p className="fil mt-1 max-w-[500px] text-[12.5px] leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
-                {majDone === "ok" ? (
-                  <>
-                    Terminé à <b>{majFinA ?? majVerifieLabel ?? "—"}</b> —
-                    rechargez la page pour découvrir la nouvelle version. Vos conversations et
-                    réglages sont intacts.
-                  </>
-                ) : majActif ? (
-                  <>Pas besoin d&apos;attendre ici&nbsp;: tout se fait tout seul.</>
-                ) : majEtat === "disponible" ? (
-                  <>
-                    Une nouvelle version est prête. Un clic, et tout se fait tout seul
-                    (1 à 2 minutes, davantage si l&apos;application doit être reconstruite —
-                    c&apos;est annoncé dans le fil).
-                  </>
-                ) : majEtat === "erreur" ? (
-                  <>
-                    Impossible de vérifier les mises à jour ({majMotif ?? "cause inconnue"}).
-                    Vérifiez votre connexion internet, puis réessayez.
-                  </>
-                ) : majEtat === "ajour" ? (
-                  <>
-                    Dernière vérification&nbsp;: {majVerifieLabel ?? "à une heure inconnue"}. Votre
-                    version est la plus récente.
-                  </>
-                ) : (
-                  <>Vérification de la disponibilité d&apos;une nouvelle version…</>
-                )}
-              </p>
-            </div>
-
-            {/* Lot audit : classe Tailwind corrompue réparée —
-                « max-[560px]:stretch » et « max-[560px]:*: » (variante
-                inachevée, retour à la ligne dans la chaîne) n'existaient pas ;
-                l'intention responsive < 560 px est rétablie. */}
-            <div className="flex flex-none flex-wrap items-center gap-2 max-[560px]:min-w-[130px] max-[560px]:flex-1 max-[560px]:text-center">
-              {majDone === "ok" ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => window.location.reload()}
-                  className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90"
-                >
-                  Recharger la page
-                </Button>
-              ) : majActif ? null : majEtat === "disponible" ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={updateNow}
-                  disabled={updating}
-                  className="h-8 cursor-pointer rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {updating ? "Envoi…" : "Mettre à jour"}
-                </Button>
-              ) : majEtat === "erreur" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => prodeMajCheck()}
-                  className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
-                >
-                  Réessayer
-                </Button>
-              ) : majEtat === "ajour" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => prodeMajCheck()}
-                  className="h-8 cursor-pointer rounded-lg border border-border bg-card px-3.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text"
-                >
-                  Vérifier maintenant
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled
-                  className="h-8 cursor-not-allowed rounded-lg bg-hermes-strong px-3.5 text-[12.5px] font-semibold text-hermes-foreground opacity-40"
-                >
-                  Vérification…
-                </Button>
-              )}
-            </div>
-          </div>
+          <SystemEnteteApp
+            majDone={majDone}
+            majActif={majActif}
+            majEtat={majEtat}
+            majMotif={majMotif}
+            majVerifieLabel={majVerifieLabel}
+            majFinA={majFinA}
+            updating={updating}
+            updateNow={updateNow}
+            prodeMajCheck={prodeMajCheck}
+          />
 
           {/* Le fil live — LE cœur de la v3 : jalons + phrases horodatées
               qui respirent + garde-fou « aucune nouvelle depuis 30 s ». */}
-          {majActif || majDone !== null ? (
-            <div className="mt-3 overflow-hidden rounded-[10px] border border-border">
-              <div className="flex flex-wrap items-center gap-2.5 px-3.5 pb-0.5 pt-2.5">
-                {jalonsHtml(JALONS, jalonCourant)}
-              </div>
-              <div className="mt-2 border-t border-border bg-background px-3.5 pb-3 pt-2.5">
-                {/* Les dernières lignes du fil (les 6 plus récentes — le
-                    début reste dans la fenêtre « Hermes Web » si besoin). */}
-                <div className="flex flex-col gap-1">
-                  {fil.slice(-6).map((l, i, arr) => (
-                    <p
-                      key={i}
-                      className={
-                        "flex items-baseline gap-2.5 text-[12.5px] " +
-                        (l.classe === "cur" || (l.classe === "" && i === arr.length - 1 && majDone === null)
-                          ? "text-foreground before:inline-block before:size-[6px] before:flex-none before:rounded-full before:bg-hermes before:align-[1px] before:animate-pulse before:content-['']"
-                          : l.classe === "ok"
-                            ? "text-foreground before:mr-0 before:font-bold before:text-success before:content-['✓']"
-                            : l.classe === "ko"
-                              ? "text-foreground before:mr-0 before:font-bold before:text-destructive before:content-['✕']"
-                              : "text-muted-foreground")
-                      }
-                    >
-                      {l.heure ? (
-                        <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground opacity-80">
-                          {l.heure}
-                        </span>
-                      ) : null}
-                      <span className="min-w-0 flex-1">{l.texte}</span>
-                      {majDone === null && i === arr.length - 1 && l.heure ? (
-                        <span className="flex-none text-[11px] text-muted-foreground">{ageLigne(l)}</span>
-                      ) : null}
-                    </p>
-                  ))}
-                </div>
+          <SystemFilApp
+            majActif={majActif}
+            majDone={majDone}
+            majEtat={majEtat}
+            fil={fil}
+            jalonCourant={jalonCourant}
+            majReconnect={majReconnect}
+            majStale={majStale}
+            majAttendGitHub={majAttendGitHub}
+            ageJournal={ageJournal}
+            ageLigne={ageLigne}
+          />
 
-                {/* Reconnexion : la pile relance par la mise à jour. */}
-                {majReconnect && majDone === null ? (
-                  <p className="mt-2 text-[11.5px] text-muted-foreground" role="status">
-                    La connexion coupe et revient — c&apos;est prévu pendant le redémarrage.
-                  </p>
-                ) : null}
-
-                {/* Garde-fou maquette : le silence, dit honnêtement. */}
-                {majStale && majDone === null ? (
-                  <div
-                    role="alert"
-                    className="mt-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12px] font-medium leading-relaxed text-warning"
-                  >
-                    Aucune nouvelle depuis {majAttendGitHub ? "45" : "30"} secondes
-                    {ageJournal ? ` (dernière écriture il y a ${ageJournal} s)` : ""}. Ce n&apos;est
-                    probablement rien — certaines étapes sont longues. Mais si rien ne bouge
-                    d&apos;ici une minute&nbsp;: regardez si la fenêtre «&nbsp;Hermes Web&nbsp;»
-                    (le petit programme qui installe les mises à jour) attend une réponse de
-                    votre part.
-                  </div>
-                ) : null}
-
-                {majDone === null && !majStale && !majReconnect ? (
-                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                    Le déroulé complet vit dans la fenêtre «&nbsp;Hermes Web&nbsp;» — ici, l&apos;essentiel en direct.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : majEtat === "disponible" ? (
-            /* État disponible sans journal : ce que le lanceur fera. */
-            <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
-              La mise à jour est installée par le petit programme «&nbsp;Hermes Web&nbsp;» qui a
-              lancé l&apos;application&nbsp;: il prend la demande dans les 15&nbsp;secondes, met tout
-              à jour, puis relance tout seul. Si vous aviez modifié des fichiers de
-              l&apos;application, ils sont mis de côté dans une sauvegarde datée — jamais perdus.
-            </p>
-          ) : null}
 
           {updateError ? (
             <p className="mt-2 text-[11.5px] font-medium text-destructive" role="alert">

@@ -14,9 +14,9 @@ Vitest ajoutés au mini-service en sont la **première couverture mesurable**.
 | Fichier | Rôle |
 | --- | --- |
 | `audit-cc30.txt` | Phase 1 — audit des 44 fonctions de production CC ≥ 30 (1052 fonctions analysées), familles A-E. |
-| `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séances UI du 25/11 (vagues 5 et 6) — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
+| `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séances UI du 25/11 (vagues 5 à 7) — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
 | `suite-tests.log` | Preuves de validation brutes de la dernière séance (fichier LOCAL — `*.log` gitignore, non commité comme les précédents) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM dédiée Composer 25/25, preuve VERBATIM du découpage Composer (12 plages, 728 lignes), classement crapper après la vague 6. |
-| `refactoring.patch` | Vagues 1+2+3+4 + séances UI (vagues 5 et 6) — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
+| `refactoring.patch` | Vagues 1+2+3+4 + séances UI (vagues 5 à 7) — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
 | `table-crap.txt` | Snapshot crapper complet après la vague 6 UI du 25/11 (fonction, namespace, CC, couverture, CRAP). |
 | `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la vague 6 UI du 25/11. |
 | `crap.edn` | Métriques au format EDN pour uml-viewer. |
@@ -89,11 +89,20 @@ scripts/qa-composer-dom.ts **25/25** (harnais auto-porté : service base
 jetable + front dev + passerelle :81 du sandbox — structure, comportements
 slash/envoi/dépôt, mobile 375 px).
 
-Prochaines cibles (classement après la vague 6) : StorageSection 105 ·
-SystemSection 102 · registerProvidersHandlers 96 · registerExtensionsHandlers
-94 — même discipline pour l'UI : sous-cartes feuilles VERBATIM + preuve de
-découpage versionnée + QA DOM dédiée par composant (qa-motor-card-v3-dom.ts,
-qa-composer-dom.ts).
+Vague 7 UI (2026-11-25) : **StorageSection 105 → 54** en 5 feuilles
+(Compteurs 4 · BarreFiltres 9 · Bandeau 9 · Groupe 28 · Toasts 7) et
+**SystemSection 102 → 55** en 2 feuilles (EnteteApp 26 · FilApp 23) —
+`extract_storage_leaves.py` / `preuve_storage_verbatim.py` (13 plages,
+801 lignes) et `extract_system_leaves.py` / `preuve_system_verbatim.py`
+(8 plages, 560 lignes) ; QA DOM dédiées `scripts/qa-storage-dom.ts` **21/21**
+et `scripts/qa-system-dom.ts` **16/16** (harnais auto-porté, sonde réelle
+« Vérification… » observée) ; `qa-motor-card-v3-dom.ts` TOUT VERT (41).
+**Plus aucune fonction de production au-dessus de CC 100.**
+
+Prochaines cibles (classement après la vague 7) : registerProvidersHandlers
+96 · registerExtensionsHandlers 94 — le motif « sous-registres » (vagues 1-3)
+reprend ; l'UI restante est sous la barre (HermesWebPage 82, WebchatSection
+75, à la demande).
 
 ## Scripts de mesure et de chirurgie (`scripts/`)
 
@@ -111,7 +120,11 @@ qa-composer-dom.ts).
   `extract_sidebar_leaves.py` + `preuve_sidebar_verbatim.py` (vague 5 UI —
   Sidebar en 5 feuilles + 2 algorithmes purs, 23 plages prouvées au HEAD),
   `extract_composer_leaves.py` + `preuve_composer_verbatim.py` (vague 6 UI —
-  Composer en 7 feuilles, 12 plages prouvées au HEAD).
+  Composer en 7 feuilles, 12 plages prouvées au HEAD),
+  `extract_storage_leaves.py` + `preuve_storage_verbatim.py` (vague 7 UI —
+  StorageSection en 5 feuilles, 13 plages / 801 lignes prouvées au HEAD),
+  `extract_system_leaves.py` + `preuve_system_verbatim.py` (vague 7 UI —
+  SystemSection en 2 feuilles, 8 plages / 560 lignes prouvées au HEAD).
 - QA DOM de la carte moteur : `scripts/qa-motor-card-v3-dom.ts` (à la racine
   du repo, harnais auto-porté : Caddy :81 + front dev + service stubbé —
   scénario complet de la carte v3, 41 vérifications).
@@ -119,6 +132,12 @@ qa-composer-dom.ts).
   harnais auto-porté : service base jetable + front dev + passerelle :81 du
   sandbox, journaux du service et du front en fichiers — 25 vérifications :
   structure des 7 feuilles, comportements slash/envoi/dépôt, mobile 375 px).
+- QA DOM du Stockage : `scripts/qa-storage-dom.ts` (vague 7 UI — 21
+  vérifications : compteurs, barre de filtres, bandeau de résultats,
+  inventaire vide, effacement des filtres, mobile 375 px).
+- QA DOM du Système : `scripts/qa-system-dom.ts` (vague 7 UI — 16
+  vérifications : pastille d'état, chaîne de boutons, sonde « Vérifier
+  maintenant » réelle, fil live absent au repos, carte Hermes, mobile).
 
 ## Reproduire la mesure
 

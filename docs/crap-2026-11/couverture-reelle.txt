@@ -535,3 +535,81 @@ C. Classement crapper après la vague 6 (production, CC ≥ 30 — 60 fonctions)
    CC  52  AgentMotorCard               (acceptable — feuilles 30-57)
    CC  45  Composer                     (acceptable — feuilles 2-38)
    CC  38  ComposerSaisie               (feuille du Composer)
+
+## 10bis — Séance du 2026-11-25 : vague 7 UI — StorageSection (105) et
+SystemSection (102), LA BARRE DES 100 EST VIDE
+
+### A. Chirurgies
+
+Deux chirurgies ancrées versionnées en une séance (même discipline que les
+vagues 5 et 6), bornes vérifiées AVANT toute écriture, corps déplacés
+VERBATIM, closures devenues props typées du même nom, tout l'état reste à
+l'orchestrateur, structure DOM et props publiques inchangées :
+
+- `extract_storage_leaves.py` + `preuve_storage_verbatim.py` — StorageSection
+  démontée en **5 feuilles** (même fichier, ordre du rendu) :
+  StorageCompteurs 4 (bandeau §4.1) · StorageBarreFiltres 9 (recherche / tri
+  / chips) · StorageBandeau 9 (bandeau de résultats C4) · StorageGroupe 28
+  (dérivation du déroulé §4.2 + en-tête « Nettoyer » en place + lignes
+  triées + projet vidé) · StorageToasts 7 (bandeaux « Annuler » 7 s §4.5) ;
+  13 plages (801 lignes) prouvées identiques octet par octet au HEAD, dont
+  294 déplacées. La ref inputRef descend en props (convention RefObject) ;
+  l'import react reçoit Dispatch / RefObject / SetStateAction.
+- `extract_system_leaves.py` + `preuve_system_verbatim.py` — SystemSection
+  démontée en **2 feuilles** : SystemEnteteApp 26 (dérivation appTone/appLabel
+  de la pastille + phrase d'état + chaîne de boutons — les deux blocs
+  ternaires CC-lourds sortent d'un coup) · SystemFilApp 23 (le fil live,
+  LE cœur de la v3 : jalons, phrases horodatées, reconnexion, garde-fou) ;
+  8 plages (560 lignes) prouvées, dont 189 déplacées. La sonde unique
+  prodeMajCheck, updateNow et ageLigne descendent en props. Trois refus
+  propres du script avant écriture (garde coupée par un saut de ligne,
+  compteurs socket.on/off sous-estimés) — le fichier n'est jamais écrit en
+  échec, aucune retouche manuelle du produit.
+
+### B. Mesure (couverture Vitest fraîche, lcov fusionné absolutisé)
+
+- StorageSection **CC 105 → 54** (CRAP 11 130 → 2 970 à couverture 0) ;
+  SystemSection **CC 102 → 55** (CRAP 10 506 → 3 080).
+- **Plus aucune fonction de production au-dessus de CC 100** — l'objectif
+  posé à l'ouverture du chantier CRAP est atteint. La liste des hotspots
+  garde 60 entrées (les mêmes fonctions : les deux sections y restent, sous
+  la barre) ; la première cible restante est registerProvidersHandlers 96
+  (motif « sous-registres », déjà prouvé trois fois en vagues 1-3).
+
+### C. QA
+
+Baseline vérifiée verte sur HEAD AVANT chirurgie (33/33 · tsc ×3 · eslint
+195 warnings · Vitest 144/144). Après chirurgies : tsc ×3 0 erreur · eslint
+0 erreur, ensembles de warnings identiques ligne à ligne (seul « majAJour »,
+préexistant à HEAD, change de ligne ; 193 sources + 2 artefacts target/) ·
+suite autonome 33/33 · gardes de source 0 échec · Vitest 144/144 · QA DOM
+dédiées (harnais auto-porté : service base jetable + front dev + passerelle
+:81) : **qa-storage-dom.ts 21/21** (compteurs, barre de filtres, bandeau de
+résultats, inventaire vide honnête, effacement des filtres, mobile 375 px) ·
+**qa-system-dom.ts 16/16** (pastille « À jour », chaîne de boutons, sonde
+réelle avec bascule « Vérification… » observée puis retour stable, fil live
+absent au repos, carte Hermes, mobile) · **qa-motor-card-v3-dom.ts TOUT
+VERT** (41 — traverse la section Système surgiée). NOTE HARNAIS :
+qa-v23-dom / qa-v24-dom sont du harnais d'époque (Caddy :8181 + service
+externe, socket global) — inutilisables dans le bac à sable actuel (:81) ;
+qa-v24-dom lancé par prudence est resté bloqué AVANT toute assertion (attente
+de socket sans timeout) et a été arrêté : non exécutable ici ≠ échec ; la
+régression de la section Système est couverte par qa-system-dom +
+qa-motor-card-v3-dom. Preuves brutes complètes : suite-tests.log (vague 7).
+
+### D. Classement crapper après la vague 7 (production, CC ≥ 30 — 60 fonctions)
+   CC  96  registerProvidersHandlers    (sous-registres — première cible)
+   CC  94  registerExtensionsHandlers   (sous-registres)
+   CC  86  useHermesChat                (acceptable)
+   CC  84  runAssistantTurn             (acceptable)
+   CC  82  HermesWebPage                (UI)
+   CC  81  useChatSocketEvents          (acceptable)
+   CC  77  registerTurnHandlers         (sous-registres)
+   CC  77  runGatewayTurn               (sous-registres)
+   CC  75  WebchatSection               (UI)
+   CC  74  Sidebar                      (acceptable — feuilles 2-15)
+   CC  55  SystemSection                (acceptable — feuilles 23-55)
+   CC  54  StorageSection               (acceptable — feuilles 4-54)
+   CC  52  AgentMotorCard               (acceptable — feuilles 30-57)
+   CC  45  Composer                     (acceptable — feuilles 2-38)
+   CC  38  ComposerSaisie               (feuille du Composer)

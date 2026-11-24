@@ -9,8 +9,6 @@ main                                  scripts.test-providers-wallets            
 main                                  scripts.test-source-guards                                                128   0.0%  16512.0
 main                                  scripts.test-integration-fixes                                            115   0.0%  13340.0
 main                                  scripts.test-reattach-stream                                              109   0.0%  11990.0
-StorageSection                        components.settings.storage-section                                       105   0.0%  11130.0
-SystemSection                         components.settings.system-section                                        102   0.0%  10506.0
 registerProvidersHandlers             mini-services.hermes-chat.handlers.providers-extensions                    96   0.0%   9312.0
 main                                  scripts.test-providers-opencode                                            95   0.0%   9120.0
 registerExtensionsHandlers            mini-services.hermes-chat.handlers.providers-extensions                    94   0.0%   8930.0
@@ -40,8 +38,10 @@ streamAnthropicTurn                   mini-services.hermes-chat.llm-streams     
 main                                  scripts.test-pool-flow                                                     57   0.0%   3306.0
 registerMessageAndStopHandlers        mini-services.hermes-chat.handlers.conversations                           56   0.0%   3192.0
 main                                  scripts.test-web-flow                                                      56   0.0%   3192.0
+SystemSection                         components.settings.system-section                                         55   0.0%   3080.0
 main                                  scripts.qa-v24-dom                                                         55   0.0%   3080.0
 ExtensionRow                          components.settings.extensions-section                                     54   0.0%   2970.0
+StorageSection                        components.settings.storage-section                                        54   0.0%   2970.0
 useChatStream                         hooks.use-chat-stream                                                      54   0.0%   2970.0
 registerProjectHandlers               mini-services.hermes-chat.handlers.conversations                           53   0.0%   2862.0
 AgentMotorCard                        components.settings.agent-motor-card                                       52   0.0%   2756.0
@@ -95,6 +95,7 @@ MemoryCard                            components.settings.memory-card           
 testZaiSurface                        mini-services.hermes-chat.providers                                        30   0.0%    930.0
 useDictation                          hooks.use-dictation                                                        29   0.0%    870.0
 ModelesPane                           components.settings.models-section                                         28   0.0%    812.0
+StorageGroupe                         components.settings.storage-section                                        28   0.0%    812.0
 registerFileVersionHandlers           mini-services.hermes-chat.handlers.artifacts-shares                        28   0.0%    812.0
 main                                  scripts.test-motor-rest-flow                                               28   0.0%    812.0
 partA                                 scripts.test-storage-flow                                                  28   0.0%    812.0
@@ -107,6 +108,7 @@ _parse                                .next.dev.static.chunks.node_modules_next_
 lock                                  .next.dev.static.chunks.node_modules_next_dist_compiled_next-devtools_index_1dd7fb59.lH   26   0.0%    702.0
 ArtifactViewerDialog                  components.chat.artifact-panel                                             26   0.0%    702.0
 HermesSection                         components.settings.hermes-section                                         26   0.0%    702.0
+SystemEnteteApp                       components.settings.system-section                                         26   0.0%    702.0
 getInfo                               .next.dev.server.chunks.ssr.node_modules_ws_dc1115cc._.Receiver            25   0.0%    650.0
 useArtifactSource                     components.chat.artifact-views                                             25   0.0%    650.0
 SettingsPanel                         components.settings.settings-panel                                         25   0.0%    650.0
@@ -124,6 +126,7 @@ decodeString                          .next.dev.server.chunks.ssr.node_modules_c
 decodeString                          .next.dev.static.chunks.node_modules_cf89e8f1._.Decoder                    23   0.0%    552.0
 ComposerBarre                         components.chat.composer                                                   23   0.0%    552.0
 ProjectGroup                          components.chat.project-group                                              23   0.0%    552.0
+SystemFilApp                          components.settings.system-section                                         23   0.0%    552.0
 startAgentRollback                    mini-services.hermes-chat.agent-motor                                      23   0.0%    552.0
 runDebate                             mini-services.hermes-chat.orchestrator                                     23   0.0%    552.0
 main                                  scripts.test-memory-flow                                                   23   0.0%    552.0
@@ -338,6 +341,8 @@ jalonsHtml                            components.settings.fil-live              
 PresetEditor                          components.settings.hermes-section                                          9   0.0%     90.0
 PromptCard                            components.settings.modes-section                                           9   0.0%     90.0
 ProvidersSection                      components.settings.providers-section                                       9   0.0%     90.0
+StorageBandeau                        components.settings.storage-section                                         9   0.0%     90.0
+StorageBarreFiltres                   components.settings.storage-section                                         9   0.0%     90.0
 modePillLabel                         lib.modes                                                                   9   0.0%     90.0
 voicesFor                             lib.modes                                                                   9   0.0%     90.0
 runSensesCheckSilent                  mini-services.hermes-chat.agent-motor                                       9   0.0%     90.0
@@ -435,6 +440,7 @@ modeModelDefaults                     components.chat.mode-picker               
 voicesDefaults                        components.chat.mode-picker                                                 7   0.0%     56.0
 relativeDate                          components.chat.version-popover                                             7   0.0%     56.0
 getServerPrompts                      components.settings.modes-section                                           7   0.0%     56.0
+StorageToasts                         components.settings.storage-section                                         7   0.0%     56.0
 SystemPromptPanel                     components.settings.system-prompt-panel                                     7   0.0%     56.0
 useSpeech                             hooks.use-speech                                                            7   0.0%     56.0
 isArtifactFence                       lib.artifact-utils                                                          7   0.0%     56.0
@@ -732,6 +738,7 @@ verdictMotor                          components.settings.fil-live              
 formatTarif                           components.settings.models-section                                          4   0.0%     20.0
 ModeModelRow                          components.settings.modes-section                                           4   0.0%     20.0
 effectiveBaseUrl                      components.settings.providers-section                                       4   0.0%     20.0
+StorageCompteurs                      components.settings.storage-section                                         4   0.0%     20.0
 maxByDocOf                            components.settings.storage-section                                         4   0.0%     20.0
 parseDate                             components.settings.storage-section                                         4   0.0%     20.0
 ConfirmDestructiveDialog              components.shared.confirm-destructive-dialog                                4   0.0%     20.0
@@ -790,6 +797,10 @@ waitHttp                              scripts.qa-motor-card-v3-dom              
 check                                 scripts.qa-projects-dom                                                     4   0.0%     20.0
 emit                                  scripts.qa-projects-dom                                                     4   0.0%     20.0
 emit                                  scripts.qa-projects-visual                                                  4   0.0%     20.0
+ok                                    scripts.qa-storage-dom                                                      4   0.0%     20.0
+waitHttp                              scripts.qa-storage-dom                                                      4   0.0%     20.0
+ok                                    scripts.qa-system-dom                                                       4   0.0%     20.0
+waitHttp                              scripts.qa-system-dom                                                       4   0.0%     20.0
 ok                                    scripts.qa-v033-available                                                   4   0.0%     20.0
 ok                                    scripts.qa-v033-visual                                                      4   0.0%     20.0
 ok                                    scripts.qa-v040-motor                                                       4   0.0%     20.0
@@ -1066,6 +1077,8 @@ cleanup                               scripts.qa-composer-dom                   
 boxes                                 scripts.qa-layout                                                           3   0.0%     12.0
 startGW                               scripts.qa-motor-card-v3-dom                                                3   0.0%     12.0
 stopGW                                scripts.qa-motor-card-v3-dom                                                3   0.0%     12.0
+cleanup                               scripts.qa-storage-dom                                                      3   0.0%     12.0
+cleanup                               scripts.qa-system-dom                                                       3   0.0%     12.0
 cleanup                               scripts.qa-v040-motor                                                       3   0.0%     12.0
 main                                  scripts.qa-v23-visual                                                       3   0.0%     12.0
 startFixture                          scripts.run-tests                                                           3   0.0%     12.0
@@ -1365,6 +1378,8 @@ top                                   docs.crap-2026-11.scripts.analyze_crap_edn
 ancre                                 docs.crap-2026-11.scripts.extract_agent_motor_leaves                        2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_composer_leaves                           2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_sidebar_leaves                            2   0.0%      6.0
+ancre                                 docs.crap-2026-11.scripts.extract_storage_leaves                            2   0.0%      6.0
+ancre                                 docs.crap-2026-11.scripts.extract_system_leaves                             2   0.0%      6.0
 notify                                hooks.use-pricing                                                           2   0.0%      6.0
 notify                                hooks.use-profiles                                                          2   0.0%      6.0
 addToRemoveQueue                      hooks.use-toast                                                             2   0.0%      6.0
@@ -2216,12 +2231,16 @@ L                                     docs.crap-2026-11.scripts.extract_conversa
 replace                               docs.crap-2026-11.scripts.extract_conversations_hook                        1   0.0%      2.0
 morceau                               docs.crap-2026-11.scripts.extract_sidebar_leaves                            1   0.0%      2.0
 chk                                   docs.crap-2026-11.scripts.extract_socket_events                             1   0.0%      2.0
+morceau                               docs.crap-2026-11.scripts.extract_storage_leaves                            1   0.0%      2.0
+morceau                               docs.crap-2026-11.scripts.extract_system_leaves                             1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.extract_turn_actions                              1   0.0%      2.0
 replace                               docs.crap-2026-11.scripts.extract_turn_actions                              1   0.0%      2.0
 strip_noise                           docs.crap-2026-11.scripts.inventory_effect2                                 1   0.0%      2.0
 strip_noise                           docs.crap-2026-11.scripts.inventory_effect3                                 1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_composer_verbatim                          1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_sidebar_verbatim                           1   0.0%      2.0
+slice_head                            docs.crap-2026-11.scripts.preuve_storage_verbatim                           1   0.0%      2.0
+slice_head                            docs.crap-2026-11.scripts.preuve_system_verbatim                            1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.providers_valide                                  1   0.0%      2.0
 replace                               docs.crap-2026-11.scripts.providers_valide                                  1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.refactor_llm_pool                                 1   0.0%      2.0

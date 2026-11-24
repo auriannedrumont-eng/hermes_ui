@@ -3,8 +3,6 @@
   {:name "main", :namespace "scripts.test-source-guards", :complexity 128, :coverage 0.0, :crap 16512.0}
   {:name "main", :namespace "scripts.test-integration-fixes", :complexity 115, :coverage 0.0, :crap 13340.0}
   {:name "main", :namespace "scripts.test-reattach-stream", :complexity 109, :coverage 0.0, :crap 11990.0}
-  {:name "StorageSection", :namespace "components.settings.storage-section", :complexity 105, :coverage 0.0, :crap 11130.0}
-  {:name "SystemSection", :namespace "components.settings.system-section", :complexity 102, :coverage 0.0, :crap 10506.0}
   {:name "registerProvidersHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 96, :coverage 0.0, :crap 9312.0}
   {:name "main", :namespace "scripts.test-providers-opencode", :complexity 95, :coverage 0.0, :crap 9120.0}
   {:name "registerExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 94, :coverage 0.0, :crap 8930.0}
@@ -34,8 +32,10 @@
   {:name "main", :namespace "scripts.test-pool-flow", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "registerMessageAndStopHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 56, :coverage 0.0, :crap 3192.0}
   {:name "main", :namespace "scripts.test-web-flow", :complexity 56, :coverage 0.0, :crap 3192.0}
+  {:name "SystemSection", :namespace "components.settings.system-section", :complexity 55, :coverage 0.0, :crap 3080.0}
   {:name "main", :namespace "scripts.qa-v24-dom", :complexity 55, :coverage 0.0, :crap 3080.0}
   {:name "ExtensionRow", :namespace "components.settings.extensions-section", :complexity 54, :coverage 0.0, :crap 2970.0}
+  {:name "StorageSection", :namespace "components.settings.storage-section", :complexity 54, :coverage 0.0, :crap 2970.0}
   {:name "useChatStream", :namespace "hooks.use-chat-stream", :complexity 54, :coverage 0.0, :crap 2970.0}
   {:name "registerProjectHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 53, :coverage 0.0, :crap 2862.0}
   {:name "AgentMotorCard", :namespace "components.settings.agent-motor-card", :complexity 52, :coverage 0.0, :crap 2756.0}
@@ -89,6 +89,7 @@
   {:name "testZaiSurface", :namespace "mini-services.hermes-chat.providers", :complexity 30, :coverage 0.0, :crap 930.0}
   {:name "useDictation", :namespace "hooks.use-dictation", :complexity 29, :coverage 0.0, :crap 870.0}
   {:name "ModelesPane", :namespace "components.settings.models-section", :complexity 28, :coverage 0.0, :crap 812.0}
+  {:name "StorageGroupe", :namespace "components.settings.storage-section", :complexity 28, :coverage 0.0, :crap 812.0}
   {:name "registerFileVersionHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 28, :coverage 0.0, :crap 812.0}
   {:name "main", :namespace "scripts.test-motor-rest-flow", :complexity 28, :coverage 0.0, :crap 812.0}
   {:name "partA", :namespace "scripts.test-storage-flow", :complexity 28, :coverage 0.0, :crap 812.0}
@@ -101,6 +102,7 @@
   {:name "lock", :namespace ".next.dev.static.chunks.node_modules_next_dist_compiled_next-devtools_index_1dd7fb59.lH", :complexity 26, :coverage 0.0, :crap 702.0}
   {:name "ArtifactViewerDialog", :namespace "components.chat.artifact-panel", :complexity 26, :coverage 0.0, :crap 702.0}
   {:name "HermesSection", :namespace "components.settings.hermes-section", :complexity 26, :coverage 0.0, :crap 702.0}
+  {:name "SystemEnteteApp", :namespace "components.settings.system-section", :complexity 26, :coverage 0.0, :crap 702.0}
   {:name "getInfo", :namespace ".next.dev.server.chunks.ssr.node_modules_ws_dc1115cc._.Receiver", :complexity 25, :coverage 0.0, :crap 650.0}
   {:name "useArtifactSource", :namespace "components.chat.artifact-views", :complexity 25, :coverage 0.0, :crap 650.0}
   {:name "SettingsPanel", :namespace "components.settings.settings-panel", :complexity 25, :coverage 0.0, :crap 650.0}
@@ -118,6 +120,7 @@
   {:name "decodeString", :namespace ".next.dev.static.chunks.node_modules_cf89e8f1._.Decoder", :complexity 23, :coverage 0.0, :crap 552.0}
   {:name "ComposerBarre", :namespace "components.chat.composer", :complexity 23, :coverage 0.0, :crap 552.0}
   {:name "ProjectGroup", :namespace "components.chat.project-group", :complexity 23, :coverage 0.0, :crap 552.0}
+  {:name "SystemFilApp", :namespace "components.settings.system-section", :complexity 23, :coverage 0.0, :crap 552.0}
   {:name "startAgentRollback", :namespace "mini-services.hermes-chat.agent-motor", :complexity 23, :coverage 0.0, :crap 552.0}
   {:name "runDebate", :namespace "mini-services.hermes-chat.orchestrator", :complexity 23, :coverage 0.0, :crap 552.0}
   {:name "main", :namespace "scripts.test-memory-flow", :complexity 23, :coverage 0.0, :crap 552.0}
@@ -332,6 +335,8 @@
   {:name "PresetEditor", :namespace "components.settings.hermes-section", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "PromptCard", :namespace "components.settings.modes-section", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "ProvidersSection", :namespace "components.settings.providers-section", :complexity 9, :coverage 0.0, :crap 90.0}
+  {:name "StorageBandeau", :namespace "components.settings.storage-section", :complexity 9, :coverage 0.0, :crap 90.0}
+  {:name "StorageBarreFiltres", :namespace "components.settings.storage-section", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "modePillLabel", :namespace "lib.modes", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "voicesFor", :namespace "lib.modes", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "runSensesCheckSilent", :namespace "mini-services.hermes-chat.agent-motor", :complexity 9, :coverage 0.0, :crap 90.0}
@@ -429,6 +434,7 @@
   {:name "voicesDefaults", :namespace "components.chat.mode-picker", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "relativeDate", :namespace "components.chat.version-popover", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "getServerPrompts", :namespace "components.settings.modes-section", :complexity 7, :coverage 0.0, :crap 56.0}
+  {:name "StorageToasts", :namespace "components.settings.storage-section", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "SystemPromptPanel", :namespace "components.settings.system-prompt-panel", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "useSpeech", :namespace "hooks.use-speech", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "isArtifactFence", :namespace "lib.artifact-utils", :complexity 7, :coverage 0.0, :crap 56.0}
@@ -726,6 +732,7 @@
   {:name "formatTarif", :namespace "components.settings.models-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "ModeModelRow", :namespace "components.settings.modes-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "effectiveBaseUrl", :namespace "components.settings.providers-section", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "StorageCompteurs", :namespace "components.settings.storage-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "maxByDocOf", :namespace "components.settings.storage-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "parseDate", :namespace "components.settings.storage-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "ConfirmDestructiveDialog", :namespace "components.shared.confirm-destructive-dialog", :complexity 4, :coverage 0.0, :crap 20.0}
@@ -784,6 +791,10 @@
   {:name "check", :namespace "scripts.qa-projects-dom", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "emit", :namespace "scripts.qa-projects-dom", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "emit", :namespace "scripts.qa-projects-visual", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "ok", :namespace "scripts.qa-storage-dom", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "waitHttp", :namespace "scripts.qa-storage-dom", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "ok", :namespace "scripts.qa-system-dom", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "waitHttp", :namespace "scripts.qa-system-dom", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "ok", :namespace "scripts.qa-v033-available", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "ok", :namespace "scripts.qa-v033-visual", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "ok", :namespace "scripts.qa-v040-motor", :complexity 4, :coverage 0.0, :crap 20.0}
@@ -1060,6 +1071,8 @@
   {:name "boxes", :namespace "scripts.qa-layout", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "startGW", :namespace "scripts.qa-motor-card-v3-dom", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "stopGW", :namespace "scripts.qa-motor-card-v3-dom", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "cleanup", :namespace "scripts.qa-storage-dom", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "cleanup", :namespace "scripts.qa-system-dom", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "cleanup", :namespace "scripts.qa-v040-motor", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "main", :namespace "scripts.qa-v23-visual", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "startFixture", :namespace "scripts.run-tests", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -1359,6 +1372,8 @@
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_agent_motor_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_composer_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_storage_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_system_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-pricing", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-profiles", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "addToRemoveQueue", :namespace "hooks.use-toast", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -2210,12 +2225,16 @@
   {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_conversations_hook", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "chk", :namespace "docs.crap-2026-11.scripts.extract_socket_events", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_storage_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_system_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect2", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect3", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_composer_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_sidebar_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_storage_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_system_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "replace", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.refactor_llm_pool", :complexity 1, :coverage 0.0, :crap 2.0}

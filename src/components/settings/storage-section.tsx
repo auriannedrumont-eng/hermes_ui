@@ -12,7 +12,16 @@
 //   F2 — pas de double refetch : le broadcast de l'émetteur arrive APRÈS
 //        l'ack ; une réinventaire silencieuse idempotente suffit ;
 //   F4 — filtre type conservé même si la dernière ligne du type part.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 import { Pin, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -158,6 +167,456 @@ function VersionTag({ entry, isLast }: { entry: StorageEntry; isLast: boolean })
 }
 
 // ── Page (§4) ─────────────────────────────────────────────────────────────
+
+// ── Découpage en feuilles (chantier CRAP vague 7 UI, 2026-11-24) ────────
+// Le composant StorageSection (CC 105 au crapper) est démonté : cinq
+// feuilles appelées dans l'ordre du rendu, corps déplacés VERBATIM (aucune
+// ligne de JSX ni de handler modifiée — les closures deviennent des props
+// typées du même nom), par chirurgie ancrée (ce script, versionné) :
+//   StorageCompteurs     — le bandeau des compteurs globaux (§4.1) ;
+//   StorageBarreFiltres  — la barre recherche / tri / filtres par type (§4.1) ;
+//   StorageBandeau       — le bandeau de résultats du filtrage (§2.2, C4) ;
+//   StorageGroupe        — un groupe projet : déroulé dérivé, en-tête
+//                          (compteurs + « Nettoyer » en place), lignes
+//                          triées, projet vidé (§2.2, §4.2) ;
+//   StorageToasts        — les bandeaux d'annulation « Annuler » 7 s (§4.5).
+// Tout l'état reste dans l'orchestrateur (StorageSection) : inventaire,
+// filtres, verrou busy, freedTotal, toasts, demandes d'inventaire et
+// mutations socket. La ref inputRef reste à l'orchestrateur et descend en
+// props (convention RefObject du repo, cf. composer.tsx). Structure DOM
+// inchangée (mêmes nœuds dans le même ordre) ; props publiques de
+// StorageSection inchangées. Les feuilles à plusieurs enfants racine (un
+// commentaire JSX compte comme un enfant) sont enveloppées dans un
+// fragment — aucun nœud DOM ajouté.
+
+/** Feuille 1 — le bandeau des compteurs globaux (§4.1). Corps déplacé
+ *  VERBATIM de l'orchestrateur (chantier CRAP vague 7 UI, 2026-11-24). */
+interface StorageCompteursProps {
+  loading: boolean;
+  error: string | null;
+  totaux: { docs: number; bytes: number; cleanable: number };
+  freedTotal: { n: number; bytes: number };
+}
+
+function StorageCompteurs({ loading, error, totaux, freedTotal }: StorageCompteursProps) {
+  return (
+    <>
+      {/* Compteurs globaux (§4.1 — pas de « Tout nettoyer » global : le
+          nettoyage reste une action par projet) */}
+      <div className="mt-4 rounded-xl border border-border px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            <div className="text-[12.5px] font-semibold">Documents générés</div>
+            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
+              {loading
+                ? "Chargement de l'inventaire…"
+                : error
+                  ? "Inventaire indisponible."
+                  : `${totaux.docs} versions · ${formatArtifactBytes(totaux.bytes)} au total · dont ${formatArtifactBytes(totaux.cleanable)} récupérables par nettoyage`}
+            </div>
+          </div>
+          {freedTotal.n > 0 ? (
+            <span className="flex-none text-[11px] font-semibold text-success" role="status">
+              ✓ {freedTotal.n} fichiers supprimés · {formatArtifactBytes(freedTotal.bytes)} libérés (mesuré)
+            </span>
+          ) : (
+            <span className="max-w-[300px] flex-none text-[11px] leading-snug text-muted-foreground">
+              Le nettoyage s&apos;applique projet par projet ; chaque suppression est annulable
+              pendant {STORAGE_UNDO_MS / 1000} secondes.
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Feuille 2 — la barre recherche / tri / filtres par type (§4.1). Corps
+ *  déplacé VERBATIM de l'orchestrateur (chantier CRAP vague 7 UI,
+ *  2026-11-24) ; la ref du champ de recherche reste au parent et descend
+ *  en props (convention RefObject du repo). */
+interface StorageBarreFiltresProps {
+  inputRef: RefObject<HTMLInputElement | null>;
+  recherche: string;
+  setRecherche: Dispatch<SetStateAction<string>>;
+  tri: SortKey;
+  setTri: Dispatch<SetStateAction<SortKey>>;
+  types: string[];
+  type: string;
+  setType: Dispatch<SetStateAction<string>>;
+  setProjetOuvert: Dispatch<SetStateAction<string | null>>;
+}
+
+function StorageBarreFiltres({
+  inputRef,
+  recherche,
+  setRecherche,
+  tri,
+  setTri,
+  types,
+  type,
+  setType,
+  setProjetOuvert,
+}: StorageBarreFiltresProps) {
+  return (
+    <>
+        {/* Barre recherche / tri / filtres (§4.1) */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 pt-2.5">
+          <div className="flex min-w-[170px] flex-1 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-muted-foreground focus-within:border-hermes/60">
+            <Search className="size-[13px] flex-none" strokeWidth={2} />
+            <Input
+              ref={inputRef}
+              type="search"
+              value={recherche}
+              onChange={(e) => {
+                setRecherche(e.target.value);
+                // Fin de filtrage par champ vidé (§4.2 : retour au repli).
+                if (e.target.value.trim() === "" && type === "Tous") setProjetOuvert(null);
+              }}
+              placeholder="Rechercher un fichier…"
+              aria-label="Rechercher un fichier par nom"
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[12.5px] text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 md:text-[12.5px]"
+            />
+            {recherche !== "" ? (
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => {
+                  setRecherche("");
+                  if (type === "Tous") setProjetOuvert(null);
+                  inputRef.current?.focus();
+                }}
+                className="h-auto flex-none px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
+              >
+                effacer
+              </Button>
+            ) : null}
+          </div>
+          <select
+            value={tri}
+            onChange={(e) => setTri(e.target.value as SortKey)}
+            aria-label="Trier les versions"
+            className="h-[34px] flex-none cursor-pointer rounded-md border border-border bg-card px-2 text-[12px] font-semibold text-foreground outline-none focus-visible:border-hermes/60"
+          >
+            <option value="taille">Tri : taille</option>
+            <option value="date">Tri : date</option>
+            <option value="nom">Tri : nom</option>
+          </select>
+          <div role="group" aria-label="Filtrer par type" className="flex w-full flex-wrap gap-1 pb-2.5 pt-1">
+            {types.map((t) => (
+              <Button
+                key={t}
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setType(t);
+                  // Fin de filtrage par retour au type « Tous » (§4.2).
+                  if (t === "Tous" && recherche.trim() === "") setProjetOuvert(null);
+                }}
+                aria-pressed={type === t}
+                className={cn(
+                  "cursor-pointer rounded-full border px-[11px] py-[3px] text-[11px] font-semibold transition-colors",
+                  type === t
+                    ? "border-transparent bg-hermes/10 text-hermes-text"
+                    : "border-border bg-card text-muted-foreground hover:border-hermes/50 hover:text-hermes-text"
+                )}
+              >
+                {t}
+              </Button>
+            ))}
+          </div>
+        </div>
+    </>
+  );
+}
+
+/** Feuille 3 — le bandeau de résultats du filtrage (§2.2 : affiché pendant
+ *  TOUT le filtrage, compteurs et bouton d'effacement identiques au cas
+ *  vide, C4). Corps déplacé VERBATIM de l'orchestrateur (chantier CRAP
+ *  vague 7 UI, 2026-11-24) ; finFiltrage reste calculée au parent. */
+interface StorageBandeauProps {
+  filtrageActif: boolean;
+  loading: boolean;
+  error: string | null;
+  entries: StorageEntry[] | null;
+  qNorm: string;
+  type: string;
+  finFiltrage: (focus: HTMLElement | null) => void;
+  inputRef: RefObject<HTMLInputElement | null>;
+}
+
+function StorageBandeau({
+  filtrageActif,
+  loading,
+  error,
+  entries,
+  qNorm,
+  type,
+  finFiltrage,
+  inputRef,
+}: StorageBandeauProps) {
+  return (
+    <>
+        {/* Bandeau de résultats (§2.2 : affiché pendant TOUT le filtrage —
+            compteurs et bouton d'effacement identiques au cas vide, C4) */}
+        {filtrageActif && !loading && !error ? (
+          (() => {
+            const nb = (entries ?? []).filter(
+              (e) =>
+                (qNorm === "" || norm(e.name).includes(qNorm)) &&
+                (type === "Tous" || e.kind.toUpperCase() === type)
+            ).length;
+            return (
+              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3.5 py-2 text-[11.5px] text-muted-foreground">
+                {nb > 0 ? (
+                  <span>
+                    <b className="text-foreground">{nb}</b> fichiers correspondent
+                  </span>
+                ) : (
+                  <span>Aucun fichier ne correspond</span>
+                )}
+                <Button
+                  type="button"
+                  variant="link"
+                  // Lot audit : le focus retourne au champ de recherche —
+                  // l'ancienne cible (le bouton « effacer les filtres »
+                  // lui-même) se démontait juste après : focus perdu.
+                  onClick={() => finFiltrage(inputRef.current)}
+                  className="h-auto px-0 py-0 font-semibold text-hermes-text hover:underline"
+                >
+                  effacer les filtres
+                </Button>
+              </div>
+            );
+          })()
+        ) : null}
+    </>
+  );
+}
+
+/** Feuille 4 — un groupe projet : dérivation du déroulé (§4.2 — jamais
+ *  stocké), en-tête (compteurs + « Nettoyer » en place, replié §2.2),
+ *  lignes triées, projet vidé. Corps déplacé VERBATIM de l'orchestrateur
+ *  (chantier CRAP vague 7 UI, 2026-11-24) ; les callbacks de mutation
+ *  (deleteVersion, cleanProject) et le verrou busy restent au parent et
+ *  descendent en props. La clé de liste est posée sur l'appel. */
+interface StorageGroupeProps {
+  g: ProjectGroup;
+  filtrageActif: boolean;
+  projetOuvert: string | null;
+  setProjetOuvert: Dispatch<SetStateAction<string | null>>;
+  resultatsDe: (g: ProjectGroup) => StorageEntry[];
+  tri: SortKey;
+  maxByDoc: Map<string, number>;
+  busy: string | null;
+  deleteVersion: (e: StorageEntry) => void;
+  cleanProject: (g: ProjectGroup) => void;
+}
+
+function StorageGroupe({
+  g,
+  filtrageActif,
+  projetOuvert,
+  setProjetOuvert,
+  resultatsDe,
+  tri,
+  maxByDoc,
+  busy,
+  deleteVersion,
+  cleanProject,
+}: StorageGroupeProps) {
+                // Dérivation du déroulé (§4.2 — jamais stocké). Le lien
+                // profond porte un NOM de projet (?projet=…) : la
+                // comparaison accepte id OU nom (F3), le clic interne
+                // utilise toujours l'id.
+                const res = filtrageActif ? resultatsDe(g) : null;
+                const deroule =
+                  filtrageActif ? (res?.length ?? 0) > 0
+                  : g.id !== null && (projetOuvert === g.id || projetOuvert === g.name);
+                const masque = filtrageActif && (res?.length ?? 0) === 0;
+                const visibles = filtrageActif ? res! : g.entries;
+                return (
+                  <section
+                    key={g.id ?? "__hors"}
+                    className={cn("border-t border-border first:border-t-0", masque && "hidden")}
+                    aria-label={"Projet " + g.name}
+                  >
+                    {/* En-tête : compteurs + Nettoyer en place, fonctionne
+                        replié (§2.2 « nettoyer sans déplier »).
+                        Lot audit : le déroulé est un VRAI <button> (le
+                        conteneur role="button" avec un <button> Nettoyer
+                        imbriqué violait ARIA : descendants interactifs
+                        interdits). */}
+                    <div
+                      className={cn(
+                        "flex w-full flex-wrap items-center gap-2.5 px-3 py-2",
+                        !filtrageActif && "hover:bg-muted"
+                      )}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        tabIndex={filtrageActif ? -1 : 0}
+                        aria-expanded={deroule}
+                        aria-disabled={filtrageActif ? true : undefined}
+                        aria-label={`${g.name} — ${g.entries.length} documents, ${formatArtifactBytes(g.bytes)}`}
+                        onClick={() => {
+                          // Repliage manuel IGNORÉ pendant un filtrage actif (§2.2).
+                          if (filtrageActif) return;
+                          // Accordéon exclusif par construction.
+                          setProjetOuvert((p) => (p === g.id ? null : g.id));
+                        }}
+                        className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-2.5 rounded-sm px-0 py-0 text-left hover:bg-transparent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes"
+                      >
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 truncate text-[13px] font-bold",
+                            g.hors && "font-semibold text-muted-foreground"
+                          )}
+                        >
+                          {g.name}
+                        </span>
+                        <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
+                          {g.entries.length}
+                          {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          // « Nettoyer » ne déplie JAMAIS le groupe (§2.2).
+                          cleanProject(g);
+                        }}
+                        disabled={busy === groupKey(g)}
+                        className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-wait disabled:opacity-40"
+                      >
+                        {busy === groupKey(g) ? "Nettoyage…" : "Nettoyer"}
+                      </Button>
+                    </div>
+
+                    {/* Lignes du groupe — déroulé dérivé (animation : rangées
+                        de grille, jamais de mesure JS — §6 ; motion-safe) */}
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows] duration-150 motion-reduce:transition-none",
+                        deroule ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                      )}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <div className="pb-2.5 pl-[22px] pr-1.5">
+                          {sortEntries(visibles, tri).map((e) => {
+                            const estDerniere = e.version === maxByDoc.get(`${e.conversationId}\u0000${e.key}`);
+                            // La version épinglée n'est jamais supprimable :
+                            // bouton désactivé + titre explicatif (§2.2), le
+                            // service refuse aussi (409) même si l'UI échoue.
+                            const bloquee = e.pinned;
+                            return (
+                              <div
+                                key={e.id}
+                                className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12px] hover:bg-muted"
+                              >
+                                <KindBadge kind={e.kind} />
+                                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                                  <span className="truncate font-medium">{e.name}</span>
+                                  <VersionTag entry={e} isLast={!!estDerniere} />
+                                  {bloquee ? (
+                                    <span className="flex flex-none text-warning" title="Version épinglée — non supprimable">
+                                      <Pin className="size-[11px]" strokeWidth={2} />
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
+                                  {formatArtifactBytes(e.size)} · {df.format(parseDate(e.createdAt))}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => deleteVersion(e)}
+                                  disabled={bloquee || busy === e.id}
+                                  title={
+                                    bloquee
+                                      ? "Version épinglée — non supprimable"
+                                      : `Supprimer ${e.name} v${e.version}`
+                                  }
+                                  aria-label={
+                                    bloquee
+                                      ? `${e.name} v${e.version} — version épinglée, non supprimable`
+                                      : `Supprimer ${e.name} v${e.version}`
+                                  }
+                                  className="grid size-6 flex-none place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                                >
+                                  <Trash2 className="size-[13px]" strokeWidth={2} />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                          {/* Projet vidé : en-tête conservé (§2.2), message honnête */}
+                          {visibles.length === 0 && !filtrageActif ? (
+                            <div className="px-1.5 py-2 text-center text-[12px] text-muted-foreground">
+                              Aucune version — ce projet a été entièrement nettoyé.
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                );
+}
+
+/** Feuille 5 — les bandeaux d'annulation (§4.5 — toasts « Annuler » 7 s).
+ *  Corps déplacé VERBATIM de l'orchestrateur (chantier CRAP vague 7 UI,
+ *  2026-11-24) ; le tableau des toasts et undo restent à l'orchestrateur. */
+interface StorageToastsProps {
+  toasts: Array<{
+    key: number;
+    title: string;
+    description: string;
+    tone: "ok" | "err" | "warn";
+    undo?: { token: string; bytes: number; n: number };
+    expireAt: number;
+  }>;
+  undo: (token: string, bytes: number, n: number) => void;
+}
+
+function StorageToasts({ toasts, undo }: StorageToastsProps) {
+  return (
+    <>
+      {/* Bandeaux d'annulation (§4.5 — toasts « Annuler » 7 s) */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite">
+        {toasts.map((t) => (
+          <div
+            key={t.key}
+            className={cn(
+              "pointer-events-auto flex max-w-[520px] flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 shadow-lg",
+              t.tone === "ok" && "border-border bg-card text-foreground",
+              t.tone === "err" && "border-destructive/40 bg-destructive/10 text-foreground",
+              t.tone === "warn" && "border-warning/40 bg-warning/10 text-foreground"
+            )}
+            role={t.tone === "ok" ? "status" : "alert"}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-semibold">{t.title}</div>
+              <div className="text-[11.5px] leading-snug text-muted-foreground">{t.description}</div>
+            </div>
+            {t.undo ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void undo(t.undo!.token, t.undo!.bytes, t.undo!.n)}
+                disabled={Date.now() >= t.expireAt}
+                title={Date.now() >= t.expireAt ? "Fenêtre d'annulation expirée" : undefined}
+                className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Annuler
+              </Button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
 export function StorageSection({ initialProject }: { initialProject?: string | null }) {
   const [entries, setEntries] = useState<StorageEntry[] | null>(null);
@@ -464,135 +923,37 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
         sont toujours conservés.
       </p>
 
-      {/* Compteurs globaux (§4.1 — pas de « Tout nettoyer » global : le
-          nettoyage reste une action par projet) */}
-      <div className="mt-4 rounded-xl border border-border px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-          <div className="min-w-0">
-            <div className="text-[12.5px] font-semibold">Documents générés</div>
-            <div className="mt-px text-[11px] leading-snug text-muted-foreground">
-              {loading
-                ? "Chargement de l'inventaire…"
-                : error
-                  ? "Inventaire indisponible."
-                  : `${totaux.docs} versions · ${formatArtifactBytes(totaux.bytes)} au total · dont ${formatArtifactBytes(totaux.cleanable)} récupérables par nettoyage`}
-            </div>
-          </div>
-          {freedTotal.n > 0 ? (
-            <span className="flex-none text-[11px] font-semibold text-success" role="status">
-              ✓ {freedTotal.n} fichiers supprimés · {formatArtifactBytes(freedTotal.bytes)} libérés (mesuré)
-            </span>
-          ) : (
-            <span className="max-w-[300px] flex-none text-[11px] leading-snug text-muted-foreground">
-              Le nettoyage s&apos;applique projet par projet ; chaque suppression est annulable
-              pendant {STORAGE_UNDO_MS / 1000} secondes.
-            </span>
-          )}
-        </div>
-      </div>
+      <StorageCompteurs
+        loading={loading}
+        error={error}
+        totaux={totaux}
+        freedTotal={freedTotal}
+      />
 
       {/* Explorateur (liste intégrale : aucune pagination — §2.3) */}
       <div className="mt-3 overflow-hidden rounded-xl border border-border">
-        {/* Barre recherche / tri / filtres (§4.1) */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 pt-2.5">
-          <div className="flex min-w-[170px] flex-1 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-muted-foreground focus-within:border-hermes/60">
-            <Search className="size-[13px] flex-none" strokeWidth={2} />
-            <Input
-              ref={inputRef}
-              type="search"
-              value={recherche}
-              onChange={(e) => {
-                setRecherche(e.target.value);
-                // Fin de filtrage par champ vidé (§4.2 : retour au repli).
-                if (e.target.value.trim() === "" && type === "Tous") setProjetOuvert(null);
-              }}
-              placeholder="Rechercher un fichier…"
-              aria-label="Rechercher un fichier par nom"
-              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[12.5px] text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 md:text-[12.5px]"
-            />
-            {recherche !== "" ? (
-              <Button
-                type="button"
-                variant="link"
-                onClick={() => {
-                  setRecherche("");
-                  if (type === "Tous") setProjetOuvert(null);
-                  inputRef.current?.focus();
-                }}
-                className="h-auto flex-none px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
-              >
-                effacer
-              </Button>
-            ) : null}
-          </div>
-          <select
-            value={tri}
-            onChange={(e) => setTri(e.target.value as SortKey)}
-            aria-label="Trier les versions"
-            className="h-[34px] flex-none cursor-pointer rounded-md border border-border bg-card px-2 text-[12px] font-semibold text-foreground outline-none focus-visible:border-hermes/60"
-          >
-            <option value="taille">Tri : taille</option>
-            <option value="date">Tri : date</option>
-            <option value="nom">Tri : nom</option>
-          </select>
-          <div role="group" aria-label="Filtrer par type" className="flex w-full flex-wrap gap-1 pb-2.5 pt-1">
-            {types.map((t) => (
-              <Button
-                key={t}
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setType(t);
-                  // Fin de filtrage par retour au type « Tous » (§4.2).
-                  if (t === "Tous" && recherche.trim() === "") setProjetOuvert(null);
-                }}
-                aria-pressed={type === t}
-                className={cn(
-                  "cursor-pointer rounded-full border px-[11px] py-[3px] text-[11px] font-semibold transition-colors",
-                  type === t
-                    ? "border-transparent bg-hermes/10 text-hermes-text"
-                    : "border-border bg-card text-muted-foreground hover:border-hermes/50 hover:text-hermes-text"
-                )}
-              >
-                {t}
-              </Button>
-            ))}
-          </div>
-        </div>
+        <StorageBarreFiltres
+          inputRef={inputRef}
+          recherche={recherche}
+          setRecherche={setRecherche}
+          tri={tri}
+          setTri={setTri}
+          types={types}
+          type={type}
+          setType={setType}
+          setProjetOuvert={setProjetOuvert}
+        />
 
-        {/* Bandeau de résultats (§2.2 : affiché pendant TOUT le filtrage —
-            compteurs et bouton d'effacement identiques au cas vide, C4) */}
-        {filtrageActif && !loading && !error ? (
-          (() => {
-            const nb = (entries ?? []).filter(
-              (e) =>
-                (qNorm === "" || norm(e.name).includes(qNorm)) &&
-                (type === "Tous" || e.kind.toUpperCase() === type)
-            ).length;
-            return (
-              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3.5 py-2 text-[11.5px] text-muted-foreground">
-                {nb > 0 ? (
-                  <span>
-                    <b className="text-foreground">{nb}</b> fichiers correspondent
-                  </span>
-                ) : (
-                  <span>Aucun fichier ne correspond</span>
-                )}
-                <Button
-                  type="button"
-                  variant="link"
-                  // Lot audit : le focus retourne au champ de recherche —
-                  // l'ancienne cible (le bouton « effacer les filtres »
-                  // lui-même) se démontait juste après : focus perdu.
-                  onClick={() => finFiltrage(inputRef.current)}
-                  className="h-auto px-0 py-0 font-semibold text-hermes-text hover:underline"
-                >
-                  effacer les filtres
-                </Button>
-              </div>
-            );
-          })()
-        ) : null}
+        <StorageBandeau
+          filtrageActif={filtrageActif}
+          loading={loading}
+          error={error}
+          entries={entries}
+          qNorm={qNorm}
+          type={type}
+          finFiltrage={finFiltrage}
+          inputRef={inputRef}
+        />
 
         {/* Corps : squelette (§4.3), erreur avec Réessayer, ou groupes */}
         <div>
@@ -619,145 +980,21 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
             </div>
           ) : (
             <div>
-              {groupes.map((g) => {
-                // Dérivation du déroulé (§4.2 — jamais stocké). Le lien
-                // profond porte un NOM de projet (?projet=…) : la
-                // comparaison accepte id OU nom (F3), le clic interne
-                // utilise toujours l'id.
-                const res = filtrageActif ? resultatsDe(g) : null;
-                const deroule =
-                  filtrageActif ? (res?.length ?? 0) > 0
-                  : g.id !== null && (projetOuvert === g.id || projetOuvert === g.name);
-                const masque = filtrageActif && (res?.length ?? 0) === 0;
-                const visibles = filtrageActif ? res! : g.entries;
-                return (
-                  <section
-                    key={g.id ?? "__hors"}
-                    className={cn("border-t border-border first:border-t-0", masque && "hidden")}
-                    aria-label={"Projet " + g.name}
-                  >
-                    {/* En-tête : compteurs + Nettoyer en place, fonctionne
-                        replié (§2.2 « nettoyer sans déplier »).
-                        Lot audit : le déroulé est un VRAI <button> (le
-                        conteneur role="button" avec un <button> Nettoyer
-                        imbriqué violait ARIA : descendants interactifs
-                        interdits). */}
-                    <div
-                      className={cn(
-                        "flex w-full flex-wrap items-center gap-2.5 px-3 py-2",
-                        !filtrageActif && "hover:bg-muted"
-                      )}
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        tabIndex={filtrageActif ? -1 : 0}
-                        aria-expanded={deroule}
-                        aria-disabled={filtrageActif ? true : undefined}
-                        aria-label={`${g.name} — ${g.entries.length} documents, ${formatArtifactBytes(g.bytes)}`}
-                        onClick={() => {
-                          // Repliage manuel IGNORÉ pendant un filtrage actif (§2.2).
-                          if (filtrageActif) return;
-                          // Accordéon exclusif par construction.
-                          setProjetOuvert((p) => (p === g.id ? null : g.id));
-                        }}
-                        className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-2.5 rounded-sm px-0 py-0 text-left hover:bg-transparent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-hermes"
-                      >
-                        <span
-                          className={cn(
-                            "min-w-0 flex-1 truncate text-[13px] font-bold",
-                            g.hors && "font-semibold text-muted-foreground"
-                          )}
-                        >
-                          {g.name}
-                        </span>
-                        <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
-                          {g.entries.length}
-                          {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
-                        </span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          // « Nettoyer » ne déplie JAMAIS le groupe (§2.2).
-                          cleanProject(g);
-                        }}
-                        disabled={busy === groupKey(g)}
-                        className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-wait disabled:opacity-40"
-                      >
-                        {busy === groupKey(g) ? "Nettoyage…" : "Nettoyer"}
-                      </Button>
-                    </div>
-
-                    {/* Lignes du groupe — déroulé dérivé (animation : rangées
-                        de grille, jamais de mesure JS — §6 ; motion-safe) */}
-                    <div
-                      className={cn(
-                        "grid transition-[grid-template-rows] duration-150 motion-reduce:transition-none",
-                        deroule ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                      )}
-                    >
-                      <div className="min-h-0 overflow-hidden">
-                        <div className="pb-2.5 pl-[22px] pr-1.5">
-                          {sortEntries(visibles, tri).map((e) => {
-                            const estDerniere = e.version === maxByDoc.get(`${e.conversationId}\u0000${e.key}`);
-                            // La version épinglée n'est jamais supprimable :
-                            // bouton désactivé + titre explicatif (§2.2), le
-                            // service refuse aussi (409) même si l'UI échoue.
-                            const bloquee = e.pinned;
-                            return (
-                              <div
-                                key={e.id}
-                                className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12px] hover:bg-muted"
-                              >
-                                <KindBadge kind={e.kind} />
-                                <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                                  <span className="truncate font-medium">{e.name}</span>
-                                  <VersionTag entry={e} isLast={!!estDerniere} />
-                                  {bloquee ? (
-                                    <span className="flex flex-none text-warning" title="Version épinglée — non supprimable">
-                                      <Pin className="size-[11px]" strokeWidth={2} />
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
-                                  {formatArtifactBytes(e.size)} · {df.format(parseDate(e.createdAt))}
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  onClick={() => deleteVersion(e)}
-                                  disabled={bloquee || busy === e.id}
-                                  title={
-                                    bloquee
-                                      ? "Version épinglée — non supprimable"
-                                      : `Supprimer ${e.name} v${e.version}`
-                                  }
-                                  aria-label={
-                                    bloquee
-                                      ? `${e.name} v${e.version} — version épinglée, non supprimable`
-                                      : `Supprimer ${e.name} v${e.version}`
-                                  }
-                                  className="grid size-6 flex-none place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                                >
-                                  <Trash2 className="size-[13px]" strokeWidth={2} />
-                                </Button>
-                              </div>
-                            );
-                          })}
-                          {/* Projet vidé : en-tête conservé (§2.2), message honnête */}
-                          {visibles.length === 0 && !filtrageActif ? (
-                            <div className="px-1.5 py-2 text-center text-[12px] text-muted-foreground">
-                              Aucune version — ce projet a été entièrement nettoyé.
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                );
-              })}
+              {groupes.map((g) => (
+                <StorageGroupe
+                  key={g.id ?? "__hors"}
+                  g={g}
+                  filtrageActif={filtrageActif}
+                  projetOuvert={projetOuvert}
+                  setProjetOuvert={setProjetOuvert}
+                  resultatsDe={resultatsDe}
+                  tri={tri}
+                  maxByDoc={maxByDoc}
+                  busy={busy}
+                  deleteVersion={deleteVersion}
+                  cleanProject={cleanProject}
+                />
+              ))}
               {/* Inventaire vide (aucun document du tout) */}
               {groupes.length === 0 ? (
                 <div className="px-5 py-8 text-center text-[12.5px] text-muted-foreground">
@@ -770,38 +1007,8 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
         </div>
       </div>
 
-      {/* Bandeaux d'annulation (§4.5 — toasts « Annuler » 7 s) */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite">
-        {toasts.map((t) => (
-          <div
-            key={t.key}
-            className={cn(
-              "pointer-events-auto flex max-w-[520px] flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 shadow-lg",
-              t.tone === "ok" && "border-border bg-card text-foreground",
-              t.tone === "err" && "border-destructive/40 bg-destructive/10 text-foreground",
-              t.tone === "warn" && "border-warning/40 bg-warning/10 text-foreground"
-            )}
-            role={t.tone === "ok" ? "status" : "alert"}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] font-semibold">{t.title}</div>
-              <div className="text-[11.5px] leading-snug text-muted-foreground">{t.description}</div>
-            </div>
-            {t.undo ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void undo(t.undo!.token, t.undo!.bytes, t.undo!.n)}
-                disabled={Date.now() >= t.expireAt}
-                title={Date.now() >= t.expireAt ? "Fenêtre d'annulation expirée" : undefined}
-                className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Annuler
-              </Button>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      <StorageToasts toasts={toasts} undo={undo} />
+
     </section>
   );
 }
