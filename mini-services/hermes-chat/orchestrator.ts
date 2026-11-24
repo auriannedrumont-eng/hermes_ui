@@ -265,8 +265,17 @@ function voicePromptContent(
   transcript: string[],
   note?: string,
 ): string {
+  // Ordre fixe « question → transcription → note » (revue 95/3.5) : la note,
+  // SEULE partie qui change entre deux voix d'un même tour et entre deux
+  // tours, arrive EN DERNIER — le message est croissant par la fin, le
+  // préfixe (question + transcription déjà posée) reste stable d'un appel
+  // LLM au suivant et le cache de prompt du fournisseur frappe jusqu'à la
+  // transcription au lieu de casser dès le premier caractère. L'ancien
+  // ordre (note en tête) réécrivait le début du message à chaque étape.
+  // La gateway WS ne lisant que `content`, ce message unique lui transmet
+  // toujours l'intégralité : aucun changement de comportement, juste
+  // l'ordre des blocs (la note en fin = avantage de récence pour le modèle).
   const parts: string[] = [];
-  if (note) parts.push(note);
   parts.push(`Question / demande :\n${userContent}`);
   if (transcript.length) {
     parts.push(
@@ -274,6 +283,7 @@ function voicePromptContent(
         transcript.join("\n"),
     );
   }
+  if (note) parts.push(note);
   return parts.join("\n\n");
 }
 
