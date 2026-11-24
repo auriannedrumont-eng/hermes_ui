@@ -141,6 +141,14 @@ export class HermesConnector {
   private pool: LlmPoolApi | null = null;
   /** Dernière re-sonde infructueuse : throttle (une par 10 s max). */
   private lastReprobe = 0;
+  /** Bascule REST (93) : le moteur annonce-t-il le contrat sessions natives
+   *  (/v1/capabilities → session_create + session_chat_stream) ? null = pas
+   *  encore sondé. Le listener 9120 du webapp n'a que le GET /api/sessions
+   *  (POST → 405) : le contrat vit dans l'adaptateur api_server (port 8642,
+   *  clé API_SERVER_KEY). Sans annonce, la bascule REST est coupée — plus
+   *  jamais une trace d'échec pour un chemin qui n'existe pas. Re-sondé à
+   *  chaque reconnexion gateway (le moteur peut arriver après l'interface). */
+  private restContract: boolean | null = null;
 
   /** Branche le pool de clés fournisseurs (v2.3) — appelé par le service. */
   attachPool(pool: LlmPoolApi): void {
@@ -184,6 +192,8 @@ export class HermesConnector {
       this.gatewayToken = null;
     }
     this.gatewayUrl = nextUrl;
+    // Nouvelle destination (93) : le verdict REST repart de zéro.
+    this.restContract = null;
     await this.init();
     return this.mode;
   }
@@ -283,6 +293,9 @@ export class HermesConnector {
     this.lastReprobe = now;
     if (await this.probe(REPROBE_TIMEOUT_MS)) {
       this.mode = "gateway";
+      // Le moteur vient d'arriver : le verdict REST (93) est re-sondé au
+      // prochain tour — ce n'est peut-être plus le même listener.
+      this.restContract = null;
       console.log(
         `[hermes-chat] agent Hermes détecté sur ${this.gatewayUrl} → mode gateway`
       );
@@ -299,10 +312,41 @@ export class HermesConnector {
     return this.mode === "gateway";
   }
 
+  /** Bascule REST (93) : interroge UNE fois /v1/capabilities et retient si le
+   *  moteur annonce le contrat sessions natives. Toute erreur (404 sur un
+   *  webapp listener, réseau, JSON inattendu) = contrat absent. Non bloquant :
+   *  en cas de doute, la bascule est coupée et le WS reste le chemin. */
+  async hasRestContract(): Promise<boolean> {
+    if (this.restContract !== null) return this.restContract;
+    if (!this.gatewayUrl) return false;
+    try {
+      const res = await fetch(`${toHttpBase(this.gatewayUrl)}/v1/capabilities`, {
+        headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : {},
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const caps = (await res.json()) as { endpoints?: { name?: string }[] };
+      const names = new Set((caps.endpoints ?? []).map((e) => e.name));
+      this.restContract = names.has("session_create") && names.has("session_chat_stream");
+    } catch {
+      this.restContract = false;
+    }
+    if (!this.restContract) {
+      trace(
+        "motor-rest",
+        "bascule REST désactivée (93) : le moteur n'annonce pas le contrat sessions natives — les tours passent au WebSocket",
+      );
+    }
+    return this.restContract;
+  }
+
   /** Bascule REST (75) : un candidat existe si la conversation est liée à
-   *  une session moteur et que le tour n'emporte pas de pièces jointes. */
-  private restTurnCandidate(req: TurnRequest): { base: string; sessionId: string } | null {
+   *  une session moteur, que le tour n'emporte pas de pièces jointes, et
+   *  que le moteur ANNONCE le contrat (93) — sinon null, sans appel REST
+   *  voué au 405 ni trace d'échec. */
+  private async restTurnCandidate(req: TurnRequest): Promise<{ base: string; sessionId: string } | null> {
     if (!req.motorSessionId || req.attachments?.length || !this.gatewayUrl) return null;
+    if (!(await this.hasRestContract())) return null;
     return { base: toHttpBase(this.gatewayUrl), sessionId: req.motorSessionId };
   }
 
@@ -316,7 +360,7 @@ export class HermesConnector {
       // premier delta replie sur le WebSocket : MÊME moteur, jamais un
       // autre (la loi du chemin unique vise un autre moteur ; ici seul le
       // transport change, pas le cerveau).
-      const rest = this.restTurnCandidate(req);
+      const rest = await this.restTurnCandidate(req);
       if (rest) {
         try {
           const out = await runRestTurn(

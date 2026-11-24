@@ -782,8 +782,14 @@ const runAssistantTurn = async (
       // chemin REST (le moteur porte l'historique de SA session) et replie
       // sur le WebSocket à la moindre erreur avant premier delta. Jamais
       // bloquant : échec de liaison → null → WS inchangé, comme avant.
+      // (93) : la liaison n'est tentée que si le moteur ANNONCE le contrat
+      // sessions natives — sinon aucun POST voué au 405 d'un listener qui
+      // ne l'expose pas (le webapp 9120 n'a que le GET), aucune trace
+      // d'échec pour un chemin qui n'existe pas.
       const motorSessionId =
-        connector.mode === "gateway" && connector.gatewayUrl
+        connector.mode === "gateway" &&
+        connector.gatewayUrl &&
+        (await connector.hasRestContract())
           ? await ensureConversationMotorLink(
               store,
               toHttpBase(connector.gatewayUrl),
