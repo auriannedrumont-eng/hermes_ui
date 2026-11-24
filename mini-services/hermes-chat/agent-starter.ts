@@ -160,13 +160,13 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
       spawned = true;
       break;
     }
+    // Revue P1-P7 : la fermeture du fd est GARANTIE — l'ancien closeSync
+    // vivait après la boucle : une exception dedans (aucun candidat, spawn
+    // implosif) le laissait ouvert à jamais.
     if (logFd !== null) {
-      try {
-        // Le fils garde SA copie du fd : le parent peut fermer la sienne.
-        closeSync(logFd);
-      } catch {
-        /* déjà fermé */
-      }
+      // Le fils garde SA copie du fd : le parent peut fermer la sienne.
+      try { closeSync(logFd); } catch { /* déjà fermé */ }
+      logFd = null;
     }
     if (!spawned) {
       trace("system", "agent non démarré automatiquement : aucun interpréteur python trouvé");

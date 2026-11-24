@@ -160,6 +160,26 @@ export function openUndoWindow(rows: ArtifactRow[]): string {
   return token;
 }
 
+/** Revue P1-P7 : purge les fichiers dérivés de toutes les fenêtres ouvertes —
+ *  appelée à l'arrêt propre du service : le timer de 7 s ne tirera jamais,
+ *  les .png/.pdf des suppressions non expirées restaient sur le disque pour
+ *  toujours (fuite). Best effort, comme l'expiration normale. */
+export function flushUndoWindows(): void {
+  for (const [, win] of undoWindows) {
+    clearTimeout(win.timer);
+    for (const row of win.rows) {
+      for (const file of [artifactThumbPath(row.id), artifactPdfPath(row.id)]) {
+        try {
+          rmSync(file, { force: true });
+        } catch {
+          /* verrou Windows ou fichier régénéré : conservé, sans incident */
+        }
+      }
+    }
+  }
+  undoWindows.clear();
+}
+
 /** Annule dans la fenêtre : réinsère les lignes ; « gone » si expirée. */
 export function consumeUndoWindow(
   token: string,

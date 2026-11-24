@@ -154,9 +154,12 @@ export function WebchatSection() {
       "fork.webchat.idleMin": idleClamp,
     }) as ServerSettings);
     const targets: Array<[keyof ServerSettings, string | number]> = [
-      ["fork.webchat.port", portClamp],
-      ["fork.webchat.timeoutS", timeoutClamp],
-      ["fork.webchat.idleMin", idleClamp],
+      // Revue P1-P7 (B5) : les nombres partent en String() — le service
+      // enregistrait "" pour toute valeur non-chaîne et répondait
+      // { ok: true } : les réglages numériques étaient effacés en base.
+      ["fork.webchat.port", String(portClamp)],
+      ["fork.webchat.timeoutS", String(timeoutClamp)],
+      ["fork.webchat.idleMin", String(idleClamp)],
       ["fork.webchat.outDir", outDir.trim()],
       ["fork.webchat.browserPath", browserPath.trim()],
     ];
@@ -228,10 +231,14 @@ export function WebchatSection() {
   const outDir = String(drafts["fork.webchat.outDir"] ?? settings["fork.webchat.outDir"] ?? "");
   const browserPath = String(drafts["fork.webchat.browserPath"] ?? settings["fork.webchat.browserPath"] ?? "");
 
+  // Revue P1-P7 (B5) : le repli est le DÉFAUT connu, plus la valeur du
+  // brouillon — l'ancien `settings[...] ?? port` comparait port à port
+  // quand la clé n'existe pas encore (installation neuve) : le bouton
+  // « Enregistrer » n'apparaissait jamais pour port/timeoutS/idleMin.
   const draftDirty =
-    port !== Number(settings["fork.webchat.port"] ?? port) ||
-    timeoutS !== Number(settings["fork.webchat.timeoutS"] ?? timeoutS) ||
-    idleMin !== Number(settings["fork.webchat.idleMin"] ?? idleMin) ||
+    port !== Number(settings["fork.webchat.port"] ?? DEFAULTS.port) ||
+    timeoutS !== Number(settings["fork.webchat.timeoutS"] ?? DEFAULTS.timeoutS) ||
+    idleMin !== Number(settings["fork.webchat.idleMin"] ?? DEFAULTS.idleMin) ||
     outDir !== String(settings["fork.webchat.outDir"] ?? "") ||
     browserPath !== String(settings["fork.webchat.browserPath"] ?? "");
 

@@ -35,6 +35,12 @@ export function SanteCard() {
       if (m) setManifeste(m);
     };
     socket.on("system:update-state", onState);
+    // Revue P1-P7 (B6) : system:update-state ne porte JAMAIS de manifeste
+    // (il n'existe que dans helloPayload) — lecture directe au montage,
+    // sinon la carte restait muette à vie.
+    socket.emit("system:sante-manifeste", (res: { manifeste?: SanteManifeste | null } = {}) => {
+      if (res?.manifeste) setManifeste(res.manifeste);
+    });
     return () => {
       socket.off("system:update-state", onState);
     };

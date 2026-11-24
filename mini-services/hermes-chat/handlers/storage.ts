@@ -10,7 +10,7 @@
 // réellement supprimées) — jamais l'estimation d'avant (§5.3).
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
-import { openUndoWindow, consumeUndoWindow, cleanStorageProject } from "../store-storage";
+import { openUndoWindow, consumeUndoWindow, cleanStorageProject, flushUndoWindows } from "../store-storage";
 import type {
   StorageEntry,
   StorageMutationResult,
@@ -90,6 +90,19 @@ export function registerStorageHandlers(socket: Socket): void {
     (payload: { projectId?: string | null }, cb?: (data: unknown) => void) => {
       const projectId = payload?.projectId === undefined ? null : payload.projectId;
       const doomed = cleanStorageProject(ctx.store, projectId);
+      // Revue P1-P7 : rien à supprimer → ni jeton d'annulation, ni diffusion
+      // storage:changed (l'ancien code ouvrait une fenêtre vide et faisait
+      // recharger l'inventaire pour rien).
+      if (doomed.length === 0) {
+        const out: StorageMutationResult = {
+          ok: true,
+          removed: 0,
+          bytesFreed: 0,
+          undoToken: null,
+        };
+        if (typeof cb === "function") cb(out);
+        return;
+      }
       const bytesFreed = doomed.reduce((s, r) => s + r.size, 0);
       const out: StorageMutationResult = {
         ok: true,

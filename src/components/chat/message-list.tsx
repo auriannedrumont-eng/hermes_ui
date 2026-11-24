@@ -308,15 +308,13 @@ export function MessageList({
   const isEmpty = !loadingHistory && messages.length === 0 && effectiveStreams.length === 0;
   // Bandeau d'avance (loi « une seule voix », 24/11) : affiché dès l'ouverture
   // quand le service n'est PAS branché à la gateway — l'utilisateur sait AVANT
-  // d'envoyer un message que ses clés doivent être configurées (ou l'agent
-  // lancé), plus jamais un tour qui échoue en surprise.
-  // Revue 95 : en mode local AVEC clés actionnables, le bandeau serait FAUX
-  // (les tours partiront sur ces clés) — il n'apparaît que si rien n'est
-  // utilisable (pas de clé configurée).
-  const horsLigne =
-    gatewayMode !== null &&
-    gatewayMode !== "gateway" &&
-    !(engineProviders?.length);
+  // d'envoyer un message que l'agent doit être lancé, plus jamais un tour qui
+  // échoue en surprise.
+  // Revue P1-P7 (B2) : l'exception « clés fournisseurs présentes » est
+  // SUPPRIMÉE — le repli pool de clés n'existe plus (le connecteur renvoie
+  // [HERMES_OFFLINE] sans gateway) : montrer le bandeau tant que la
+  // gateway n'est pas branchée, même avec des clés locales configurées.
+  const horsLigne = gatewayMode !== null && gatewayMode !== "gateway";
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -329,7 +327,7 @@ export function MessageList({
         >
           <KeyRound className="h-3.5 w-3.5 shrink-0 text-warning" />
           <span className="truncate text-[12px] text-warning">
-            Hermes n'est pas encore connecté — configurez une clé fournisseur ou lancez l'agent.
+            Hermes n'est pas encore connecté — lancez l'agent (Hermes-Web.bat) ou vérifiez la liaison dans Paramètres.
           </span>
           <span className="ml-auto shrink-0 text-[11.5px] font-medium text-warning underline decoration-warning/40 underline-offset-2">
             Paramètres

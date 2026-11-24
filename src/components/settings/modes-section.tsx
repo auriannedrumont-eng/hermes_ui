@@ -716,9 +716,15 @@ export function ModesSection({
     const next = { ...overridesRef.current };
     delete next[key];
     setOverrides(next);
-    // Reset : clic unique, pas une frappe — sauvegarde immédiate (et toute
-    // sauvegarde débouncée en attente est remplacée par cet état plus frais).
-    flushPendingPrompts();
+    // Revue P1-P7 : on ANNULE la sauvegarde débouncée en attente —
+    // l'ancien flushPendingPrompts() lançait l'ANCIEN état en parallèle du
+    // reset : deux écritures concurrentes, et la plus ancienne pouvait
+    // arriver dernière et ressusciter l'override que le reset supprimait.
+    if (saveDebounceRef.current) {
+      clearTimeout(saveDebounceRef.current);
+      saveDebounceRef.current = null;
+    }
+    pendingSaveRef.current = null;
     const ok = await saveServerPrompts(next);
     if (!ok) {
       reportSaveFailure("Consignes non enregistrées");

@@ -417,6 +417,12 @@ export function createLlmPool(store: Store): LlmPoolApi {
         }));
       }
     }
+    // Revue P1-P7 : un échec N'EST PAS mis en cache — l'ancien
+    // modelsCache.set(row.id, null) figeait une coupure réseau passagère :
+    // le fournisseur restait ignoré jusqu'à modification manuelle du
+    // porte-clés. null = « indisponible maintenant », le prochain appel
+    // retente naturellement.
+    if (result === null) return null;
     modelsCache.set(row.id, result);
     return result;
   }

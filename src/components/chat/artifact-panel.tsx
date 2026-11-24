@@ -294,8 +294,16 @@ function ArtifactBody({
       />
     );
   } else if (artifact.kind === "markdown") {
+    // Revue P1-P7 (B16) : le bouton « Diff » était actif pour le Markdown
+    // (canDiff) mais seul le bloc code rendait <DiffView> — le clic ne
+    // changeait rien. Même rendu que le code quand une version précédente
+    // existe.
     body =
-      mode === "preview" ? (
+      diff && prevSource !== null ? (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DiffView oldSource={prevSource} newSource={source ?? ""} />
+        </div>
+      ) : mode === "preview" ? (
         <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
           <MarkdownContent content={source ?? ""} />
         </div>
@@ -553,6 +561,41 @@ function ArtifactMetaLine({ artifact }: { artifact: Artifact }) {
 
 // ── Panneau bureau (split view) ──────────────────────────────────────────
 
+/** Revue P1-P7 (B16) : historique COMPLET des versions de l'artefact
+ *  affiché — l'état artifacts ne garde que la DERNIÈRE version par clé,
+ *  donc l'ancien `versions` n'avait qu'une entrée : ni prevArtifact ni
+ *  diff possible (le clic « Diff » ne changeait rien, même pour le code).
+ *  Le résultat de fetchVersions était jeté (`void fetchVersions(...)`).
+ *  Ici : chargement par clé + UNION avec l'état live (une v3 arrivée en
+ *  streaming reste visible même après l'historique servi). */
+function useVersionHistory(
+  selected: Artifact | null,
+  artifacts: Artifact[],
+  fetchVersions: (key: string) => Promise<Artifact[]>
+): Artifact[] {
+  const [history, setHistory] = useState<Record<string, Artifact[]>>({});
+  const selectedKey = selected?.key ?? null;
+  const hasVersions = !!selected && selected.version > 1;
+  useEffect(() => {
+    if (!selectedKey || !hasVersions) return;
+    let cancelled = false;
+    void fetchVersions(selectedKey).then((list) => {
+      if (cancelled || list.length === 0) return;
+      setHistory((prev) => ({ ...prev, [selectedKey]: list }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey, hasVersions, fetchVersions]);
+  return useMemo(() => {
+    if (!selected) return [];
+    const parId = new Map<string, Artifact>();
+    for (const v of history[selected.key] ?? []) parId.set(v.id, v);
+    for (const a of artifacts) if (a.key === selected.key) parId.set(a.id, a);
+    return [...parId.values()].sort((a, b) => a.version - b.version);
+  }, [selected, artifacts, history]);
+}
+
 export interface ArtifactPanelProps {
   artifacts: Artifact[];
   selectedId: string | null;
@@ -596,20 +639,12 @@ export function ArtifactPanel({
     return tabs[0] ?? null;
   }, [artifacts, selectedId, tabs]);
 
-  const versions = useMemo(() => {
-    if (!selected) return [];
-    return artifacts.filter((a) => a.key === selected.key).sort((a, b) => a.version - b.version);
-  }, [artifacts, selected]);
+  const versions = useVersionHistory(selected, artifacts, fetchVersions);
 
   const { text: source, error: sourceError, retry: retrySource } = useArtifactSource(selected);
   const streamingContent = selected ? streamingArtifacts[selected.key] : undefined;
   const selectedKey = selected?.key;
   const selectedHasVersions = !!selected && selected.version > 1;
-
-  // Charge l'historique des versions d'une clé multi-versions (pour le diff)
-  useEffect(() => {
-    if (selectedHasVersions && selectedKey) void fetchVersions(selectedKey);
-  }, [selectedKey, selectedHasVersions, fetchVersions]);
 
   if (!selected) {
     return (
@@ -748,10 +783,7 @@ export function ArtifactViewerDialog({
     if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
   };
 
-  const versions = useMemo(() => {
-    if (!selected) return [];
-    return artifacts.filter((a) => a.key === selected.key).sort((a, b) => a.version - b.version);
-  }, [artifacts, selected]);
+  const versions = useVersionHistory(selected, artifacts, fetchVersions);
   const { text: source, error: sourceError, retry: retrySource } = useArtifactSource(selected);
   const streamingContent = selected ? streamingArtifacts[selected.key] : undefined;
 

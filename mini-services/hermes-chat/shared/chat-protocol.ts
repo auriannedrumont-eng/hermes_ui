@@ -602,8 +602,10 @@ export interface StorageMutationResult {
   removed: number;
   /** Octets réellement libérés — MESURE, jamais estimation (§5.3). */
   bytesFreed: number;
-  /** Jeton d'annulation valable STORAGE_UNDO_MS (annulé au retour). */
-  undoToken: string;
+  /** Jeton d'annulation valable STORAGE_UNDO_MS (annulé au retour).
+   *  Revue P1-P7 : null quand il n'y avait RIEN à supprimer
+   *  (cleanProject sans aucune ligne condamnée). */
+  undoToken: string | null;
 }
 
 /** Réponse OK de storage:undo. */

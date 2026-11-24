@@ -108,7 +108,18 @@ socket.on(
     cb?: (data: unknown) => void
   ) => {
     const raw = (payload?.name ?? "").trim();
-    const kind = payload?.kind === "service" ? "service" : "llm";
+    // Revue P1-P7 : le kind demandé est contrôlé — une valeur inconnue est
+    // REFUSÉE au lieu d'être silencieusement convertie en "llm".
+    if (
+      payload?.kind !== undefined &&
+      payload.kind !== "llm" &&
+      payload.kind !== "service"
+    ) {
+      if (typeof cb === "function")
+        cb({ error: "kind invalide — « llm » ou « service » attendu" });
+      return;
+    }
+    let kind = payload?.kind === "service" ? "service" : "llm";
     if (!raw) {
       if (typeof cb === "function") cb({ error: "Nom ou adresse requis" });
       return;
@@ -118,6 +129,15 @@ socket.on(
       if (typeof cb === "function")
         cb({ error: "Fournisseur non reconnu — collez son adresse (https://…)" });
       return;
+    }
+    // Revue P1-P7 : pour un fournisseur CONNU, le CATALOGUE fait foi — le
+    // kind demandé ne peut pas contredire sa nature (tavily demandé en
+    // « llm » restait bloqué au mauvais type et ne répondait jamais).
+    if ("known" in resolved) {
+      const cat = ctx
+        .knownProviderCatalog()
+        .find((c) => c.name === resolved.known.name);
+      if (cat?.kind) kind = cat.kind;
     }
     // Un fournisseur connu n'est pas dupliqué
     const canonicalName = "known" in resolved ? resolved.known.name : resolved.custom.name;

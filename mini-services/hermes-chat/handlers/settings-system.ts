@@ -5,7 +5,10 @@
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
+import { homedir } from "node:os";
+import { WEBCHAT_DATA_DIR } from "../webchat/engine";
+import { readSanteManifeste } from "../sante";
 
 // ── Vérification de mise à jour (carte Système — v0.3.0) ─────────────────
 // La révision installée est lue DIRECTEMENT dans .git (HEAD, puis la ref
@@ -59,7 +62,7 @@ function updateProbeBase(): string {
   return process.env.HERMES_UPDATE_TEST_URL ?? "https://github.com";
 }
 
-async function fetchRemoteRevision(): Promise<string | null> {
+async function fetchRemoteRevision(): Promise<string> {
   const base = updateProbeBase();
   const urls = [
     `${base}/${GITHUB_REPO}.git/info/refs?service=git-upload-pack`,
@@ -92,7 +95,11 @@ async function fetchRemoteRevision(): Promise<string | null> {
       /* essai suivant */
     }
   }
-  return null;
+  // Revue P1-P7 (B20) : toutes les URLs ont échoué — JETER au lieu de
+  // renvoyer null. L'ancien null était indistinguable d'un succès sans
+  // mise à jour : le catch de refreshUpdateState était mort (jamais
+  // atteint) et l'écran affichait « À jour » hors ligne.
+  throw new Error("Dépôt GitHub injoignable (aucune source n'a répondu).");
 }
 
 /** État de mise à jour connu du service — LA source unique diffusée aux
@@ -120,7 +127,7 @@ async function refreshUpdateState(): Promise<void> {
     const remote = await fetchRemoteRevision();
     updateState = {
       installed,
-      available: remote !== null && remote !== installed ? remote : null,
+      available: remote !== installed ? remote : null,
       checkedAt: new Date().toISOString(),
       error: null,
     };
@@ -152,7 +159,55 @@ export function currentUpdateState(): UpdateState {
   return updateState;
 }
 
+// ── Revue P1-P7 (B7) : garde-fous de settings:set ────────────────────────
+
+/** Clés autorisées à l'écriture via settings:set — les autres clés
+ *  (journal moteur, versions, compaction par conversation, révisions)
+ *  s'écrivent par le SERVICE seul, jamais par un client socket. */
+const SETTINGS_ALLOWED_KEYS = new Set<string>([
+  "fork.webchat.port",
+  "fork.webchat.timeoutS",
+  "fork.webchat.idleMin",
+  "fork.webchat.outDir",
+  "fork.webchat.profileDir",
+  "fork.webchat.browserPath",
+  "hermes.modes.prompts",
+  "hermes.modes.voiceChars",
+  "hermes.pricing",
+  "hermes.profiles",
+]);
+
+/** Racines sous lesquelles outDir/profileDir doivent vivre : dossier de
+ *  données du service (db/) ou dossier utilisateur. Vide = défaut, accepté. */
+function dirSousRacines(raw: string): boolean {
+  if (!raw.trim()) return true;
+  if (!isAbsolute(raw)) return false;
+  const abs = resolve(raw);
+  const racines = [resolve(WEBCHAT_DATA_DIR), resolve(homedir())];
+  return racines.some((r) => abs === r || abs.startsWith(r + sep));
+}
+
+/** Binaire navigateur : le NOM du fichier doit être un navigateur connu
+ *  (chrome / chromium / edge / brave, Windows ou Unix). Un chemin absolu
+ *  quelconque (exécutable renommé, malware) ne passe plus ; l'existence
+ *  du fichier reste vérifiée par ensureBrowser au moment du lancement. */
+function binaireNavigateur(raw: string): boolean {
+  if (!raw.trim()) return true;
+  if (!isAbsolute(raw)) return false;
+  return /^(chrome|chromium|chromium-browser|google-chrome|google-chrome-stable|microsoft-edge|msedge|brave|brave-browser)(\.exe)?$/i.test(
+    basename(raw)
+  );
+}
+
 export function registerSettingsSystemHandlers(socket: Socket) {
+
+// Revue P1-P7 (B6) : le manifeste du dernier démarrage n'était relayé
+// QUE dans helloPayload (connexion initiale) — system:update-state ne le
+// porte jamais, donc la carte « Dernier démarrage » restait null à vie.
+// Lecture à la demande au montage de la carte.
+socket.on("system:sante-manifeste", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ manifeste: readSanteManifeste() });
+});
 
 // ── Réglages serveur (persistés, cf. FORK.md §6) ────────────────────
 
@@ -190,11 +245,18 @@ socket.on(
 
 socket.on(
   "settings:set",
-  (payload: { key?: string; value?: string }, cb?: (data: unknown) => void) => {
+  (payload: { key?: string; value?: string | number | boolean }, cb?: (data: unknown) => void) => {
     const key = String(payload?.key ?? "").trim();
-    // (audit 2026-11-21) payload réseau : value non-chaîne (objet, nombre)
-    // levait dans le binding bun:sqlite et tuait le process — garde explicite.
-    const value = typeof payload?.value === "string" ? payload.value : "";
+    // Revue P1-P7 (B5) : les réglages numériques (port, timeout, idle)
+    // arrivaient en chaîne vide — le client envoie désormais String(value)
+    // et le service accepte un scalaire simple (nombre, booléen) au lieu
+    // de le réduire à "" silencieusement.
+    const value =
+      typeof payload?.value === "string"
+        ? payload.value
+        : typeof payload?.value === "number" || typeof payload?.value === "boolean"
+          ? String(payload.value)
+          : "";
     if (!key) {
       if (typeof cb === "function") cb({ error: "key requise" });
       return;
@@ -204,6 +266,36 @@ socket.on(
     if (key === ctx.GATEWAY_TOKEN_KEY) {
       if (typeof cb === "function")
         cb({ error: "clé réservée — passer par gateway:set" });
+      return;
+    }
+    // Revue P1-P7 (B7) : l'URL gateway non plus — elle contournerait la
+    // validation SSRF de gateway:set (http:// intranet accepté en silence).
+    if (key === ctx.GATEWAY_URL_KEY) {
+      if (typeof cb === "function")
+        cb({ error: "clé réservée — passer par gateway:set" });
+      return;
+    }
+    // Revue P1-P7 (B7) : liste blanche stricte — settings:set n'est plus
+    // une écriture libre de la base (elle permettait d'exécuter un binaire
+    // arbitraire via fork.webchat.browserPath puis webchat:open).
+    if (!SETTINGS_ALLOWED_KEYS.has(key)) {
+      if (typeof cb === "function")
+        cb({ error: "clé non autorisée via settings:set" });
+      return;
+    }
+    // Revue P1-P7 (B7) : bornes des chemins webchat — outDir/profileDir
+    // vivent sous le dossier de données du service ou le dossier
+    // utilisateur ; browserPath doit être un binaire navigateur connu.
+    if (key === "fork.webchat.outDir" || key === "fork.webchat.profileDir") {
+      if (!dirSousRacines(value)) {
+        if (typeof cb === "function")
+          cb({ error: "chemin refusé — hors du dossier de données ou du dossier utilisateur" });
+        return;
+      }
+    }
+    if (key === "fork.webchat.browserPath" && !binaireNavigateur(value)) {
+      if (typeof cb === "function")
+        cb({ error: "binaire refusé — chrome, chromium, edge ou brave attendu" });
       return;
     }
     ctx.store.setSetting(key, value);
@@ -459,6 +551,12 @@ socket.on(
     const content = (payload?.content ?? "").trim();
     if (!id) {
       if (typeof cb === "function") cb({ error: "conversationId requis" });
+      return;
+    }
+    // Revue P1-P7 : conversation inexistante → refus (l'ancien code créait
+    // une ligne de prompt pour un id fantôme).
+    if (!ctx.store.getConversation(id)) {
+      if (typeof cb === "function") cb({ error: "Conversation introuvable" });
       return;
     }
     const invalid = ctx.validatePromptText(content, ctx.MAX_PROMPT_CHARS);

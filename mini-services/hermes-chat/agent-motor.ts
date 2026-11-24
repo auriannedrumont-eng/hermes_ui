@@ -414,13 +414,17 @@ export async function fetchLatestRelease(force = false): Promise<AgentRelease | 
 // ── Vérification de l'état (version + release + dérive hors interface) ────
 export async function refreshMotorStatus(deps: MotorDeps): Promise<MotorState> {
   const installed = await hermesVersion(true);
-  const previousSaved = deps.store.getSetting(AGENT_PREVIOUS_KEY)?.trim() || null;
+  let previousSaved = deps.store.getSetting(AGENT_PREVIOUS_KEY)?.trim() || null;
   const notedInstalled = deps.store.getSetting(AGENT_INSTALLED_KEY)?.trim() || null;
   // Dérive : la version a changé SANS passer par l'interface (l'utilisateur
   // a lancé `hermes update` lui-même, ou le bureau) — le carnet le note et
   // le filet de sécurité retient la version d'avant.
   if (installed && notedInstalled && installed !== notedInstalled) {
     deps.store.setSetting(AGENT_PREVIOUS_KEY, notedInstalled);
+    // Revue P1-P7 (B12) : la publication suit l'ÉCRITURE — l'ancien code
+    // diffusait l'ancien previousSaved lu avant la dérive, alors que la
+    // base retient désormais notedInstalled (bouton « Revenir » mensonger).
+    previousSaved = notedInstalled;
     journalAppend(deps.store, {
       type: "version",
       label: "Le moteur Hermes a changé de version",
@@ -520,12 +524,18 @@ export async function runSensesCheck(deps: MotorDeps): Promise<MotorControl> {
 // ── Mise à jour du moteur : `hermes update --backup` (officiel) ────────────
 export async function startAgentUpdate(deps: MotorDeps): Promise<{ ok: boolean; error?: string }> {
   if (motorState.op) return { ok: false, error: "une opération est déjà en cours" };
+  // Revue P1-P7 (B12) : réservation AVANT tout await. L'ancien ordre
+  // (sonde de port 800 ms puis relecture de version 4 s AVANT de poser
+  // op) laissait deux appels concourants passer tous deux la garde et
+  // lancer deux « hermes update --backup » en parallèle sur la même
+  // installation. Le refus ci-dessous libère la réservation.
+  setState({ op: { kind: "update", startedAt: new Date().toISOString() } }, deps);
   // §9 (64), capture du 23 : le programme officiel `hermes update` REFUSE de
   // se lancer tant que Hermes tourne (fichiers .pyd verrouillés) — et comme
   // l'interface allume l'agent toute seule (loi « tout simplement »), le
   // bouton échouait à coup sûr avec un refus en anglais brut. On refuse
   // NOUS-MÊMES, en français, AVANT de lancer quoi que ce soit : rien n'est
-  // réservé, rien n'est lancé, et on n'arrête jamais l'agent de quelqu'un
+  // lancé, et on n'arrête jamais l'agent de quelqu'un
   // (loi « tout simplement » : c'est à la personne de fermer Hermes).
   if (await gatewayPortOpen()) {
     logLine(
@@ -533,18 +543,12 @@ export async function startAgentUpdate(deps: MotorDeps): Promise<{ ok: boolean; 
       "MOTEUR MAJ REFUSÉ — Hermes est en marche : le programme officiel refuse de se mettre à jour tant qu'il tourne (fichiers verrouillés). Fermez l'application Hermes et les autres terminaux Hermes, puis refaites la mise à jour ici — rien n'a été modifié.",
       true
     );
-    setState({ error: "Hermes est en marche — fermez-le (application de bureau, autres terminaux), puis relancez la mise à jour." }, deps);
+    setState({ op: null, error: "Hermes est en marche — fermez-le (application de bureau, autres terminaux), puis relancez la mise à jour." }, deps);
     return {
       ok: false,
       error: "Hermes est en marche — fermez l'application Hermes (et les autres terminaux Hermes), puis relancez la mise à jour.",
     };
   }
-  // (audit 2026-11-21) Réservation SYNCHRONE avant tout await : le test
-  // ci-dessus puis `await hermesVersion(true)` (jusqu'à 4 s) laissaient une
-  // fenêtre où deux déclenchements (deux onglets) passaient tous deux le
-  // garde et lançaient deux `hermes update --backup` en parallèle sur la
-  // même installation. Si la sonde échoue, on libère l'opération.
-  setState({ op: { kind: "update", startedAt: new Date().toISOString() } }, deps);
   const before = await hermesVersion(true);
   if (!before) {
     setState({ op: null }, deps);
@@ -620,7 +624,10 @@ export async function startAgentUpdate(deps: MotorDeps): Promise<{ ok: boolean; 
   return { ok: true };
 }
 
-/** Contrôle sans double écriture au carnet (utilisé juste après une maj). */
+/** Contrôle sans double écriture au carnet (utilisé juste après une maj).
+ *  Revue P1-P7 (B12) : même en-tête Authorization que runSensesCheck —
+ *  sur une gateway authentifiée, la sonde muette recevait 401 et
+ *  proposait à tort un retour arrière après une mise à jour réussie. */
 async function runSensesCheckSilent(deps: MotorDeps): Promise<MotorControl> {
   const url = deps.connector.gatewayUrl;
   let liaison: "ok" | "echec" = "echec";
@@ -631,6 +638,9 @@ async function runSensesCheckSilent(deps: MotorDeps): Promise<MotorControl> {
       const res = await fetch(`${toHttpBase(url)}/api/model/options?include_unconfigured=1`, {
         redirect: "error",
         signal: AbortSignal.timeout(4_000),
+        headers: deps.connector.gatewayToken
+          ? { Authorization: `Bearer ${deps.connector.gatewayToken}` }
+          : undefined,
       });
       if (res.ok) {
         liaison = "ok";

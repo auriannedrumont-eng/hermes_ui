@@ -175,6 +175,12 @@ socket.on("conversations:open", (payload: { id?: string }, cb?: (data: unknown) 
     if (typeof cb === "function") cb({ error: "conversationId requis" });
     return;
   }
+  // Revue P1-P7 : conversation inexistante → erreur explicite (l'ancien
+  // code répondait un fil vide comme si de rien n'était).
+  if (!ctx.store.getConversation(id)) {
+    if (typeof cb === "function") cb({ error: "Conversation introuvable" });
+    return;
+  }
   const messages = ctx.store.getMessages(id);
   ctx.attachArtifactCards(id, messages, true);
   const compact = ctx.compactInfoWire(id);
@@ -445,6 +451,12 @@ socket.on(
       : [];
     if (!conversationId || (!content && attachments.length === 0)) {
       if (typeof cb === "function") cb({ error: "Paramètres manquants" });
+      return;
+    }
+    // Revue P1-P7 : conversation inexistante → refus (l'ancien code insérait
+    // des messages (et lançait un tour) pour un conversationId fantôme).
+    if (!ctx.store.getConversation(conversationId)) {
+      if (typeof cb === "function") cb({ error: "Conversation introuvable" });
       return;
     }
 

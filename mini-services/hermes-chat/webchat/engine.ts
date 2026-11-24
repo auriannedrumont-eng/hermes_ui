@@ -280,6 +280,10 @@ function spawnDriver(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // Revue P1-P7 : le listener d'abort est RETIRÉ — l'ancien code le
+      // laissait attaché après clôture : un abort ultérieur du signal
+      // (tour suivant sur le même contrôleur) rejetait une promesse morte.
+      signal?.removeEventListener("abort", onAbort);
       try { child.kill(); } catch { /* déjà sorti */ }
       fn();
     };

@@ -427,12 +427,16 @@ export function Sidebar({
     ...subControls,
     collapsedSubs: SEARCH_EMPTY_SET,
     onToggleSubCollapse: () => {},
-    conversationsOf: (projectId: string) =>
-      (conversationsByProject.get(projectId) ?? []).filter(
+    conversationsOf: (projectId: string) => {
+      // Revue P1-P7 : SANS ACCENTS — l'ancien filtre brut (toLowerCase)
+      // faisait dire « Aucune conversation » à « reunion » pour « Réunion ».
+      const ql = foldAccents(q);
+      return (conversationsByProject.get(projectId) ?? []).filter(
         (c) =>
-          c.title.toLowerCase().includes(q.toLowerCase()) ||
-          c.preview.toLowerCase().includes(q.toLowerCase())
-      ),
+          foldAccents(c.title).includes(ql) ||
+          foldAccents(c.preview).includes(ql)
+      );
+    },
   };
 
   // ── Drag & drop ───────────────────────────────────────────────────

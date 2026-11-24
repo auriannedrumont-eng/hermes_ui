@@ -100,7 +100,7 @@ interface ComposerProps {
   compactRunning: boolean;
   onCompact: () => void;
   onNewSession: () => void;
-  onSend: (text: string, attachments: Attachment[]) => void;
+  onSend: (text: string, attachments: Attachment[]) => void | boolean | Promise<boolean>;
   onStop: () => void;
   onUploadFile: (file: File) => Promise<Attachment | null>;
   onTranscribe: (dataBase64: string, mime?: string) => Promise<string>;
@@ -180,17 +180,16 @@ export function Composer({
   // d'effet (revue 95) — l'écriture pendant le rendu, sous React 19
   // strict (rendu doublé), rejouait le flush APRÈS que le second rendu
   // a déjà réinitialisé `value` : le brouillon sortant était écrasé
-  // par une chaîne vide. Le cleanup capture `value` au moment où
-  // draftLoaded change encore l'ancienne conversation, avant reset.
-  const outgoingDraftRef = useRef<{ key: string; value: string } | null>(null);
+  // par une chaîne vide. Le changement de conversation reset `value`
+  // AVANT que le debounce (plus bas) n'ait eu le temps d'écrire : le
+  // cleanup ci-dessous restitue la DERNIÈRE valeur commitée sous
+  // l'ANCIENNE clé (fermeture de ce créneau de frappe en vol).
+  const outgoingValueRef = useRef("");
   if (draftLoaded !== draftKey) {
     // re-render immédiat : motif React officiel « adjust state on prop
-    // change » — la lecture de `value` (contient encore l'ANCIEN
-    // brouillon) est mémorisée pour le cleanup ; plus AUCUNE écriture
-    // disque dans le corps du rendu.
-    if (draftLoaded) {
-      outgoingDraftRef.current = { key: draftLoaded, value };
-    }
+    // change » — plus AUCUNE écriture disque ni de ref dans le corps du
+    // rendu (react-hooks/refs) ; la valeur sortante est capturée par la
+    // ref ci-dessus (dernier commit) et le cleanup du flush la restitue.
     setDraftLoaded(draftKey);
     try {
       // chargement du brouillon de la conversation entrante — sous la
@@ -203,20 +202,26 @@ export function Composer({
   }
   useEffect(() => {
     return () => {
-      const out = outgoingDraftRef.current;
-      outgoingDraftRef.current = null;
-      if (!out) return;
+      const out = outgoingValueRef.current;
       try {
-        if (out.value.trim()) {
-          window.localStorage.setItem(draftStorageKey(out.key), out.value);
+        if (out.trim()) {
+          window.localStorage.setItem(draftStorageKey(draftKey), out);
         } else {
-          window.localStorage.removeItem(draftStorageKey(out.key));
+          window.localStorage.removeItem(draftStorageKey(draftKey));
         }
       } catch {
         /* stockage indisponible */
       }
     };
+    // Déclaré AVANT l'effet de synchronisation : React exécute les effets
+    // dans l'ordre de déclaration, ce cleanup lit donc la ref AVANT que
+    // l'effet suivant n'y ait écrit la valeur de la conversation entrante.
   }, [draftKey]);
+  useEffect(() => {
+    // Synchronise APRÈS chaque commit — jamais pendant le rendu
+    // (react-hooks/refs) : la valeur est toujours la dernière commitée.
+    outgoingValueRef.current = value;
+  });
   useEffect(() => {
     if (textareaRef.current) textareaRef.current.focus();
   }, [draftKey]);
@@ -324,15 +329,24 @@ export function Composer({
 
   const submit = () => {
     if (!canSend) return;
-    onSend(value, ready.map((p) => p.uploaded!));
-    setValue("");
-    try {
-      window.localStorage.removeItem(draftStorageKey(draftKey));
-    } catch {
-      /* stockage indisponible */
-    }
-    clearAll();
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    const texte = value;
+    const pieces = ready.map((p) => p.uploaded!);
+    // Revue P1-P7 : le brouillon n'est vidé QU'APRÈS acceptation — l'ancien
+    // code détruisait textarea, localStorage et pièces jointes AVANT de
+    // savoir si l'envoi était accepté (résumé en cours, réponse en vol,
+    // échec de création de conversation) : le texte de l'utilisateur
+    // disparaissait sans retour.
+    void Promise.resolve(onSend(texte, pieces)).then((accepte) => {
+      if (accepte === false) return;
+      setValue("");
+      try {
+        window.localStorage.removeItem(draftStorageKey(draftKey));
+      } catch {
+        /* stockage indisponible */
+      }
+      clearAll();
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    });
   };
 
   return (
@@ -579,9 +593,14 @@ export function Composer({
               type="button"
               variant="ghost"
               onClick={() => {
-                if (webSearchAvailable && mode === "local") onToggleWebSearch();
+                // Revue P1-P7 (B2) : la bascule suit l'état RÉEL de la
+                // gateway — branchée, la recherche est gérée par l'agent
+                // Hermes (le service l'annonce dans le fil) ; hors ligne
+                // avec une clé Tavily/Exa, la recherche locale tourne.
+                if (mode === "gateway" || (webSearchAvailable && mode === "local"))
+                  onToggleWebSearch();
               }}
-              aria-disabled={!webSearchAvailable || mode !== "local"}
+              aria-disabled={mode !== "gateway" && !(webSearchAvailable && mode === "local")}
               aria-pressed={webSearch}
               aria-label="Recherche web"
               className={

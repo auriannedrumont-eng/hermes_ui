@@ -360,7 +360,10 @@ export default function HermesWebPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleNew, paletteOpen, chat]);
+    // Revue P1-P7 : dépendances PRÉCISES — l'objet `chat` est recréé à
+    // chaque rendu, le listener clavier était donc ré-enregistré à chaque
+    // frappe. closePanel/stopGeneration sont des callbacks stables.
+  }, [handleNew, paletteOpen, chat.panelOpen, chat.isBusy, chat.closePanel, chat.stopGeneration]);
 
   // ── Notifications de fin de génération (onglet en arrière-plan) ────
   const wasStreamingRef = useRef(false);
@@ -465,7 +468,13 @@ export default function HermesWebPage() {
             ref={sidebarRef}
             id="sidebar"
             order={1}
-            defaultSize={19}
+            // Revue P1-P7 : le DÉFAUT au (re)montage est la largeur
+            // PERSISTÉE — l'ancien defaultSize={19} fixe rétrécissait la
+            // sidebar à chaque masquage/réaffichage.
+            defaultSize={(() => {
+              const pct = readClientSetting<number>(SIDEBAR_WIDTH_KEY);
+              return Number.isFinite(pct) && pct >= 12 && pct <= 34 ? pct : 19;
+            })()}
             minSize={14}
             maxSize={34}
             onResize={handleSidebarResize}
@@ -611,7 +620,6 @@ export default function HermesWebPage() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         mode={chat.mode}
-        engineProviders={chat.engineProviders}
         connected={chat.connected}
         models={chat.models}
         selectedModel={chat.selectedModel}
@@ -622,10 +630,6 @@ export default function HermesWebPage() {
         serverVersion={chat.serverVersion}
         updateAvailable={chat.updateAvailable}
         appRevision={chat.serverRevision}
-        chromeHeadless={chat.chromeHeadless}
-        gatewayUrl={chat.gatewayUrl}
-        gatewayConfigured={chat.gatewayConfigured}
-        gatewayTokenSet={chat.gatewayTokenSet}
         onConnectGateway={chat.connectGateway}
         webSearchAvailable={webSearchAvailable}
       />

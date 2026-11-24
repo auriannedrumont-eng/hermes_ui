@@ -95,79 +95,74 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
   const hasThumb = !!artifact.thumbnailUrl && !imgError;
 
   return (
-    <div
-      className="group/art w-full max-w-[420px] overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:border-hermes/50 hover:shadow-md"
-      role="button"
-      tabIndex={0}
-      aria-label={`Artefact ${artifact.name} — ${artifactKindLabel(artifact.kind)}`}
-      onClick={() => onOpen(artifact)}
-      onKeyDown={(e) => {
-        // C-04 : ne réagir qu'aux touches frappées sur la carte ELLE-MÊME —
-        // les événements remontés depuis un Portal (popover de versions,
-        // Input d'étiquette) ne doivent pas ouvrir l'artefact.
-        if (e.target !== e.currentTarget) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen(artifact);
-        }
-      }}
-    >
-      {/* En-tête : icône, nom, version, statut */}
+    <div className="group/art w-full max-w-[420px] overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:border-hermes/50 hover:shadow-md">
+      {/* En-tête : icône, nom, version, statut — Revue P1-P7 : la zone
+          cliquable est un VRAI bouton qui ne contient plus les actions —
+          l'ancien <div role="button"> englobait des <Button> (contrôles
+          interactifs imbriqués). Les actions sont des SŒURS. */}
       <div className="flex items-center gap-2.5 px-3 py-2.5">
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${KIND_TINT[artifact.kind]}`}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+          aria-label={`Artefact ${artifact.name} — ${artifactKindLabel(artifact.kind)}`}
+          onClick={() => onOpen(artifact)}
         >
-          <KindIcon kind={artifact.kind} className="h-4.5 w-4.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate font-mono text-[12.5px] font-medium">{artifact.name}</p>
-            {artifact.version > 1 ? (
-              // F-26 : le badge EST la porte du journal des versions (design
-              // validé : un seul point d'entrée, pas de bouton de plus).
-              <VersionPopover artifact={artifact}>
-                <Badge
-                  variant="outline"
-                  className="h-4 shrink-0 cursor-pointer rounded px-1 font-mono text-[11px] text-hermes-text transition-colors hover:border-hermes/60 hover:bg-hermes/10"
-                  title="Historique des versions"
-                >
-                  v{artifact.version}
-                </Badge>
-              </VersionPopover>
-            ) : null}
-          </div>
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
-            {isGenerating || isRendering ? (
-              <>
-                <Loader2 className="h-3 w-3 shrink-0 animate-spin text-hermes-text" />
-                <span className="truncate">
-                  {artifact.statusLabel ??
-                    (isGenerating ? `Génération de ${artifact.name}…` : "Rendu…")}
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${KIND_TINT[artifact.kind]}`}
+          >
+            <KindIcon kind={artifact.kind} className="h-4.5 w-4.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate font-mono text-[12.5px] font-medium">{artifact.name}</span>
+            </span>
+            <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+              {isGenerating || isRendering ? (
+                <>
+                  <Loader2 className="h-3 w-3 shrink-0 animate-spin text-hermes-text" />
+                  <span className="truncate">
+                    {artifact.statusLabel ??
+                      (isGenerating ? `Génération de ${artifact.name}…` : "Rendu…")}
+                  </span>
+                </>
+              ) : isError ? (
+                <span className="truncate text-destructive">
+                  {artifact.error ?? "Échec de la génération"}
                 </span>
-              </>
-            ) : isError ? (
-              <span className="truncate text-destructive">
-                {artifact.error ?? "Échec de la génération"}
-              </span>
-            ) : (
-              <>
-                <span>{artifactKindLabel(artifact.kind)}</span>
-                <span aria-hidden="true">·</span>
-                <span>{formatArtifactBytes(artifact.size)}</span>
-                {artifact.pdfSize ? (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>PDF {formatArtifactBytes(artifact.pdfSize)}</span>
-                  </>
-                ) : null}
-                <span aria-hidden="true">·</span>
-                <span>{timeLabel(artifact.createdAt)}</span>
-              </>
-            )}
-          </p>
-        </div>
+              ) : (
+                <>
+                  <span>{artifactKindLabel(artifact.kind)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatArtifactBytes(artifact.size)}</span>
+                  {artifact.pdfSize ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>PDF {formatArtifactBytes(artifact.pdfSize)}</span>
+                    </>
+                  ) : null}
+                  <span aria-hidden="true">·</span>
+                  <span>{timeLabel(artifact.createdAt)}</span>
+                </>
+              )}
+            </span>
+          </span>
+        </button>
+        {artifact.version > 1 ? (
+          // F-26 : le badge EST la porte du journal des versions (design
+          // validé : un seul point d'entrée, pas de bouton de plus) —
+          // SŒUR du bouton principal, plus aucun imbriquement.
+          <VersionPopover artifact={artifact}>
+            <Badge
+              variant="outline"
+              className="h-4 shrink-0 cursor-pointer rounded px-1 font-mono text-[11px] text-hermes-text transition-colors hover:border-hermes/60 hover:bg-hermes/10"
+              title="Historique des versions"
+            >
+              v{artifact.version}
+            </Badge>
+          </VersionPopover>
+        ) : null}
         {/* Actions */}
-        <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center gap-0.5">
           {isError ? (
             <Button
               variant="ghost"

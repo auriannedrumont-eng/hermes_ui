@@ -34,11 +34,16 @@ export function playCompletionBeep(): void {
 }
 
 let flashTimer: ReturnType<typeof setInterval> | null = null;
+// Revue P1-P7 : la base de titre mémorisée — un second flashTitle pendant
+// la phase active recapturait document.title (le MESSAGE du flash en cours)
+// comme titre permanent ; la base ne change que quand aucun flash ne vit.
+let flashBase: string | null = null;
 
 /** Fait clignoter le titre de l'onglet (limité en durée). */
 export function flashTitle(message: string, times = 6): void {
   if (flashTimer) clearInterval(flashTimer);
-  const base = document.title;
+  if (flashBase === null) flashBase = document.title;
+  const base = flashBase;
   let on = false;
   let count = 0;
   flashTimer = setInterval(() => {
@@ -48,6 +53,7 @@ export function flashTitle(message: string, times = 6): void {
     if (count >= times * 2) {
       if (flashTimer) clearInterval(flashTimer);
       flashTimer = null;
+      flashBase = null;
       document.title = base;
     }
   }, 700);

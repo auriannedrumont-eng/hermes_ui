@@ -93,6 +93,10 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   const [tick, setTick] = useState(0);
   const derivedStallNotice: string | null = useMemo(() => {
     if (turnState !== "streaming") return null;
+    // Revue P1-P7 (B14) : horodatage jamais posé (F5 pendant un tour, acks
+    // invisibles de onAny) — 0 n'est pas un silence de 55 ans, la vigie ne
+    // juge pas avant le premier vrai signe de vie.
+    if (lastActivityRef.current === 0) return null;
     const silentS = Math.round((Date.now() - lastActivityRef.current) / 1000);
     if (silentS < 60) return null;
     const voice = runningVoiceRef.current;
@@ -131,6 +135,9 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
   useEffect(() => {
     if (turnState !== "streaming") return;
     const release = () => {
+      // Revue P1-P7 (B14) : horodatage jamais posé (0) — pas un silence de
+      // 55 ans : le tour vivant ré-attaché n'est pas tué au premier tick.
+      if (lastActivityRef.current === 0) return;
       const silentMs = Date.now() - lastActivityRef.current;
       if (silentMs < MAX_TURN_SILENCE_MS) return;
       const first = Object.values(streamStore.get().streamsRecord)[0];

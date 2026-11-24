@@ -151,6 +151,12 @@ export async function runRestTurn(
       const chunk = await reader.read();
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });
+      // Revue P1-P7 (B10) : un serveur ou proxy HTTP peut émettre des trames
+      // SSE en CRLF — l'ancienne recherche de "\n\n" seule ne découpait
+      // RIEN ("\r\n\r\n") et tout le flux s'accumulait : en fin de flux,
+      // parseSseFrame échouait sur le bloc concaténé
+      // (rest_chat_stream_close_premature). Normalisation systématique.
+      buffer = buffer.replace(/\r\n/g, "\n");
       let sep = buffer.indexOf("\n\n");
       while (sep !== -1) {
         const frame = buffer.slice(0, sep);

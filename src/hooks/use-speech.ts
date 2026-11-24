@@ -47,12 +47,19 @@ export function useSpeech(content: string) {
 
   const toggle = () => {
     if (!supported) return;
-    if (window.speechSynthesis.speaking) {
+    // Revue P1-P7 : l'état LOCAL décide — l'ancien test global
+    // (window.speechSynthesis.speaking) voyait la lecture d'une AUTRE
+    // bulle : cliquer la seconde la coupait sans démarrer la sienne
+    // (setSpeaking(false) sur une bulle qui ne parlait pas).
+    if (speakingRef.current) {
       window.speechSynthesis.cancel();
       setSpeaking(false);
       return;
     }
     const plain = speechPlain(content);
+    // Une autre bulle parlait : la file globale est coupée AVANT de
+    // démarrer celle-ci (une seule voix à la fois).
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(plain.slice(0, 4000));
     utterance.lang = "fr-FR";
     utterance.rate = 1.02;
@@ -107,10 +114,20 @@ export function useContinuousSpeech(content: string, active: boolean) {
     const plain = speechPlain(content);
     if (!plain) return;
     // Phrases complètes uniquement (terminées par . ! ? …), courtes ignorées
+    // Revue P1-P7 : seules les phrases TERMINÉES comptent — l'ancien code
+    // incluait la fin de texte SANS ponctuation finale (fraction en cours)
+    // : parlée à moitié, comptée comme lue, sa completion définitive
+    // jamais re-lue (dernière phrase omise).
     const sentences = plain
       .split(/(?<=[.!?…])\s+/)
       .map((s) => s.trim())
-      .filter((s) => s.length >= 20);
+      .filter((s) => s.length >= 20 && /[.!?…]$/.test(s));
+    // Revue P1-P7 : le compteur suit le contenu — un texte RÉTRÉCI (nouvelle
+    // réponse dans la même bulle) repart de zéro.
+    if (sentences.length < spokenCountRef.current) {
+      spokenCountRef.current = 0;
+      spokenCharsRef.current = 0;
+    }
     const fresh = sentences.slice(spokenCountRef.current);
     for (const s of fresh) {
       // Garde-fou : jamais plus de 4 000 caractères lus par réponse
@@ -133,6 +150,10 @@ export function useContinuousSpeech(content: string, active: boolean) {
       setSpeaking(false);
       return;
     }
+    // Revue P1-P7 : la (re)prise ne repart PAS avec le compteur d'une
+    // lecture précédente — sinon tout ou partie du texte était omis.
+    spokenCountRef.current = 0;
+    spokenCharsRef.current = 0;
     // Activation : l'effet ci-dessus alimente la file au contenu courant
     // (les phrases complètes déjà présentes partent d'un coup, puis le
     // stream nourrit la file delta après delta).

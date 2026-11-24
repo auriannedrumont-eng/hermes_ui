@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 const execFile = promisify(execFileCb);
 import { mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, basename, dirname, sep } from "node:path";
+import { join, basename, dirname, sep, relative, isAbsolute } from "node:path";
 import type { Store } from "./store";
 import { resolveUploadFile } from "./uploads";
 import { artifactPdfPath, artifactThumbPath } from "./artifacts";
@@ -84,11 +84,13 @@ export function createFilesServer(deps: HttpDeps) {
     // (curl, <img> du même site) n'envoient pas sec-fetch-site : inchangés.
     const fetchSite = req.headers["sec-fetch-site"];
     const crossSite = fetchSite === "cross-site";
+    // Revue P1-P7 : la garde cross-site vit HORS du test SERVICE_TOKEN —
+    // en mode dev sans jeton, un site distant pouvait charger /uploads/,
+    // /artifacts/ ou /diagnostics en <iframe> ou <img> sans rien payer.
+    // /share/ reste exempt (le destinataire d'un lien vient d'où il veut).
     if (
-      SERVICE_TOKEN &&
-      !isShareRoute &&
-      (crossSite ||
-        (!isPublicViewRoute && !httpAuthorized(req, u)))
+      (!isShareRoute && crossSite) ||
+      (SERVICE_TOKEN && !isShareRoute && !isPublicViewRoute && !httpAuthorized(req, u))
     ) {
       res.writeHead(401, { "Content-Type": "text/plain", "WWW-Authenticate": "Bearer" });
       res.end("Jeton de service requis");
@@ -132,7 +134,14 @@ export function createFilesServer(deps: HttpDeps) {
             : {}),
           "X-Content-Type-Options": "nosniff",
         });
-        createReadStream(served.filePath).pipe(res);
+        createReadStream(served.filePath)
+          // Revue P1-P7 : un fichier supprimé PENDANT la lecture laissait la
+          // réponse bloquée ET émettait une exception non gérée — le flux
+          // écoute ses erreurs et coupe la réponse.
+          .on("error", () => {
+            try { res.destroy(); } catch { /* réponse déjà fermée */ }
+          })
+          .pipe(res);
         return;
       } catch {
         res.writeHead(500, { "Content-Type": "text/plain" });
@@ -245,7 +254,12 @@ function handleDiskList(u: URL, res: ServerResponse): void {
     jsonError(400, "Chemin introuvable");
     return;
   }
-  if (target !== home && !target.startsWith(home + sep)) {
+  // Revue P1-P7 : comparaison par path.relative() — sous Windows,
+  // target.startsWith(home + sep) échouait sur une différence de casse de
+  // lettre de lecteur (c:\ vs C:\) : 403 injustifié. path.relative()
+  // normalise (même casse, même racine) — comme webchat/paths.ts.
+  const relatif = relative(home, target);
+  if (relatif.startsWith("..") || isAbsolute(relatif)) {
     jsonError(403, "Hors du dossier utilisateur");
     return;
   }
@@ -316,6 +330,25 @@ function handleArtifactFile(
       return;
     }
     if (action === "raw" || action === "view") {
+      // Revue P1-P7 (B16) : un artefact PDF doit sortir en application/pdf —
+      // l'ancien text/plain + nosniff affichait le contenu brut (base64) en
+      // texte dans l'iframe d'aperçu. Le contenu d'un bloc pdf annoté est en
+      // base64 (généré par le LLM) : décodage ; à défaut, tel quel.
+      if (row.kind === "pdf") {
+        const raw = row.content.trim();
+        const looksBase64 = /^[A-Za-z0-9+/=\r\n]+$/.test(raw) && raw.length > 64;
+        const body = looksBase64
+          ? Buffer.from(raw.replace(/\s+/g, ""), "base64")
+          : Buffer.from(row.content, "utf-8");
+        res.writeHead(200, {
+          "Content-Type": "application/pdf",
+          "Content-Length": body.length,
+          "Content-Disposition": `inline; filename*=UTF-8''${name}`,
+          "X-Content-Type-Options": "nosniff",
+        });
+        res.end(body);
+        return;
+      }
       // Le HTML n'est servi rendu QUE par la branche ci-dessus (bac à sable
       // CSP, origine opaque) — ici texte brut (XSS), sauf SVG (nécessaire
       // pour <img>) derrière un CSP qui neutralise les scripts.
@@ -358,7 +391,14 @@ function handleArtifactFile(
         ? { "Content-Disposition": `attachment; filename*=UTF-8''${name.replace(/\.html?$/, "")}.pdf` }
         : {}),
     });
-    createReadStream(filePath).pipe(res);
+    createReadStream(filePath)
+      // Revue P1-P7 : même garde que /uploads/ — erreur de lecture (fichier
+      // supprimé en plein transfert) sans gestionnaire = exception non
+      // gérée + réponse pendante.
+      .on("error", () => {
+        try { res.destroy(); } catch { /* réponse déjà fermée */ }
+      })
+      .pipe(res);
     return;
   } catch {
     res.writeHead(500, { "Content-Type": "text/plain" });

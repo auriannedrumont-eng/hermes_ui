@@ -142,8 +142,11 @@ export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
   ctx.onStep("Insertion de la consigne et envoi");
   let sent = false;
   for (let attempt = 1; attempt <= 12 && !sent; attempt++) {
+    // Revue P1-P7 : le textarea est VIDÉ avant chaque essai — insertText
+    // s'ajoutait au contenu resté d'un envoi raté : jusqu'à 12 répétitions
+    // du prompt dans le champ.
     await page.evaluate(
-      `(() => { const t = document.querySelector('textarea'); if (t) t.focus(); })()`
+      `(() => { const t = document.querySelector('textarea'); if (t) { t.focus(); t.value = ""; t.dispatchEvent(new Event("input", { bubbles: true })); } })()`
     );
     await page.insertText(ctx.prompt);
     await page.click(fiche.sel_envoyer);
@@ -485,8 +488,10 @@ export async function runAiStudio(ctx: FlowCtx): Promise<FlowResult> {
   const first30 = norm(ctx.prompt).slice(0, 30);
   let sent = false;
   for (let attempt = 1; attempt <= 10 && !sent; attempt++) {
+    // Revue P1-P7 : vidage du textarea avant chaque essai (idem z.ai) —
+    // insertText s'ajoutait au résidu d'un envoi raté.
     await page.evaluate(
-      `(() => { const t = document.querySelector('textarea'); if (t) t.focus(); })()`
+      `(() => { const t = document.querySelector('textarea'); if (t) { t.focus(); t.value = ""; t.dispatchEvent(new Event("input", { bubbles: true })); } })()`
     );
     await page.insertText(ctx.prompt);
     await page.click(fiche.sel_envoyer);

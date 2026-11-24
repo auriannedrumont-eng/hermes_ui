@@ -80,9 +80,17 @@ export function saveAttachment(name: string, mime: string, dataBase64: string): 
   mkdirSync(UPLOADS_DIR, { recursive: true });
   const id = crypto.randomUUID();
   const ext = safeExt(name, mime);
+  // Revue P1-P7 : le SVG est exclu QUELLE que soit la façon dont il arrive —
+  // un .svg envoyé sous un mime quelconque (text/plain…) passait le fil
+  // image/svg+xml et s'enregistrait avec l'extension .svg.
+  if (ext === "svg" || ext === "svgz") {
+    throw new Error("Le format SVG n'est pas accepté (sécurité)");
+  }
   const fileName = `${id}.${ext}`;
   writeFileSync(join(UPLOADS_DIR, fileName), buffer);
-  const safeMime = mime || MIME_EXT[ext] || "application/octet-stream";
+  // Revue P1-P7 : la table est indexée PAR EXTENSION (EXT_MIME) — l'ancien
+  // MIME_EXT[ext] (mime → ext) valait toujours undefined pour une extension.
+  const safeMime = mime || EXT_MIME[ext] || "application/octet-stream";
   return {
     id,
     name: (name || `fichier.${ext}`).slice(0, 180),

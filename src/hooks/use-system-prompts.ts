@@ -74,13 +74,19 @@ export function useSystemPrompts(activeConversationId: string | null) {
   useEffect(() => {
     if (!activeConversationId) return;
     const socket = getSocket();
+    // Revue P1-P7 : garde anti-course — l'ack lent de A n'écrase plus le
+    // prompt affiché pour B quand l'utilisateur navigue vite A → B.
+    let cancelled = false;
     socket.emit(
       "system-prompt:get",
       { conversationId: activeConversationId },
       (res: { prompt?: ConversationPrompt | null } = {}) => {
-        setPrompt(res.prompt ?? null);
+        if (!cancelled) setPrompt(res.prompt ?? null);
       }
     );
+    return () => {
+      cancelled = true;
+    };
   }, [activeConversationId]);
 
   // Bus : prompt modifié depuis un autre client (broadcast du service).

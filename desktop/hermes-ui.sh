@@ -743,11 +743,14 @@ start_chat() {
   # HERMES_DATA_DIR_SUFFIX). Écrit à la première utilisation du webapp
   # (webapp_listener.py : browser_session_token, 43 caractères).
   # Un HERMES_GATEWAY_TOKEN déjà réglé par l'utilisateur est respecté.
-  if [ -n "$HERMES_GATEWAY_TOKEN" ]; then
+  if [ -n "${HERMES_GATEWAY_TOKEN:-}" ]; then
     log "• jeton de session webapp : déjà réglé par l'environnement — respecté"
   else
+    # LOI 1 (revue P1-P7, B1) : le jeton n'est lu QUE dans <racine>/data —
+    # l'ancienne liste sondait aussi ~/.hermes : le jeton d'une AUTRE
+    # installation Hermes était injecté dans HERMES_GATEWAY_TOKEN.
     local gwf="" tok="" d
-    for d in "${HERMES_HOME:-}" "${HOME}/.hermes${HERMES_DATA_DIR_SUFFIX:-}"; do
+    for d in "${HERMES_HOME:-}"; do
       [ -n "$d" ] || continue
       if [ -f "$d/webapp/session-token" ]; then gwf="$d/webapp/session-token"; break; fi
     done
@@ -846,15 +849,15 @@ request_chat_drain() {
 }
 
 start_agent_runtime() {
-  # (77) LE LANCEUR ALLUME L'AGENT — même faute que Windows avant ce jour :
-  # il se bornait à sonder le 9120 sans jamais allumer ; un agent installé
-  # mais éteint laissait l'interface à vie sur les clés fournisseurs. Le
-  # python DÉDIÉ du venv d'abord, le système en repli. Déjà en marche :
-  # adopté sans rien toucher. PID dans l'état pour l'arrêt propre.
+  # (77) LE LANCEUR ALLUME L'AGENT. Déjà en marche : adopté sans rien
+  # toucher. PID dans l'état pour l'arrêt propre.
   local maison="$ROOT/hermes-agent" apy up=0 cause
   if [ ! -d "$maison/.git" ] && [ ! -f "$maison/gateway/run_api.py" ]; then
-    set_sante_maillon agent "pas installé — l'interface tourne sur vos clés"
-    log "• agent : pas encore installé dans le dossier — l'interface tourne sur vos clés ce démarrage."
+    # Loi 2 (revue P1-P7, B2) : plus aucune mention de « vos clés » —
+    # l'interface ne tourne JAMAIS sur des clés locales : sans agent, le
+    # chat est éteint ([HERMES_OFFLINE]), le message le dit.
+    set_sante_maillon agent "pas installé — chat éteint (relancez pour installer)"
+    log "• agent : pas encore installé dans le dossier — le chat reste éteint ([HERMES_OFFLINE]) tant que le moteur n'est pas installé."
     return 0
   fi
   if port_open 9120; then
@@ -862,10 +865,21 @@ start_agent_runtime() {
     log "• agent : déjà en marche sur le port 9120 — l'interface l'adopte."
     return 0
   fi
-  apy="${venvpy:-}"; [ -n "$apy" ] || apy="${pycmd:-}"; [ -n "$apy" ] || apy="$(command -v python3 2>/dev/null || true)"
+  # Revue P1-P7 (B22) : le chemin Python est recalculé ICI — l'ancien code
+  # lisait $venvpy/$pycmd déclarés « local » dans d'autres fonctions (toujours
+  # vides) : le lanceur ignorait .venv et le python portable, puis échouait
+  # avec le python3 système (dépendances ailleurs). Ordre : venv → portable
+  # → python3.
+  if [ -x "$maison/.venv/bin/python" ]; then apy="$maison/.venv/bin/python"; fi
   if [ -z "$apy" ]; then
-    set_sante_maillon agent "aucun python pour l'allumer — vos clés"
-    log "• agent : installé mais aucun python pour l'allumer — l'interface reste sur vos clés ce démarrage."
+    local portdir="$RUNTIME_DIR/python-portable"
+    if [ -x "$portdir/python/bin/python3" ]; then apy="$portdir/python/bin/python3"; fi
+    [ -n "$apy" ] || { [ -x "$portdir/bin/python3" ] && apy="$portdir/bin/python3"; }
+  fi
+  [ -n "$apy" ] || apy="$(command -v python3 2>/dev/null || true)"
+  if [ -z "$apy" ]; then
+    set_sante_maillon agent "aucun python pour l'allumer — chat éteint"
+    log "• agent : installé mais aucun python pour l'allumer — le chat reste éteint ce démarrage ([HERMES_OFFLINE])."
     return 0
   fi
   log "• démarrage de l'agent (moteur local) sur :9120…"
@@ -874,6 +888,10 @@ start_agent_runtime() {
   mkdir -p "$ROOT/db"
   ( cd "$maison" && PYTHONPATH="$maison${PYTHONPATH:+:$PYTHONPATH}" PYTHONIOENCODING=utf-8 exec "$apy" -m hermes_cli.main --profile default gateway run --quiet >>"$ROOT/db/agent.log" 2>&1 ) &
   state_set AGENT_PID "$!"
+  # Revue P1-P7 (B22) : la pile AGENT_OWNED 1 est posée — sinon l'agent
+  # démarré ici n'était jamais supervisé ni arrêté proprement (do_stop ne
+  # touche que ce que le lanceur possède).
+  state_set AGENT_OWNED 1
   for _ in $(seq 1 45); do
     if port_open 9120; then up=1; break; fi
     pid_alive "$(state_get AGENT_PID)" || break
@@ -885,8 +903,8 @@ start_agent_runtime() {
   else
     cause="$(tail -5 "$ROOT/db/agent.log" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -1)"
     [ -n "$cause" ] || cause="toujours muet après 45 s (ou processus terminé)"
-    set_sante_maillon agent "n'a pas répondu — vos clés (détail : db/agent.log)"
-    log "  ATTENTION : l'agent n'a pas répondu en 45 s — $cause ; l'interface reste sur vos clés ce démarrage (détail : db/agent.log)."
+    set_sante_maillon agent "n'a pas répondu — chat éteint (détail : db/agent.log)"
+    log "  ATTENTION : l'agent n'a pas répondu en 45 s — $cause ; le chat reste éteint ce démarrage ([HERMES_OFFLINE], détail : db/agent.log)."
   fi
   return 0
 }
@@ -1017,12 +1035,13 @@ do_status() {
 
 # ((89)) Maison de l'agent déterministe, DANS le dossier : <racine>/data
 # toujours (choix tranché : tout vit dans le dossier, quel que soit le mode
-# de lancement). Premier boot utile : l'ancienne maison (HERMES_HOME de la
-# session, sinon ~/.hermes) est copiée ENTIÈRE vers <racine>/data —
-# config.yaml (webapp.enabled), jeton du webapp, clés suivent — puis c'est
-# la seule maison connue. Refus si l'agent tourne déjà (9120 occupé) :
-# jamais de maison à moitié copiée sous un agent vivant. HERMES_HOME est
-# exportée : agent et mini-service héritent. /data/ est hors git.
+# de lancement). HERMES_HOME est exportée : agent et mini-service héritent.
+# /data/ est hors git.
+# LOI 1 (revue P1-P7, B1) : AUCUNE migration depuis une autre installation
+# Hermes (~/.hermes, HERMES_HOME hérité d'une console étrangère) — le lanceur
+# copiait le dossier ENTIER (config, jeton du webapp, clés) d'une installation
+# voisine : données mélangées entre installations. <racine>/data est créé
+# VIDE si absent ; c'est la seule maison connue.
 set_agent_home() {
   local dh="$ROOT/data"
   if port_open 9120; then
@@ -1030,26 +1049,9 @@ set_agent_home() {
     [ -n "${HERMES_HOME:-}" ] || export HERMES_HOME="$dh"
     return 0
   fi
-  if [ ! -e "$dh/config.yaml" ] && [ ! -e "$dh/.env" ] && [ ! -d "$dh/webapp" ]; then
-    local src
-    for src in "${HERMES_HOME:-}" "$HOME/.hermes"; do
-      [ -n "$src" ] || continue
-      [ "${src%/}" = "$dh" ] && continue
-      if [ -e "$src/config.yaml" ] || [ -e "$src/.env" ]; then
-        log "• maison de l'agent : migration de $src vers $dh (copie entière, une seule fois)…"
-        mkdir -p "$dh"
-        if cp -a "$src/." "$dh/" >/dev/null 2>&1; then
-          log "  OK maison migrée — webapp.enabled, jeton du webapp et clés suivent dans le dossier."
-        else
-          log "  ATTENTION : copie incomplète — la maison reste $dh."
-        fi
-        break
-      fi
-    done
-  fi
   mkdir -p "$dh"
   export HERMES_HOME="$dh"
-  log "• maison de l'agent : $dh (dans le dossier, (89)) — plus aucune dépendance à la console de lancement."
+  log "• maison de l'agent : $dh (dans le dossier, (89)) — plus aucune dépendance à la console de lancement, aucune lecture d'une autre installation."
 }
 
 do_start() {
@@ -1066,6 +1068,33 @@ do_start() {
   # de toute façon la mise à jour GitHub — le retirer évite une relance
   # supplémentaire dès le premier cycle de surveillance.
   rm -f "$MAJ_FLAG" 2>/dev/null
+
+  # Revue P1-P7 (B22) : le test LAUNCHER_PID arrive AVANT la mise à jour
+  # GitHub — l'ancien ordre exécutait git fetch/merge, rm -rf .next et
+  # npm run build AVANT de vérifier qu'un lanceur vivant tenait déjà la
+  # pile : relancer le script pendant que la pile vit détruisait .next
+  # sous le serveur actif. Le test périmé/vivant reste complet ici.
+  local pid debut scriptmt
+  pid="$(state_get LAUNCHER_PID)"
+  if pid_alive "$pid" && our_process "$pid" && grep -aq "hermes-ui" "/proc/$pid/cmdline" 2>/dev/null; then
+    # Début du processus (epoch) : /proc/PID (ctime = démarrage) — Linux
+    # uniquement ; sans cette donnée, comportement simple conservé.
+    debut="$(stat -c %Y "/proc/$pid" 2>/dev/null || true)"
+    scriptmt="$(stat -c %Y "$0" 2>/dev/null || true)"
+    if [ -n "$debut" ] && [ -n "$scriptmt" ] && [ $((scriptmt - debut)) -gt 5 ]; then
+      log "REPRISE EN MAIN : un lanceur périmé tourne encore (pid $pid, son script est plus récent sur disque) — arrêt de l'ancien lanceur et de sa pile, puis redémarrage avec le code à jour."
+      kill "$pid" 2>/dev/null || true
+      sleep 2
+      if pid_alive "$pid"; then kill -9 "$pid" 2>/dev/null || true; sleep 1; fi
+    else
+      log "Pile déjà démarrée (lanceur pid $pid) — ouverture du navigateur uniquement."
+      open_browser "http://127.0.0.1:$(state_get GW_PORT)/"
+      echo "Hermes Web est déjà lancé : http://127.0.0.1:$(state_get GW_PORT)/"
+      echo "  Rien à relancer. (Pour REMPLACER le lanceur : fermez sa fenêtre puis relancez ce fichier.)"
+      sleep 8
+      return 0
+    fi
+  fi
 
   # Mise à jour GitHub (même idiome que le lanceur Windows : fusion rapide
   # ff-only ; en cas d'écart local, version locale conservée sans toucher).
@@ -1166,39 +1195,13 @@ do_start() {
   # hermes-agent/, zéro contact avec les installations existantes.
   install_agent_fresh
 
-  # Pile déjà lancée par un lanceur précédent encore vivant ? — SAUF si le
-  # lanceur en mémoire est périmé : le script sur disque a été modifié APRÈS
-  # son démarrage (mise à jour GitHub appliquée pendant qu'il tournait). Une
-  # relance doit alors le REMPLACER, pas seulement ouvrir le navigateur —
-  # sinon la mise à jour suivante reste muette (le vieux lanceur ne connaît
-  # pas le journal live).
-  local pid debut scriptmt
-  pid="$(state_get LAUNCHER_PID)"
-  if pid_alive "$pid" && our_process "$pid" && grep -aq "hermes-ui" "/proc/$pid/cmdline" 2>/dev/null; then
-    # Début du processus (epoch) : /proc/PID (ctime = démarrage) — Linux
-    # uniquement ; sans cette donnée, comportement simple conservé.
-    debut="$(stat -c %Y "/proc/$pid" 2>/dev/null || true)"
-    scriptmt="$(stat -c %Y "$0" 2>/dev/null || true)"
-    if [ -n "$debut" ] && [ -n "$scriptmt" ] && [ $((scriptmt - debut)) -gt 5 ]; then
-      log "REPRISE EN MAIN : un lanceur périmé tourne encore (pid $pid, son script est plus récent sur disque) — arrêt de l'ancien lanceur et de sa pile, puis redémarrage avec le code à jour."
-      kill "$pid" 2>/dev/null || true
-      sleep 2
-      if pid_alive "$pid"; then kill -9 "$pid" 2>/dev/null || true; sleep 1; fi
-    else
-      log "Pile déjà démarrée (lanceur pid $pid) — ouverture du navigateur uniquement."
-      open_browser "http://127.0.0.1:$(state_get GW_PORT)/"
-      echo "Hermes Web est déjà lancé : http://127.0.0.1:$(state_get GW_PORT)/"
-      echo "  Rien à relancer. (Pour REMPLACER le lanceur : fermez sa fenêtre puis relancez ce fichier.)"
-      sleep 8
-      return 0
-    fi
-  fi
   # Verrou périmé (plantage sauvage précédent) : nettoie les restes éventuels
   if [ -f "$STATE_FILE" ]; then
     log "Verrou d'une session précédente trouvé — nettoyage des restes éventuels."
     stop_tree UI_PID  "next dev|standalone/server\.js|next-server" TERM
     stop_tree CHAT_PID "bun index\.ts|hermes-chat/index" TERM
     stop_tree GW_PID  "caddy run" TERM
+    stop_tree AGENT_PID "hermes_cli\.main.*gateway" TERM
     sleep 1
     rm -f "$STATE_FILE" "$RUNTIME_DIR"/*.pid 2>/dev/null
   fi

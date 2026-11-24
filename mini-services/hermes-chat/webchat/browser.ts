@@ -132,6 +132,15 @@ async function windowsCmdline(pid: number): Promise<string | null> {
  * navigateur personnel de l'utilisatrice — même binaire, autre profil — ne
  * peut jamais être visé.
  */
+/** Revue P1-P7 : comparaison tolérante de l'argument --user-data-dir —
+ *  Windows entoure les chemins avec espaces de guillemets et peut varier
+ *  la casse de la lettre de lecteur : includes() brut refusait alors de
+ *  reconnaître NOTRE navigateur, killPilotBrowser ne fermait plus rien. */
+function cmdlinePorteProfil(cmdline: string, profileDir: string): boolean {
+  const sansCotes = cmdline.replace(/"/g, "");
+  return sansCotes.toLowerCase().includes(`--user-data-dir=${profileDir.toLowerCase()}`);
+}
+
 export async function isAppBrowserPid(
   pid: number,
   profileDir: string
@@ -140,7 +149,7 @@ export async function isAppBrowserPid(
   try {
     if (existsSync(`/proc/${pid}/cmdline`)) {
       const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf-8").replace(/\0/g, " ");
-      return cmdline.includes(`--user-data-dir=${profileDir}`);
+      return cmdlinePorteProfil(cmdline, profileDir);
     }
     // Sans /proc (Windows) : la ligne de commande du processus DOIT porter
     // le profil applicatif — un pid recyclé vers un autre processus ne
@@ -148,7 +157,7 @@ export async function isAppBrowserPid(
     if (IS_WIN) {
       const cmdline = await windowsCmdline(pid);
       if (cmdline === null) return false; // non vérifiable = non tuable
-      return cmdline.includes(`--user-data-dir=${profileDir}`);
+      return cmdlinePorteProfil(cmdline, profileDir);
     }
     // Autres plateformes sans /proc : pas de kill sans vérification.
     return false;

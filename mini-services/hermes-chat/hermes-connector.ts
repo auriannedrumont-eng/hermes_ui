@@ -442,6 +442,11 @@ export class HermesConnector {
       // transport change, pas le cerveau).
       const rest = await this.restTurnCandidate(req);
       if (rest) {
+        // Revue P1-P7 (B9) : si des deltas sont DÉJÀ partis vers le fil,
+        // un repli WebSocket referait dérouler le même tour sur la même
+        // bulle — deux réponses concaténées. Le repli n'est permis que
+        // SANS aucun delta émis (erreur avant premier jeton).
+        let emittedDelta = false;
         try {
           const out = await runRestTurn(
             rest.base,
@@ -453,7 +458,10 @@ export class HermesConnector {
               ...(req.systemPrompt ? { system_message: req.systemPrompt } : {}),
             },
             {
-              onDelta: cb.onDelta,
+              onDelta: (d: string) => {
+                if (d) emittedDelta = true;
+                cb.onDelta(d);
+              },
               onReasoning: cb.onReasoning,
               onStatus: cb.onStatus,
               onToolEvent: cb.onToolEvent,
@@ -477,6 +485,11 @@ export class HermesConnector {
               engine: "gateway",
             };
           }
+          if (emittedDelta) {
+            // Réponse partielle déjà livrée : on relance l'erreur telle
+            // quelle, JAMAIS de relance complète par un autre transport.
+            throw err;
+          }
           trace(
             "motor-rest",
             `REST indisponible (${err instanceof Error ? err.message : String(err)}) — repli WebSocket, même moteur`,
@@ -495,7 +508,12 @@ export class HermesConnector {
     throw noEngineError();
   }
 
-  /** Synthèse de compaction : pool de clés uniquement (pas de LLM simulé). */
+  /** Synthèse de compaction : pool de clés d'abord, gateway en repli.
+   *  Revue P1-P7 (B3) : en mode gateway PUR (aucune clé locale), l'ancien
+   *  code levait [HERMES_OFFLINE] — « Compacter » était mort alors que la
+   *  gateway EST un fournisseur de résumé. Session VIERGE côté gateway
+   *  (pas de request_id / motorSessionId) : le prompt de résumé ne doit
+   *  jamais polluer l'historique de la session de la conversation. */
   async summarize(
     history: { role: "user" | "assistant"; content: string }[]
   ): Promise<string> {
@@ -503,7 +521,36 @@ export class HermesConnector {
       const pooled = await this.pool.summarize(history);
       if (pooled) return pooled;
     }
-    throw noEngineError();
+    if (this.mode === "gateway" && this.gatewayUrl) {
+      const prompt =
+        "Résume la conversation suivante pour la suite d'une session de chat avec un agent. " +
+        "Conserve : le sujet et l'objectif, les décisions prises, les fichiers/artefacts produits " +
+        "(noms), les contraintes et préférences de l'utilisateur, et les prochaines étapes en cours. " +
+        "Réponds en français, en 10 lignes maximum, sans préambule.\n\n" +
+        history
+          .map((m) => `${m.role === "user" ? "Utilisateur" : "Hermes"} : ${m.content}`)
+          .join("\n\n")
+          .slice(0, 60_000);
+      const out = await this.runGatewayTurn(
+        { content: prompt, history: [], motorSessionId: null, modelId: null, model: null },
+        {
+          onDelta: () => {},
+          onReasoning: () => {},
+          onStatus: () => {},
+          onToolEvent: () => {},
+          signal: new AbortController().signal,
+        },
+      );
+      const text = out.content?.trim();
+      if (text) return text;
+      throw new Error("La gateway n'a produit aucun résumé — compaction impossible");
+    }
+    // Ni pool ni gateway : l'erreur dit CE QUI manque (fournisseur de
+    // résumé) au lieu du message hors-ligne générique.
+    throw new Error(
+      "[COMPACT_SANS_MOTEUR] Aucun fournisseur de résumé disponible — " +
+        "connectez la gateway ou ajoutez une clé fournisseur dans Paramètres."
+    );
   }
 
   // Protocole canonique de tour Hermes (hermes-gateway-v1) :
@@ -683,15 +730,12 @@ export class HermesConnector {
                 mime: a.mime,
               }))
             : undefined;
-          await rpc("prompt.submit", {
-            session_id: sid,
-            text: req.content,
-            submission_id: submissionId,
-            ...(req.modelId ? { model_override: { model: req.modelId } } : {}),
-            ...(attachments ? { attachments } : {}),
-          });
-
           // 3. Le stream : frames d'événements (method=event, params.type).
+          // Revue P1-P7 (B8) : l'écouteur est posé AVANT prompt.submit —
+          // la gateway peut émettre message.delta / error / message.complete
+          // dès la RÉCEPTION de la soumission ; ces trames arrivaient avant
+          // le tour de boucle qui posait onEvent, étaient ignorées par
+          // onFrame (id inconnu) et figeaient le tour jusqu'au timeout.
           const onEvent = (raw: unknown) => {
             if (cb.signal.aborted) return finish();
             let data: any;
@@ -757,6 +801,13 @@ export class HermesConnector {
             }
           };
           ws.on("message", onEvent);
+          await rpc("prompt.submit", {
+            session_id: sid,
+            text: req.content,
+            submission_id: submissionId,
+            ...(req.modelId ? { model_override: { model: req.modelId } } : {}),
+            ...(attachments ? { attachments } : {}),
+          });
         } catch (err) {
           finish(err instanceof Error ? err : new Error(String(err)));
         }

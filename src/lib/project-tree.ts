@@ -22,8 +22,14 @@ export function buildProjectTree(projects: Project[]): ProjectNode[] {
     a.position - b.position || a.createdAt.localeCompare(b.createdAt);
   const childrenOf = new Map<string, Project[]>();
   const roots: Project[] = [];
+  // Filet de sécurité (revue P1-P7, B18) : un enfant dont le parent est
+  // ABSENT de la liste (parent encore archivé, enfant déjà désarchivé)
+  // est rattaché aux racines — l'ancien code le laissait dans
+  // childrenOf sans jamais l'atteindre : dossier et conversations
+  // invisibles de toute la sidebar.
+  const présents = new Set(projects.map((p) => p.id));
   for (const p of projects) {
-    if (p.parentId) {
+    if (p.parentId && présents.has(p.parentId)) {
       const list = childrenOf.get(p.parentId) ?? [];
       list.push(p);
       childrenOf.set(p.parentId, list);

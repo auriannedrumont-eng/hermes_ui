@@ -81,13 +81,16 @@ export function ConversationItem({
   // F-59 : le menu « Déplacer vers… » liste l'arbre — racines d'abord, leurs
   // sous-dossiers indentés sous chacune (« Parent › Sous-dossier »).
   const moveTargets = useMemo(() => {
-    const roots = projects
+    // Revue P1-P7 : les dossiers ARCHIVÉS ne sont pas des cibles de
+    // déplacement (on ne dépose pas une conversation dans les archives).
+    const actifs = projects.filter((p) => !p.archived);
+    const roots = actifs
       .filter((p) => !p.parentId)
       .sort((a, b) => a.position - b.position);
     const out: { project: Project; label: string; nested: boolean }[] = [];
     for (const r of roots) {
       out.push({ project: r, label: r.name, nested: false });
-      for (const s of projects
+      for (const s of actifs
         .filter((p) => p.parentId === r.id)
         .sort((a, b) => a.position - b.position)) {
         out.push({ project: s, label: `${r.name} › ${s.name}`, nested: true });
@@ -95,7 +98,7 @@ export function ConversationItem({
     }
     // Projets orphelins (parent supprimé entre-temps) : listés à la fin.
     const seen = new Set(out.map((x) => x.project.id));
-    for (const p of projects) {
+    for (const p of actifs) {
       if (!seen.has(p.id)) out.push({ project: p, label: p.name, nested: false });
     }
     return out;

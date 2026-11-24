@@ -46,7 +46,12 @@
 # validee (chemin du projet dans la ligne de commande) avant arret.
 # Encodage : UTF-8 avec BOM (requis par PowerShell 5.1 pour les accents).
 # ─────────────────────────────────────────────────────────────────────────
-param([ValidateSet('start','stop','status','restart')][string]$Action = 'start')
+param([ValidateSet('start','stop','status','restart')][string]$Action = 'start',
+      # Revue P1-P7 (B21) : le drapeau « mise à jour demandée depuis
+      # l'interface » se propage à la RELANCE du lanceur (Update-FromGit) —
+      # sans lui, la session relancée n'écrivait jamais « MAJ OK » dans
+      # maj.log et l'interface restait bloquée en cours de mise à jour.
+      [switch]$MajDepuisInterface)
 $ErrorActionPreference = 'Stop'
 
 # ── Chemins ─────────────────────────────────────────────────────────────
@@ -589,7 +594,12 @@ function Update-FromGit {
             Log "  cette fenetre va se fermer et se rouvrir toute seule - rien d autre a faire"
             Write-MajLog "lanceur mis a jour - relance automatique avec la nouvelle version"
             Start-Sleep -Seconds 2
-            Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, $Action) -WorkingDirectory $Root
+            # Revue P1-P7 (B21) : le drapeau suit la relance — sinon la
+            # nouvelle session repart en démarrage normal et le bloc
+            # « MAJ OK » de Do-Start n'écrit jamais dans maj.log.
+            $argsRelance = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, $Action)
+            if ($Script:MajDepuisInterface) { $argsRelance += '-MajDepuisInterface' }
+            Start-Process -FilePath 'powershell.exe' -ArgumentList $argsRelance -WorkingDirectory $Root
             exit 0
         } else {
             Log "  lanceur mis a jour mais une relance automatique vient deja de se produire - la nouvelle version sera utilisee au prochain demarrage"
@@ -965,14 +975,14 @@ function Ensure-Build([string]$nodeDir) {
 # suivait HERMES_HOME — presente dans la session PowerShell qui lance, absente
 # du double-clic → la maison changeait de place a chaque boot (jeton du webapp
 # ecrit dans F:\data a 17:14, cherche dans C:\Users\...\AppData a 22:41, agent
-# mort sur une maison fraiche vide). Desormais : <racine>\data TOUJOURS
-# (choix tranche — option A : tout vit dans F:). Premier boot utile :
-# l'ancienne maison (HERMES_HOME de la session, sinon defaut plateforme) est
-# copiee ENTIERE vers <racine>\data — config.yaml (webapp.enabled), jeton du
-# webapp, cles suivent — puis c'est la seule maison connue. Refus si l'agent
-# tourne deja (9120 occupe) : jamais de maison moitie copiee sous un agent
-# vivant. HERMES_HOME est fixee pour tout le processus : agent et mini-service
+# mort sur une maison fraiche vide). Desormais : <racine>\data TOUJOURS.
+# HERMES_HOME est fixee pour tout le processus : agent et mini-service
 # heritent. /data/ est hors git (.gitignore) : jeton et cles ne partent pas.
+# LOI 1 (revue P1-P7, B1) : AUCUNE migration depuis une autre installation
+# Hermes (%LOCALAPPDATA%\hermes, ~/.hermes, HERMES_HOME herite d'une console
+# etrangere) — le lanceur copiait le dossier ENTIER (config, jeton du webapp,
+# cles) d'une installation voisine : donnees melangees entre installations.
+# <racine>\data est cree VIDE si absent ; c'est la seule maison connue.
 function Set-AgentHome {
     $DataHome = Join-Path $Root 'data'
     if (Test-PortBusy 9120) {
@@ -980,31 +990,9 @@ function Set-AgentHome {
         if (-not $env:HERMES_HOME) { $env:HERMES_HOME = $DataHome }
         return
     }
-    $dejaUtilisee = (Test-Path (Join-Path $DataHome 'config.yaml')) -or (Test-Path (Join-Path $DataHome '.env')) -or (Test-Path (Join-Path $DataHome 'webapp'))
-    if (-not $dejaUtilisee) {
-        $cands = New-Object System.Collections.Generic.List[string]
-        if ($env:HERMES_HOME) { $cands.Add($env:HERMES_HOME.TrimEnd('\')) }
-        if ($env:LOCALAPPDATA) { $cands.Add((Join-Path $env:LOCALAPPDATA 'hermes')) }
-        $cands.Add((Join-Path $env:USERPROFILE '.hermes'))
-        $ancienne = $null
-        foreach ($c in $cands) {
-            if (-not $c) { continue }
-            if ($c.ToLower() -eq $DataHome.ToLower()) { continue }
-            if ((Test-Path (Join-Path $c 'config.yaml')) -or (Test-Path (Join-Path $c '.env'))) { $ancienne = $c; break }
-        }
-        if ($ancienne) {
-            Log "• maison de l'agent : migration de $ancienne vers $DataHome (copie entiere, une seule fois)..."
-            robocopy $ancienne $DataHome /E /NFL /NDL /NJH /NJS /NP | Out-Null
-            if ($LASTEXITCODE -ge 8) {
-                Log "  ATTENTION : robocopy code $LASTEXITCODE — migration incomplete ; la maison reste $DataHome."
-            } else {
-                Log "  OK maison migree — webapp.enabled, jeton du webapp et cles suivent dans le dossier."
-            }
-        }
-    }
     if (-not (Test-Path $DataHome)) { New-Item -ItemType Directory -Path $DataHome -Force | Out-Null }
     $env:HERMES_HOME = $DataHome
-    Log "• maison de l'agent : $DataHome (dans le dossier, (89)) — plus aucune dependance a la console de lancement."
+    Log "• maison de l'agent : $DataHome (dans le dossier, (89)) — plus aucune dependance a la console de lancement, aucune lecture d'une autre installation."
 }
 
 # ── Clés + modèle par défaut de l'agent (loi « démarrage sans intervention », 24/11) ──
@@ -1047,18 +1035,28 @@ function Ensure-AgentCles {
             }
         } catch { }
     }
+    # Écriture SANS BOM (revue P1-P7) : Set-Content -Encoding UTF8 sous
+    # PowerShell 5.1 écrit un BOM UTF-8 (EF BB BF) — le parseur YAML de
+    # l'agent avalait mal la première clé du fichier.
+    $utf8SansBom = New-Object System.Text.UTF8Encoding($false)
     if ($aRegler) {
         try {
             if (Test-Path $cfgFile) {
                 $cfgTxt = Get-Content $cfgFile -Raw
                 if ($cfgTxt -match '(?m)^model:\s*$') {
                     $cfgTxt = $cfgTxt -replace '(?m)^model:\s*$', ("model:`n  provider: {0}`n  model: {1}`n" -f $providerDefaut, $modelDefaut)
+                } elseif ($cfgTxt -match '(?m)^model:\s*\S') {
+                    # Revue P1-P7 : bloc model: EXISTANT en forme INLINE
+                    # (« model: quelque-chose ») — l'ancien else PRÉPENDAIT un
+                    # second bloc model: : clé dupliquée, config refusée par
+                    # le parseur. La ligne inline devient la forme bloc.
+                    $cfgTxt = $cfgTxt -replace '(?m)^model:\s*\S.*$', ("model:`n  provider: {0}`n  model: {1}" -f $providerDefaut, $modelDefaut)
                 } else {
                     $cfgTxt = ("model:`n  provider: {0}`n  model: {1}`n`n" -f $providerDefaut, $modelDefaut) + $cfgTxt
                 }
-                Set-Content -Path $cfgFile -Value $cfgTxt -Encoding UTF8
+                [System.IO.File]::WriteAllText($cfgFile, $cfgTxt, $utf8SansBom)
             } else {
-                ("model:`n  provider: {0}`n  model: {1}`n" -f $providerDefaut, $modelDefaut) | Set-Content -Path $cfgFile -Encoding UTF8
+                [System.IO.File]::WriteAllText($cfgFile, (("model:`n  provider: {0}`n  model: {1}`n" -f $providerDefaut, $modelDefaut)), $utf8SansBom)
             }
             Log ("• modele par défaut de l'agent pose : {0}/{1} — plus de rejet OpenRouter par défaut amont." -f $providerDefaut, $modelDefaut)
         } catch {
@@ -1086,16 +1084,22 @@ function Ensure-AgentCles {
 function Reset-OwnEnvironment {
     $root = $Root
     $cache = Join-Path $root '.cache'
-    # 1) Identite : tout vivre dans le dossier (rien chez l'autre, rien chez C:)
+    # 1) Identité : tout vivre dans le dossier (rien chez l'autre, rien chez C:)
+    #    Revue P1-P7 (B21) : USERPROFILE/LOCALAPPDATA ne sont PLUS réécrits —
+    #    os.homedir() du service suivait ces variables : /disk/list renvoyait
+    #    HTTP 400 (home inexistant) et browserCandidates ne voyait plus les
+    #    navigateurs installés par utilisateur (%LOCALAPPDATA% réel). Les
+    #    caches sont redirigés par leurs variables DÉDIÉES, et les dossiers
+    #    .cache\* sont créés avant usage.
     $env:HERMES_HOME      = Join-Path $root 'data'
-    $env:HOME             = Join-Path $cache 'home'
-    $env:USERPROFILE      = Join-Path $cache 'home'
-    $env:APPDATA          = Join-Path $cache 'appdata'
-    $env:LOCALAPPDATA     = Join-Path $cache 'localappdata'
     $env:NODE_PATH        = Join-Path $root 'node_modules'
-    $env:NPM_CONFIG_PREFIX= Join-Path $cache 'npm-prefix'
+    $env:NPM_CONFIG_CACHE = Join-Path $cache 'npm-cache'
+    $env:BUN_INSTALL_CACHE_DIR = Join-Path $cache 'bun'
     $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $cache 'playwright'
     $env:HERMES_OPTIONAL_SKILLS   = Join-Path $root 'optional-skills'
+    foreach ($d in @($cache, (Join-Path $cache 'npm-cache'), (Join-Path $cache 'bun'), (Join-Path $cache 'playwright'))) {
+        if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    }
     foreach ($k in @('PORTABLE_ROOT','CACHE_DIR','RUNTIME_DIR','SRC_DIR','UV_PYTHON','VIRTUAL_ENV','SSL_CERT_FILE','DSH_HOME','HERMES_REAL_HOME','AGENT_BROWSER_EXECUTABLE_PATH','PYTHONPATH')) {
         Remove-Item ("Env:" + $k) -ErrorAction SilentlyContinue
     }
@@ -1140,13 +1144,12 @@ function Start-Chat {
     if ($env:HERMES_GATEWAY_TOKEN) {
         Log "• jeton de session webapp : deja regle par l'environnement - respecte"
     } else {
+        # LOI 1 (revue P1-P7, B1) : le jeton n'est lu QUE dans <racine>\data —
+        # l'ancienne liste sondait aussi %LOCALAPPDATA%\hermes et ~/.hermes :
+        # le jeton d'une AUTRE installation Hermes etait injecte dans
+        # HERMES_GATEWAY_TOKEN (donnees melangees entre installations).
         $candidats = New-Object System.Collections.Generic.List[string]
-        if ($env:HERMES_HOME) { $candidats.Add($env:HERMES_HOME) }
-        if ($env:LOCALAPPDATA) {
-            if ($env:HERMES_DATA_DIR_SUFFIX) { $candidats.Add((Join-Path $env:LOCALAPPDATA ('hermes' + $env:HERMES_DATA_DIR_SUFFIX))) }
-            $candidats.Add((Join-Path $env:LOCALAPPDATA 'hermes'))
-        }
-        $candidats.Add((Join-Path $env:USERPROFILE '.hermes'))
+        $candidats.Add($(if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $Root 'data' }))
         $gwTokenFile = $null
         foreach ($c in $candidats) {
             $p = Join-Path $c 'webapp\session-token'
@@ -1165,7 +1168,7 @@ function Start-Chat {
                 Log "• jeton de session webapp : $gwTokenFile present mais illisible - mini-service en mode local"
             }
         } else {
-            Log ("• jeton de session webapp ABSENT (cherches : " + ($candidats -join ' ; ') + ")webapp\session-token - la gateway ne l'a pas encore ecrit ; mini-service en mode local")
+            Log ("• jeton de session webapp ABSENT (cherche : " + ($candidats -join ' ; ') + "webapp\session-token) - la gateway ne l'a pas encore ecrit ; mini-service en mode local")
         }
     }
     $chatScript = Join-Path $Root 'mini-services\hermes-chat\index.ts'   # chemin absolu : marque le processus comme nôtre
@@ -1726,8 +1729,11 @@ function Start-AgentRuntime {
     # en tant qu'enfant du Job Object, la fermeture de la fenêtre l'arrête.
     $house = Join-Path $Root 'hermes-agent'
     if (-not ((Test-Path (Join-Path $house '.git')) -or (Test-Path (Join-Path $house 'gateway\run_api.py')))) {
-        Set-SanteMaillon 'agent' "pas installé — l'interface tourne sur vos clés"
-        Log "• agent : pas encore installé dans le dossier — l'interface tourne sur vos clés ce démarrage."
+        # Loi 2 (revue P1-P7, B2) : plus aucune mention de « vos clés » —
+        # l'interface ne tourne JAMAIS sur des clés locales : sans agent, le
+        # chat est éteint ([HERMES_OFFLINE]), le message le dit.
+        Set-SanteMaillon 'agent' "pas installé — chat éteint (relancez pour installer)"
+        Log "• agent : pas encore installé dans le dossier — le chat reste éteint ([HERMES_OFFLINE]) tant que le moteur n'est pas installé."
         return
     }
     if (Test-PortBusy 9120) {
@@ -1766,8 +1772,8 @@ function Start-AgentRuntime {
     elseif (Test-Command 'py') { $apy = 'py'; $aPre = @('-3') }
     elseif (Test-Command 'python') { $apy = 'python' }
     if (-not $apy) {
-        Set-SanteMaillon 'agent' "aucun python pour l'allumer — vos clés"
-        Log "• agent : installé mais aucun python pour l'allumer — l'interface reste sur vos clés ce démarrage."
+        Set-SanteMaillon 'agent' "aucun python pour l'allumer — chat éteint"
+        Log "• agent : installé mais aucun python pour l'allumer — le chat reste éteint ce démarrage ([HERMES_OFFLINE])."
         return
     }
     Log "• demarrage de l'agent (moteur local) sur :9120..."
@@ -1779,6 +1785,10 @@ function Start-AgentRuntime {
     try { $env:PYTHONIOENCODING = 'utf-8' } catch { }
     $alog = Join-Path $Root 'db\agent.log'
     $ap = Start-Process -FilePath $apy -ArgumentList (@($aPre) + @('-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet')) -WorkingDirectory $house -WindowStyle Hidden -RedirectStandardError $alog -RedirectStandardOutput ($alog + '.out') -PassThru
+    # Revue P1-P7 (B21) : l'agent DANS le Job Object du lanceur — sans lui,
+    # la fermeture de la fenetre laissait l'agent orphelin (9120 tenu par un
+    # processus sans maitre, plus aucun arret propre possible).
+    Add-ToJob $ap
     State-Set 'AGENT_PID' $ap.Id; State-Set 'AGENT_OWNED' '1'
     $up = $false
     for ($i = 0; $i -lt 45; $i++) {
@@ -1793,8 +1803,8 @@ function Start-AgentRuntime {
         $cause = ''
         try { $cause = (Get-Content $alog -Tail 5 | Where-Object { $_.Trim() } | Select-Object -Last 1) } catch { }
         if (-not $cause) { if ($ap.HasExited) { $cause = "processus terminé dès le départ (code $($ap.ExitCode))" } else { $cause = "toujours muet après 45 s" } }
-        Set-SanteMaillon 'agent' "n'a pas répondu — vos clés (détail : db\agent.log)"
-        Log ("  ATTENTION : l'agent n'a pas répondu en 45 s — {0} ; l'interface reste sur vos clés ce démarrage (détail : {1})." -f $cause, $alog)
+        Set-SanteMaillon 'agent' "n'a pas répondu — chat éteint (détail : db\agent.log)"
+        Log ("  ATTENTION : l'agent n'a pas répondu en 45 s — {0} ; le chat reste éteint ce démarrage ([HERMES_OFFLINE], détail : {1})." -f $cause, $alog)
     }
 }
 # ((90)) Autopsie de l'incident « processus terminé dès le départ (code ) »
@@ -2226,6 +2236,9 @@ function Show-Status {
 
 function Do-Start {
     param([switch]$MajDepuisInterface)
+    # Revue P1-P7 (B21) : le drapeau est porté au niveau script pour que
+    # Update-FromGit (relance éventuelle du lanceur) puisse le transmettre.
+    $Script:MajDepuisInterface = [bool]$MajDepuisInterface
 
     # Drapeau reste pose (demande faite sans lanceur vivant) : le demarrage
     # fait de toute facon la mise a jour GitHub — le retirer evite une
@@ -2292,7 +2305,11 @@ function Do-Start {
         Stop-Tree 'GW_PID'   $MGw
         Stop-Tree 'UI_PID'   $MUii
         Stop-Tree 'CHAT_PID' $MChat
-        Wait-Gone $MUii 10; Wait-Gone $MChat 10; Wait-Gone $MGw 10
+        # Revue P1-P7 (B21) : l'agent aussi — l'ancien nettoyage le laissait
+        # vivant (orphelin de la session morte), et le prochain boot refusait
+        # de l'allumer (9120 occupé) ou adoptait un agent de code ancien.
+        Stop-Tree 'AGENT_PID' $MAgent
+        Wait-Gone $MUii 10; Wait-Gone $MChat 10; Wait-Gone $MGw 10; Wait-Gone $MAgent 10
         Start-Sleep -Seconds 1
         $Script:State = @{}; Save-State
     }
@@ -2363,11 +2380,12 @@ function Do-Start {
         Set-SanteMaillon 'passerelle' "page OK mais liaison temps réelle muette (code $via)"
         Log "  ATTENTION : liaison temps réelle muette à travers la passerelle (code $via) — l'onglet dirait « Hors ligne »"
     }
-    # Agent : LE LANCEUR L'ALLUME (refonte (77)), puis la sonde 9120 tranche
-    # la vérité du live (branché sur le nôtre, sur le vôtre déjà en marche,
-    # ou muet — cause dans db\agent.log).
+    # Agent : LE LANCEUR L'ALLUME (refonte (77)) — Start-AgentRuntime est
+    # SEUL maître du maillon agent (sonde d'identité (100) comprise).
+    # Revue P1-P7 (B21) : la ligne qui re-écrivait « répond (9120) » juste
+    # après écrasait immédiatement le diagnostic « port 9120 tenu par une
+    # AUTRE installation » posé par Start-AgentRuntime.
     Start-AgentRuntime
-    if (Test-PortBusy 9120) { Set-SanteMaillon 'agent' 'répond (9120)' } else { Set-SanteMaillon 'agent' 'ne répond pas (9120)' }
     Write-Sante -pret 'pret'
     if ($MajDepuisInterface) {
         # Le lanceur lui-meme fait-il partie de ce qui vient d'etre recu ?
@@ -2396,8 +2414,8 @@ function Do-Start {
 
 Load-State
 switch ($Action) {
-    'start'   { Do-Start }
+    'start'   { Do-Start -MajDepuisInterface:$MajDepuisInterface }
     'stop'    { Stop-All }
     'status'  { Show-Status }
-    'restart' { Stop-All; Start-Sleep -Seconds 1; Do-Start }
+    'restart' { Stop-All; Start-Sleep -Seconds 1; Do-Start -MajDepuisInterface:$MajDepuisInterface }
 }

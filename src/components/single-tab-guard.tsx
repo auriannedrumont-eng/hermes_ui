@@ -121,6 +121,10 @@ export function SingleTabGuard() {
 
     const ownId = tabId();
     let role: "primary" | "duplicate" = "primary";
+    // Revue P1-P7 (B13) : tout claim() après le nettoyage est bloqué —
+    // l'ancien .then() appelait claim() sur un composant démonté
+    // (navigation vers /shared) et réécrivait un battement vivant.
+    let unmounted = false;
     let channel: BroadcastChannel | null = null;
     try {
       channel = new BroadcastChannel(CHANNEL_NAME);
@@ -172,13 +176,19 @@ export function SingleTabGuard() {
     if (otherIsPrimary(readHeartbeat(), ownId)) standBy();
     else claim();
 
-    // Perf 2026-11-19 — Web Locks en primaire : le verrou `navigator.locks`
+    // Revue 2026-11-19 — Web Locks en primaire : le verrou `navigator.locks`
     // est réputé « tenu » tant que l'onglet vit, sans écrire sur disque.
-    // Quand le principal disparaît (fermeture, crash), la promesse se
-    // résout chez le doublon, qui prend le relais immédiatement. Le
-    // battement localStorage (2 s) reste actif en REPLI : les navigateurs
-    // sans Web Locks gardent le comportement d'origine, et l'horloge du
-    // battement reste lue par les VIEUX onglets déjà ouverts.
+    // Quand le principal disparaît (fermeture, crash), le DOUBLON acquiert
+    // le verrou et prend le relais immédiatement. Le battement localStorage
+    // (2 s) reste actif en REPLI : les navigateurs sans Web Locks gardent le
+    // comportement d'origine, et l'horloge du battement reste lue par les
+    // VIEUX onglets déjà ouverts.
+    // Revue P1-P7 (B13) : claim() DANS le callback, AVANT l'attente —
+    // l'ancien code le plaçait dans .then() qui ne tournait qu'APRÈS le
+    // retour du callback (donc après `await released`, résolu au démontage)
+    // : un doublon qui acquérait le verrou (principal parti) restait à vie
+    // sur la modale — claim() n'arrivait jamais tant que l'onglet vivait,
+    // et le repli par battement est coupé quand locksApi existe.
     const locksApi = (navigator as { locks?: { request: (name: string, cb: () => Promise<void>) => Promise<void> } }).locks;
     let releaseWebLock: (() => void) | null = null;
     if (locksApi) {
@@ -189,14 +199,12 @@ export function SingleTabGuard() {
       releaseWebLock = notifyRelease;
       locksApi
         .request(CHANNEL_NAME, async () => {
-          // Verrou acquis : cet onglet EST le principal (le premier arrivé).
+          // Verrou acquis : cet onglet EST le principal — revendication
+          // immédiate (principal au premier arrivé, doublon au relais),
+          // puis on TIENT le verrou jusqu'au démontage.
+          if (!unmounted) claim();
           await released;
           // Le return libère le verrou — seulement au démontage de l'onglet.
-        })
-        .then(() => {
-          // Verrou perdu (principal parti, on était doublon) : relais.
-          if (isStandalone()) return;
-          claim();
         })
         .catch(() => {
           /* API indisponible : le repli heartbeat prend le relais */
@@ -250,6 +258,7 @@ export function SingleTabGuard() {
     window.addEventListener("pagehide", onPageHide);
 
     return () => {
+      unmounted = true;
       window.clearInterval(beat);
       releaseWebLock?.(); // libère le verrou Web Locks : le relais est immédiat
       try {

@@ -243,6 +243,7 @@ export class ChromeRenderer {
           const m = /ws:\/\/127\.0\.0\.1:(\d+)\/devtools\/browser\/[0-9a-f-]+/.exec(s);
           if (m && !settled) {
             settled = true;
+            clearTimeout(timer);
             this.debugPort = Number(m[1]);
             // L'URL browser complète figure sur la même ligne
             const full = /(ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/[0-9a-f-]+)/.exec(s);
@@ -255,6 +256,7 @@ export class ChromeRenderer {
         p.on("error", (err) => {
           if (!settled) {
             settled = true;
+            clearTimeout(timer);
             reject(err);
           }
         });
@@ -262,9 +264,15 @@ export class ChromeRenderer {
           this.proc = null;
           this.browserWsUrl = null;
         });
-        setTimeout(() => {
+        // Revue P1-P7 : le timer est ANNULÉ au succès et TUE le processus au
+        // timeout — l'ancien code laissait un chrome-headless-shell orphelin
+        // tourner après un échec de démarrage, et le timer traînait.
+        const timer = setTimeout(() => {
           if (!settled) {
             settled = true;
+            try { p.kill(); } catch { /* déjà mort */ }
+            this.proc = null;
+            this.browserWsUrl = null;
             reject(new Error("chrome-headless-shell : pas de port CDP annoncé"));
           }
         }, 15_000);
@@ -356,6 +364,11 @@ export class ChromeRenderer {
           mobile: false,
         });
         const loaded = page.waitForEvent("Page.loadEventFired", NAV_TIMEOUT_MS);
+        // Revue P1-P7 : si Page.navigate échoue (ou renvoie errorText), la
+        // promesse `loaded` rejette 20 s plus tard SANS destinataire — rejet
+        // non géré (crash du process en bun). Un .catch neutre la rattache ;
+        // le await ci-dessous reste le seul juge du succès.
+        loaded.catch(() => {});
         const nav = await page.send("Page.navigate", {
           url: dataUrl,
         });
@@ -465,12 +478,22 @@ export function chromeProfileStats(): { count: number; bytes: number } {
   return { count, bytes };
 }
 
-/** Nettoie les profils chrome orphelins de ce service (best effort). */
+/** Nettoie les profils chrome orphelins de ce service (best effort).
+ *  Revue P1-P7 : un profil touché depuis MOINS D'UNE HEURE n'est PAS
+ *  supprimé — au chargement du module, l'ancien code détruisait les
+ *  profils hermes-chrome-* d'une AUTRE instance active (deux services sur
+ *  le même poste). Une instance vivante écrit sans arrêt dans son profil. */
 export function clearChromeProfiles(): { removed: number; kept: number } {
   let removed = 0;
   let kept = 0;
+  const fraisMs = 60 * 60_000;
   for (const dir of listChromeProfiles()) {
     try {
+      const mtime = statSync(dir).mtimeMs;
+      if (Date.now() - mtime < fraisMs) {
+        kept += 1; /* profil trop frais : peut-être une autre instance */
+        continue;
+      }
       rmSync(dir, { recursive: true, force: true, maxRetries: 0 });
       removed += 1;
     } catch {

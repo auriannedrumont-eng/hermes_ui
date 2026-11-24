@@ -55,7 +55,16 @@ export function useDictation({ onTranscript, transcribe }: UseDictationOptions) 
     startingRef.current = false; // 4.7 : prêt pour un nouvel enregistrement
   }, []);
 
-  useEffect(() => cleanup, [cleanup]);
+  // Revue P1-P7 : drapeau de démontage — le flux audio qui arrive APRÈS le
+  // cleanup (consentement micro accepté trop tard) doit être coupé aussitôt.
+  const unmountedRef = useRef(false);
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      cleanup();
+    };
+  }, [cleanup]);
 
   const stop = useCallback(() => {
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
@@ -72,6 +81,14 @@ export function useDictation({ onTranscript, transcribe }: UseDictationOptions) 
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Revue P1-P7 : le composant s'est démonté pendant l'attente du
+      // consentement — le flux démarrait APRÈS cleanup et gardait le micro
+      // ouvert sans fin. Coupé immédiatement.
+      if (unmountedRef.current) {
+        for (const track of stream.getTracks()) track.stop();
+        startingRef.current = false;
+        return;
+      }
       streamRef.current = stream;
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"

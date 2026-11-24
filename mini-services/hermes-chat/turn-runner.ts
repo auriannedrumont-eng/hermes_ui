@@ -434,9 +434,14 @@ const runAssistantTurn = async (
   const modeState = conversationModeState(conversationId);
   if (!variant && modeState.mode === "compare") {
     const [idA, idB] = comparePairFromMode(modeState);
+    // Revue P1-P7 (B19) : chaque variante passe par le wrapper GARDÉ —
+    // l'ancien appel direct laissait une erreur de préparation de a
+    // remonter au wrapper SANS variante, qui ne purgeait que la clé
+    // `conversationId` : conv:a restait dans `running`, isRunning vrai à
+    // vie (plus aucun envoi possible sur la conversation).
     await Promise.all([
-      runAssistantTurn(conversationId, { ...opts, modelId: idA, variant: "a" }),
-      runAssistantTurn(conversationId, { ...opts, modelId: idB, variant: "b" }),
+      runAssistantTurnGuarded(conversationId, { ...opts, modelId: idA, variant: "a" }),
+      runAssistantTurnGuarded(conversationId, { ...opts, modelId: idB, variant: "b" }),
     ]);
     return;
   }
@@ -1163,8 +1168,16 @@ const runAssistantTurnGuarded = async (
   try {
     return await runAssistantTurn(conversationId, opts);
   } catch (err) {
-    if (running.has(turnKey)) running.delete(turnKey);
-    liveTurns.delete(turnKey);
+    // Revue P1-P7 (B19) : filet — purge aussi les clés de VARIANTE quand
+    // l'erreur remonte sans variante : une préparation de Comparer qui
+    // échappe encore au gardé ne doit pas laisser isRunning vrai à vie.
+    for (const k of [
+      turnKey,
+      ...(opts.variant ? [] : [`${conversationId}:a`, `${conversationId}:b`]),
+    ]) {
+      running.delete(k);
+      liveTurns.delete(k);
+    }
     console.error(
       `[hermes-chat] tour en échec (phase préparation) : ${err instanceof Error ? err.message : "erreur inconnue"}`
     );

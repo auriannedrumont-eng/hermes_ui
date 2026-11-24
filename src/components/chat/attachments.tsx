@@ -63,6 +63,9 @@ function ImageAttachment({ attachment }: { attachment: Attachment }) {
           alt={attachment.name}
           className="max-h-56 w-auto max-w-full object-cover"
           onLoad={() => setLoaded(true)}
+          // Revue P1-P7 : une image cassée restait sur son spinner à vie —
+          // onError libère l'état de chargement.
+          onError={() => setLoaded(true)}
         />
         {!loaded ? (
           <span className="absolute inset-0 flex items-center justify-center">

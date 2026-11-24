@@ -142,7 +142,14 @@ export const streamStore = {
    *  orpheline. Seul un stream:start ({ reopen: true }) rouvre. */
   reset() {
     turnToolsCache.clear();
-    flushRecord(); // perf : rien de pendsu ne doit fuiter dans le prochain tour
+    // Revue P1-P7 : les deltas PENDANTS du tour quitté sont JETÉS —
+    // l'ancien flushRecord() avant EMPTY provoquait un re-rendu inutile
+    // avec d'anciens deltas (l'état vide arrive juste après).
+    if (coalesceTimer) {
+      clearTimeout(coalesceTimer);
+      coalesceTimer = null;
+    }
+    pendingRecord = null;
     sealed = true;
     if (snapshot !== EMPTY) {
       snapshot = EMPTY;
@@ -162,17 +169,6 @@ export const streamStore = {
 };
 
 // ── Fragments d'abonnement (useSyncExternalStore — re-render ciblé) ────
-
-function equalStreamRecord(
-  a: Record<string, StreamingState>,
-  b: Record<string, StreamingState>
-) {
-  if (a === b) return true;
-  const ka = Object.keys(a);
-  if (ka.length !== Object.keys(b).length) return false;
-  for (const k of ka) if (a[k] !== b[k]) return false;
-  return true;
-}
 
 /** Registre COMPLET des streams — consommé par MessageList (la bulle en vol).
  *  Comparaison par entrée : un delta ne re-rend que si l'entrée changée

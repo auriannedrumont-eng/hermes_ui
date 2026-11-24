@@ -113,8 +113,15 @@ export function stripArtifactBlocks(text: string): string {
       // Bloc artefact : retiré du flux (ouvert ou fermé)
       i = complete ? j + 1 : lines.length;
     } else {
-      out.push(lines[i]);
-      i++;
+      // Bloc code NORMAL : poussé ENTIer — ouverture, contenu, clôture.
+      // Revue P1-P7 (B15) : l'ancien code ne poussait que la ligne
+      // d'ouverture puis reprenait le scan à la ligne suivante — la
+      // clôture ``` du bloc normal était alors lue comme une NOUVELLE
+      // ouverture, et tout le texte jusqu'au bloc suivant était avalé
+      // dans un faux bloc (disparu du fil).
+      const last = complete ? j : lines.length - 1;
+      for (let k = i; k <= last; k++) out.push(lines[k]);
+      i = complete ? j + 1 : lines.length;
     }
   }
   return out.join("\n");

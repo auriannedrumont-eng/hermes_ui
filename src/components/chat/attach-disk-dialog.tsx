@@ -170,40 +170,40 @@ export function AttachDiskDialog({
                 const linked = linkedPaths.has(d.path);
                 return (
                   <li key={d.path}>
-                    <button
-                      onClick={() => void load(d.path)}
-                      disabled={loading}
-                      className="group flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label={`Ouvrir le dossier ${d.name}`}
-                    >
-                      <Folder className="h-3.5 w-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 truncate text-[12.5px]">{d.name}</span>
+                    {/* Revue P1-P7 : plus de contrôle interactif IMBRIQUÉ —
+                        l'ancien <span role="button"> vivait dans un <button>
+                        (navigateurs et lecteurs d'écran s'y perdent). Deux
+                        boutons SŒURS : ouvrir / lier. */}
+                    <div className="group flex w-full items-center gap-2 px-3 py-1.5 hover:bg-sidebar-accent">
+                      <button
+                        type="button"
+                        onClick={() => void load(d.path)}
+                        disabled={loading}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Ouvrir le dossier ${d.name}`}
+                      >
+                        <Folder className="h-3.5 w-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-[12.5px]">{d.name}</span>
+                      </button>
                       {linked ? (
                         <span className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10.5px] text-muted-foreground">
                           déjà lié
                         </span>
                       ) : (
-                        <span
-                          role="button"
-                          tabIndex={0}
+                        <button
+                          type="button"
+                          disabled={loading}
                           onClick={(e) => {
                             e.stopPropagation();
                             void attach(d.name, d.path);
                           }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              void attach(d.name, d.path);
-                            }
-                          }}
-                          className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-hermes-text opacity-0 transition-opacity hover:bg-hermes/10 focus-visible:opacity-100 group-hover:opacity-100"
+                          className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-hermes-text opacity-0 transition-opacity hover:bg-hermes/10 focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed"
                           aria-label={`Lier le dossier ${d.name} à Mes dossiers`}
                         >
                           Lier
-                        </span>
+                        </button>
                       )}
-                    </button>
+                    </div>
                   </li>
                 );
               })}

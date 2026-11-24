@@ -74,12 +74,21 @@ export async function transcribeAudioBase64(dataBase64: string, mime = ""): Prom
   }
   const zai = await getZai();
   const wav = await ensureAsrFormat(buffer, mime);
-  const result = await Promise.race([
-    zai.audio.asr.create({ file_base64: wav.toString("base64") }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Délai de transcription dépassé")), ASR_TIMEOUT_MS)
-    ),
-  ]);
-  const text = (result as any)?.text ?? (result as any)?.result ?? "";
-  return String(text).trim();
+  // Revue P1-P7 : le timer de sécurité est ANNULÉ après la course —
+  // l'ancien setTimeout non annulé traînait (le process ne sortait pas
+  // proprement tant qu'il vivait) et un rejet tardif après le succès était
+  // un rejet orphelin.
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    const result = await Promise.race([
+      zai.audio.asr.create({ file_base64: wav.toString("base64") }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Délai de transcription dépassé")), ASR_TIMEOUT_MS);
+      }),
+    ]);
+    const text = (result as any)?.text ?? (result as any)?.result ?? "";
+    return String(text).trim();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

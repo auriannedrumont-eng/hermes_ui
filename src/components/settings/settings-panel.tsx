@@ -25,6 +25,12 @@
 // models-section) et le SettingRow jamais rendu (chaque section a sa copie
 // ; InterfacePane exporte celle de référence).
 
+// Revue P1-P7 : nettoyage du code mort — les imports jamais utilisés
+// (getSettingDef, onSettingsChanged, readClientSetting, writeClientSetting,
+// GENERIC_EFFORTS, PRICING_KEY, PricingMap, parseModelLabel, useModelPricing,
+// getSocket) sont retirés ; les props ignorées (engineProviders,
+// chromeHeadless, gatewayUrl, gatewayConfigured, gatewayTokenSet) aussi —
+// les sections qui en ont besoin les relisent du hello elles-mêmes.
 import { useEffect, useRef, useState } from "react";
 import {
   Archive,
@@ -44,27 +50,13 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { InfoTip } from "@/components/shared/info-tip";
 import { WebchatSection } from "@/components/settings/webchat-section";
 import { ModesSection } from "@/components/settings/modes-section";
-import {
-  getSettingDef,
-  onSettingsChanged,
-  readClientSetting,
-  writeClientSetting,
-} from "@/lib/settings";
-import {
-  GENERIC_EFFORTS,
-  type GatewayMode,
-  type MemoryState,
-  type ModelOption,
-  type Project,
-  type SystemPromptPreset,
+import type {
+  GatewayMode,
+  MemoryState,
+  ModelOption,
+  Project,
+  SystemPromptPreset,
 } from "@/lib/chat-types";
-import {
-  PRICING_KEY,
-  type PricingMap,
-  parseModelLabel,
-} from "@/lib/pricing";
-import { useModelPricing } from "@/hooks/use-pricing";
-import { getSocket } from "@/lib/socket";
 import type { ProvidersApi } from "@/hooks/use-providers";
 import { ProvidersSection } from "@/components/settings/providers-section";
 import { HermesSection } from "@/components/settings/hermes-section";
@@ -103,8 +95,6 @@ interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: GatewayMode | null;
-  /** Fournisseurs LLM actionnables (v2.4) — pastille « clés actives » honnête. */
-  engineProviders?: string[] | null;
   connected: boolean;
   /** Catalogue vivant (service) pour la ligne « Modèle de conversation ». */
   models: ModelOption[];
@@ -137,12 +127,6 @@ interface SettingsPanelProps {
   updateAvailable?: string | null;
   /** v2.4 (section Système) — sondes réelles du hello. */
   appRevision?: string | null;
-  chromeHeadless?: "present" | "absent" | null;
-  gatewayUrl?: string | null;
-  /** F-02 : gateway réellement configurée (vs défaut automatique). */
-  gatewayConfigured?: boolean;
-  /** Jeton de gateway enregistré côté service (jamais la valeur). */
-  gatewayTokenSet?: boolean;
   /** Branche/débranche la gateway (section Système). */
   onConnectGateway?: (
     url: string,
@@ -160,7 +144,6 @@ export function SettingsPanel({
   open,
   onOpenChange,
   mode,
-  engineProviders = null,
   connected,
   models,
   selectedModel,
@@ -171,10 +154,6 @@ export function SettingsPanel({
   serverVersion,
   updateAvailable = null,
   appRevision = null,
-  chromeHeadless = null,
-  gatewayUrl = null,
-  gatewayConfigured = false,
-  gatewayTokenSet = false,
   onConnectGateway,
   webSearchAvailable = false,
 }: SettingsPanelProps) {

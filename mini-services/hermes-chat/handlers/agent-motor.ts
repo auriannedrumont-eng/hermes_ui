@@ -52,28 +52,48 @@ export function registerAgentMotorHandlers(socket: Socket) {
 
   // Mise à jour du moteur : `hermes update --backup` (officiel, avec
   // sauvegarde) — journal en direct, contrôle automatique à la fin.
+  // Revue P1-P7 (B4) : acquittement IMMÉDIAT. L'ancien code awaitait la
+  // FIN de l'opération (jusqu'à 10 min) avant de répondre — le chien de
+  // garde client de 8 s expirait à coup sûr et affichait un échec pendant
+  // que le serveur exécutait l'opération. Les refus SYNCHRONES (opération
+  // déjà en cours, Hermes en marche, hermes introuvable) se règlent dans
+  // la seconde : Promise.race les transporte dans l'ack ; au-delà, le
+  // verdict passe par agent:motor-changed (déjà diffusé par setState).
   socket.on("agent:update-request", async (cb?: (data: unknown) => void) => {
-    const res = await startAgentUpdate(deps()).catch((err: unknown) => ({
+    const travail = startAgentUpdate(deps()).catch((err: unknown) => ({
       ok: false,
       error: err instanceof Error ? err.message : "échec inattendu",
     }));
-    if (typeof cb === "function") cb(res);
+    const refuse = await Promise.race([
+      travail,
+      new Promise<null>((r) => setTimeout(() => r(null), 1_500)),
+    ]);
+    if (typeof cb === "function") cb(refuse ?? { ok: true, started: true });
   });
 
   // Retour arrière : procédure officielle assistée (arrêt gateway, retour
-  // aux fichiers de la version précédente, contrôle).
+  // aux fichiers de la version précédente, contrôle). Même contrat que
+  // agent:update-request : refus synchrones dans l'ack, verdict long par
+  // agent:motor-changed (revue P1-P7, B4).
   socket.on("agent:rollback-request", async (cb?: (data: unknown) => void) => {
-    const res = await startAgentRollback(deps()).catch((err: unknown) => ({
+    const travail = startAgentRollback(deps()).catch((err: unknown) => ({
       ok: false,
       error: err instanceof Error ? err.message : "échec inattendu",
     }));
-    if (typeof cb === "function") cb(res);
+    const refuse = await Promise.race([
+      travail,
+      new Promise<null>((r) => setTimeout(() => r(null), 1_500)),
+    ]);
+    if (typeof cb === "function") cb(refuse ?? { ok: true, started: true });
   });
 
   // Contrôle des sens à la demande (bouton « Revérifier maintenant »).
+  // Revue P1-P7 (B4) : champ ok explicite — l'ancienne réponse
+  // { control, state } sans ok faisait lire res.ok === undefined au client.
   socket.on("agent:check-request", async (cb?: (data: unknown) => void) => {
     const control = await runSensesCheck(deps()).catch(() => null);
-    if (typeof cb === "function") cb({ control, state: getMotorState() });
+    if (typeof cb === "function")
+      cb({ ok: control !== null, control, state: getMotorState() });
   });
 
   // Carnet de bord seul (léger — rafraîchi après chaque événement).

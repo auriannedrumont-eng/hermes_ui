@@ -53,6 +53,7 @@ import { startAgentMotorWatchdog } from "./agent-motor";
 import { probeMotorSessionsOnce } from "./motor-sessions";
 import { toHttpBase } from "./hermes-connector";
 import { registerStorageHandlers } from "./handlers/storage";
+import { flushUndoWindows } from "./store-storage";
 import { startDrainWatchdog } from "./handlers/drain";
 import { startAgentGatewayIfDown } from "./agent-starter";
 import { readSanteManifeste } from "./sante";
@@ -161,7 +162,17 @@ import { FICHES } from "./webchat/fiches";
  *  téléversé, bundle) : affichée telle quelle dans Paramètres → Système. */
 function readAppRevision(): string | null {
   try {
-    const gitDir = join(import.meta.dir, "..", "..", ".git");
+    let gitDir = join(import.meta.dir, "..", "..", ".git");
+    // Revue P1-P7 : worktree git — .git est un fichier « gitdir: … » à
+    // suivre (même logique que readInstalledRevision) : l'ancien code
+    // échouait à lire HEAD d'un clone en worktree.
+    try {
+      const link = readFileSync(gitDir, "utf8").trim();
+      const m = link.match(/^gitdir:\s*(\S+)/);
+      if (m) gitDir = m[1];
+    } catch {
+      /* .git standard (dossier) — rien à suivre */
+    }
     const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
     const direct = /^[0-9a-f]{40}$/i.test(head) ? head : null;
     if (direct) return direct.slice(0, 7);
@@ -515,7 +526,9 @@ const majLogRead = (): { exists: boolean; text: string; mtimeMs: number } => {
 };
 // Relais en direct : le fichier est écrit par le lanceur, pas par nous —
 // sondage léger (2 s), diffusion seulement si le contenu a vraiment changé.
-setInterval(() => {
+// Revue P1-P7 : handle conservé (annulé dans shutdown) + unref — l'ancien
+// timer référencé maintenait la boucle d'événements vivante après fermeture.
+const majLogTimer = setInterval(() => {
   const snap = majLogRead();
   if (!snap.exists) return;
   const sig = `${snap.mtimeMs}:${snap.text.length}`;
@@ -523,6 +536,7 @@ setInterval(() => {
   majLogSig = sig;
   io.emit("system:update-log:changed", snap);
 }, 2000);
+majLogTimer.unref?.();
 
 // Arrêt propre des tours en vol (loi « jamais bloqué », 2026-11-22) : le
 // lanceur dépose `arret-propre.flag` avant toute relance ; le service clôt
@@ -544,17 +558,19 @@ startDrainWatchdog({
 // re-sonde déjà à chaque tour et bascule en mode gateway sans aucune saisie.
 // Adoption si l'agent tourne déjà, jamais de kill, échec non bloquant
 // (l'interface garde son état honnête). Logique : agent-starter.ts.
-void startAgentGatewayIfDown().then((up) => {
+// Revue P1-P7 : le lancement a DÉPLACÉ après connector.init() et après la
+// lecture des réglages en base (GATEWAY_URL_KEY plus bas) — l'ancien bloc
+// tournait EN PARALLÈLE du boot, avant l'URL persistée appliquée au
+// connecteur : l'agent partait pour une adresse transitoire et la sonde de
+// boot voyait un état qui ne correspondait à aucun réglage réel.
+const startAgentGatewayOnce = async (): Promise<void> => {
+  const up = await startAgentGatewayIfDown().catch(() => false);
   if (!up) return;
   // L'agent répond : sonde immédiate + hello rediffusé — la barre latérale
   // et la carte Hermes passent à « branché » sans attendre le prochain message.
-  connector
-    .probeNow()
-    .then((ok) => {
-      if (ok) io.emit("hello", helloPayload());
-    })
-    .catch(() => {});
-});
+  const ok = await connector.probeNow().catch(() => false);
+  if (ok) io.emit("hello", helloPayload());
+};
 
 // Branchement des handlers (découpage 2026-11, FORK.md §10) : chaque domaine
 // pose ses socket.on(...) ; le contexte partagé (handlers/context.ts) est
@@ -567,13 +583,14 @@ void startAgentGatewayIfDown().then((up) => {
 // l'agent vivait. Un timer léger (30 s, throttlé par reprobeIfOffline, zéro
 // requête dès que le mode est gateway) rend la bascule automatique certaine ;
 // le passage gateway rediffuse le hello comme le fait probeNow.
-setInterval(() => {
+const probeTimer = setInterval(() => {
   if (connector.mode !== "gateway") {
     void connector.probeNow().then((ok) => {
       if (ok) io.emit("hello", helloPayload());
     });
   }
-}, 30_000).unref?.();
+}, 30_000);
+probeTimer.unref?.();
 
 // Contexte partagé des handlers (découpage 2026-11) : une seule pose, avant
 // toute connexion client — majLogSig passe par accesseur (mutable côté service).
@@ -760,6 +777,9 @@ io.on("connection", (socket) => {
 connector
   .init()
   .then(async () => {
+    // Revue P1-P7 : l'agent démarre ICI — après init (sonde faite) et après
+    // l'application des réglages persistés (URL/jeton ci-dessus).
+    await startAgentGatewayOnce();
     // Checkpoint WAL périodique (dette revue 2026-11-13) : le -wal ne croît
     // plus sans borne ; checkpoint TRUNCATE en zone calme + arrêt propre.
     store.startWalCheckpoint();
@@ -846,6 +866,16 @@ connector
 // AVANT le checkpoint final (sinon le -wal survit à l'arrêt).
 function shutdown(signal: string): void {
   console.log(`[hermes-chat] arrêt (${signal})…`);
+  // Revue P1-P7 : tours en vol ABORTÉS d'abord — chaque tour clôt son
+  // partiel (persistance + événement terminal) pendant que la base est
+  // encore ouverte ; les intervalles du boot sont annulés.
+  try { abortAllRunning(); } catch { /* registre déjà vide */ }
+  clearInterval(majLogTimer);
+  clearInterval(probeTimer);
+  // Revue P1-P7 : les fenêtres d'annulation ouvertes (7 s) ne tireront
+  // jamais — leurs .png/.pdf dérivés sont purgés MAINTENANT, base encore
+  // ouverte, sinon ils restaient orphelins sur le disque.
+  try { flushUndoWindows(); } catch { /* best effort */ }
   chromeRenderer.shutdown();
   filesServer.close();
   httpServer.close();

@@ -314,6 +314,11 @@ export class ArtifactTracker {
       getArtifactRow: (id: string) => ArtifactRow | null;
       deleteArtifactRow?: (id: string) => void;
       latestArtifactRow?: (conversationId: string, key: string) => ArtifactRow | null;
+      previousArtifactRow?: (
+        conversationId: string,
+        key: string,
+        beforeVersion: number
+      ) => ArtifactRow | null;
     },
     private conversationId: string,
     private messageId: string,
@@ -377,13 +382,21 @@ export class ArtifactTracker {
         // s'il est strictement identique à la version courante `ready`
         // précédente, on SUPPRIME la ligne provisoire v(n+1) et on réutilise
         // v(n) — la ré-émission identique ne crée pas de version.
+        // Revue P1-P7 (B11) : la comparaison lit previousArtifactRow
+        // (version < v(n+1)) — latestArtifactRow renvoyait la ligne
+        // provisoire ELLE-MÊME : condition toujours fausse, dédoublonnage
+        // mort à 100 %.
         if (
           this.store.deleteArtifactRow &&
-          this.store.latestArtifactRow &&
+          this.store.previousArtifactRow &&
           existing.row.version > 1 &&
           existing.row.status === "generating"
         ) {
-          const previous = this.store.latestArtifactRow(this.conversationId, c.key);
+          const previous = this.store.previousArtifactRow(
+            this.conversationId,
+            c.key,
+            existing.row.version
+          );
           if (
             previous &&
             previous.id !== existing.row.id &&

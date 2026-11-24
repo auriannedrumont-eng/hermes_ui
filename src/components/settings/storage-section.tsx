@@ -349,7 +349,10 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
   );
 
   const deleteVersion = (e: StorageEntry) => {
-    if (busy === e.id) return;
+    // Revue P1-P7 : verrou GLOBAL — l'ancien test (busy === e.id) autorisait
+    // deux suppressions parallèles sur deux lignes, et l'ack de la première
+    // libérait le verrou pendant que la seconde volait encore.
+    if (busy) return;
     setBusy(e.id);
     // Chien de garde : sans ack, le bouton restait en échec silencieux et
     // la ligne re-supprimable en double-clic.
@@ -400,7 +403,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
 
   const cleanProject = (g: ProjectGroup) => {
     const k = groupKey(g);
-    if (busy === k) return;
+    // Revue P1-P7 : même verrou global que deleteVersion — une seule
+    // mutation de stockage à la fois, quel que soit le groupe.
+    if (busy) return;
     setBusy(k);
     // Lot audit : chien de garde — « Nettoyage… » ne reste plus figé pour
     // toujours si le service n'acquitte pas.

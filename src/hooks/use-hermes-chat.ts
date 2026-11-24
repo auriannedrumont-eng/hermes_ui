@@ -822,6 +822,13 @@ export function useHermesChat() {
     if (socket.connected) onConnect();
 
     return () => {
+      // Revue P1-P7 : le verdict « connexion perdue » programmé ne survit
+      // pas au démontage du grand effet — l'ancien code ne nettoyait pas
+      // disconnectTimer ici : un setState pouvait partir sur un hook mort.
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
+      }
       socket.offAny(onAnyActivity);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
@@ -1026,12 +1033,16 @@ export function useHermesChat() {
                 setModeFlowLive({ messageId: t.messageId, rows: t.modeFlow });
               }
             }
+            // Revue P1-P7 (B14) : un tour ré-attaché est un signe de vie —
+            // après F5, lastActivityRef vaut 0 (socket.onAny ne voit pas
+            // les acks) et la vigie tuait le tour VIVANT au premier tick.
+            if (res.live?.length) bumpActivity();
           }
         }
       );
       fetchArtifacts(id);
     },
-    [fetchArtifacts]
+    [fetchArtifacts, bumpActivity]
   );
 
   // Reprise après coupure (voir onConnect) : le handler de reconnexion
@@ -1135,9 +1146,12 @@ export function useHermesChat() {
   );
 
   const sendMessage = useCallback(
-    async (text: string, attachments: Attachment[] = []) => {
+    // Revue P1-P7 : retourne true quand l'envoi est ACCEPTÉ (le compositeur
+    // ne vide le brouillon qu'alors) — false sur chaque refus (résumé en
+    // cours, réponse en vol, échec de création de conversation).
+    async (text: string, attachments: Attachment[] = []): Promise<boolean> => {
       const content = text.trim();
-      if (!content && attachments.length === 0) return;
+      if (!content && attachments.length === 0) return false;
       // Loi « jamais bloqué » (2026-11-22) : un envoi n'est JAMAIS avalé en
       // silence — l'ancien garde unique `return` jetait l'envoi sans un mot
       // quand un verrou (réponse en vol, résumé) restait collé : l'écran
@@ -1149,7 +1163,7 @@ export function useHermesChat() {
           title: "Résumé du contexte en cours",
           description: "Quelques secondes — réenvoyez juste après.",
         });
-        return;
+        return false;
       }
       if (streaming) {
         toast({
@@ -1157,13 +1171,13 @@ export function useHermesChat() {
           description:
             "Attendez la fin — ou appuyez sur le bouton rond « Arrêter » si rien ne bouge, puis renvoyez.",
         });
-        return;
+        return false;
       }
 
       let conversationId = activeIdRef.current;
       if (!conversationId) {
         conversationId = await newConversation();
-        if (!conversationId) return;
+        if (!conversationId) return false;
       }
 
       // Message utilisateur optimiste
@@ -1222,13 +1236,21 @@ export function useHermesChat() {
         // Ack (revue 2026-11-13) : refus propre si un tour est déjà en vol
         // sur cette conversation (le serveur n'entrelace plus deux streams).
         // Le message optimiste est retiré, une erreur claire s'affiche.
+        // Revue P1-P7 : l'erreur n'écrit turnError que si SA conversation est
+        // toujours active — l'utilisateur peut avoir changé de conversation
+        // pendant l'envoi (ou pendant l'attente du résumé) : l'erreur de
+        // convA n'écrase plus l'écran de convB.
         (res: { error?: string } | null) => {
           if (res?.error) {
             setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-            setTurnError({ messageId: optimistic.id, error: res.error });
+            if (activeIdRef.current === conversationId) {
+              setTurnError({ messageId: optimistic.id, error: res.error });
+            }
           }
         }
       );
+      // Accepté : le tour part — le compositeur peut vider le brouillon.
+      return true;
     },
     [newConversation, streaming, autoCompactBeforeSend]
   );
@@ -1493,12 +1515,28 @@ export function useHermesChat() {
   const compactConversation = useCallback(() => {
     const conversationId = activeIdRef.current;
     if (!conversationId || streaming) return;
+    // Revue P1-P7 : le verrou compactingRef est posé par la compaction
+    // MANUELLE aussi — l'autoCompact le posait, pas celle-ci : sendMessage
+    // pouvait partir pendant un résumé manuel. Timeout 90 s : sur coupure
+    // socket (ack jamais rendu), le spinner ne reste plus collé à vie.
+    compactingRef.current = true;
     setCompacting(true);
+    const garde = setTimeout(() => {
+      compactingRef.current = false;
+      setCompacting(false);
+      toast({
+        title: "Compaction lente",
+        description: "Le service n'a pas confirmé le résumé — réessayez.",
+        variant: "destructive",
+      });
+    }, 90_000);
     getSocket().emit(
       "conversation:compact",
       { conversationId },
       (res: { ok?: boolean; error?: string } = {}) => {
         if (!res?.ok) {
+          clearTimeout(garde);
+          compactingRef.current = false;
           setCompacting(false);
           toast({ title: "Compaction impossible", description: res?.error, variant: "destructive" });
         }

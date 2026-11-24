@@ -205,7 +205,20 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
      *  tout le contenu en un geste, comme une suppression ; ici RIEN n'est
      *  supprimé : conversations et sous-dossiers restent en base. */
     setProjectArchived(id: string, archived: boolean): Project | null {
-      if (!this.getProject(id)) return null;
+      const project = this.getProject(id);
+      if (!project) return null;
+      // Revue P1-P7 (B18) : DÉSARCHIVER un sous-dossier réactive aussi son
+      // parent direct — sinon le parent reste archivé, l'enfant devient
+      // actif, et buildProjectTree (liste active) ne rattache pas un enfant
+      // dont le parent est absent : sous-dossier et conversations
+      // invisibles de toute la sidebar. LE PARENT SEUL — pas ses autres
+      // enfants : l'archivage d'un frère est un choix explicite de
+      // l'utilisateur, un désarchivage ciblé ne doit pas le défaire.
+      if (!archived && project.parentId) {
+        this.db
+          .query("UPDATE projects SET archived = ?, updated_at = ? WHERE id = ?")
+          .run(0, new Date().toISOString(), project.parentId);
+      }
       this.db
         .query(
           "UPDATE projects SET archived = ?, updated_at = ? WHERE id = ? OR parent_id = ?"
@@ -309,15 +322,20 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       // messages, artefacts, mais aussi prompt système de conversation
       // (system_prompts) et résumé de compaction (settings compact:<id>),
       // sinon les lignes orphelines s'accumulent en base.
-      this.db.query("DELETE FROM messages WHERE conversation_id = ?").run(id);
-      this.db.query("DELETE FROM artifacts WHERE conversation_id = ?").run(id);
-      this.db
-        .query("DELETE FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?")
-        .run(id);
-      this.db
-        .query("DELETE FROM settings WHERE key = ?")
-        .run(`compact:${id}`);
-      this.db.query("DELETE FROM conversations WHERE id = ?").run(id);
+      // Revue P1-P7 : les cinq DELETE en UNE transaction — un crash au
+      // milieu laissait une conversation amputée (messages partis,
+      // conversation encore là).
+      this.db.transaction(() => {
+        this.db.query("DELETE FROM messages WHERE conversation_id = ?").run(id);
+        this.db.query("DELETE FROM artifacts WHERE conversation_id = ?").run(id);
+        this.db
+          .query("DELETE FROM system_prompts WHERE scope = 'conversation' AND conversation_id = ?")
+          .run(id);
+        this.db
+          .query("DELETE FROM settings WHERE key = ?")
+          .run(`compact:${id}`);
+        this.db.query("DELETE FROM conversations WHERE id = ?").run(id);
+      })();
     },
 
     renameConversation(id: string, title: string): ConversationMeta | null {
@@ -904,29 +922,38 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       const idx = all.findIndex((m) => m.id === messageId);
       if (idx < 0) return null;
       const removed = all.slice(idx + 1);
-      for (const m of removed) {
+      // Revue P1-P7 : troncature + purge des versions + UPDATE du contenu
+      // en UNE transaction — un crash au milieu laissait un fil amputé
+      // sans le message réécrit (ou l'inverse).
+      let purged: { purgedIds: string[]; purgedAttachments: Attachment[] } = {
+        purgedIds: [],
+        purgedAttachments: [],
+      };
+      this.db.transaction(() => {
+        for (const m of removed) {
+          this.db
+            .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
+            .run(conversationId, m.id);
+        }
+        // D-02 : purge des versions inactives des groupes touchés (même règle
+        // que deleteTrailingAssistant — jamais de lignes fantômes conservées).
+        // F-14 : ids et pièces jointes purgés rejoignent la réponse — leurs
+        // artefacts et fichiers doivent être nettoyés eux aussi.
+        purged = this.purgeInactiveVersionsOf(
+          conversationId,
+          removed.map((m) => m.id),
+        );
         this.db
-          .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
-          .run(conversationId, m.id);
-      }
-      // D-02 : purge des versions inactives des groupes touchés (même règle
-      // que deleteTrailingAssistant — jamais de lignes fantômes conservées).
-      // F-14 : ids et pièces jointes purgés rejoignent la réponse — leurs
-      // artefacts et fichiers doivent être nettoyés eux aussi.
-      const { purgedIds, purgedAttachments } = this.purgeInactiveVersionsOf(
-        conversationId,
-        removed.map((m) => m.id),
-      );
-      this.db
-        .query("UPDATE messages SET content = ? WHERE conversation_id = ? AND id = ?")
-        .run(content, conversationId, messageId);
+          .query("UPDATE messages SET content = ? WHERE conversation_id = ? AND id = ?")
+          .run(content, conversationId, messageId);
+      })();
       this.touchConversation(conversationId);
       return {
         message: { ...msg, content },
-        removedIds: [...removed.map((m) => m.id), ...purgedIds],
+        removedIds: [...removed.map((m) => m.id), ...purged.purgedIds],
         removedAttachments: [
           ...removed.flatMap((m) => m.attachments ?? []),
-          ...purgedAttachments,
+          ...purged.purgedAttachments,
         ],
       };
     },
@@ -952,6 +979,11 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
         src.modeRounds ?? null,
         src.modeConfig ?? null,
       );
+      // Revue P1-P7 : TOUTE la fork en UNE transaction — l'ancien code
+      // créait la conversation et son prompt système HORS de la transaction
+      // des messages : un crash au milieu laissait une conversation vide
+      // (transaction imbriquée = savepoint chez bun:sqlite).
+      this.db.transaction(() => {
       // D-02 : le prompt système de la conversation (system_prompts,
       // scope 'conversation') accompagne la branche — sinon la fork tournait
       // sans ses instructions dédiées, silencieusement.
@@ -977,13 +1009,11 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
             );
         }
       }
-      // Transaction (Lot 2, audit L2-5) : la copie des messages ET le
-      // re-ancrage des artefacts sont un seul acte — un crash au milieu laissait
-      // un fork à moitié rempli (transaction imbriquée = savepoint chez
-      // bun:sqlite, donc copyArtifactsToFork reste correct).
-      this.db.transaction(() => {
-        // Mapping ancien id -> nouvel id pour re-ancrer les artefacts du fork
-        const messageIdMap = new Map<string, string>();
+      // La copie des messages ET le re-ancrage des artefacts font partie du
+      // même acte (Lot 2, audit L2-5) — tout vit dans la transaction ouverte
+      // ci-dessus (imbriquée = savepoint chez bun:sqlite).
+      // Mapping ancien id -> nouvel id pour re-ancrer les artefacts du fork
+      const messageIdMap = new Map<string, string>();
         for (const m of upto) {
           const copy = this.appendMessage({
             conversationId: forked.id,
@@ -1003,6 +1033,11 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
             variant: m.variant,
             modeTag: m.modeTag,
             modeFlow: m.modeFlow,
+            // Revue P1-P7 : usage et sources suivent la copie — l'ancien
+            // fork les perdait (jauge de contexte et citations fausses
+            // dans la branche).
+            usage: m.usage,
+            sources: m.sources,
           });
           messageIdMap.set(m.id, copy.id);
         }

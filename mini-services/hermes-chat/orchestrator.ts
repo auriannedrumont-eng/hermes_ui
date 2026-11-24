@@ -566,8 +566,11 @@ async function runCouncil(
     status: "running",
     detail: "compare les avis anonymisés, fusionne",
   });
-  const anonymes = avis
-    .filter((a) => a.content)
+  // Revue P1-P7 : le compte annoncé est celui des avis RÉELS — l'ancien
+  // code annonçait N membres même si N-1 avaient échoué (le président
+  // cherchait des avis fantômes).
+  const avisValidés = avis.filter((a) => a.content);
+  const anonymes = avisValidés
     .map((a) => `Avis ${a.letter} :\n${a.content}`)
     .join("\n\n");
   const outcome = await runVoiceWithRow(
@@ -579,12 +582,12 @@ async function runCouncil(
     {
       modelId: president.model,
       systemPrompt: ctx.prompts.president
-        ? ctx.prompts.president.replaceAll("{membres}", String(members.length))
+        ? ctx.prompts.president.replaceAll("{membres}", String(Math.max(1, avisValidés.length)))
         : null,
       content: voicePromptContent(
         ctx.userContent,
         [],
-        `Vous présidez un conseil de ${members.length} voix. Voici leurs avis, anonymisés :\n\n${anonymes}`,
+        `Vous présidez un conseil de ${Math.max(1, avisValidés.length)} voix. Voici leurs avis, anonymisés :\n\n${anonymes}`,
       ),
       history: ctx.history,
       attachments: ctx.attachments,

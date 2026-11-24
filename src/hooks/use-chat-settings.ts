@@ -207,10 +207,16 @@ export function useChatSettings() {
   // CHANGEMENT du cran résolu, exactement quand l'ancien code écrivait.
   useEffect(() => {
     if (effortResolvedFor === null) return; // premier rendu : rien à écrire
-    if (effortForScale !== effort && effortForScale != null) {
+    if (effortForScale == null) return;
+    // Revue P1-P7 (B17) : comparer à l'état `effort` était TOUJOURS faux à
+    // ce stade — le setState du rendu (effortForScale) re-rend AVANT les
+    // effets : effort === effortForScale, writeClientSetting ne partait
+    // jamais et le cran résolu n'était jamais persisté. La comparaison se
+    // fait contre la valeur PERSISTÉE (localStorage).
+    if (readClientSetting<string>(EFFORT_SETTING_KEY) !== effortForScale) {
       writeClientSetting(EFFORT_SETTING_KEY, effortForScale);
     }
-  }, [effortResolvedFor, effortForScale, effort]);
+  }, [effortResolvedFor, effortForScale]);
 
   /** F-09/F-12 — bascule la recherche web du tour (persistée hermes.tools.web). */
   const toggleWebSearch = useCallback(() => {

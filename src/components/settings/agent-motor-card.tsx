@@ -51,6 +51,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { emitAck } from "@/lib/emit-ack";
 import { getSocket } from "@/lib/socket";
 import type {
   AgentRelease,
@@ -211,19 +212,19 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
                 ? "À jour"
                 : "Hermes non détecté";
 
-  /** Lot audit : chien de garde générique — une demande jamais acquittée
-   *  toast au bout de 8 s au lieu de laisser l'utilisateur sans réponse. */
+  /** Revue P1-P7 (B4) : émission via emitAck — omet le payload quand il
+   *  vaut undefined. Sinon le sérialiseur socket.io transforme l'argument
+   *  undefined en null sur le fil et le handler « (cb?) » reçoit
+   *  (null, ackFn) : jamais acquitté, échec toasté à 8 s pendant que le
+   *  serveur exécute l'opération. Le chien de garde interne à emitAck
+   *  résout null au même délai (8 s) — même contrat pour l'appelant. */
   const demander = useCallback(
     (
       event: string,
       payload: Record<string, unknown> | undefined,
-      onRes: (res: { ok?: boolean; error?: string } | null) => void
+      onRes: (res: { ok?: boolean; error?: string; started?: boolean } | null) => void
     ) => {
-      const garde = window.setTimeout(() => onRes(null), 8_000);
-      getSocket().emit(event, payload, (res: { ok?: boolean; error?: string } = {}) => {
-        window.clearTimeout(garde);
-        onRes(res ?? {});
-      });
+      emitAck<{ ok?: boolean; error?: string; started?: boolean }>(event, payload).then(onRes);
     },
     []
   );
@@ -473,7 +474,10 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
               </p>
             ) : null}
             {notesApercu.length > 0 ? (
-              <div className="max-h-[132px] overflow-hidden rounded-lg border border-border px-3 py-2.5 text-[12px] text-muted-foreground">
+              // Revue P1-P7 : le bloc déplié sort du clamp — l'ancien
+              // conteneur max-h-[132px] overflow-hidden cachait aussi la
+              // liste complète (notesOpen) : texte déplié invisible.
+              <div className={`rounded-lg border border-border px-3 py-2.5 text-[12px] text-muted-foreground ${notesOpen ? "" : "max-h-[132px] overflow-hidden"}`}>
                 <p className="mb-1.5 text-[12.5px] font-semibold text-foreground">
                   Ce qui change dans {release.name ?? release.tag}
                 </p>
@@ -694,6 +698,41 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
                 >
                   {advBusy ? "Branchement…" : "Relier cette gateway"}
                 </Button>
+                {/* Revue P1-P7 : DÉBRANCHEMENT — l'ancien formulaire n'offrait
+                    aucun moyen de quitter une gateway distante une fois
+                    configurée (gateway:set avec url vide = retour au défaut
+                    automatique ws://127.0.0.1:9120). */}
+                {state?.gatewayUrl ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={advBusy}
+                    onClick={async () => {
+                      if (!onConnectGateway) return;
+                      setAdvBusy(true);
+                      try {
+                        const res = await onConnectGateway("");
+                        if (res.ok) {
+                          toast({ title: "Gateway débranchée", description: "Retour au défaut automatique (agent local)." });
+                          setAdvOpen(false);
+                          setAdvUrl("");
+                          setAdvToken("");
+                        } else {
+                          toast({
+                            title: "Débranchement refusé",
+                            description: res.error ?? "La gateway n'a pas répondu.",
+                            variant: "destructive",
+                          });
+                        }
+                      } finally {
+                        setAdvBusy(false);
+                      }
+                    }}
+                    className="mt-2 h-8 w-full rounded-lg border-border text-[12.5px] font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    Débrancher cette gateway
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </>

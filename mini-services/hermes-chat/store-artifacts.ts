@@ -48,6 +48,7 @@ export interface StoreArtifactsMethods {
   ): void;
   getArtifactRow(id: string): ArtifactRow | null;
   latestArtifactRow(conversationId: string, key: string): ArtifactRow | null;
+  previousArtifactRow(conversationId: string, key: string, beforeVersion: number): ArtifactRow | null;
   deleteArtifactRow(id: string): void;
   nextArtifactVersion(conversationId: string, key: string): number;
   listConversationArtifacts(conversationId: string): ArtifactRow[];
@@ -81,37 +82,43 @@ export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
       label?: string | null;
       restoredFrom?: number | null;
     }): ArtifactRow {
-      const latest = this.latestArtifactRow(a.conversationId, a.key);
-      if (latest && isIdenticalReissue(latest, a.content)) return latest;
-      const id = a.id ?? crypto.randomUUID();
-      const version = this.nextArtifactVersion(a.conversationId, a.key);
-      const created_at = new Date().toISOString();
-      this.db
-        .query(
-          `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          a.conversationId,
-          a.messageId,
-          a.key,
-          version,
-          a.kind,
-          a.name,
-          a.language ?? null,
-          a.mime,
-          a.content,
-          Buffer.byteLength(a.content, "utf-8"),
-          a.status,
-          a.statusLabel ?? null,
-          a.error ?? null,
-          a.label ?? null,
-          0,
-          a.restoredFrom ?? null,
-          created_at
-        );
-      return this.getArtifactRow(id)!;
+      // Revue P1-P7 : lecture « dernière version » + calcul du numéro suivant
+      // + INSERT en UNE transaction — en mode Comparer, deux voix concurrentes
+      // calculaient le même nextArtifactVersion et l'une des deux INSERT
+      // violait l'UNIQUE (conversation_id, key, version).
+      return this.db.transaction(() => {
+        const latest = this.latestArtifactRow(a.conversationId, a.key);
+        if (latest && isIdenticalReissue(latest, a.content)) return latest;
+        const id = a.id ?? crypto.randomUUID();
+        const version = this.nextArtifactVersion(a.conversationId, a.key);
+        const created_at = new Date().toISOString();
+        this.db
+          .query(
+            `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            id,
+            a.conversationId,
+            a.messageId,
+            a.key,
+            version,
+            a.kind,
+            a.name,
+            a.language ?? null,
+            a.mime,
+            a.content,
+            Buffer.byteLength(a.content, "utf-8"),
+            a.status,
+            a.statusLabel ?? null,
+            a.error ?? null,
+            a.label ?? null,
+            0,
+            a.restoredFrom ?? null,
+            created_at
+          );
+        return this.getArtifactRow(id)!;
+      })();
     },
 
     /** Version courante d'une clé (la plus récente), null si nouvelle.
@@ -124,6 +131,26 @@ export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
             "SELECT * FROM artifacts WHERE conversation_id = ? AND key = ? ORDER BY version DESC LIMIT 1"
           )
           .get(conversationId, key) as ArtifactRow | undefined) ?? null
+      );
+    },
+
+    /** Revue P1-P7 (B11) : version PRÉCÉDENTE d'une clé (version <
+     *  beforeVersion, la plus récente d'abord) — latestArtifactRow
+     *  renvoyait TOUJOURS la ligne provisoire v(n+1) tout juste insérée à
+     *  l'ouverture du bloc : le dédoublonnage F-26 comparait la ligne à
+     *  elle-même (previous.id !== existing.row.id jamais vrai) et chaque
+     *  ré-émission identique créait une version dupliquée. */
+    previousArtifactRow(
+      conversationId: string,
+      key: string,
+      beforeVersion: number
+    ): ArtifactRow | null {
+      return (
+        (this.db
+          .query(
+            "SELECT * FROM artifacts WHERE conversation_id = ? AND key = ? AND version < ? ORDER BY version DESC LIMIT 1"
+          )
+          .get(conversationId, key, beforeVersion) as ArtifactRow | undefined) ?? null
       );
     },
 
@@ -275,34 +302,38 @@ export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
       );
       if (!src) return null;
       const { status, statusLabel } = restoredStatus(src.kind);
-      const id = crypto.randomUUID();
-      const version = this.nextArtifactVersion(conversationId, key);
-      this.db
-        .query(
-          `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          conversationId,
-          src.message_id,
-          key,
-          version,
-          src.kind,
-          src.name,
-          src.language,
-          src.mime,
-          src.content,
-          src.size,
-          status,
-          statusLabel,
-          null,
-          restoreLabel(fromVersion),
-          0,
-          fromVersion,
-          new Date().toISOString()
-        );
-      return this.getArtifactRow(id);
+      // Revue P1-P7 : même transaction que insertArtifact — le numéro de
+      // version et l'INSERT sont inséparables.
+      return this.db.transaction(() => {
+        const id = crypto.randomUUID();
+        const version = this.nextArtifactVersion(conversationId, key);
+        this.db
+          .query(
+            `INSERT INTO artifacts (id, conversation_id, message_id, key, version, kind, name, language, mime, content, size, status, status_label, error, label, pinned, restored_from, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            id,
+            conversationId,
+            src.message_id,
+            key,
+            version,
+            src.kind,
+            src.name,
+            src.language,
+            src.mime,
+            src.content,
+            src.size,
+            status,
+            statusLabel,
+            null,
+            restoreLabel(fromVersion),
+            0,
+            fromVersion,
+            new Date().toISOString()
+          );
+        return this.getArtifactRow(id);
+      })();
     },
 
     /**
