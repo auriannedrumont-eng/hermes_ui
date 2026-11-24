@@ -399,6 +399,431 @@ function compactInfoWire(conversationId: string): CompactInfo | null {
 }
 
 
+// ── Étapes de runAssistantTurn extraites (audit CRAP 2026-11, vague 4) ──
+// Corps VERBATIM — seules les frontières changent : les closures de stream
+// (liveSync, emitTool, onDelta…) et les accumulateurs (contentAcc,
+// reasoningAcc, lastEmit, lastSent) restent dans runAssistantTurn et sont
+// passés explicitement aux helpers. store/io/quota/cartes aussi.
+
+type TurnStageDeps = Pick<
+  TurnRunnerDeps,
+  "store" | "io" | "attachArtifactCards" | "enforceVersionQuota"
+>;
+
+type TurnVersionOpts = {
+  /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
+   *  réponse qu'il remplace (l'ancienne est conservée, inactive). */
+  versionGroup?: string;
+  /** Lot audit passe 2 : version affichée AVANT la régénération (capturée
+   *  par supersedeTrailingAssistant). En cas d'arrêt/échec à vide, c'est
+   *  CETTE version qui revient au fil — restoreLatestVersion réactivait
+   *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
+   *  ‹ 1/2 ›. */
+  versionRestore?: { group: string; id: string } | null;
+};
+
+/** Fusionne les messages consécutifs de même rôle (alternance stricte,
+ *  94) : contenus joints par \n\n — l'API LLM refuse les historiques qui
+ *  empilent deux messages de même rôle (HTTP 400). */
+function fuseRoles(
+  rows: { role: "user" | "assistant"; content: string }[]
+): { role: "user" | "assistant"; content: string }[] {
+  const out: { role: "user" | "assistant"; content: string }[] = [];
+  for (const row of rows) {
+    const prev = out[out.length - 1];
+    if (prev && prev.role === row.role) prev.content = `${prev.content}\n\n${row.content}`;
+    else out.push({ role: row.role, content: row.content });
+  }
+  return out;
+}
+
+/** Construit l'historique du tour (étape extraite de runAssistantTurn,
+ *  vague 4 — corps verbatim) : fil lu en base, filtre de variante (F-17),
+ *  coupe au dernier message utilisateur, résumé de compaction en tête
+ *  (v2.4), plafond MAX_HISTORY, fusion des rôles consécutifs (94). */
+function buildTurnHistory(
+  conversationId: string,
+  variant: "a" | "b" | undefined,
+  store: Store,
+): { role: "user" | "assistant"; content: string }[] {
+  const all = store.getMessages(conversationId);
+  // F-17 : en comparaison, chaque modèle revoit le fil comme un dialogue
+  // bilatéral — ses propres réponses, pas celles de l'autre variante.
+  const existing = variant
+    ? all.filter((m) => m.role === "user" || !m.variant || m.variant === variant)
+    : all;
+  let lastUserIdx = -1;
+  for (let i = existing.length - 1; i >= 0; i--) {
+    if (existing[i].role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  const cut = lastUserIdx >= 0 ? lastUserIdx : existing.length;
+  // Alternance stricte des rôles (94) : la construction ci-dessous peut
+  // empiler deux messages de même rôle — le résumé de compaction (un
+  // `user`) suivi du premier message postérieur (souvent `user` aussi),
+  // un tour échoué sans partiel, une suppression de message assistant,
+  // un échec d'une variante en comparaison. L'API LLM refuse ces
+  // historiques (HTTP 400). La fusion des consécutifs (contenus joints
+  // par \n\n) répare les trois cas d'un seul geste, sans déplacer le
+  // résumé (le déplacer dans systemPrompt le perdrait en gateway, dont
+  // le contrat WS ne transmet pas de prompt système).
+  let history: { role: "user" | "assistant"; content: string }[];
+  const compact = readCompact(conversationId);
+  if (compact) {
+    const untilIdx = existing.findIndex((m) => m.id === compact.untilMessageId);
+    const after = existing.slice(untilIdx >= 0 ? untilIdx + 1 : 0, cut);
+    // Le résumé est TOUJOURS en tête (c'est le contrat de la compaction :
+    // un contexte résumé permanent) — le plafond ne coupe que les messages
+    // postérieurs. L'ancien slice(-MAX_HISTORY) sur le tout éliminait le
+    // résumé dès le 30e message postérieur, vidant la session de son
+    // contexte sans avertissement.
+    history = fuseRoles([
+      {
+        role: "user" as const,
+        content:
+          `[Résumé des ${compact.summarizedCount} premiers messages de cette conversation — compaction du ${new Date(compact.at).toLocaleString("fr-FR")}]
+
+${compact.summary}`,
+      },
+      ...after
+        .slice(-(MAX_HISTORY - 1))
+        .map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+    ]);
+  } else {
+    history = fuseRoles(existing
+      .slice(0, cut)
+      .slice(-MAX_HISTORY)
+      .map((m: ChatMessage) => ({ role: m.role, content: m.content })));
+  }
+  return history;
+}
+
+/** Étape recherche web du tour (F-09/F-12) — corps verbatim de
+ *  runAssistantTurn (vague 4). Best effort : un échec n'annule jamais le
+ *  tour, l'événement outil l'affiche honnêtement dans la bulle (et le
+ *  modèle répond sans contexte). Renvoie les sources à joindre au tour. */
+async function runWebSearchStage(
+  opts: { webSearch?: boolean; content: string },
+  connector: HermesConnector,
+  emitTool: (event: {
+    name: string;
+    status: "running" | "done" | "error";
+    detail?: string;
+  }) => void,
+  store: Store,
+): Promise<WebSource[] | undefined> {
+  let webSources: WebSource[] | undefined;
+  if (opts.webSearch) {
+    if (connector.mode === "gateway") {
+      emitTool({
+        name: "Recherche web",
+        status: "done",
+        detail: "gérée par l'agent Hermes (gateway)",
+      });
+    } else {
+      emitTool({
+        name: "Recherche web",
+        status: "running",
+        detail: opts.content.slice(0, 80),
+      });
+      const outcome = await runWebSearch(store, opts.content);
+      if (outcome.sources?.length) {
+        webSources = outcome.sources;
+        emitTool({
+          name: "Recherche web",
+          status: "done",
+          detail: `${outcome.sources.length} sources (${outcome.provider})`,
+        });
+      } else {
+        emitTool({
+          name: "Recherche web",
+          status: "error",
+          detail: outcome.error ?? "aucun résultat",
+        });
+      }
+    }
+  }
+  return webSources;
+}
+
+/** F-14 : restaure la version AFFICHÉE avant la régénération (Lot audit
+ *  passe 2 — versionRestore.id, repli historique sur la plus récente)
+ *  et rediffuse le fil. Bloc partagé par l'arrêt à vide et l'échec du
+ *  tour (il était dupliqué deux fois dans runAssistantTurn). */
+function restoreDisplayedVersionAndRefresh(
+  conversationId: string,
+  opts: TurnVersionOpts,
+  deps: TurnStageDeps,
+) {
+  const { store, io, attachArtifactCards } = deps;
+  // F-14 : régénération stoppée avant le premier jeton — l'ancienne
+  // réponse, passée à version_active = 0 par supersedeTrailingAssistant
+  // AVANT le tour, est réactivée au lieu de disparaître définitivement
+  // du fil (aucune nouvelle version n'a été insérée).
+  if (opts.versionGroup) {
+    // Lot audit passe 2 : la version AFFICHÉE avant la régénération
+    // (versionRestore.id) redevient active — pas la plus récente du
+    // groupe ; repli historique si l'information n'a pas été transmise.
+    if (opts.versionRestore?.id && opts.versionRestore.group === opts.versionGroup) {
+      store.restoreVersionById(conversationId, opts.versionRestore.id);
+    } else {
+      store.restoreLatestVersion(conversationId, opts.versionGroup);
+    }
+    const refreshed = store.getMessages(conversationId);
+    attachArtifactCards(conversationId, refreshed, true);
+    io.emit("messages:refreshed", { conversationId, messages: refreshed });
+  }
+}
+
+/** Arrêt avant le premier jeton : rien à conserver, pas de bulle vide —
+ *  clôture propre du tour (corps verbatim de runAssistantTurn, vague 4). */
+function finishEmptyStoppedTurn({
+  deps,
+  conversationId,
+  messageId,
+  variant,
+  opts,
+  contentAcc,
+  reasoningAcc,
+  toolEvents,
+  stopped,
+}: {
+  deps: TurnStageDeps;
+  conversationId: string;
+  messageId: string;
+  variant?: "a" | "b";
+  opts: TurnVersionOpts;
+  contentAcc: string;
+  reasoningAcc: string;
+  toolEvents: ToolEvent[];
+  stopped: boolean;
+}) {
+  const { store, io, attachArtifactCards } = deps;
+  restoreDisplayedVersionAndRefresh(conversationId, opts, deps);
+  const conversation = store.touchConversation(conversationId) ?? undefined;
+  io.emit("stream:done", {
+    conversationId,
+    messageId,
+    conversation,
+    stopped: true,
+    ...(variant ? { variant } : {}),
+  });
+}
+
+/** Clôture de tour réussi (corps verbatim de runAssistantTurn, vague 4) :
+ *  persistance définitive des artefacts + quota (F-26), INSERT de la
+ *  réponse assistant, cartes d'artefacts ancrées, événement stream:done. */
+function persistDoneTurn({
+  deps,
+  conversationId,
+  messageId,
+  variant,
+  opts,
+  versionIndex,
+  result,
+  contentAcc,
+  reasoningAcc,
+  toolEvents,
+  usedModel,
+  modeTagOut,
+  modeFlowOut,
+  webSources,
+  stopped,
+  tracker,
+}: {
+  deps: TurnStageDeps;
+  conversationId: string;
+  messageId: string;
+  variant?: "a" | "b";
+  opts: TurnVersionOpts;
+  versionIndex: number | null;
+  result: {
+    content: string;
+    reasoning: string;
+    model: string;
+    engine?: "pool" | "gateway";
+    provider?: string;
+    usage?: import("./llm-pool").TurnUsage;
+  };
+  contentAcc: string;
+  reasoningAcc: string;
+  toolEvents: ToolEvent[];
+  usedModel: string;
+  modeTagOut: string | undefined;
+  modeFlowOut: import("./types").ModeFlowRow[] | undefined;
+  webSources: WebSource[] | undefined;
+  stopped: boolean;
+  tracker: ArtifactTracker;
+}) {
+  const { store, io, attachArtifactCards, enforceVersionQuota } = deps;
+  // Clôture du suivi des artefacts (persistance définitive) + quota (F-26)
+  // Lot audit passe 2 : on transmet `stopped` (et non false en dur) — après
+  // un chat:stop, le connecteur résout NORMALEMENT avec le texte partiel et
+  // on arrive ici ; false en dur laissait à vie tout artefact ouvert avec
+  // status = "generating" en base (jamais clôturé en error).
+  const finalizedRows = tracker.finalize(contentAcc, stopped);
+  enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
+
+  // Persiste la réponse assistant (INSERT avec l'id du tour)
+  store.appendMessage({
+    id: messageId,
+    conversationId,
+    role: "assistant",
+    content: contentAcc || "(réponse vide)",
+    reasoning: reasoningAcc || undefined,
+    toolEvents: toolEvents.length ? toolEvents : undefined,
+    model: usedModel,
+    stopped: stopped || undefined,
+    variant,
+    modeTag: modeTagOut,
+    modeFlow: modeFlowOut,
+    // F-21 : jetons réels quand l'API les renvoie (pool de clés)
+    usage: result.usage,
+    // F-12 : sources de la recherche web du tour
+    sources: webSources,
+    ...(opts.versionGroup
+      ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
+      : {}),
+  });
+  const conversation = store.touchConversation(conversationId) ?? undefined;
+  const doneMessage: ChatMessage = {
+    id: messageId,
+    conversationId,
+    role: "assistant",
+    content: contentAcc || "(réponse vide)",
+    reasoning: reasoningAcc || undefined,
+    toolEvents: toolEvents.length ? toolEvents : undefined,
+    model: usedModel,
+    createdAt: new Date().toISOString(),
+    stopped: stopped || undefined,
+    variant,
+    modeTag: modeTagOut,
+    modeFlow: modeFlowOut,
+    usage: result.usage,
+    sources: webSources,
+    ...(opts.versionGroup
+      ? { versions: { group: opts.versionGroup, index: versionIndex ?? 1, count: versionIndex ?? 1 } }
+      : {}),
+  };
+  // Cartes d'artefacts ancrées sur ce message (celles créées par ce tour)
+  attachArtifactCards(conversationId, [doneMessage]);
+  io.emit("stream:done", {
+    conversationId,
+    messageId,
+    conversation,
+    message: doneMessage,
+    stopped,
+    ...(variant ? { variant } : {}),
+  });
+}
+
+/** Échec du tour (corps verbatim du catch de runAssistantTurn, vague 4) :
+ *  partiel sauvegardé + quota (F-26), restauration F-14 à vide, clôture
+ *  d'arrêt (stream:done) ou erreur réelle (stream:error, « Réessayer »). */
+function persistFailedTurn({
+  deps,
+  conversationId,
+  messageId,
+  variant,
+  opts,
+  versionIndex,
+  contentAcc,
+  reasoningAcc,
+  toolEvents,
+  usedModel,
+  webSources,
+  tracker,
+  controller,
+  liveClose,
+  err,
+}: {
+  deps: TurnStageDeps;
+  conversationId: string;
+  messageId: string;
+  variant?: "a" | "b";
+  opts: TurnVersionOpts;
+  versionIndex: number | null;
+  contentAcc: string;
+  reasoningAcc: string;
+  toolEvents: ToolEvent[];
+  usedModel: string;
+  webSources: WebSource[] | undefined;
+  tracker: ArtifactTracker;
+  controller: AbortController;
+  liveClose: () => void;
+  err: unknown;
+}) {
+  const { store, io, attachArtifactCards, enforceVersionQuota } = deps;
+  // Échec/arrêt : le tour quitte le registre de ré-attache avant les
+  // événements terminaux (même garde d'identité qu'en fin de try).
+  liveClose();
+  // Sauvegarde du partiel déjà reçu (quota F-26 appliqué aussi aux tours interrompus)
+  const finalizedRows = tracker.finalize(contentAcc, true);
+  enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
+  const stopped = controller.signal.aborted;
+  let partial: ChatMessage | null = null;
+  if (contentAcc || reasoningAcc) {
+    partial = store.appendMessage({
+      id: messageId,
+      conversationId,
+      role: "assistant",
+      content: contentAcc || "(interrompu)",
+      reasoning: reasoningAcc || undefined,
+      toolEvents: toolEvents.length ? toolEvents : undefined,
+      model: usedModel,
+      stopped: stopped || undefined,
+      variant,
+      // F-12 : la recherche a eu lieu avant l'échec — le partiel garde
+      // ses sources (l'événement outil est déjà dans toolEvents).
+      sources: webSources,
+      ...(opts.versionGroup
+        ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
+        : {}),
+    });
+  }
+  if (stopped) {
+    // Abort levé en plein vol : même clôture qu'un arrêt propre
+    const conversation = store.touchConversation(conversationId) ?? undefined;
+    if (partial) attachArtifactCards(conversationId, [partial]);
+    io.emit("stream:done", {
+      conversationId,
+      messageId,
+      conversation,
+      message: partial ?? undefined,
+      stopped: true,
+      ...(variant ? { variant } : {}),
+    });
+  } else {
+    // F-14 : tour régénéré en échec avant le premier jeton — même
+    // restauration que l'arrêt à vide : sans elle, toutes les versions
+    // du groupe restaient à version_active = 0 et la réponse disparaissait
+    // définitivement du fil.
+    if (!partial && opts.versionGroup) {
+      restoreDisplayedVersionAndRefresh(conversationId, opts, deps);
+    }
+    // Erreur réelle : le partiel persisté part avec l'événement — le client
+    // l'affiche dans le fil et propose « Réessayer » (F-04).
+    trace(
+      "error",
+      `tour en échec : ${err instanceof Error ? err.message : "erreur inconnue"}`
+    );
+    const conversation = contentAcc || reasoningAcc
+      ? store.touchConversation(conversationId) ?? undefined
+      : undefined;
+    if (partial) attachArtifactCards(conversationId, [partial]);
+    io.emit("stream:error", {
+      conversationId,
+      messageId,
+      conversation,
+      message: partial ?? undefined,
+      error: err instanceof Error ? err.message : "Erreur inconnue du tour",
+      ...(variant ? { variant } : {}),
+    });
+  }
+}
+
 /**
  * Exécute un tour assistant complet : stream, événements d'outils,
  * raisonnement, persistance. Utilisé par chat:send, chat:regenerate
@@ -427,6 +852,9 @@ const runAssistantTurn = async (
   }
 ) => {
   const variant = opts.variant;
+  // Deps des étapes extraites (vague 4) : les helpers module-level
+  // reçoivent store/io/quota/cartes explicitement — corps verbatim.
+  const stageDeps = { store, io, attachArtifactCards, enforceVersionQuota };
   // ── F-30 : le mode de la conversation est relu ICI, à chaque envoi —
   // le service fait foi, jamais l'écran. Comparer devient un mode : deux
   // tours parallèles (variantes a/b, mécanisme F-17 inchangé) avec les
@@ -501,66 +929,9 @@ const runAssistantTurn = async (
   // Historique : tout ce qui précède le dernier message utilisateur.
   // Si la conversation est compactée, le résumé remplace les messages
   // couverts ; seuls les messages postérieurs partent en clair.
-  const all = store.getMessages(conversationId);
-  // F-17 : en comparaison, chaque modèle revoit le fil comme un dialogue
-  // bilatéral — ses propres réponses, pas celles de l'autre variante.
-  const existing = variant
-    ? all.filter((m) => m.role === "user" || !m.variant || m.variant === variant)
-    : all;
-  let lastUserIdx = -1;
-  for (let i = existing.length - 1; i >= 0; i--) {
-    if (existing[i].role === "user") {
-      lastUserIdx = i;
-      break;
-    }
-  }
-  const cut = lastUserIdx >= 0 ? lastUserIdx : existing.length;
-  // Alternance stricte des rôles (94) : la construction ci-dessous peut
-  // empiler deux messages de même rôle — le résumé de compaction (un
-  // `user`) suivi du premier message postérieur (souvent `user` aussi),
-  // un tour échoué sans partiel, une suppression de message assistant,
-  // un échec d'une variante en comparaison. L'API LLM refuse ces
-  // historiques (HTTP 400). La fusion des consécutifs (contenus joints
-  // par \n\n) répare les trois cas d'un seul geste, sans déplacer le
-  // résumé (le déplacer dans systemPrompt le perdrait en gateway, dont
-  // le contrat WS ne transmet pas de prompt système).
-  const fuseRoles = (
-    rows: { role: "user" | "assistant"; content: string }[]
-  ): { role: "user" | "assistant"; content: string }[] => {
-    const out: { role: "user" | "assistant"; content: string }[] = [];
-    for (const row of rows) {
-      const prev = out[out.length - 1];
-      if (prev && prev.role === row.role) prev.content = `${prev.content}\n\n${row.content}`;
-      else out.push({ role: row.role, content: row.content });
-    }
-    return out;
-  };
-  let history: { role: "user" | "assistant"; content: string }[];
-  const compact = readCompact(conversationId);
-  if (compact) {
-    const untilIdx = existing.findIndex((m) => m.id === compact.untilMessageId);
-    const after = existing.slice(untilIdx >= 0 ? untilIdx + 1 : 0, cut);
-    // Le résumé est TOUJOURS en tête (c'est le contrat de la compaction :
-    // un contexte résumé permanent) — le plafond ne coupe que les messages
-    // postérieurs. L'ancien slice(-MAX_HISTORY) sur le tout éliminait le
-    // résumé dès le 30e message postérieur, vidant la session de son
-    // contexte sans avertissement.
-    history = fuseRoles([
-      {
-        role: "user" as const,
-        content:
-          `[Résumé des ${compact.summarizedCount} premiers messages de cette conversation — compaction du ${new Date(compact.at).toLocaleString("fr-FR")}]\n\n${compact.summary}`,
-      },
-      ...after
-        .slice(-(MAX_HISTORY - 1))
-        .map((m: ChatMessage) => ({ role: m.role, content: m.content })),
-    ]);
-  } else {
-    history = fuseRoles(existing
-      .slice(0, cut)
-      .slice(-MAX_HISTORY)
-      .map((m: ChatMessage) => ({ role: m.role, content: m.content })));
-  }
+  // Étape extraite dans buildTurnHistory (vague 4) — corps verbatim,
+  // fusion des rôles consécutifs dans fuseRoles (même extrait).
+  const history = buildTurnHistory(conversationId, variant, store);
 
   const toolEvents: ToolEvent[] = [];
   let contentAcc = "";
@@ -659,36 +1030,8 @@ const runAssistantTurn = async (
   // orchestré — la recherche tourne AVANT l'orchestration et ses sources
   // partent dans le prompt système de CHAQUE voix (webSearchSection du
   // contexte), comme pour un tour simple.
-  if (opts.webSearch) {
-    if (connector.mode === "gateway") {
-      emitTool({
-        name: "Recherche web",
-        status: "done",
-        detail: "gérée par l'agent Hermes (gateway)",
-      });
-    } else {
-      emitTool({
-        name: "Recherche web",
-        status: "running",
-        detail: opts.content.slice(0, 80),
-      });
-      const outcome = await runWebSearch(store, opts.content);
-      if (outcome.sources?.length) {
-        webSources = outcome.sources;
-        emitTool({
-          name: "Recherche web",
-          status: "done",
-          detail: `${outcome.sources.length} sources (${outcome.provider})`,
-        });
-      } else {
-        emitTool({
-          name: "Recherche web",
-          status: "error",
-          detail: outcome.error ?? "aucun résultat",
-        });
-      }
-    }
-  }
+    // Corps de l'étape extrait dans runWebSearchStage (vague 4) — verbatim.
+    webSources = await runWebSearchStage(opts, connector, emitTool, store);
 
   // ── F-30 : consigne du mode — ajoutée au systemPrompt du tour, recomposée
   // à chaque envoi (aucune consigne fantôme possible). Comparer : la consigne
@@ -972,170 +1315,61 @@ const runAssistantTurn = async (
     liveClose();
 
     // Arrêt avant le premier jeton : rien à conserver, pas de bulle vide
+    // (corps extrait dans finishEmptyStoppedTurn, vague 4 — verbatim).
     if (stopped && !contentAcc && !reasoningAcc && toolEvents.length === 0) {
-      // F-14 : régénération stoppée avant le premier jeton — l'ancienne
-      // réponse, passée à version_active = 0 par supersedeTrailingAssistant
-      // AVANT le tour, est réactivée au lieu de disparaître définitivement
-      // du fil (aucune nouvelle version n'a été insérée).
-      if (opts.versionGroup) {
-        // Lot audit passe 2 : la version AFFICHÉE avant la régénération
-        // (versionRestore.id) redevient active — pas la plus récente du
-        // groupe ; repli historique si l'information n'a pas été transmise.
-        if (opts.versionRestore?.id && opts.versionRestore.group === opts.versionGroup) {
-          store.restoreVersionById(conversationId, opts.versionRestore.id);
-        } else {
-          store.restoreLatestVersion(conversationId, opts.versionGroup);
-        }
-        const refreshed = store.getMessages(conversationId);
-        attachArtifactCards(conversationId, refreshed, true);
-        io.emit("messages:refreshed", { conversationId, messages: refreshed });
-      }
-      const conversation = store.touchConversation(conversationId) ?? undefined;
-      io.emit("stream:done", {
+      finishEmptyStoppedTurn({
+        deps: stageDeps,
         conversationId,
         messageId,
-        conversation,
-        stopped: true,
-        ...(variant ? { variant } : {}),
+        variant,
+        opts,
+        contentAcc,
+        reasoningAcc,
+        toolEvents,
+        stopped,
       });
       return;
     }
 
-    // Clôture du suivi des artefacts (persistance définitive) + quota (F-26)
-    // Lot audit passe 2 : on transmet `stopped` (et non false en dur) — après
-    // un chat:stop, le connecteur résout NORMALEMENT avec le texte partiel et
-    // on arrive ici ; false en dur laissait à vie tout artefact ouvert avec
-    // status = "generating" en base (jamais clôturé en error).
-    const finalizedRows = tracker.finalize(contentAcc, stopped);
-    enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
-
-    // Persiste la réponse assistant (INSERT avec l'id du tour)
-    store.appendMessage({
-      id: messageId,
-      conversationId,
-      role: "assistant",
-      content: contentAcc || "(réponse vide)",
-      reasoning: reasoningAcc || undefined,
-      toolEvents: toolEvents.length ? toolEvents : undefined,
-      model: usedModel,
-      stopped: stopped || undefined,
-      variant,
-      modeTag: modeTagOut,
-      modeFlow: modeFlowOut,
-      // F-21 : jetons réels quand l'API les renvoie (pool de clés)
-      usage: result.usage,
-      // F-12 : sources de la recherche web du tour
-      sources: webSources,
-      ...(opts.versionGroup
-        ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
-        : {}),
-    });
-    const conversation = store.touchConversation(conversationId) ?? undefined;
-    const doneMessage: ChatMessage = {
-      id: messageId,
-      conversationId,
-      role: "assistant",
-      content: contentAcc || "(réponse vide)",
-      reasoning: reasoningAcc || undefined,
-      toolEvents: toolEvents.length ? toolEvents : undefined,
-      model: usedModel,
-      createdAt: new Date().toISOString(),
-      stopped: stopped || undefined,
-      variant,
-      modeTag: modeTagOut,
-      modeFlow: modeFlowOut,
-      usage: result.usage,
-      sources: webSources,
-      ...(opts.versionGroup
-        ? { versions: { group: opts.versionGroup, index: versionIndex ?? 1, count: versionIndex ?? 1 } }
-        : {}),
-    };
-    // Cartes d'artefacts ancrées sur ce message (celles créées par ce tour)
-    attachArtifactCards(conversationId, [doneMessage]);
-    io.emit("stream:done", {
+    // Clôture + persistance extraites dans persistDoneTurn (vague 4) —
+    // corps verbatim (artefacts, quota F-26, INSERT, cartes, stream:done).
+    persistDoneTurn({
+      deps: stageDeps,
       conversationId,
       messageId,
-      conversation,
-      message: doneMessage,
+      variant,
+      opts,
+      versionIndex,
+      result,
+      contentAcc,
+      reasoningAcc,
+      toolEvents,
+      usedModel,
+      modeTagOut,
+      modeFlowOut,
+      webSources,
       stopped,
-      ...(variant ? { variant } : {}),
+      tracker,
     });
   } catch (err) {
-    // Échec/arrêt : le tour quitte le registre de ré-attache avant les
-    // événements terminaux (même garde d'identité qu'en fin de try).
-    liveClose();
-    // Sauvegarde du partiel déjà reçu (quota F-26 appliqué aussi aux tours interrompus)
-    const finalizedRows = tracker.finalize(contentAcc, true);
-    enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
-    const stopped = controller.signal.aborted;
-    let partial: ChatMessage | null = null;
-    if (contentAcc || reasoningAcc) {
-      partial = store.appendMessage({
-        id: messageId,
-        conversationId,
-        role: "assistant",
-        content: contentAcc || "(interrompu)",
-        reasoning: reasoningAcc || undefined,
-        toolEvents: toolEvents.length ? toolEvents : undefined,
-        model: usedModel,
-        stopped: stopped || undefined,
-        variant,
-        // F-12 : la recherche a eu lieu avant l'échec — le partiel garde
-        // ses sources (l'événement outil est déjà dans toolEvents).
-        sources: webSources,
-        ...(opts.versionGroup
-          ? { versionGroup: opts.versionGroup, versionIndex: versionIndex ?? 1, versionActive: 1 }
-          : {}),
-      });
-    }
-    if (stopped) {
-      // Abort levé en plein vol : même clôture qu'un arrêt propre
-      const conversation = store.touchConversation(conversationId) ?? undefined;
-      if (partial) attachArtifactCards(conversationId, [partial]);
-      io.emit("stream:done", {
-        conversationId,
-        messageId,
-        conversation,
-        message: partial ?? undefined,
-        stopped: true,
-        ...(variant ? { variant } : {}),
-      });
-    } else {
-      // F-14 : tour régénéré en échec avant le premier jeton — même
-      // restauration que l'arrêt à vide : sans elle, toutes les versions
-      // du groupe restaient à version_active = 0 et la réponse disparaissait
-      // définitivement du fil.
-      if (!partial && opts.versionGroup) {
-        // Lot audit passe 2 : version affichée avant régénération, pas la
-        // plus récente (repli historique si non transmise).
-        if (opts.versionRestore?.id && opts.versionRestore.group === opts.versionGroup) {
-          store.restoreVersionById(conversationId, opts.versionRestore.id);
-        } else {
-          store.restoreLatestVersion(conversationId, opts.versionGroup);
-        }
-        const refreshed = store.getMessages(conversationId);
-        attachArtifactCards(conversationId, refreshed, true);
-        io.emit("messages:refreshed", { conversationId, messages: refreshed });
-      }
-      // Erreur réelle : le partiel persisté part avec l'événement — le client
-      // l'affiche dans le fil et propose « Réessayer » (F-04).
-      trace(
-        "error",
-        `tour en échec : ${err instanceof Error ? err.message : "erreur inconnue"}`
-      );
-      const conversation = contentAcc || reasoningAcc
-        ? store.touchConversation(conversationId) ?? undefined
-        : undefined;
-      if (partial) attachArtifactCards(conversationId, [partial]);
-      io.emit("stream:error", {
-        conversationId,
-        messageId,
-        conversation,
-        message: partial ?? undefined,
-        error: err instanceof Error ? err.message : "Erreur inconnue du tour",
-        ...(variant ? { variant } : {}),
-      });
-    }
+    // Corps du catch extrait dans persistFailedTurn (vague 4) — verbatim.
+    persistFailedTurn({
+      deps: stageDeps,
+      conversationId,
+      messageId,
+      variant,
+      opts,
+      versionIndex,
+      contentAcc,
+      reasoningAcc,
+      toolEvents,
+      usedModel,
+      webSources,
+      tracker,
+      controller,
+      liveClose,
+      err,
+    });
   } finally {
     // Ne retire que SI c'est encore CE tour qui occupe la conversation :
     // un tour plus récent a pu prendre la place entre-temps (chat:send

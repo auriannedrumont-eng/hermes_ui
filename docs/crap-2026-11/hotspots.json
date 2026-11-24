@@ -21,48 +21,6 @@
   }
  },
  {
-  "name": "useHermesChat",
-  "ns": "hooks.use-hermes-chat",
-  "cc": 166,
-  "start": 72,
-  "end": 1095,
-  "lines": 1024,
-  "file": "src/hooks/use-hermes-chat.ts",
-  "decisions": {
-   "if": 51,
-   "else if": 2,
-   "for/while": 2,
-   "catch": 0,
-   "ternaire": 50,
-   "&&": 13,
-   "||": 12,
-   "??": 37,
-   "?.": 37,
-   "case": 0
-  }
- },
- {
-  "name": "runAssistantTurn",
-  "ns": "mini-services.hermes-chat.turn-runner",
-  "cc": 147,
-  "start": 407,
-  "end": 1151,
-  "lines": 745,
-  "file": "mini-services/hermes-chat/turn-runner.ts",
-  "decisions": {
-   "if": 27,
-   "else if": 1,
-   "for/while": 3,
-   "catch": 1,
-   "ternaire": 69,
-   "&&": 14,
-   "||": 23,
-   "??": 24,
-   "?.": 9,
-   "case": 0
-  }
- },
- {
   "name": "Sidebar",
   "ns": "components.chat.sidebar",
   "cc": 138,
@@ -80,27 +38,6 @@
    "||": 12,
    "??": 18,
    "?.": 7,
-   "case": 0
-  }
- },
- {
-  "name": "registerProvidersHandlers",
-  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
-  "cc": 114,
-  "start": 102,
-  "end": 391,
-  "lines": 290,
-  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
-  "decisions": {
-   "if": 51,
-   "else if": 0,
-   "for/while": 0,
-   "catch": 3,
-   "ternaire": 22,
-   "&&": 10,
-   "||": 12,
-   "??": 10,
-   "?.": 15,
    "case": 0
   }
  },
@@ -168,23 +105,86 @@
   }
  },
  {
+  "name": "registerProvidersHandlers",
+  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
+  "cc": 96,
+  "start": 110,
+  "end": 380,
+  "lines": 271,
+  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
+  "decisions": {
+   "if": 46,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 1,
+   "ternaire": 22,
+   "&&": 4,
+   "||": 7,
+   "??": 10,
+   "?.": 15,
+   "case": 0
+  }
+ },
+ {
   "name": "registerExtensionsHandlers",
   "ns": "mini-services.hermes-chat.handlers.providers-extensions",
-  "cc": 95,
-  "start": 409,
-  "end": 717,
-  "lines": 309,
+  "cc": 94,
+  "start": 398,
+  "end": 708,
+  "lines": 311,
   "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
   "decisions": {
    "if": 60,
    "else if": 0,
    "for/while": 0,
    "catch": 4,
-   "ternaire": 14,
+   "ternaire": 13,
    "&&": 2,
-   "||": 4,
+   "||": 3,
    "??": 4,
    "?.": 11,
+   "case": 0
+  }
+ },
+ {
+  "name": "useHermesChat",
+  "ns": "hooks.use-hermes-chat",
+  "cc": 86,
+  "start": 61,
+  "end": 733,
+  "lines": 673,
+  "file": "src/hooks/use-hermes-chat.ts",
+  "decisions": {
+   "if": 19,
+   "else if": 1,
+   "for/while": 0,
+   "catch": 0,
+   "ternaire": 34,
+   "&&": 7,
+   "||": 2,
+   "??": 24,
+   "?.": 23,
+   "case": 0
+  }
+ },
+ {
+  "name": "runAssistantTurn",
+  "ns": "mini-services.hermes-chat.turn-runner",
+  "cc": 84,
+  "start": 832,
+  "end": 1385,
+  "lines": 554,
+  "file": "mini-services/hermes-chat/turn-runner.ts",
+  "decisions": {
+   "if": 13,
+   "else if": 1,
+   "for/while": 1,
+   "catch": 2,
+   "ternaire": 42,
+   "&&": 10,
+   "||": 10,
+   "??": 13,
+   "?.": 6,
    "case": 0
   }
  },
@@ -273,27 +273,6 @@
   }
  },
  {
-  "name": "testProviderKey",
-  "ns": "mini-services.hermes-chat.providers",
-  "cc": 77,
-  "start": 650,
-  "end": 840,
-  "lines": 191,
-  "file": "mini-services/hermes-chat/providers.ts",
-  "decisions": {
-   "if": 18,
-   "else if": 1,
-   "for/while": 0,
-   "catch": 5,
-   "ternaire": 19,
-   "&&": 21,
-   "||": 7,
-   "??": 6,
-   "?.": 6,
-   "case": 0
-  }
- },
- {
   "name": "WebchatSection",
   "ns": "components.settings.webchat-section",
   "cc": 75,
@@ -311,6 +290,27 @@
    "||": 11,
    "??": 26,
    "?.": 9,
+   "case": 0
+  }
+ },
+ {
+  "name": "testProviderKey",
+  "ns": "mini-services.hermes-chat.providers",
+  "cc": 73,
+  "start": 650,
+  "end": 838,
+  "lines": 189,
+  "file": "mini-services/hermes-chat/providers.ts",
+  "decisions": {
+   "if": 18,
+   "else if": 1,
+   "for/while": 0,
+   "catch": 5,
+   "ternaire": 19,
+   "&&": 19,
+   "||": 5,
+   "??": 6,
+   "?.": 6,
    "case": 0
   }
  },
@@ -353,6 +353,27 @@
    "||": 12,
    "??": 15,
    "?.": 0,
+   "case": 0
+  }
+ },
+ {
+  "name": "useTurnActions",
+  "ns": "hooks.use-turn-actions",
+  "cc": 70,
+  "start": 53,
+  "end": 488,
+  "lines": 436,
+  "file": "src/hooks/use-turn-actions.ts",
+  "decisions": {
+   "if": 29,
+   "else if": 1,
+   "for/while": 2,
+   "catch": 0,
+   "ternaire": 14,
+   "&&": 5,
+   "||": 9,
+   "??": 11,
+   "?.": 10,
    "case": 0
   }
  },
@@ -437,27 +458,6 @@
    "||": 1,
    "??": 20,
    "?.": 28,
-   "case": 0
-  }
- },
- {
-  "name": "registerArtifactsSharesHandlers",
-  "ns": "mini-services.hermes-chat.handlers.artifacts-shares",
-  "cc": 59,
-  "start": 8,
-  "end": 177,
-  "lines": 170,
-  "file": "mini-services/hermes-chat/handlers/artifacts-shares.ts",
-  "decisions": {
-   "if": 34,
-   "else if": 0,
-   "for/while": 0,
-   "catch": 0,
-   "ternaire": 5,
-   "&&": 0,
-   "||": 5,
-   "??": 4,
-   "?.": 14,
    "case": 0
   }
  },

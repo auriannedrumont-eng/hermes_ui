@@ -21,53 +21,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
   // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
 ```
 
-###  2. useHermesChat  CC=166  (1024 lignes, src/hooks/use-hermes-chat.ts:72-1095)
-    entête fichier: // Hook principal : orchestre les conversations, la sélection de modèle, | // les pièces jointes multimédia et le streaming via socket.io
-```ts
-export function useHermesChat() {
-  // Garde anti double-émission de conversations:create (Lot 3, audit L3-5).
-  const creatingRef = useRef(false);
-
-  const { toast } = useToast();
-  const {
-    projects,
-    setProjects,
-    fetchProjects,
-    createProject,
-    renameProject,
-    deleteProject,
-    setProjectArchived,
-    reorderProjects,
-  } = useProjects();
-  /** Miroir ref de `projects` (F-59) : les écouteurs socket (projects:deleted)
-   *  ont besoin des sous-dossiers courants sans dépendre du tableau de deps. */
-  const projectsRef = useRef(projects);
-```
-
-###  3. runAssistantTurn  CC=147  (745 lignes, mini-services/hermes-chat/turn-runner.ts:407-1151)
-    entête fichier: // Tour assistant : moteur d'exécution — extrait d'index.ts (découpage | // 2026-11, cf. FORK.md §10). Contient runAssistantTurn, les registres des | // tours en vol (running, live
-```ts
-const runAssistantTurn = async (
-  conversationId: string,
-  opts: {
-    content: string;
-    attachments?: Attachment[];
-    modelId?: string | null;
-    settings?: TurnSettings;
-    /** F-09/F-12 : recherche web du tour (clés Tavily/Exa, moteur local). */
-    webSearch?: boolean;
-    /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
-    variant?: "a" | "b";
-    /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
-     *  réponse qu'il remplace (l'ancienne est conservée, inactive). */
-    versionGroup?: string;
-    /** Lot audit passe 2 : version affichée AVANT la régénération (capturée
-     *  par supersedeTrailingAssistant). En cas d'arrêt/échec à vide, c'est
-     *  CETTE version qui revient au fil — restoreLatestVersion réactivait
-     *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
-```
-
-###  4. Sidebar  CC=138  (906 lignes, src/components/chat/sidebar.tsx:115-1020)
+###  2. Sidebar  CC=138  (906 lignes, src/components/chat/sidebar.tsx:115-1020)
     entête fichier: // Sidebar : dossiers (arbre à un niveau, sous-dossiers repliables, | // drag & drop pour ranger et réordonner entre frères), recherche | // (dossiers + titres + contenu des messag
 ```ts
 export function Sidebar({
@@ -90,30 +44,7 @@ export function Sidebar({
   onDeleteProject,
 ```
 
-###  5. registerProvidersHandlers  CC=114  (290 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:102-391)
-    entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
-```ts
-function registerProvidersHandlers(socket: Socket) {
-
-// ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
-
-socket.on("providers:list", (cb?: (data: unknown) => void) => {
-  if (typeof cb === "function") cb({ providers: ctx.providersWire() });
-});
-
-// Catalogue des fournisseurs connus (sélecteur d'ajout, v2.5) — z.ai y
-// figure DEUX fois : API standard (paiement au jeton) et GLM Coding
-// Plan (abonnement), deux portefeuilles étanches.
-socket.on("providers:catalog", (cb?: (data: unknown) => void) => {
-  if (typeof cb === "function") cb({ catalog: ctx.knownProviderCatalog() });
-});
-
-socket.on(
-  "providers:add",
-  (
-```
-
-###  6. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
+###  3. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
     entête fichier: // Barre de saisie façon ChatGPT : textarea auto-redimensionnable, | // envoi/stop, pièces jointes (trombone, glisser-déposer, coller), | // sélecteur de modèle, dictée vocale, com
 ```ts
 export function Composer({
@@ -136,7 +67,7 @@ export function Composer({
   expert,
 ```
 
-###  7. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
+###  4. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
     entête fichier: // Page Stockage — explorateur déclaratif des documents générés (v0.3.0). | // Spec §4 : liste intégrale sans pagination, groupement par projet côté | // client, déroulé DÉRIVÉ (ja
 ```ts
 export function StorageSection({ initialProject }: { initialProject?: string | null }) {
@@ -159,7 +90,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
       expireAt: number;
 ```
 
-###  8. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
+###  5. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
     entête fichier: // Section « Système » — v3 (v0.5.1), maquette validée | // design/maquette-systeme-v3.html : DEUX cartes, une par programme | // (« L'application » / « Hermes »), une seule gramma
 ```ts
 export function SystemSection({
@@ -182,7 +113,30 @@ export function SystemSection({
     const d = new Date(majVerifieAt);
 ```
 
-###  9. registerExtensionsHandlers  CC=95  (309 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:409-717)
+###  6. registerProvidersHandlers  CC=96  (271 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:110-380)
+    entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
+```ts
+function registerProvidersHandlers(socket: Socket) {
+
+// ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
+
+socket.on("providers:list", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ providers: ctx.providersWire() });
+});
+
+// Catalogue des fournisseurs connus (sélecteur d'ajout, v2.5) — z.ai y
+// figure DEUX fois : API standard (paiement au jeton) et GLM Coding
+// Plan (abonnement), deux portefeuilles étanches.
+socket.on("providers:catalog", (cb?: (data: unknown) => void) => {
+  if (typeof cb === "function") cb({ catalog: ctx.knownProviderCatalog() });
+});
+
+socket.on(
+  "providers:add",
+  (
+```
+
+###  7. registerExtensionsHandlers  CC=94  (311 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:398-708)
     entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
 ```ts
 function registerExtensionsHandlers(socket: Socket) {
@@ -203,6 +157,52 @@ socket.on(
     if (!source) {
       if (typeof cb === "function") cb({ error: "Source requise" });
       return;
+```
+
+###  8. useHermesChat  CC=86  (673 lignes, src/hooks/use-hermes-chat.ts:61-733)
+    entête fichier: // Hook principal : orchestre les conversations, la sélection de modèle, | // les pièces jointes multimédia et le streaming via socket.io
+```ts
+export function useHermesChat() {
+  // Garde anti double-émission de conversations:create (Lot 3, audit L3-5).
+  const creatingRef = useRef(false);
+
+  const { toast } = useToast();
+  const {
+    projects,
+    setProjects,
+    fetchProjects,
+    createProject,
+    renameProject,
+    deleteProject,
+    setProjectArchived,
+    reorderProjects,
+  } = useProjects();
+  /** Miroir ref de `projects` (F-59) : les écouteurs socket (projects:deleted)
+   *  ont besoin des sous-dossiers courants sans dépendre du tableau de deps.
+   *  Mise à jour en effet (react-hooks/refs) — lecture uniquement dans les
+```
+
+###  9. runAssistantTurn  CC=84  (554 lignes, mini-services/hermes-chat/turn-runner.ts:832-1385)
+    entête fichier: // Tour assistant : moteur d'exécution — extrait d'index.ts (découpage | // 2026-11, cf. FORK.md §10). Contient runAssistantTurn, les registres des | // tours en vol (running, live
+```ts
+const runAssistantTurn = async (
+  conversationId: string,
+  opts: {
+    content: string;
+    attachments?: Attachment[];
+    modelId?: string | null;
+    settings?: TurnSettings;
+    /** F-09/F-12 : recherche web du tour (clés Tavily/Exa, moteur local). */
+    webSearch?: boolean;
+    /** Variante de comparaison (F-17) : ce tour n'occupe que SON côté. */
+    variant?: "a" | "b";
+    /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
+     *  réponse qu'il remplace (l'ancienne est conservée, inactive). */
+    versionGroup?: string;
+    /** Lot audit passe 2 : version affichée AVANT la régénération (capturée
+     *  par supersedeTrailingAssistant). En cas d'arrêt/échec à vide, c'est
+     *  CETTE version qui revient au fil — restoreLatestVersion réactivait
+     *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
 ```
 
 ### 10. HermesWebPage  CC=82  (639 lignes, src/app/page.tsx:42-680)
@@ -297,30 +297,7 @@ socket.on(
       // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
 ```
 
-### 14. testProviderKey  CC=77  (191 lignes, mini-services/hermes-chat/providers.ts:650-840)
-    entête fichier: // Fournisseurs & clés + Extensions — logique du chantier « Paramètres v2.2 ». | // Le mini-service est le SEUL détenteur des secrets : il les stocke, les | // masque pour le clien
-```ts
-export async function testProviderKey(
-  name: string,
-  baseUrl: string | null | undefined,
-  secret: string | null,
-): Promise<KeyTestResult> {
-  const caps = providerCapabilities(name, baseUrl);
-  // Audit passe 3, F-06 : la baseUrl vient du client — le test de clé
-  // n'interroge que https, ou http strictement local (Ollama et compagnie).
-  // Interdit : http vers le réseau — le test ne doit pas servir de sonde.
-  if (baseUrl) {
-    try {
-      const u = new URL(baseUrl);
-      const isLocalHost =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
-      if (u.protocol !== "https:" && !(u.protocol === "http:" && isLocalHost)) {
-        return {
-          status: "error",
-          statusLabel: "adresse refusée : https requis (http admis sur localhost uniquement)",
-```
-
-### 15. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
+### 14. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
     entête fichier: // Section « Chats web » du volet Paramètres v4 — fournisseur « Chats IA web » | // (identifiant stable `webchat`, spec « Piloter des chats IA web »). Règles | // rendues ici plutô
 ```ts
 export function WebchatSection() {
@@ -341,6 +318,29 @@ export function WebchatSection() {
   const [showAdv, setShowAdv] = useState(false);
 
   const load = useCallback(() => {
+```
+
+### 15. testProviderKey  CC=73  (189 lignes, mini-services/hermes-chat/providers.ts:650-838)
+    entête fichier: // Fournisseurs & clés + Extensions — logique du chantier « Paramètres v2.2 ». | // Le mini-service est le SEUL détenteur des secrets : il les stocke, les | // masque pour le clien
+```ts
+export async function testProviderKey(
+  name: string,
+  baseUrl: string | null | undefined,
+  secret: string | null,
+): Promise<KeyTestResult> {
+  const caps = providerCapabilities(name, baseUrl);
+  // Audit passe 3, F-06 : la baseUrl vient du client — le test de clé
+  // n'interroge que https, ou http strictement local (Ollama et compagnie).
+  // Interdit : http vers le réseau — le test ne doit pas servir de sonde.
+  if (baseUrl) {
+    try {
+      const u = new URL(baseUrl);
+      if (!isAllowedProviderUrl(u)) {
+        return {
+          status: "error",
+          statusLabel: "adresse refusée : https requis (http admis sur localhost uniquement)",
+        };
+      }
 ```
 
 ### 16. buildMessageVersionsMethods  CC=73  (407 lignes, mini-services/hermes-chat/store-messages.ts:597-1003)
@@ -389,7 +389,30 @@ function ArtifactBody({
   versions: Artifact[];
 ```
 
-### 18. createLlmPool  CC=69  (217 lignes, mini-services/hermes-chat/llm-pool.ts:431-647)
+### 18. useTurnActions  CC=70  (436 lignes, src/hooks/use-turn-actions.ts:53-488)
+    entête fichier: // Actions de tour extraites de use-hermes-chat.ts (audit CRAP 2026-11, vague 4) : | // compaction (v2.4 + manuelle), envoi, arrêt, régénération, navigation de | // versions (F-14)
+```ts
+export function useTurnActions(deps: TurnActionsDeps) {
+  const {
+    toast,
+    streaming,
+    setTurnError,
+    compactingRef,
+    setCompacting,
+    activeIdRef,
+    contextBaseRef,
+    messages,
+    setMessages,
+    newConversation,
+    openConversation,
+    models,
+    selectedModelRef,
+    effortRef,
+    permissionsRef,
+    expertRef,
+```
+
+### 19. createLlmPool  CC=69  (217 lignes, mini-services/hermes-chat/llm-pool.ts:431-647)
     entête fichier: // Pools de clés fournisseurs → tours LLM réels (v2.3, cf. FORK.md §7.4). | // Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours | // partent sur l'API d
 ```ts
 export function createLlmPool(store: Store): LlmPoolApi {
@@ -412,7 +435,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
   // dans llm-streams.ts depuis la vague 2.
 ```
 
-### 19. ProviderCard  CC=69  (442 lignes, src/components/settings/providers-section.tsx:92-533)
+### 20. ProviderCard  CC=69  (442 lignes, src/components/settings/providers-section.tsx:92-533)
     entête fichier: // Section « Fournisseurs » (LLM) et « Clés de services » du volet | // Paramètres v4 — porte-clés multi-clés, test réel exécuté par le service, | // stratégie d'ordre d'utilisatio
 ```ts
 function ProviderCard({ provider, api }: { provider: ProviderView; api: ProvidersApi }) {
@@ -435,7 +458,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   const hasDefault = api.catalog.some((c) => c.name === provider.name);
 ```
 
-### 20. registerConversationLifecycleHandlers  CC=66  (241 lignes, mini-services/hermes-chat/handlers/conversations.ts:40-280)
+### 21. registerConversationLifecycleHandlers  CC=66  (241 lignes, mini-services/hermes-chat/handlers/conversations.ts:40-280)
     entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
 ```ts
 function registerConversationLifecycleHandlers(socket: Socket) {
@@ -458,7 +481,7 @@ socket.on(
     const src = payload && typeof payload === "object" ? payload : {};
 ```
 
-### 21. parseModelOptions  CC=66  (49 lignes, mini-services/hermes-chat/hermes-connector.ts:135-183)
+### 22. parseModelOptions  CC=66  (49 lignes, mini-services/hermes-chat/hermes-connector.ts:135-183)
     entête fichier: // Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat : | // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent | //   Hermes suffit, rien à
 ```ts
 export function parseModelOptions(data: any): ModelOption[] {
@@ -479,29 +502,6 @@ export function parseModelOptions(data: any): ModelOption[] {
     } else if (rawEfforts === true) {
       efforts = ["off", "on"];
       // étiquette « budget » quand le provider expose un simple interrupteur
-```
-
-### 22. registerArtifactsSharesHandlers  CC=59  (170 lignes, mini-services/hermes-chat/handlers/artifacts-shares.ts:8-177)
-    entête fichier: // Handlers « artifacts-shares » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.stor
-```ts
-export function registerArtifactsSharesHandlers(socket: Socket) {
-
-// Toutes les versions d'une clé (sélecteur de version / diff du panneau)
-socket.on(
-  "artifact:versions",
-  (payload: { conversationId?: string; key?: string }, cb?: (data: unknown) => void) => {
-    const id = payload?.conversationId;
-    const key = payload?.key;
-    if (!id || !key) {
-      if (typeof cb === "function") cb({ versions: [] });
-      return;
-    }
-    const rows = ctx.store.listArtifactVersions(id, key);
-    const versions = rows.map((r) => ctx.wireArtifact(id, key, r));
-    if (typeof cb === "function") cb({ versions });
-  }
-);
-
 ```
 
 ### 23. streamAnthropicTurn  CC=57  (150 lignes, mini-services/hermes-chat/llm-streams.ts:295-444)

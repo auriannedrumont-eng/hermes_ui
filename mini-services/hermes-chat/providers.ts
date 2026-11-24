@@ -16,7 +16,8 @@ import type {
   ProviderKind,
   ProviderStrategy,
   ProviderKeyView,
-} from "./types";
+  } from "./types";
+import { isAllowedProviderUrl } from "./providers-validate";
 
 // ── Catalogue des fournisseurs connus ─────────────────────────────────
 // `match` s'applique au nom saisi par l'utilisatrice (ou à l'adresse) ;
@@ -317,9 +318,8 @@ export function resolveKnownProvider(
       // boucle locale. Sans elle, une adresse http:// collée dans le champ
       // NOM créait le fournisseur en base en contournant la garde de
       // providers:add (qui ne filtre que le champ baseUrl explicite).
-      const local =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
-      if (u.protocol !== "https:" && !(u.protocol === "http:" && local)) return null;
+      // Vague 4 : la règle vit dans providers-validate.ts (une seule vérité).
+      if (!isAllowedProviderUrl(u)) return null;
       return { custom: { name: u.hostname, baseUrl: raw.replace(/\/+$/, "") } };
     } catch {
       return null;
@@ -659,9 +659,7 @@ export async function testProviderKey(
   if (baseUrl) {
     try {
       const u = new URL(baseUrl);
-      const isLocalHost =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
-      if (u.protocol !== "https:" && !(u.protocol === "http:" && isLocalHost)) {
+      if (!isAllowedProviderUrl(u)) {
         return {
           status: "error",
           statusLabel: "adresse refusée : https requis (http admis sur localhost uniquement)",

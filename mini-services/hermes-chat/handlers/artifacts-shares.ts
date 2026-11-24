@@ -5,8 +5,16 @@
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
 
-export function registerArtifactsSharesHandlers(socket: Socket) {
+// ── Découpage interne (audit CRAP 2026-11, vague 4) ───────────────────────
+// registerArtifactsSharesHandlers ne pose plus 7 socket.on() dans un seul
+// corps : trois sous-registres, un par domaine, chacun appelé dans l'ordre
+// source d'origine. Les blocs sont VERBATIM (aucune ligne de handler
+// modifiée) ; seuls les corps englobants changent — l'ordre de pose et les
+// identifiants ctx.* sont inchangés, le protocole socket est intouché.
 
+/** Vue des artefacts : toutes les versions d'une clé (sélecteur de version /
+ *  diff du panneau) et relance du rendu d'un HTML en erreur (Réessayer). */
+function registerArtifactViewHandlers(socket: Socket) {
 // Toutes les versions d'une clé (sélecteur de version / diff du panneau)
 socket.on(
   "artifact:versions",
@@ -43,6 +51,12 @@ socket.on(
 );
 
 
+}
+
+/** Versionnage fichiers (F-26) : restaurer une version antérieure — crée
+ *  v(n+1) d'après vN, jamais d'écrasement —, étiqueter une version
+ *  (double-clic dans le journal) et épingler (jamais purgée par le quota). */
+function registerFileVersionHandlers(socket: Socket) {
 // ── Versionnage fichiers (F-26) : restaurer, étiqueter, épingler ─────
 
 // Restaure une version antérieure : crée v(n+1) d'après vN (jamais d'écrasement).
@@ -108,6 +122,12 @@ socket.on(
 );
 
 
+}
+
+/** Partage public lecture seule (F-13) : l'état actif de la conversation,
+ *  la création du lien (snapshot FIGÉ au moment du partage) et la
+ *  révocation (le snapshot et la conversation ne bougent pas). */
+function registerShareHandlers(socket: Socket) {
 // ── Partage public lecture seule (F-13) ───────────────────────────
 
 // Partage actif de la conversation (null si aucun)
@@ -174,4 +194,12 @@ socket.on(
   }
 );
 
+}
+
+/* Orchestrateur (audit CRAP 2026-11, vague 4) : l'export public et l'ordre
+ * de pose des socket.on() sont inchangés — index.ts n'est pas touché. */
+export function registerArtifactsSharesHandlers(socket: Socket) {
+  registerArtifactViewHandlers(socket);
+  registerFileVersionHandlers(socket);
+  registerShareHandlers(socket);
 }

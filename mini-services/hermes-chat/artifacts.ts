@@ -6,8 +6,9 @@ import type { Artifact, ArtifactKind } from "./types";
 import type { ArtifactRow } from "./store";
 
 // ── Dossiers des fichiers dérivés (PNG / PDF), servis par le port 3004 ──
-import { join } from "node:path";
-export const ARTIFACTS_DIR = join(import.meta.dir, "..", "..", "db", "artifacts");
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+export const ARTIFACTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "db", "artifacts");
 
 export function artifactThumbPath(id: string): string {
   return join(ARTIFACTS_DIR, `${id}.png`);

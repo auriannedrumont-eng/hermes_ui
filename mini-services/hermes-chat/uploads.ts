@@ -2,9 +2,10 @@
 // détection du type, service HTTP et nettoyage.
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, copyFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Attachment, AttachmentKind } from "./types";
 
-const UPLOADS_DIR = join(import.meta.dir, "..", "..", "db", "uploads");
+const UPLOADS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "db", "uploads");
 
 export const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 Mo par fichier
 export const MAX_ATTACHMENTS_PER_MESSAGE = 6;

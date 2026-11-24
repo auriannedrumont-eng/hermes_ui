@@ -4,6 +4,14 @@
 // partagé handlers/context.ts — câblé une fois par index.ts.
 import type { Socket } from "socket.io";
 import { ctx } from "./context";
+import {
+  checkKeySecret,
+  checkProviderBaseUrl,
+  isMcpLaunchSource,
+  isProviderStrategy,
+  resolveExplicitBaseUrl,
+  sameAsCanonicalBaseUrl,
+} from "../providers-validate";
 
 // registerProvidersExtensionsHandlers ne pose plus 21 socket.on() dans un
 // seul corps : quatre sous-registres thématiques, appelés dans l'ordre
@@ -170,30 +178,17 @@ socket.on(
     // bascule z.ai vers la surface coding). v2.5 : une adresse avec chemin
     // est la base COMPLÈTE ; une origine seule remplace l'hôte du canon.
     // https requis, ou http strictement local (même règle que le test de clé).
+    // Vague 4 : la règle vit dans providers-validate.ts (une seule vérité,
+    // testée) — l'override reste SILENCIEUX (invalide → canonique conservée).
     const explicit = (payload?.baseUrl ?? "").trim();
-    if (explicit && /^https?:\/\//i.test(explicit)) {
-      try {
-        const u = new URL(explicit);
-        const local =
-          u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
-        if (u.protocol === "https:" || (u.protocol === "http:" && local)) {
-          baseUrl = explicit.replace(/\/+$/, "");
-        }
-      } catch {
-        /* adresse invalide : adresse canonique conservée */
-      }
-    }
+    baseUrl = resolveExplicitBaseUrl(explicit, baseUrl);
     // Champ d'adresse non modifié (pré-rempli par le sélecteur à l'identique
     // du canon) : stocker null — l'adresse canonique reste la référence et
     // les surfaces de TEST propres à certains fournisseurs (opencode) sont
     // préservées.
     const canonicalDefault =
       "known" in resolved ? (resolved.known.defaultBaseUrl ?? null) : null;
-    if (
-      canonicalDefault &&
-      baseUrl &&
-      baseUrl.replace(/\/+$/, "") === canonicalDefault.replace(/\/+$/, "")
-    ) {
+    if (sameAsCanonicalBaseUrl(baseUrl, canonicalDefault)) {
       baseUrl = null;
     }
     const row = ctx.store.createProvider({ name: canonicalName, kind, baseUrl });
@@ -222,8 +217,8 @@ socket.on(
   ) => {
     const id = payload?.id;
     const strategy = payload?.strategy;
-    const ok = ["fill_first", "round_robin", "least_used"];
-    if (!id || !strategy || !ok.includes(strategy)) {
+    // Vague 4 : la liste des stratégies vit dans providers-validate.ts (testée).
+    if (!id || !strategy || !isProviderStrategy(strategy)) {
       if (typeof cb === "function") cb({ error: "Paramètres invalides" });
       return;
     }
@@ -262,25 +257,16 @@ socket.on(
       ctx.broadcastProviders();
       return;
     }
-    if (!/^https?:\/\//i.test(raw)) {
-      if (typeof cb === "function")
-        cb({ error: "Adresse invalide — elle commence par https://" });
+    // Vague 4 : la validation https / http-local vit dans
+    // providers-validate.ts (une seule vérité, testée) — les trois refus
+    // gardent leurs messages d'origine, la valeur stockée aussi (slashes
+    // finaux supprimés).
+    const check = checkProviderBaseUrl(raw);
+    if (!check.ok) {
+      if (typeof cb === "function") cb({ error: check.error });
       return;
     }
-    try {
-      const u = new URL(raw);
-      const local =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
-      if (u.protocol !== "https:" && !(u.protocol === "http:" && local)) {
-        if (typeof cb === "function")
-          cb({ error: "https requis (http admis sur localhost uniquement)" });
-        return;
-      }
-    } catch {
-      if (typeof cb === "function") cb({ error: "Adresse invalide" });
-      return;
-    }
-    const updated = ctx.store.setProviderBaseUrl(id, raw.replace(/\/+$/, ""));
+    const updated = ctx.store.setProviderBaseUrl(id, check.url);
     if (typeof cb === "function")
       cb({ provider: updated ? ctx.providerWire(updated, ctx.store.listKeyRows(id)) : null });
     ctx.broadcastProviders();
@@ -302,8 +288,11 @@ socket.on(
       if (typeof cb === "function") cb({ error: "Fournisseur introuvable" });
       return;
     }
-    if (secret.length < 8) {
-      if (typeof cb === "function") cb({ error: "Clé trop courte" });
+    // Vague 4 : la borne vit dans providers-validate.ts (testée) —
+    // message d'erreur verbatim.
+    const secretError = checkKeySecret(secret);
+    if (secretError) {
+      if (typeof cb === "function") cb({ error: secretError });
       return;
     }
     // Lot audit 2026-11-21 : déduplication — la même clé collée deux fois
@@ -525,7 +514,9 @@ socket.on(
     }
 
     // 2. Adresse https → serveur MCP. 3. Commande de lancement → MCP aussi.
-    if (/^https?:\/\//i.test(raw) || /^(npx|uvx|bunx|node|python3?|docker)\b/i.test(raw)) {
+    // Vague 4 : classification adresse https / commande de lancement dans
+    // providers-validate.ts (testée par Vitest) — regex verbatim.
+    if (isMcpLaunchSource(raw)) {
       if (findExtensionBySource(ctx.store, "mcp", raw)) {
         if (typeof cb === "function") cb({ error: "Ce serveur est déjà ajouté." });
         return;

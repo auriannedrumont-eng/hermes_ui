@@ -1,35 +1,34 @@
 {:entries [
   {:name "main", :namespace "scripts.test-providers-wallets", :complexity 183, :coverage 0.0, :crap 33672.0}
   {:name "AgentMotorCard", :namespace "components.settings.agent-motor-card", :complexity 179, :coverage 0.0, :crap 32220.0}
-  {:name "useHermesChat", :namespace "hooks.use-hermes-chat", :complexity 166, :coverage 0.0, :crap 27722.0}
-  {:name "runAssistantTurn", :namespace "mini-services.hermes-chat.turn-runner", :complexity 147, :coverage 0.0, :crap 21756.0}
   {:name "Sidebar", :namespace "components.chat.sidebar", :complexity 138, :coverage 0.0, :crap 19182.0}
   {:name "main", :namespace "scripts.test-source-guards", :complexity 128, :coverage 0.0, :crap 16512.0}
   {:name "main", :namespace "scripts.test-integration-fixes", :complexity 115, :coverage 0.0, :crap 13340.0}
-  {:name "registerProvidersHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 114, :coverage 0.0, :crap 13110.0}
   {:name "Composer", :namespace "components.chat.composer", :complexity 110, :coverage 0.0, :crap 12210.0}
   {:name "main", :namespace "scripts.test-reattach-stream", :complexity 109, :coverage 0.0, :crap 11990.0}
   {:name "StorageSection", :namespace "components.settings.storage-section", :complexity 105, :coverage 0.0, :crap 11130.0}
   {:name "SystemSection", :namespace "components.settings.system-section", :complexity 102, :coverage 0.0, :crap 10506.0}
-  {:name "registerExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 95, :coverage 0.0, :crap 9120.0}
+  {:name "registerProvidersHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 96, :coverage 0.0, :crap 9312.0}
   {:name "main", :namespace "scripts.test-providers-opencode", :complexity 95, :coverage 0.0, :crap 9120.0}
+  {:name "registerExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 94, :coverage 0.0, :crap 8930.0}
+  {:name "useHermesChat", :namespace "hooks.use-hermes-chat", :complexity 86, :coverage 0.0, :crap 7482.0}
+  {:name "runAssistantTurn", :namespace "mini-services.hermes-chat.turn-runner", :complexity 84, :coverage 0.0, :crap 7140.0}
   {:name "main", :namespace "scripts.test-providers-zai-coding", :complexity 84, :coverage 0.0, :crap 7140.0}
   {:name "HermesWebPage", :namespace "app.page", :complexity 82, :coverage 0.0, :crap 6806.0}
   {:name "useChatSocketEvents", :namespace "hooks.use-chat-socket-events", :complexity 81, :coverage 0.0, :crap 6642.0}
   {:name "serviceTests", :namespace "scripts.test-modes-flow", :complexity 81, :coverage 0.0, :crap 6642.0}
   {:name "registerTurnHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 77, :coverage 0.0, :crap 6006.0}
   {:name "runGatewayTurn", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 77, :coverage 0.0, :crap 6006.0}
-  {:name "testProviderKey", :namespace "mini-services.hermes-chat.providers", :complexity 77, :coverage 0.0, :crap 6006.0}
   {:name "WebchatSection", :namespace "components.settings.webchat-section", :complexity 75, :coverage 0.0, :crap 5700.0}
   {:name "unitTests", :namespace "scripts.test-modes-flow", :complexity 74, :coverage 0.0, :crap 5550.0}
   {:name "main", :namespace "scripts.test-version-flow", :complexity 74, :coverage 0.0, :crap 5550.0}
-  {:name "buildMessageVersionsMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 73, :coverage 0.0, :crap 5402.0}
+  {:name "testProviderKey", :namespace "mini-services.hermes-chat.providers", :complexity 73, :coverage 0.0, :crap 5402.0}
   {:name "ArtifactBody", :namespace "components.chat.artifact-panel", :complexity 72, :coverage 0.0, :crap 5256.0}
+  {:name "useTurnActions", :namespace "hooks.use-turn-actions", :complexity 70, :coverage 0.0, :crap 4970.0}
   {:name "ProviderCard", :namespace "components.settings.providers-section", :complexity 69, :coverage 0.0, :crap 4830.0}
   {:name "createLlmPool", :namespace "mini-services.hermes-chat.llm-pool", :complexity 69, :coverage 0.0, :crap 4830.0}
   {:name "registerConversationLifecycleHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 66, :coverage 0.0, :crap 4422.0}
   {:name "main", :namespace "scripts.test-429-reasons", :complexity 60, :coverage 0.0, :crap 3660.0}
-  {:name "registerArtifactsSharesHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 59, :coverage 0.0, :crap 3540.0}
   {:name "ModelPicker", :namespace "components.chat.model-picker", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "streamAnthropicTurn", :namespace "mini-services.hermes-chat.llm-streams", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "main", :namespace "scripts.test-pool-flow", :complexity 57, :coverage 0.0, :crap 3306.0}
@@ -49,11 +48,9 @@
   {:name "VersionPopover", :namespace "components.chat.version-popover", :complexity 43, :coverage 0.0, :crap 1892.0}
   {:name "main", :namespace "scripts.test-cost-flow", :complexity 43, :coverage 0.0, :crap 1892.0}
   {:name "useConversations", :namespace "hooks.use-conversations", :complexity 42, :coverage 0.0, :crap 1806.0}
-  {:name "buildMessagesCoreMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 41, :coverage 0.0, :crap 1722.0}
   {:name "main", :namespace "scripts.test-compare-flow", :complexity 41, :coverage 0.0, :crap 1722.0}
   {:name "ModesSection", :namespace "components.settings.modes-section", :complexity 40, :coverage 0.0, :crap 1640.0}
   {:name "SingleTabGuard", :namespace "components.single-tab-guard", :complexity 40, :coverage 0.0, :crap 1640.0}
-  {:name "buildConversationMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 40, :coverage 0.0, :crap 1640.0}
   {:name "useChatSettings", :namespace "hooks.use-chat-settings", :complexity 39, :coverage 0.0, :crap 1560.0}
   {:name "main", :namespace "scripts.run-tests", :complexity 38, :coverage 0.0, :crap 1482.0}
   {:name "main", :namespace "scripts.test-stop-error-flow", :complexity 38, :coverage 0.0, :crap 1482.0}
@@ -81,6 +78,7 @@
   {:name "testZaiSurface", :namespace "mini-services.hermes-chat.providers", :complexity 30, :coverage 0.0, :crap 930.0}
   {:name "useDictation", :namespace "hooks.use-dictation", :complexity 29, :coverage 0.0, :crap 870.0}
   {:name "ModelesPane", :namespace "components.settings.models-section", :complexity 28, :coverage 0.0, :crap 812.0}
+  {:name "registerFileVersionHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 28, :coverage 0.0, :crap 812.0}
   {:name "main", :namespace "scripts.test-motor-rest-flow", :complexity 28, :coverage 0.0, :crap 812.0}
   {:name "partA", :namespace "scripts.test-storage-flow", :complexity 28, :coverage 0.0, :crap 812.0}
   {:name "update", :namespace "mini-services.hermes-chat.artifacts.ArtifactTracker", :complexity 27, :coverage 0.0, :crap 756.0}
@@ -98,8 +96,8 @@
   {:name "traduireLigneMotor", :namespace "components.settings.fil-live", :complexity 24, :coverage 0.0, :crap 600.0}
   {:name "useMemory", :namespace "hooks.use-memory", :complexity 24, :coverage 0.0, :crap 600.0}
   {:name "registerWebchatPilotHandlers", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 24, :coverage 0.0, :crap 600.0}
-  {:name "normalizeModeConfig", :namespace "mini-services.hermes-chat.modes", :complexity 24, :coverage 0.0, :crap 600.0}
   {:name "main", :namespace "mini-services.hermes-chat.scripts.preuve-pool-streams", :complexity 24, :coverage 0.0, :crap 600.0}
+  {:name "persistFailedTurn", :namespace "mini-services.hermes-chat.turn-runner", :complexity 24, :coverage 0.0, :crap 600.0}
   {:name "errorScenario", :namespace "scripts.test-stop-error-flow", :complexity 24, :coverage 0.0, :crap 600.0}
   {:name "ProjectGroup", :namespace "components.chat.project-group", :complexity 23, :coverage 0.0, :crap 552.0}
   {:name "startAgentRollback", :namespace "mini-services.hermes-chat.agent-motor", :complexity 23, :coverage 0.0, :crap 552.0}
@@ -128,6 +126,7 @@
   {:name "summarize", :namespace "components.chat.debug-bridge", :complexity 19, :coverage 0.0, :crap 380.0}
   {:name "buildRows", :namespace "components.chat.message-list", :complexity 19, :coverage 0.0, :crap 380.0}
   {:name "SharedConversationView", :namespace "components.shared.shared-conversation-view", :complexity 19, :coverage 0.0, :crap 380.0}
+  {:name "registerShareHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 19, :coverage 0.0, :crap 380.0}
   {:name "handleArtifactFile", :namespace "mini-services.hermes-chat.http-server", :complexity 19, :coverage 0.0, :crap 380.0}
   {:name "runRestTurn", :namespace "mini-services.hermes-chat.motor-rest", :complexity 19, :coverage 0.0, :crap 380.0}
   {:name "startMock", :namespace "scripts.test-providers-zai-coding", :complexity 19, :coverage 0.0, :crap 380.0}
@@ -135,7 +134,6 @@
   {:name "SocketDemo", :namespace "examples.websocket.frontend", :complexity 18, :coverage 0.0, :crap 342.0}
   {:name "fetchRepoSnapshotUncached", :namespace "mini-services.hermes-chat.providers", :complexity 18, :coverage 0.0, :crap 342.0}
   {:name "buildForkSearchMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 18, :coverage 0.0, :crap 342.0}
-  {:name "buildProjectMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 18, :coverage 0.0, :crap 342.0}
   {:name "main", :namespace "scripts.test-audit-passe3", :complexity 18, :coverage 0.0, :crap 342.0}
   {:name "AddAnything", :namespace "components.settings.add-anything", :complexity 17, :coverage 0.0, :crap 306.0}
   {:name "refreshMotorStatus", :namespace "mini-services.hermes-chat.agent-motor", :complexity 17, :coverage 0.0, :crap 306.0}
@@ -151,6 +149,7 @@
   {:name "runOrchestratedTurn", :namespace "mini-services.hermes-chat.orchestrator", :complexity 16, :coverage 0.0, :crap 272.0}
   {:name "runVoiceWithRow", :namespace "mini-services.hermes-chat.orchestrator", :complexity 16, :coverage 0.0, :crap 272.0}
   {:name "ensureStarted", :namespace "mini-services.hermes-chat.render.ChromeRenderer", :complexity 16, :coverage 0.0, :crap 272.0}
+  {:name "persistDoneTurn", :namespace "mini-services.hermes-chat.turn-runner", :complexity 16, :coverage 0.0, :crap 272.0}
   {:name "main", :namespace "scripts.test-projects-archive-flow", :complexity 16, :coverage 0.0, :crap 272.0}
   {:name "startMock", :namespace "scripts.test-providers-opencode", :complexity 16, :coverage 0.0, :crap 272.0}
   {:name "ArtifactPanel", :namespace "components.chat.artifact-panel", :complexity 15, :coverage 0.0, :crap 240.0}
@@ -168,6 +167,7 @@
   {:name "parseProfiles", :namespace "lib.profiles", :complexity 14, :coverage 0.0, :crap 210.0}
   {:name "fetchLatestRelease", :namespace "mini-services.hermes-chat.agent-motor", :complexity 14, :coverage 0.0, :crap 210.0}
   {:name "runLogged", :namespace "mini-services.hermes-chat.agent-motor", :complexity 14, :coverage 0.0, :crap 210.0}
+  {:name "registerArtifactViewHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 14, :coverage 0.0, :crap 210.0}
   {:name "probeGeneration", :namespace "mini-services.hermes-chat.providers", :complexity 14, :coverage 0.0, :crap 210.0}
   {:name "diagnostics", :namespace "mini-services.hermes-chat.scripts.preuve-pont", :complexity 14, :coverage 0.0, :crap 210.0}
   {:name "main", :namespace "scripts.qa-versions-visual", :complexity 14, :coverage 0.0, :crap 210.0}
@@ -184,12 +184,12 @@
   {:name "resolveUnder", :namespace "mini-services.hermes-chat.webchat.paths", :complexity 13, :coverage 0.0, :crap 182.0}
   {:name "cardsForMessage", :namespace "components.chat.message-list", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "InterfacePane", :namespace "components.settings.interface-section", :complexity 12, :coverage 0.0, :crap 156.0}
+  {:name "useAttachmentsWiring", :namespace "hooks.use-attachments-wiring", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "useProviders", :namespace "hooks.use-providers", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "parseCsv", :namespace "lib.artifact-utils", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "resolveKind", :namespace "mini-services.hermes-chat.artifacts", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "toWireArtifact", :namespace "mini-services.hermes-chat.artifacts", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "registerMemoryAndUpdateCheckHandlers", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 12, :coverage 0.0, :crap 156.0}
-  {:name "readPromptOverrides", :namespace "mini-services.hermes-chat.modes", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "comparePairFromMode", :namespace "mini-services.hermes-chat.turn-runner", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "runWebSearch", :namespace "mini-services.hermes-chat.web-search", :complexity 12, :coverage 0.0, :crap 156.0}
   {:name "runOne", :namespace "scripts.run-tests", :complexity 12, :coverage 0.0, :crap 156.0}
@@ -199,6 +199,7 @@
   {:name "diffLines", :namespace "lib.artifact-utils", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "conversationToMarkdown", :namespace "lib.export", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "toArtifactCandidates", :namespace "mini-services.hermes-chat.artifacts", :complexity 11, :coverage 0.0, :crap 132.0}
+  {:name "openNodeDatabase", :namespace "mini-services.hermes-chat.db-driver", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "readInstalledRevision", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "fetchGatewayModels", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "attachArtifactCards", :namespace "mini-services.hermes-chat.index", :complexity 11, :coverage 0.0, :crap 132.0}
@@ -225,7 +226,6 @@
   {:name "handleDiagnostics", :namespace "mini-services.hermes-chat.http-server", :complexity 10, :coverage 0.0, :crap 110.0}
   {:name "buildUserPayload", :namespace "mini-services.hermes-chat.llm-streams", :complexity 10, :coverage 0.0, :crap 110.0}
   {:name "modelIds", :namespace "mini-services.hermes-chat.providers", :complexity 10, :coverage 0.0, :crap 110.0}
-  {:name "resolveKnownProvider", :namespace "mini-services.hermes-chat.providers", :complexity 10, :coverage 0.0, :crap 110.0}
   {:name "scanPlaywrightShellCandidates", :namespace "mini-services.hermes-chat.render", :complexity 10, :coverage 0.0, :crap 110.0}
   {:name "findSearchProvider", :namespace "mini-services.hermes-chat.web-search", :complexity 10, :coverage 0.0, :crap 110.0}
   {:name "evaluate", :namespace "mini-services.hermes-chat.webchat.cdp.CdpPage", :complexity 10, :coverage 0.0, :crap 110.0}
@@ -248,8 +248,8 @@
   {:name "hasRestContract", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "handleDiskList", :namespace "mini-services.hermes-chat.http-server", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "handleShareFile", :namespace "mini-services.hermes-chat.http-server", :complexity 9, :coverage 0.0, :crap 90.0}
-  {:name "voicesFor", :namespace "mini-services.hermes-chat.modes", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "artifactKindLabel", :namespace "mini-services.hermes-chat.shared.chat-protocol", :complexity 9, :coverage 0.0, :crap 90.0}
+  {:name "buildTurnHistory", :namespace "mini-services.hermes-chat.turn-runner", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "saveAttachment", :namespace "mini-services.hermes-chat.uploads", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "toSources", :namespace "mini-services.hermes-chat.web-search", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "launchWatchdog", :namespace "mini-services.hermes-chat.webchat.browser", :complexity 9, :coverage 0.0, :crap 90.0}
@@ -258,6 +258,7 @@
   {:name "keyOf", :namespace "scripts.test-429-reasons", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "main", :namespace "scripts.test-origin-guards", :complexity 9, :coverage 0.0, :crap 90.0}
   {:name "main", :namespace "scripts.test-pool-ghost-streams", :complexity 9, :coverage 0.0, :crap 90.0}
+  {:name "buildMessageVersionsMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 73, :coverage 90.9091, :crap 77.0037}
   {:name "KindIcon", :namespace "components.chat.artifact-card", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "modeFlowSummary", :namespace "components.chat.mode-flow", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "SidebarArchives", :namespace "components.chat.sidebar-archives", :complexity 8, :coverage 0.0, :crap 72.0}
@@ -317,6 +318,7 @@
   {:name "makeHarness", :namespace "scripts.test-orchestrator-abort", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "main", :namespace "scripts.test-single-tab", :complexity 7, :coverage 0.0, :crap 56.0}
   {:name "waitEnds", :namespace "scripts.test-version-flow", :complexity 7, :coverage 0.0, :crap 56.0}
+  {:name "buildMessagesCoreMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 41, :coverage 89.8551, :crap 42.7551}
   {:name "AttachmentView", :namespace "components.chat.attachments", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "PendingAttachmentChip", :namespace "components.chat.attachments", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "kindIcon", :namespace "components.chat.attachments", :complexity 6, :coverage 0.0, :crap 42.0}
@@ -337,11 +339,12 @@
   {:name "registerSessionCatalogHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "ticketPythonCandidates", :namespace "mini-services.hermes-chat.hermes-connector", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "restTurnCandidate", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 6, :coverage 0.0, :crap 42.0}
-  {:name "voiceModel", :namespace "mini-services.hermes-chat.modes", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "explainQuotaError", :namespace "mini-services.hermes-chat.providers", :complexity 6, :coverage 0.0, :crap 42.0}
+  {:name "resolveKnownProvider", :namespace "mini-services.hermes-chat.providers", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "chromeProfileStats", :namespace "mini-services.hermes-chat.render", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "renderHtml", :namespace "mini-services.hermes-chat.render.ChromeRenderer", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "rowToArtifactMeta", :namespace "mini-services.hermes-chat.store", :complexity 6, :coverage 0.0, :crap 42.0}
+  {:name "runWebSearchStage", :namespace "mini-services.hermes-chat.turn-runner", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "webchatFileBlocks", :namespace "mini-services.hermes-chat.turn-runner", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "deleteAttachmentFiles", :namespace "mini-services.hermes-chat.uploads", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "safeBase", :namespace "mini-services.hermes-chat.web-search", :complexity 6, :coverage 0.0, :crap 42.0}
@@ -353,6 +356,7 @@
   {:name "main", :namespace "scripts.test-service-token", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "finish", :namespace "scripts.test-web-flow", :complexity 6, :coverage 0.0, :crap 42.0}
   {:name "testStream", :namespace "scripts.test-zai-stream2", :complexity 6, :coverage 0.0, :crap 42.0}
+  {:name "buildConversationMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 40, :coverage 98.5294, :crap 40.0051}
   {:name "cacheSource", :namespace "components.chat.artifact-views", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "modeFromTag", :namespace "components.chat.mode-flow", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "expertClamp", :namespace "components.chat.model-picker", :complexity 5, :coverage 0.0, :crap 30.0}
@@ -363,6 +367,8 @@
   {:name "getServerVoiceChars", :namespace "components.settings.modes-section", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "saveServerPrompts", :namespace "components.settings.modes-section", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "SheetContent", :namespace "components.ui.sheet", :complexity 5, :coverage 0.0, :crap 30.0}
+  {:name "zone", :namespace "docs.crap-2026-11.scripts.analyze_crap", :complexity 5, :coverage 0.0, :crap 30.0}
+  {:name "zone", :namespace "docs.crap-2026-11.scripts.analyze_crap_edn", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "detectKind", :namespace "hooks.use-composer-attachments", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "emitAck", :namespace "lib.emit-ack", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "codeBlockHtml", :namespace "lib.highlight", :complexity 5, :coverage 0.0, :crap 30.0}
@@ -384,18 +390,17 @@
   {:name "deleteArtifactFiles", :namespace "mini-services.hermes-chat.index", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "shutdown", :namespace "mini-services.hermes-chat.index", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "parseSseLine", :namespace "mini-services.hermes-chat.local-engine", :complexity 5, :coverage 0.0, :crap 30.0}
-  {:name "modeModel", :namespace "mini-services.hermes-chat.modes", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "ensureConversationMotorLink", :namespace "mini-services.hermes-chat.motor-rest", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "probeMotorSessionsOnce", :namespace "mini-services.hermes-chat.motor-sessions", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "authHeaders", :namespace "mini-services.hermes-chat.providers", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "compareTags", :namespace "mini-services.hermes-chat.providers", :complexity 5, :coverage 0.0, :crap 30.0}
-  {:name "parseRepoInput", :namespace "mini-services.hermes-chat.providers", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "finish", :namespace "mini-services.hermes-chat.scripts.preuve-debat", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "flushUndoWindows", :namespace "mini-services.hermes-chat.store-storage", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "toStorageEntry", :namespace "mini-services.hermes-chat.store-storage", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "trace", :namespace "mini-services.hermes-chat.trace", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "liveTurnsOf", :namespace "mini-services.hermes-chat.turn-runner", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "modeSystemPromptSection", :namespace "mini-services.hermes-chat.turn-runner", :complexity 5, :coverage 0.0, :crap 30.0}
+  {:name "restoreDisplayedVersionAndRefresh", :namespace "mini-services.hermes-chat.turn-runner", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "titleFrom", :namespace "mini-services.hermes-chat.turn-runner", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "attachmentKind", :namespace "mini-services.hermes-chat.uploads", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "resolveUploadFile", :namespace "mini-services.hermes-chat.uploads", :complexity 5, :coverage 0.0, :crap 30.0}
@@ -410,6 +415,7 @@
   {:name "dedent_as_object", :namespace "scripts.split-store", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "main", :namespace "scripts.test-autocompact", :complexity 5, :coverage 0.0, :crap 30.0}
   {:name "restoreDb", :namespace "scripts.test-pool-ghost-streams", :complexity 5, :coverage 0.0, :crap 30.0}
+  {:name "normalizeModeConfig", :namespace "mini-services.hermes-chat.modes", :complexity 24, :coverage 95.0, :crap 24.072}
   {:name "LigneOutil", :namespace "components.chat.artifact-terminal", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "CsvTableView", :namespace "components.chat.artifact-views", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "PdfAttachment", :namespace "components.chat.attachments", :complexity 4, :coverage 0.0, :crap 20.0}
@@ -425,6 +431,8 @@
   {:name "maxByDocOf", :namespace "components.settings.storage-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "parseDate", :namespace "components.settings.storage-section", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "ConfirmDestructiveDialog", :namespace "components.shared.confirm-destructive-dialog", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "ns_to_file", :namespace "docs.crap-2026-11.scripts.analyze_crap_edn", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "ns_to_path", :namespace "docs.crap-2026-11.scripts.extract_hotspots", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "clampCompactThreshold", :namespace "lib.compaction", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "resolveLanguage", :namespace "lib.highlight", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "captureCurrentValues", :namespace "lib.profiles", :complexity 4, :coverage 0.0, :crap 20.0}
@@ -443,7 +451,6 @@
   {:name "probe", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "stallGuardFor", :namespace "mini-services.hermes-chat.llm-streams", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "attachmentNote", :namespace "mini-services.hermes-chat.local-engine", :complexity 4, :coverage 0.0, :crap 20.0}
-  {:name "resolveModePrompt", :namespace "mini-services.hermes-chat.modes", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "fetchRepoSnapshot", :namespace "mini-services.hermes-chat.providers", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "chromeHeadlessStatus", :namespace "mini-services.hermes-chat.render", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "clearChromeProfiles", :namespace "mini-services.hermes-chat.render", :complexity 4, :coverage 0.0, :crap 20.0}
@@ -459,6 +466,7 @@
   {:name "parseModeFlowWire", :namespace "mini-services.hermes-chat.store", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "consumeUndoWindow", :namespace "mini-services.hermes-chat.store-storage", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "openUndoWindow", :namespace "mini-services.hermes-chat.store-storage", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "fuseRoles", :namespace "mini-services.hermes-chat.turn-runner", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "localSystemPrompt", :namespace "mini-services.hermes-chat.turn-runner", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "copyAttachmentForFork", :namespace "mini-services.hermes-chat.uploads", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "readPilotInfo", :namespace "mini-services.hermes-chat.webchat.browser", :complexity 4, :coverage 0.0, :crap 20.0}
@@ -554,6 +562,8 @@
   {:name "emit", :namespace "scripts.test-web-flow", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "check", :namespace "scripts.test-webchat-flow", :complexity 4, :coverage 0.0, :crap 20.0}
   {:name "check", :namespace "scripts.verify-passe2-fixes", :complexity 4, :coverage 0.0, :crap 20.0}
+  {:name "buildProjectMethods", :namespace "mini-services.hermes-chat.store-messages", :complexity 18, :coverage 100.0, :crap 18.0}
+  {:name "readPromptOverrides", :namespace "mini-services.hermes-chat.modes", :complexity 12, :coverage 93.75, :crap 12.0352}
   {:name "ArtifactMetaLine", :namespace "components.chat.artifact-panel", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "useCopySource", :namespace "components.chat.artifact-panel", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "FileAttachment", :namespace "components.chat.attachments", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -570,7 +580,9 @@
   {:name "SelectContent", :namespace "components.ui.select", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "Slider", :namespace "components.ui.slider", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "Toaster", :namespace "components.ui.toaster", :complexity 3, :coverage 0.0, :crap 12.0}
-  {:name "fileToBase64", :namespace "hooks.use-hermes-chat", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "band", :namespace "docs.crap-2026-11.scripts.analyze_crap_edn", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "line_of", :namespace "docs.crap-2026-11.scripts.inventory_effect3", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "fileToBase64", :namespace "hooks.use-attachments-wiring", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "load", :namespace "hooks.use-pricing", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "usePricingState", :namespace "hooks.use-pricing", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "load", :namespace "hooks.use-profiles", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -602,9 +614,6 @@
   {:name "renderHtmlArtifact", :namespace "mini-services.hermes-chat.index", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "startAgentGatewayOnce", :namespace "mini-services.hermes-chat.index", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "formatBytes", :namespace "mini-services.hermes-chat.local-engine", :complexity 3, :coverage 0.0, :crap 12.0}
-  {:name "clampInt", :namespace "mini-services.hermes-chat.modes", :complexity 3, :coverage 0.0, :crap 12.0}
-  {:name "interpolatePrompt", :namespace "mini-services.hermes-chat.modes", :complexity 3, :coverage 0.0, :crap 12.0}
-  {:name "resolveVoiceChars", :namespace "mini-services.hermes-chat.modes", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "ensureNotAborted", :namespace "mini-services.hermes-chat.orchestrator", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "excerptOf", :namespace "mini-services.hermes-chat.orchestrator", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "testFailed", :namespace "mini-services.hermes-chat.orchestrator", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -623,6 +632,7 @@
   {:name "buildStorage", :namespace "mini-services.hermes-chat.store-storage", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "close", :namespace "mini-services.hermes-chat.store.Store", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "startWalCheckpoint", :namespace "mini-services.hermes-chat.store.Store", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "finishEmptyStoppedTurn", :namespace "mini-services.hermes-chat.turn-runner", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "invalidateCompactIfNeeded", :namespace "mini-services.hermes-chat.turn-runner", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "readAttachmentDataUrl", :namespace "mini-services.hermes-chat.uploads", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "isIdenticalReissue", :namespace "mini-services.hermes-chat.versions", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -665,6 +675,7 @@
   {:name "check", :namespace "scripts.test-versions-flow", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "parseWebchatModelId", :namespace "mini-services.hermes-chat.webchat.fiches", :complexity 10, :coverage 94.4444, :crap 10.0171}
   {:name "sanitizeExpertSettings", :namespace "mini-services.hermes-chat.prompts", :complexity 10, :coverage 100.0, :crap 10.0}
+  {:name "voicesFor", :namespace "mini-services.hermes-chat.modes", :complexity 9, :coverage 100.0, :crap 9.0}
   {:name "composeLocalSystemPrompt", :namespace "mini-services.hermes-chat.prompts", :complexity 7, :coverage 100.0, :crap 7.0}
   {:name "codePreviewTail", :namespace "components.chat.artifact-card", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "timeLabel", :namespace "components.chat.artifact-card", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -699,6 +710,7 @@
   {:name "Button", :namespace "components.ui.button", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "DialogContent", :namespace "components.ui.dialog", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ResizableHandle", :namespace "components.ui.resizable", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "top", :namespace "docs.crap-2026-11.scripts.analyze_crap_edn", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-pricing", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-profiles", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "addToRemoveQueue", :namespace "hooks.use-toast", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -727,6 +739,8 @@
   {:name "fenceOf", :namespace "mini-services.hermes-chat.artifacts", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "getZai", :namespace "mini-services.hermes-chat.asr", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "timingSafeEqualStr", :namespace "mini-services.hermes-chat.auth", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "ensureDir", :namespace "mini-services.hermes-chat.db-driver", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "openDatabase", :namespace "mini-services.hermes-chat.db-driver", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "checkUpdate", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "startUpdateWatchdog", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "updateProbeBase", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -736,7 +750,7 @@
   {:name "USE#2", :namespace "mini-services.hermes-chat.index", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "artifactAnchor", :namespace "mini-services.hermes-chat.index", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "enforceVersionQuota", :namespace "mini-services.hermes-chat.index", :complexity 2, :coverage 0.0, :crap 6.0}
-  {:name "resolveMode", :namespace "mini-services.hermes-chat.modes", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "voiceModel", :namespace "mini-services.hermes-chat.modes", :complexity 6, :coverage 100.0, :crap 6.0}
   {:name "update", :namespace "mini-services.hermes-chat.orchestrator.FlowRecorder", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "frModels", :namespace "mini-services.hermes-chat.providers", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "maskSecret", :namespace "mini-services.hermes-chat.providers", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -748,6 +762,7 @@
   {:name "resolveMode", :namespace "mini-services.hermes-chat.shared.chat-protocol", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "buildSnapshot", :namespace "mini-services.hermes-chat.shares", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "generateShareToken", :namespace "mini-services.hermes-chat.shares", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "close", :namespace "mini-services.hermes-chat.store-memory.MemoryStore", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "walCheckpointNow", :namespace "mini-services.hermes-chat.store.Store", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "compactInfoWire", :namespace "mini-services.hermes-chat.turn-runner", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "fileStem", :namespace "mini-services.hermes-chat.uploads", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -796,8 +811,19 @@
   {:name "startService", :namespace "scripts.test-reattach-stream", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "httpGet", :namespace "scripts.test-share-flow", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "check", :namespace "scripts.test-single-tab", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "modeModel", :namespace "mini-services.hermes-chat.modes", :complexity 5, :coverage 100.0, :crap 5.0}
+  {:name "parseRepoInput", :namespace "mini-services.hermes-chat.providers", :complexity 5, :coverage 100.0, :crap 5.0}
+  {:name "resolveExplicitBaseUrl", :namespace "mini-services.hermes-chat.providers-validate", :complexity 5, :coverage 100.0, :crap 5.0}
+  {:name "resolveModePrompt", :namespace "mini-services.hermes-chat.modes", :complexity 4, :coverage 100.0, :crap 4.0}
+  {:name "checkProviderBaseUrl", :namespace "mini-services.hermes-chat.providers-validate", :complexity 4, :coverage 100.0, :crap 4.0}
   {:name "modelLabel", :namespace "mini-services.hermes-chat.models", :complexity 3, :coverage 100.0, :crap 3.0}
+  {:name "clampInt", :namespace "mini-services.hermes-chat.modes", :complexity 3, :coverage 100.0, :crap 3.0}
+  {:name "interpolatePrompt", :namespace "mini-services.hermes-chat.modes", :complexity 3, :coverage 100.0, :crap 3.0}
+  {:name "resolveVoiceChars", :namespace "mini-services.hermes-chat.modes", :complexity 3, :coverage 100.0, :crap 3.0}
   {:name "validatePromptText", :namespace "mini-services.hermes-chat.prompts", :complexity 3, :coverage 100.0, :crap 3.0}
+  {:name "isAllowedProviderUrl", :namespace "mini-services.hermes-chat.providers-validate", :complexity 3, :coverage 100.0, :crap 3.0}
+  {:name "isLocalHostname", :namespace "mini-services.hermes-chat.providers-validate", :complexity 3, :coverage 100.0, :crap 3.0}
+  {:name "sameAsCanonicalBaseUrl", :namespace "mini-services.hermes-chat.providers-validate", :complexity 3, :coverage 100.0, :crap 3.0}
   {:name "RootLayout", :namespace "app.layout", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "SharedConversationPage", :namespace "app.shared.[token].page", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "VideoAttachment", :namespace "components.chat.attachments", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -903,6 +929,27 @@
   {:name "TooltipContent", :namespace "components.ui.tooltip", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "TooltipProvider", :namespace "components.ui.tooltip", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "TooltipTrigger", :namespace "components.ui.tooltip", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.extract_conversations_hook", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_conversations_hook", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "chk", :namespace "docs.crap-2026-11.scripts.extract_socket_events", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect2", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect3", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.refactor_llm_pool", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.refactor_llm_pool", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.split_artifacts_shares", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.split_artifacts_shares", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "block", :namespace "docs.crap-2026-11.scripts.split_conversations", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "expect", :namespace "docs.crap-2026-11.scripts.split_conversations", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.split_store_messages", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.split_store_messages", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.split_turn_stages", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.split_turn_stages", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "L", :namespace "docs.crap-2026-11.scripts.store_jetables", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "replace", :namespace "docs.crap-2026-11.scripts.store_jetables", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "createSystemMessage", :namespace "examples.websocket.server", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "createUserMessage", :namespace "examples.websocket.server", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "generateMessageId", :namespace "examples.websocket.server", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -944,6 +991,8 @@
   {:name "artifactPreview", :namespace "mini-services.hermes-chat.artifacts", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "artifactThumbPath", :namespace "mini-services.hermes-chat.artifacts", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "constructor", :namespace "mini-services.hermes-chat.artifacts.ArtifactTracker", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "openBunDatabase", :namespace "mini-services.hermes-chat.db-driver", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "registerArtifactsSharesHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "bindHandlerContext", :namespace "mini-services.hermes-chat.handlers.context", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "registerConversationsHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "registerProvidersExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -966,12 +1015,14 @@
   {:name "isVisionModel", :namespace "mini-services.hermes-chat.llm-pool", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "trimSlash", :namespace "mini-services.hermes-chat.llm-pool", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "constructor", :namespace "mini-services.hermes-chat.llm-streams.PoolAuthError", :complexity 1, :coverage 0.0, :crap 2.0}
-  {:name "modePromptSection", :namespace "mini-services.hermes-chat.modes", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "resolveMode", :namespace "mini-services.hermes-chat.modes", :complexity 2, :coverage 100.0, :crap 2.0}
   {:name "motorSessionIdFor", :namespace "mini-services.hermes-chat.motor-rest", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "constructor", :namespace "mini-services.hermes-chat.orchestrator.FlowRecorder", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "push", :namespace "mini-services.hermes-chat.orchestrator.FlowRecorder", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "rowToPreset", :namespace "mini-services.hermes-chat.prompts", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "looksLikeZaiJwt", :namespace "mini-services.hermes-chat.providers", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "checkKeySecret", :namespace "mini-services.hermes-chat.providers-validate", :complexity 2, :coverage 100.0, :crap 2.0}
+  {:name "isMcpLaunchSource", :namespace "mini-services.hermes-chat.providers-validate", :complexity 2, :coverage 100.0, :crap 2.0}
   {:name "launchArgs", :namespace "mini-services.hermes-chat.render", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "send", :namespace "mini-services.hermes-chat.render.CdpPage", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "applySchema", :namespace "mini-services.hermes-chat.schema", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -984,7 +1035,7 @@
   {:name "fail", :namespace "mini-services.hermes-chat.scripts.probe-auto-connect", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "fail", :namespace "mini-services.hermes-chat.scripts.probe-no-demo", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "rowToShareView", :namespace "mini-services.hermes-chat.shares", :complexity 1, :coverage 0.0, :crap 2.0}
-  {:name "buildMessages", :namespace "mini-services.hermes-chat.store-messages", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "constructor", :namespace "mini-services.hermes-chat.store-memory.MemoryStore", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "listStorageEntries", :namespace "mini-services.hermes-chat.store-storage", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "storageMaxVersion", :namespace "mini-services.hermes-chat.store-storage", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "constructor", :namespace "mini-services.hermes-chat.store.Store", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -1079,5 +1130,8 @@
   {:name "readBody", :namespace "scripts.test-web-flow", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "waitEvent", :namespace "scripts.test-web-flow", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "catalogModelsResult", :namespace "mini-services.hermes-chat.models", :complexity 1, :coverage 100.0, :crap 1.0}
+  {:name "modePromptSection", :namespace "mini-services.hermes-chat.modes", :complexity 1, :coverage 100.0, :crap 1.0}
+  {:name "isProviderStrategy", :namespace "mini-services.hermes-chat.providers-validate", :complexity 1, :coverage 100.0, :crap 1.0}
+  {:name "buildMessages", :namespace "mini-services.hermes-chat.store-messages", :complexity 1, :coverage 100.0, :crap 1.0}
   {:name "webchatModelId", :namespace "mini-services.hermes-chat.webchat.fiches", :complexity 1, :coverage 100.0, :crap 1.0}
 ]}

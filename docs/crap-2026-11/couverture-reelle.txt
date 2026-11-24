@@ -229,3 +229,122 @@ diff unifié — vagues 1 + 2 + 3, nouveaux fichiers inclus : llm-streams.ts,
 use-chat-socket-events.ts, use-conversations.ts, test/* ×5, vitest.config.ts).
 Snapshot crapper complet : table-crap.txt + crap.edn + rapport-crap-complet.txt
 (régénérés après vague 3).
+
+══════════════════════════════════════════════════════════════════════════════
+7. VAGUE 4 — STORE JETABLE + REGISTRE 4 + VALIDATIONS PURES + HOOK + TOUR
+   (validation : tsc ×3, eslint 0 erreur, 33/33, gardes 0 échec, Vitest 144/144)
+══════════════════════════════════════════════════════════════════════════════
+
+A. Store jetable — PREMIÈRE COUVERTURE RÉELLE DU STORE (56 tests, test/store-messages.test.ts)
+   bun:sqlite est isolé derrière un DRIVER abstrait (db-driver.ts, fichier neuf) :
+   l'exact sous-ensemble db utilisé par le code de production (query/prepare →
+   statement get/all/run, exec, transaction, close). Sous Bun : bun:sqlite natif
+   (le service, inchangé). Sous Node/Vitest : node:sqlite (DatabaseSync) — le
+   MÊME moteur SQLite, base :memory: — via MemoryStore (store-memory.ts, neuf) :
+   les MÊMES builders (store-*.ts, corps VERBATIM) tournent sur un SQLite réel.
+   Différences absorbées par l'adaptateur : transaction() (BEGIN/COMMIT + imbrica-
+   tion par SAVEPOINT, comme bun), .get() à vide renvoie undefined (tous les
+   appelants testent la vérité), liaison des booléens (true→1, false→0).
+   store.ts n'a plus AUCUN import de bun:sqlite ; uploads.ts et artifacts.ts
+   basculent import.meta.dir → dirname(fileURLToPath(import.meta.url)) pour que
+   la chaîne d'import se charge sous les deux runtimes (sémantique identique).
+   vitest.config.ts : store-messages.ts, providers-validate.ts et providers.ts
+   entrent dans la liste de couverture.
+
+   Scores crapper APRÈS vague 4 (couverture RÉELLE des builders store) :
+     buildMessageVersionsMethods   CC 73   couv  0 % → 90,9 %   CRAP 5402 → 77
+     buildConversationMethods      CC 40   couv  0 % → 98,5 %   CRAP 1640 → 40
+     buildMessagesCoreMethods      CC 41   couv  0 % → 89,9 %   CRAP 1722 → 42,8
+     buildProjectMethods           CC 18   couv  0 % → 100 %    CRAP  342 → 18
+     buildMessages (orchestrateur) CC  1   couv  0 % → 100 %    CRAP    2 → 1
+   Les tests verrouillent la machine de versions F-14 (supersession, navigation
+   ‹ 1/2 ›, restauration par id, promotion/renumérotation à la suppression,
+   dissolution du groupe, purge des inactives) et le CRUD/modes (F-30, sessions
+   moteur 75, épinglage, cascade de suppression D-02, projets F-59/F-60 B18).
+
+   ANOMALIE LATENTE CONSTATÉE (comportement VERBATIM verrouillé par test, NON
+   corrigé — hors discipline de la vague) : la purge D-02 des versions inactives
+   (deleteTrailingAssistant, editUserMessageAndTruncate) est appelée APRÈS les
+   DELETE — les lignes supprimées ne portent plus leur version_group, la
+   détection des groupes ne trouve rien et la purge ne purge JAMAIS (les
+   version_active = 0 et leurs pièces jointes restent en base). Vérifié sous
+   bun:sqlite NATIF (production) et node:sqlite — même comportement. Correctif
+   proposé (chantier séparé) : relever les groupes AVANT les DELETE.
+
+B. 4e registre monolithe — handlers/artifacts-shares.ts (CC 59 → 1 + 3)
+   Même recette que conversations/providers-extensions/settings-system : trois
+   sous-registres THÉMATIQUES contigus, appelés dans l'ordre d'origine, corps
+   des handlers VERBATIM (seules les accolades d'encadrement changent) :
+     registerArtifactViewHandlers   CC 14  (artifact:versions, artifact:retry)
+     registerFileVersionHandlers    CC 28  (artifact:restore/label/pin — F-26)
+     registerShareHandlers          CC 19  (share:get/create/revoke — F-13)
+     registerArtifactsSharesHandlers (orchestrateur)  CC 1   CRAP 3540 → 2
+   index.ts inchangé (l'export public ne bouge pas).
+
+C. Validations pures — providers (CC 114 → 96) et extensions (CC 95 → 94)
+   providers-validate.ts (NOUVEAU module pur) : la règle « https requis, http
+   strictement local » vivait en QUATRE copies (resolveKnownProvider,
+   providers:add, providers:set-base, testProviderKey) — une seule vérité
+   testée maintenant : isAllowedProviderUrl + isLocalHostname. Plus les bornes
+   verbatim des handlers : checkProviderBaseUrl (3 refus verbatim), 
+   resolveExplicitBaseUrl (override silencieux de providers:add),
+   sameAsCanonicalBaseUrl (nullification canon), checkKeySecret (≤ 8),
+   isProviderStrategy (liste du pool), isMcpLaunchSource (regex registry:install).
+   8 helpers 100 % couverts (CRAP = plancher CC) + parseRepoInput (export
+   préexistant) 100 % — 21 tests (test/providers-validate.test.ts).
+   Messages d'erreur identiques octet par octet ; protocole socket inchangé.
+
+D. Fin du hook géant — use-hermes-chat.ts (CC 166 → 86, cible < 100 ATTEINTE)
+   Les pièces jointes quittent le hook : use-attachments-wiring.ts (NOUVEAU,
+   CC 12) — uploadAttachment, transcribeAudio + leurs helpers module
+   (MAX_ATTACHMENT_BYTES, fileToBase64). Les actions de tour quittent le hook :
+   use-turn-actions.ts (NOUVEAU, CC 70) — autoCompactBeforeSend (v2.4),
+   sendMessage, stopGeneration, regenerate, setMessageVersion (F-14),
+   retryAfterError, editMessage, deleteMessage, compactConversation + le
+   résolveur modelIdFromLabel. Corps des callbacks VERBATIM ; deps typées
+   (TurnActionsDeps, AttachmentsDeps) ; tableaux de deps COMPLÉTÉS (setters
+   useState et refs à identité stable — fréquence de mémoisation inchangée),
+   même convention que use-conversations.ts (vague 3).
+   useHermesChat  CC 166   CRAP 27 722 → 7 482
+   Au passage, le compilateur React (règle react-hooks/refs) impose la
+   conversion des deux miroirs render-phase (projectsRef, pendingModeRef) en
+   useEffect — convention déjà celle du fichier (activeIdRef, promptInfoRef) ;
+   lecture uniquement dans les handlers socket, aucun changement observé.
+   L'API publique du hook ne change pas : la page n'est pas touchée.
+
+E. Tour assistant — runAssistantTurn (CC 147 → 84)
+   Les étapes cohérentes quittent le corps pour des helpers MODULE-LEVEL
+   (hors de createTurnRunner — sinon crapper agrège leur CC dans l'englobant) ;
+   corps VERBATIM, deps explicites (TurnStageDeps = store/io/quota/cartes) :
+     fuseRoles                        CC  4  (alternance stricte des rôles, 94)
+     buildTurnHistory                 CC  9  (variante F-17, compaction v2.4, plafond)
+     runWebSearchStage                CC  6  (F-09/F-12, best effort)
+     restoreDisplayedVersionAndRefresh CC 5  (F-14 — était dupliqué 2×)
+     finishEmptyStoppedTurn           CC  3  (arrêt à vide)
+     persistDoneTurn                  CC 16  (artefacts + INSERT + stream:done)
+     persistFailedTurn                CC 24  (partiel + restauration + stream:error)
+   Les closures de stream (liveSync, emitTool, onDelta/onReasoning/onStatus)
+   et les accumulateurs (contentAcc, reasoningAcc, lastEmit, lastSent) RESTENT
+   dans runAssistantTurn et sont passés explicitement. runAssistantTurn
+   CC 147   CRAP 21 756 → 7 140.
+
+   Bilan vague 4 : +77 tests Vitest (67 → 144), première couverture réelle du
+   store (SQLite réel en mémoire), un registre monolithe démontlé (4e), les
+   validations d'URL/clés réunies en un module pur testé, le hook géant sous
+   la barre des 100, le tour assistant décomposé en étapes testables.
+   5 nouveaux scripts de chirurgie ancrée versionnés (scripts/) :
+   store_jetables.py, split_artifacts_shares.py, providers_valide.py,
+   extract_turn_actions.py, split_turn_stages.py.
+
+   Prochaines cibles (classement crapper après vague 4 — production uniquement) :
+   CC 179  AgentMotorCard      (UI : sous-cartes feuilles)
+   CC 138  Sidebar             (UI)
+   CC 110  Composer            (UI)
+   CC 105  StorageSection      (UI)
+   CC 102  SystemSection       (UI)
+   CC  96  registerProvidersHandlers (continuer : décomposition en sous-registres)
+   CC  94  registerExtensionsHandlers (idem)
+   CC  86  useHermesChat       (reste sous 100 — acceptable)
+   CC  84  runAssistantTurn    (reste : orchestration — acceptable)
+   L'UI est un autre chantier, avec ses propres outils (React Compiler,
+   tests de composants, conventions QA DOM du repo — scripts/qa-*.ts).

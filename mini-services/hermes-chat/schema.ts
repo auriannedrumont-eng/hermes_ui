@@ -2,12 +2,12 @@
 // (ALTER TABLE additives) — extraits du constructeur de Store (découpage
 // 2026-11, cf. FORK.md). La signature est une fonction pure qui reçoit la
 // connexion : le constructeur de Store reste l'unique point d'entrée.
-import type { Database } from "bun:sqlite";
+import type { ChatDatabase } from "./db-driver";
 
 /** Applique PRAGMA + tables + migrations douces à la connexion donnée.
  *  Ordre immuable : PRAGMA → conversations/messages → artefacts → projets →
  *  réglages → fournisseurs/clés → extensions → prompts système → partages. */
-export function applySchema(db: Database): void {
+export function applySchema(db: ChatDatabase): void {
   db.exec("PRAGMA journal_mode = WAL;");
   // D-03 : un accès concurrent très bref (script de test, second process)
   // levait immédiatement SQLITE_BUSY ; 5 s d'attente active résorbent
@@ -238,7 +238,7 @@ export function applySchema(db: Database): void {
 }
 
 /** ALTER TABLE … ADD COLUMN tolérant : silencieux si la colonne existe. */
-function softAlter(db: Database, table: string, column: string): void {
+function softAlter(db: ChatDatabase, table: string, column: string): void {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
   } catch (err) {

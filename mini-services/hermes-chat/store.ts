@@ -6,8 +6,8 @@
 // interface fusionnée (declaration merging) + implémentation posée au
 // prototype ci-dessous. L'API publique (Store, types de lignes) est
 // inchangée — les tests importent Store depuis ./store.
-import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { openDatabase, type ChatDatabase } from "./db-driver";
+import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { applySchema } from "./schema";
 import { buildSettings, type StoreSettingsMethods } from "./store-settings";
@@ -30,9 +30,13 @@ import type { ConversationMode, ModeConfig } from "./modes";
 import { normalizeWebchatModelId } from "./webchat/fiches";
 import type { ModeFlowRow } from "./types";
 
+// Portabilité (vague 4, Store jetable) : dirname(fileURLToPath(import.meta.url))
+// vaut import.meta.dir sous Bun et reste correct sous Node (Vitest) — le
+// module doit pouvoir se charger sous les deux runtimes.
+const SERVICE_DIR = dirname(fileURLToPath(import.meta.url));
 const DB_PATH =
   process.env.HERMES_CHAT_DB ??
-  join(import.meta.dir, "..", "..", "db", "hermes-chat.sqlite");
+  join(SERVICE_DIR, "..", "..", "db", "hermes-chat.sqlite");
 
 /** JSON.parse protégé pour les colonnes persistées (audit L2-6) : une ligne
  *  malformée ne doit jamais rendre une conversation impossible à ouvrir — la
@@ -220,7 +224,7 @@ export interface Store
     StoreStorageMethods {}
 
 export class Store {
-  db: Database;
+  db: ChatDatabase;
   /** Checkpointeur périodique du WAL (dette revue 2026-11-13 : sans lui,
    *  le -wal croît sans borne entre les redémarrages ; SQLite ne fait un
    *  checkpoint automatique qu'au franchissement du seuil ~1000 pages
@@ -228,8 +232,7 @@ export class Store {
   private walTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    mkdirSync(dirname(DB_PATH), { recursive: true });
-    this.db = new Database(DB_PATH, { create: true });
+    this.db = openDatabase(DB_PATH);
     // Schéma + PRAGMA + migrations douces : cf. schema.ts (découpage 2026-11).
     applySchema(this.db);
   }
