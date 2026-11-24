@@ -977,6 +977,66 @@ function Set-AgentHome {
     Log "• maison de l'agent : $DataHome (dans le dossier, (89)) — plus aucune dependance a la console de lancement."
 }
 
+# ── Clés + modèle par défaut de l'agent (loi « démarrage sans intervention », 24/11) ──
+# Deux pannes muettes vécues le 24/11 : (a) .env VIDE dans la maison → l'agent
+# répond « Hermes is not connected to any AI provider » à chaque tour ; (b)
+# aucun modèle par défaut dans config.yaml → l'amont tente openrouter/claude
+# qui rejette la requête.
+# LOI D'INDÉPENDANCE TOTALE ((91), rappel ferme du 24/11) : F:\hermes_web est
+# une application NEUVE — elle n'emprunte JAMAIS rien à aucune autre
+# installation Hermes (F:\hermes, %LOCALAPPDATA%\hermes, ~/.hermes). Le
+# premier correctif ici copiait des clés depuis F:\hermes\data\.env : FAUX,
+# retiré. Le .env appartient à l'utilisatrice : s'il est vide, l'écran
+# Système le dit et c'est ELLE qui colle ses clés (une fois). Ce que le
+# lanceur répare tout seul : le modèle par défaut (zai/glm-5.3-flash, choix
+# de l'utilisatrice ; surchargeable par HERMES_DEFAULT_PROVIDER/MODEL).
+function Ensure-AgentCles {
+    # LOI 24/11 (double plantage du lanceur) : $DataHome est LOCALE à
+    # Set-AgentHome — une fonction ne voit jamais la variable d'une autre.
+    # La maison est recalculée ici, à l'identique, depuis $env:HERMES_HOME
+    # que Set-AgentHome vient de fixer.
+    $maison = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $Root 'data' }
+    $envFile = Join-Path $maison '.env'
+    $cfgFile = Join-Path $maison 'config.yaml'
+    # (a) .env vide → ON NE TOUCHE PAS (les clés sont à l'utilisatrice) ;
+    #     on l'annonce clairement dans le manifeste/journal.
+    if (-not (Test-Path $envFile) -or ((Get-Item $envFile -ErrorAction SilentlyContinue).Length -le 10)) {
+        Set-SanteMaillon 'agent' "clés manquantes — collez vos clés API dans data\.env (écran Système)"
+        Log "• data\.env absent ou vide — l'agent répondra « not connected » : collez vos clés API dans ce fichier (une seule fois)."
+    }
+    # (b) modèle par défaut
+    $providerDefaut = if ($env:HERMES_DEFAULT_PROVIDER) { $env:HERMES_DEFAULT_PROVIDER } else { 'zai' }
+    $modelDefaut    = if ($env:HERMES_DEFAULT_MODEL)    { $env:HERMES_DEFAULT_MODEL }    else { 'glm-5.3-flash' }
+    $aRegler = $true
+    if (Test-Path $cfgFile) {
+        try {
+            $cfgTxt = Get-Content $cfgFile -Raw
+            if ($cfgTxt -match '(?m)^model:\s*$') {
+                $apres = ($cfgTxt -split '(?m)^model:\s*$', 2)[1]
+                if ($apres -match '(?m)^\s{2,}provider:\s*\S' -and $apres -match '(?m)^\s{2,}model:\s*\S') { $aRegler = $false }
+            }
+        } catch { }
+    }
+    if ($aRegler) {
+        try {
+            if (Test-Path $cfgFile) {
+                $cfgTxt = Get-Content $cfgFile -Raw
+                if ($cfgTxt -match '(?m)^model:\s*$') {
+                    $cfgTxt = $cfgTxt -replace '(?m)^model:\s*$', ("model:`n  provider: {0}`n  model: {1}`n" -f $providerDefaut, $modelDefaut)
+                } else {
+                    $cfgTxt = ("model:`n  provider: {0}`n  model: {1}`n`n" -f $providerDefaut, $modelDefaut) + $cfgTxt
+                }
+                Set-Content -Path $cfgFile -Value $cfgTxt -Encoding UTF8
+            } else {
+                ("model:`n  provider: {0}`n  model: {1}`n" -f $providerDefaut, $modelDefaut) | Set-Content -Path $cfgFile -Encoding UTF8
+            }
+            Log ("• modele par défaut de l'agent pose : {0}/{1} — plus de rejet OpenRouter par défaut amont." -f $providerDefaut, $modelDefaut)
+        } catch {
+            Log "  ATTENTION : pose du modele par défaut impossible ($($_.Exception.Message)) — l'agent pourrait rejeter les tours (modele amont par defaut)."
+        }
+    }
+}
+
 # ((91)) INDEPENDANCE TOTALE d'avec toute autre installation Hermes de la
 # machine (loi posee le 24/11 : F:\hermes_web n'emprunte RIEN a F:\hermes).
 # Cas reel du 23/11 23:42 : le lanceur etait parti d'une console d'une AUTRE
@@ -1148,8 +1208,42 @@ function Start-Gateway {
     return $true
 }
 function Open-Browser([string]$url) {
-    try { Start-Process $url } catch { Log "• impossible d'ouvrir le navigateur : $url" }
-    Log "• navigateur : $url"
+    # Onglet UNIQUE (demande du 24/11) : si un onglet du navigateur affiche
+    # déjà l'interface (n'importe quel port de la pile), on réutilise CET
+    # onglet au lieu d'en ouvrir un deuxième à chaque lancement. Méthique :
+    # les navigateurs basés sur Chromium exposent leur fenêtre via leur
+    # processus ; on ne peut pas piloter les onglets sans débogueur. La voie
+    # fiable et universelle : ouvrir l'URL dans le navigateur PAR DÉFAUT
+    # (Start-Process $url) — Windows y réutilise une fenêtre existante du
+    # même navigateur. Pour réduire les doublons DÉJÀ ouverts, on repère
+    # d'abord les onglets qui pointent l'interface via les titres de fenêtres
+    # du navigateur par défaut : si une fenêtre « Hermes Web » est déjà
+    # vivante, on se contente de la ramener au premier plan (AppActivate),
+    # sans ouvrir d'URL — l'utilisateur rafraîchit (F5) si besoin.
+    $dejaOuvert = $false
+    try {
+        # Titres d'onglets de l'interface : « Hermes Web » (layout.tsx),
+        # dans un VRAI navigateur seulement — la CONSOLE du lanceur porte
+        # aussi « Hermes Web » dans son titre (« - fermez cette fenetre ») :
+        # la croire serait ne jamais ouvrir l'onglet (cas réel du 24/11,
+        # 04:19 : focus sur la console, onglet introuvable pour l'utilisateur).
+        $navigateurs = 'brave|chrome|msedge|firefox|vivaldi|opera'
+        $suivi = Get-Process | Where-Object {
+            $_.MainWindowTitle -and
+            $_.MainWindowTitle -match 'Hermes Web' -and
+            $_.ProcessName -match $navigateurs
+        } | Select-Object -First 1
+        if ($suivi) {
+            $dejaOuvert = $true
+            Log ("• onglet Hermes deja ouvert (fenetre « {0} ») — ramene au premier plan, pas de nouvel onglet." -f $suivi.MainWindowTitle)
+            Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue
+            try { [Microsoft.VisualBasic.Interaction]::AppActivate($suivi.Id) } catch { }
+        }
+    } catch { }
+    if (-not $dejaOuvert) {
+        try { Start-Process $url } catch { Log "• impossible d'ouvrir le navigateur : $url" }
+        Log "• navigateur : $url"
+    }
 }
 
 # ── INSTALLATION DE L'AGENT DANS LE DOSSIER DE L'APPLICATION (§9 (63),
@@ -2096,10 +2190,10 @@ function Do-Start {
             # on laisse Windows souffler avant le nettoyage ci-dessous.
             Start-Sleep -Seconds 2
         } else {
-            Log "Pile deja demarree (lanceur pid $lpid) — ouverture du navigateur uniquement."
+            Log "Pile deja demarree — Hermes est deja pret, focus ramene sur l'onglet."
             Write-Host ''
-            Write-Host ("  Hermes Web tourne deja (lanceur pid {0}) : http://127.0.0.1:{1}/" -f $lpid, (State-Get 'GW_PORT'))
-            Write-Host '  Rien a relancer. (Pour REMPLACER le lanceur : fermez sa fenetre puis relancez ce fichier.)'
+            Write-Host "  Hermes Web est deja pret : http://127.0.0.1:$(State-Get 'GW_PORT')/"
+            Write-Host "  Votre onglet Hermes est au premier plan — rien d'autre a faire."
             Open-Browser ("http://127.0.0.1:{0}/" -f (State-Get 'GW_PORT'))
             # Fenetre double-clic : sans pause elle se ferme avant d'avoir
             # ete lue — l'utilisateur croyait avoir relance le lanceur.
@@ -2134,6 +2228,10 @@ function Do-Start {
     # moindre demarrage de composant (mini-service lit le jeton, agent
     # herite de HERMES_HOME).
     Set-AgentHome
+    # Clés + modèle par défaut de l'agent : les deux pannes muettes du 24/11
+    # (.env vide → « not connected » ; pas de modèle → rejet OpenRouter)
+    # se réparent ICI, avant tout démarrage — zéro intervention.
+    Ensure-AgentCles
 
     # Phase 0 (refonte (68)) : prérequis vérifiés et AFFICHÉS (✓/✗) + écrits
     # dans le manifeste — avant le moindre démarrage de composant.

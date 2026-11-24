@@ -256,6 +256,19 @@ export function useChatStream({ activeIdRef, setMessages, refreshConversations }
     setStreamsRecord((prev) => {
       const s = prev[p.messageId];
       if (!s) return prev;
+      // Corrélation par nom (24/11) : un done/error REMPLACE la carte
+      // « running » du même outil au lieu d'empiler — plus jamais un
+      // spinner orphelin à côté du ✓ de sa propre fermeture.
+      if (p.event.status !== "running") {
+        const idx = s.toolEvents.findLastIndex(
+          (t) => t.name === p.event.name && t.status === "running"
+        );
+        if (idx >= 0) {
+          const next = [...s.toolEvents];
+          next[idx] = { ...next[idx], status: p.event.status, detail: p.event.detail ?? next[idx].detail };
+          return { ...prev, [p.messageId]: { ...s, toolEvents: next, status: null } };
+        }
+      }
       return {
         ...prev,
         [p.messageId]: { ...s, toolEvents: [...s.toolEvents, p.event], status: null },

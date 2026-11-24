@@ -2,22 +2,28 @@
 // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent
 //   Hermes suffit, rien à saisir. HERMES_GATEWAY_URL ou l'URL de l'interface
 //   (Paramètres → Système) ne servent qu'aux installations spéciales.
-// - Les tours parlent le protocole de la gateway (WebSocket `/api/ws`,
-//   enveloppe `api_turn_v1`, deltas de stream / événements d'outils /
-//   raisonnement). Sans agent lancé, re-sonde silencieuse à chaque tour
-//   (l'agent démarre plus tard → ça se branche tout seul).
+// - Les tours parlent le protocole canonique de la gateway (WebSocket
+//   `/api/ws`, ticket one-use en sous-protocole, puis session.create →
+//   prompt.submit ; deltas via les événements message.delta / message.complete).
+//   Sans agent lancé, re-sonde silencieuse à chaque tour (l'agent démarre
+//   plus tard → ça se branche tout seul).
 // - Sans gateway, les clés fournisseurs actives répondent (vrais modèles,
 //   réels) ; sans gateway NI clé, le tour échoue avec un message clair —
 //   JAMAIS de LLM simulé (mode démo supprimé).
 // - `listModels()` interroge l'API REST de la gateway
 //   (GET /api/model/options) et retombe sur le catalogue Hermes.
 import WebSocket from "ws";
+import { spawnSync } from "node:child_process";
+import { resolve as pathResolve, join } from "node:path";
+import { existsSync } from "node:fs";
 import { catalogModelsResult } from "./models";
 import type { LlmPoolApi, PoolTurnResult, TurnUsage } from "./llm-pool";
-import type { Attachment, GatewayMode, ModelOption, ModelsResult } from "./types";
+import type { GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./local-engine";
 import { runRestTurn } from "./motor-rest";
 import { trace } from "./trace";
+import { portablePythonPath } from "./agent-starter";
+import { resolveAgentDir } from "./agent-motor";
 
 // URL par défaut : l'agent Hermes lancé localement (gateway/run_api.py).
 // Priorité : interface (Paramètres → Système) > HERMES_GATEWAY_URL > défaut.
@@ -29,6 +35,71 @@ const REPROBE_TIMEOUT_MS = 1500;
 const TURN_TIMEOUT_MS = 180_000;
 const MODELS_TIMEOUT_MS = 4000;
 
+// Protocole canonique de la gateway (hermes-gateway-v1) : l'upgrade exige un
+// ticket one-use passé en sous-protocole (`hermes-gateway-ticket.<ticket>`),
+// minter par `python -m hermes_cli.main gateway attach --json` (30 s TTL,
+// une seule utilisation). L'ancienne enveloppe `api_turn_v1` est refusée :
+// un tour est maintenant session.create → prompt.submit (JSON-RPC 2.0).
+const GATEWAY_PROTOCOL = "hermes-gateway-v1";
+const TICKET_PROTOCOL_PREFIX = "hermes-gateway-ticket.";
+const TICKET_TIMEOUT_MS = 15_000;
+// Candidats python pour minter le ticket (même ordre de confiance que le
+// starter : portable d'abord, VENV dédié, système en dernier repli).
+function ticketPythonCandidates(): string[] {
+  const list: string[] = [];
+  const portable = portablePythonPath();
+  if (portable) list.push(portable);
+  const agentDir = resolveAgentDir();
+  if (agentDir) {
+    const venv = process.platform === "win32"
+      ? join(agentDir, ".venv", "Scripts", "python.exe")
+      : join(agentDir, ".venv", "bin", "python");
+    if (existsSync(venv)) list.push(venv);
+  }
+  if (process.platform === "win32") {
+    list.push("py");
+    list.push("python");
+  } else {
+    list.push("python3");
+    list.push("python");
+  }
+  return list;
+}
+
+/** Minter un ticket one-use pour l'upgrade WebSocket canonique (30 s TTL).
+ *  `gateway attach --json` renvoie aussi le ticket quand la gateway tourne
+ *  déjà (state=ready) — c'est le chemin nominal. null = aucun python n'a
+ *  répondu (la gateway est probablement absente ; la re-sonde s'en charge).
+ *  ((90)) La maison est ÉPINGLÉE (HERMES_HOME du dossier) : un héritage de
+ *  l'environnement d'une AUTRE installation Hermes (console de lancement,
+ *  IDE) faisait répondre la gateway de l'autre maison — ticket d'un autre
+ *  profil, refus 4403 à l'upgrade, tours muets sans cause visible. */
+function mintGatewayTicket(): string | null {
+  const maison = pathResolve(join(import.meta.dir, "..", "..", "data"));
+  const env = { ...process.env, HERMES_HOME: maison };
+  const cwd = resolveAgentDir() ?? process.cwd();
+  for (const cmd of ticketPythonCandidates()) {
+    try {
+      const args = cmd === "py" ? ["-3"] : [];
+      const out = spawnSync(cmd, [...args, "-m", "hermes_cli.main", "gateway", "attach", "--json"], {
+        timeout: TICKET_TIMEOUT_MS,
+        encoding: "utf-8",
+        windowsHide: true,
+        env,
+        cwd,
+      });
+      if (out.status !== 0 || !out.stdout) continue;
+      const parsed = JSON.parse(out.stdout) as { ticket?: string; protocols?: string[] };
+      const ticket = parsed.ticket
+        ?? parsed.protocols?.find((p) => p.startsWith(TICKET_PROTOCOL_PREFIX))?.slice(TICKET_PROTOCOL_PREFIX.length);
+      if (ticket) return ticket;
+    } catch {
+      /* candidat suivant */
+    }
+  }
+  return null;
+}
+
 function toWsUrl(url: string): string {
   // `replace(/^http/i, "ws")` convertit déjà http→ws et https→wss :
   // re-préfixer par `ws://` produisait `ws://ws://…` / `ws://wss://…`
@@ -36,18 +107,6 @@ function toWsUrl(url: string): string {
   // désormais complétée elle aussi.
   const clean = url.trim().replace(/^http/i, "ws").replace(/\/+$/, "");
   return clean.endsWith("/api/ws") ? clean : `${clean}/api/ws`;
-}
-
-/** URL de dial WebSocket avec le jeton de session : depuis hermes-agent 0.21.x
- *  avec webapp.enabled, la poignée de main /api/ws n'accepte sur la boucle
- *  locale QUE le jeton de session du webapp passé en `?token=` (la porte du
- *  webapp le compare à constante de temps — cf. amont hermes_cli/
- *  web_server_chat.py, `_ws_auth_credential_and_reason`) ; l'en-tête
- *  Authorization reste pour les appels REST (listModels, sessions natives).
- *  Sans jeton réglé, dial identique à avant (gateway sans webapp). */
-function toWsDialUrl(url: string, token: string | null): string {
-  const base = toWsUrl(url);
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
 // Exporté pour la sonde REST « sessions natives » (motor-sessions.ts) :
@@ -109,12 +168,15 @@ function parseModelOptions(data: any): ModelOption[] {
   return out;
 }
 
-/** Erreur claire quand ni l'agent Hermes ni une clé fournisseur ne répondent. */
+/** Erreur claire quand la gateway ne répond pas : UNE seule voix dans le
+ *  chat (Hermes) — pas de repli. Le préfixe [HERMES_OFFLINE] est reconnu
+ *  par l'interface pour afficher la carte dédiée avec le bouton Paramètres. */
 function noEngineError(): Error {
   return new Error(
-    "Agent Hermes non détecté (défaut ws://127.0.0.1:9120/api/ws) — lancez l'agent " +
-      "(gateway/run_api.py du dépôt hermes-agent) ; il se branche automatiquement. " +
-      "Ou ajoutez une clé fournisseur dans Paramètres → Fournisseurs & clés."
+    "[HERMES_OFFLINE] Hermes n'est pas connecté — lancez l'application " +
+      "(Hermes-Web.bat) ou vérifiez la connexion dans Paramètres → Système. " +
+      "Vous pouvez aussi ajouter une clé fournisseur dans Paramètres → " +
+      "Fournisseurs & clés pour discuter sans agent."
   );
 }
 
@@ -268,10 +330,18 @@ export class HermesConnector {
         }
         resolve(ok);
       };
-      const ws = new WebSocket(toWsDialUrl(this.gatewayUrl!, this.gatewayToken), {
-        headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
-        handshakeTimeout: timeoutMs,
-      });
+      // Sonde canonique : un upgrade accepté exige un ticket one-use en
+      // sous-protocole. Pas de ticket minter → gateway absente (rien à sonder).
+      const ticket = mintGatewayTicket();
+      if (!ticket) {
+        resolve(false);
+        return;
+      }
+      const ws = new WebSocket(
+        toWsUrl(this.gatewayUrl!),
+        [GATEWAY_PROTOCOL, TICKET_PROTOCOL_PREFIX + ticket],
+        { handshakeTimeout: timeoutMs }
+      );
       const timer = setTimeout(() => done(false), timeoutMs);
       ws.on("open", () => {
         clearTimeout(timer);
@@ -407,21 +477,11 @@ export class HermesConnector {
       // telle quelle — jamais de repli silencieux vers un autre moteur.
       return await this.runGatewayTurn(req, cb);
     }
-    // Sans agent lancé : clés fournisseurs actives (vrais modèles, réels).
-    if (this.pool) {
-      const pooled: PoolTurnResult | null = await this.pool.runTurn(req, cb);
-      if (pooled) {
-        this.model = `${pooled.model} · ${pooled.provider}`;
-        return {
-          content: pooled.content,
-          reasoning: pooled.reasoning,
-          model: pooled.model,
-          engine: "pool",
-          provider: pooled.provider,
-          usage: pooled.usage,
-        };
-      }
-    }
+    // Loi « une seule voix dans le chat » (24/11) : UNE réponse = Hermes.
+    // Le repli pool de clés est SUPPRIMÉ — un modèle brut avec un prompt
+    // système faisait croire à l'utilisateur qu'il parlait à Hermes. Sans
+    // gateway, le tour échoue avec un message qui renvoie vers Paramètres
+    // (l'interface y affiche une carte dédiée avec le bouton Paramètres).
     throw noEngineError();
   }
 
@@ -436,28 +496,42 @@ export class HermesConnector {
     throw noEngineError();
   }
 
-  // Protocole de tour Hermes (cf. gateway/session_api_turn.py) :
-  //   -> {"text": "...", "api_turn_v1": {"history": [...], "settings": {...},
-  //        "attachments": [...]}}
-  //   <- deltas de stream / événements d'outils / raisonnement / fin de tour
-  // Les pièces jointes sont transmises dans l'enveloppe (le protocole Hermes
-  // les supporte nativement : images, audio, vidéo, documents).
+  // Protocole canonique de tour Hermes (hermes-gateway-v1) :
+  //   1. upgrade avec ticket one-use (sous-protocole hermes-gateway-ticket.<t>)
+  //   2. session.create {}                      -> session_id
+  //   3. prompt.submit {session_id, text, submission_id [, attachments]}
+  //   <- événements JSON-RPC (method=event) : message.delta (payload.text),
+  //      reasoning.delta, tool.* / status.update, message.complete (final).
+  // L'ancienne enveloppe api_turn_v1 est refusée par la gateway. Les réglages
+  // par tour sont limités au contrat fermé du canonical wire : le modèle
+  // demandé passe par model_override ; effort / permissions / prompt système /
+  // mémoire / température ne font pas partie du contrat (ignorés).
   private runGatewayTurn(
     req: TurnRequest,
     cb: TurnCallbacks
   ): Promise<TurnOutcome> {
     return new Promise((resolve, reject) => {
       let settled = false;
-      // true = la gateway a annoncé la fin (turn_end/complete/done). Une
+      // true = la gateway a annoncé la fin (message.complete). Une
       // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
       // un contenu tronqué présenté comme complet (Lot 1, audit L1-6).
       let endedProperly = false;
       let content = "";
       let reasoning = "";
-      const ws = new WebSocket(toWsDialUrl(this.gatewayUrl!, this.gatewayToken), {
-        headers: this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : undefined,
-        handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
-      });
+      // Ticket one-use : sans gateway vivante, `attach --json` échoue →
+      // erreur claire (la re-sonde rebranchera au tour suivant).
+      const ticket = mintGatewayTicket();
+      if (!ticket) {
+        reject(new Error(
+          "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
+        ));
+        return;
+      }
+      const ws = new WebSocket(
+        toWsUrl(this.gatewayUrl!),
+        [GATEWAY_PROTOCOL, TICKET_PROTOCOL_PREFIX + ticket],
+        { handshakeTimeout: HANDSHAKE_TIMEOUT_MS }
+      );
 
       const finish = (err?: Error) => {
         if (settled) return;
@@ -505,113 +579,134 @@ export class HermesConnector {
 
       const timer = setTimeout(() => finish(new Error("Timeout du tour gateway")), TURN_TIMEOUT_MS);
 
-      ws.on("open", () => {
-        cb.onStatus("Gateway Hermes connectée…");
-        const attachments: Attachment[] | undefined = req.attachments?.length
-          ? req.attachments
-          : undefined;
-        // Réglages additifs : requested_model + effort + permissions + prompt
-        // système (F-11/F-19). L'échelle d'effort et les clés permissions sont
-        // portées par le modèle / la gateway — ignorées sans dommage si non
-        // supportées (clés à valider contre la gateway, cf. chantier
-        // « Composer v2 »).
-        const settings: Record<string, unknown> = {
-          ...(req.modelId ? { requested_model: req.modelId } : {}),
-          ...(req.settings?.reasoningEffort
-            ? { reasoning_effort: req.settings.reasoningEffort }
-            : {}),
-          ...(req.settings?.permissionsMode
-            ? { permissions: req.settings.permissionsMode }
-            : {}),
-          // F-30 — Mode Plan : mise en plan demandée au premier tour
-          // (tenté une fois, refus non bloquant — la consigne écrite du
-          // mode reste la garantie).
-          ...(req.settings?.planMode ? { plan_mode: true } : {}),
-          ...(req.systemPrompt ? { system_prompt: req.systemPrompt } : {}),
-          // Mémoire utilisateur (F-18) : notes actives + apprentissage
-          // automatique — clés à valider contre la gateway (même convention
-          // que Composer v2 : ignorées sans dommage si non supportées).
-          ...(req.settings?.memoryNotes
-            ? { memory_notes: req.settings.memoryNotes }
-            : {}),
-          ...(req.settings?.memoryAutoLearn !== undefined
-            ? { memory_auto_learn: req.settings.memoryAutoLearn }
-            : {}),
-          // Mode expert (F-22) : température / plafond de sortie / graine —
-          // assainis côté service, ignorés sans dommage par la gateway.
-          ...(req.settings?.temperature !== undefined
-            ? { temperature: req.settings.temperature }
-            : {}),
-          ...(req.settings?.maxTokens !== undefined
-            ? { max_tokens: req.settings.maxTokens }
-            : {}),
-          ...(req.settings?.seed !== undefined
-            ? { seed: req.settings.seed }
-            : {}),
-        };
-        ws.send(
-          JSON.stringify({
-            text: req.content,
-            api_turn_v1: {
-              history: req.history,
-              settings,
-              ...(attachments ? { attachments } : {}),
-            },
-          })
-        );
-      });
-
-      ws.on("message", (raw) => {
-        if (cb.signal.aborted) return finish();
-        let data: any;
-        try {
-          data = JSON.parse(String(raw));
-        } catch {
-          return;
-        }
-        // Cartographie tolérante des événements de la gateway
-        const delta: string | undefined =
-          data?.stream_delta ?? data?.delta ?? data?.text ?? data?.content ?? data?.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta && !data?.event && !data?.type) {
-          content += delta;
-          cb.onDelta(delta);
-          return;
-        }
-        const think: string | undefined = data?.reasoning ?? data?.reasoning_delta ?? data?.choices?.[0]?.delta?.reasoning_content;
-        if (typeof think === "string" && think) {
-          reasoning += think;
-          cb.onReasoning(think);
-          return;
-        }
-        const evt = data?.event ?? data?.type;
-        if (typeof evt === "string") {
-          if (evt.includes("tool")) {
-            cb.onToolEvent({
-              name: data?.tool ?? data?.name ?? "outil",
-              status: evt.includes("complete") || evt.includes("done") ? "done" : "running",
-              detail: data?.detail,
-            });
-          } else if (evt.includes("status")) {
-            cb.onStatus(String(data?.status ?? "Hermes travaille…"));
-          } else if (evt.includes("turn_end") || evt.includes("complete") || evt.includes("done")) {
-            if (typeof data?.text === "string" && data.text) {
-              content = data.text;
-              cb.onDelta("");
+      let nextRpcId = 1;
+      // Outils en cours (tool.start sans tool.complete) : clos d'office à la
+      // fin du tour — aucun spinner ne survit à la réponse livrée.
+      const outilsOuverts = new Set<string>();
+      // Réponse à une requête JSON-RPC par id ; null si la socket meurt avant.
+      const rpc = (method: string, params: Record<string, unknown>): Promise<any> =>
+        new Promise((res, rej) => {
+          const id = nextRpcId++;
+          const onFrame = (raw: unknown) => {
+            let data: any;
+            try {
+              data = JSON.parse(String(raw));
+            } catch {
+              return;
             }
-            endedProperly = true;
-            finish();
-          } else if (evt.includes("error")) {
-            finish(new Error(String(data?.error ?? "Erreur gateway")));
-          }
-        }
-        if (data?.done === true) {
-          endedProperly = true;
-          finish();
-        }
-      });
+            if (data?.id !== id) return;
+            ws.off("message", onFrame);
+            if (data?.error) rej(new Error(String(data.error.message ?? "Erreur gateway")));
+            else res(data?.result);
+          };
+          ws.on("message", onFrame);
+          ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+        });
 
       ws.on("error", (err) => finish(err));
       ws.on("close", () => finish());
+
+      ws.on("open", async () => {
+        try {
+          cb.onStatus("Gateway Hermes connectée…");
+          // 1. La session canonique (l'historique vit DANS la gateway ; les
+          //    messages de la conversation ne sont pas rejoués — le wire
+          //    fermé n'accepte pas d'historique client).
+          const created = await rpc("session.create", {});
+          const sid: string | undefined = created?.session_id;
+          if (!sid || typeof sid !== "string") {
+            finish(new Error("session.create : pas de session_id renvoyé"));
+            return;
+          }
+          // 2. La soumission : submission_id OBLIGATOIRE (identité de la
+          //    soumission, sert aux reprises/replays côté gateway).
+          const submissionId = `hw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          // Pièces jointes : le contrat canonique n'accepte que {path, mime}
+          // — le chemin absolu du fichier déjà écrit sur disque par uploads.ts.
+          const attachments = req.attachments?.length
+            ? req.attachments.map((a) => ({
+                path: pathResolve(join(import.meta.dir, "..", "..", "db"), a.url.replace(/^\//, "")),
+                mime: a.mime,
+              }))
+            : undefined;
+          await rpc("prompt.submit", {
+            session_id: sid,
+            text: req.content,
+            submission_id: submissionId,
+            ...(req.modelId ? { model_override: { model: req.modelId } } : {}),
+            ...(attachments ? { attachments } : {}),
+          });
+
+          // 3. Le stream : frames d'événements (method=event, params.type).
+          const onEvent = (raw: unknown) => {
+            if (cb.signal.aborted) return finish();
+            let data: any;
+            try {
+              data = JSON.parse(String(raw));
+            } catch {
+              return;
+            }
+            if (data?.method !== "event") return;
+            const params = data?.params ?? {};
+            const evt: string = params?.type ?? "";
+            const payload = params?.payload ?? {};
+            if (evt === "message.delta") {
+              const delta = payload?.text;
+              if (typeof delta === "string" && delta) {
+                content += delta;
+                cb.onDelta(delta);
+              }
+            } else if (evt === "reasoning.delta" || evt === "thinking.delta") {
+              const think = payload?.text;
+              if (typeof think === "string" && think) {
+                reasoning += think;
+                cb.onReasoning(think);
+              }
+            } else if (evt.startsWith("tool.")) {
+              // Loi du fil propre (24/11) : SEUL le couple tool.start →
+              // tool.complete crée/ferme une carte. Les autres variantes
+              // (tool.generating, tool.progress, tool.output_risk) sont des
+              // signaux intermédiaires : les transformer en cartes créait
+              // des spinners JAMAIS fermés après la réponse livrée (capture
+              // du 24/11 : 3 web_extract, 6 terminal, 8 read_file figés).
+              if (evt === "tool.start" || evt === "tool.complete") {
+                const toolName = payload?.name ?? payload?.tool ?? "outil";
+                if (evt === "tool.complete") outilsOuverts.delete(toolName);
+                else outilsOuverts.add(toolName);
+                cb.onToolEvent({
+                  name: toolName,
+                  status: evt === "tool.complete" ? "done" : "running",
+                  detail: payload?.summary ?? payload?.preview,
+                });
+              }
+            } else if (evt === "status.update") {
+              cb.onStatus(String(payload?.text ?? payload?.status ?? "Hermes travaille…"));
+            } else if (evt === "message.complete") {
+              // Texte final autoritaire ; usage disponible dans le payload.
+              // Filet : tout outil resté "running" (complete perdu) est clos —
+              // le fil ne garde AUCUN spinner après la réponse livrée.
+              for (const nom of outilsOuverts) {
+                cb.onToolEvent({ name: nom, status: "done" });
+              }
+              outilsOuverts.clear();
+              const finalText = payload?.text ?? payload?.content;
+              if (typeof finalText === "string" && finalText && !cb.signal.aborted) {
+                content = finalText;
+                cb.onDelta("");
+              }
+              endedProperly = true;
+              ws.off("message", onEvent);
+              finish();
+            } else if (evt === "error") {
+              ws.off("message", onEvent);
+              finish(new Error(String(payload?.error ?? payload?.message ?? "Erreur gateway")));
+            }
+          };
+          ws.on("message", onEvent);
+        } catch (err) {
+          finish(err instanceof Error ? err : new Error(String(err)));
+        }
+      });
     });
   }
 }

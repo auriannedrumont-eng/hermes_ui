@@ -10,6 +10,7 @@ import {
   Code2,
   FileText,
   GitBranch,
+  KeyRound,
   Lightbulb,
   Mail,
   RefreshCw,
@@ -114,6 +115,12 @@ interface MessageListProps {
   onSetVersion: (message: ChatMessage, index: number) => void;
   onRetryError: () => void;
   onDismissError: () => void;
+  /** Loi « une seule voix » (24/11) : ouvre Paramètres depuis la carte
+   *  « Hermes non connecté » (erreur [HERMES_OFFLINE] du tour). */
+  onOpenSettings?: () => void;
+  /** Bandeau d'avance (24/11) : mode moteur vu par le service — null tant
+   *  que le hello n'est pas reçu (pas de faux avertissement au boot). */
+  gatewayMode?: "gateway" | "local" | null;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onFork: (messageId: string) => void;
@@ -196,6 +203,8 @@ export function MessageList({
   onSetVersion,
   onRetryError,
   onDismissError,
+  onOpenSettings,
+  gatewayMode = null,
   onEdit,
   onDelete,
   onFork,
@@ -286,9 +295,30 @@ export function MessageList({
   }
 
   const isEmpty = !loadingHistory && messages.length === 0 && effectiveStreams.length === 0;
+  // Bandeau d'avance (loi « une seule voix », 24/11) : affiché dès l'ouverture
+  // quand le service n'est PAS branché à la gateway — l'utilisateur sait AVANT
+  // d'envoyer un message que ses clés doivent être configurées (ou l'agent
+  // lancé), plus jamais un tour qui échoue en surprise.
+  const horsLigne = gatewayMode !== null && gatewayMode !== "gateway";
 
   return (
     <div className="relative min-h-0 flex-1">
+      {horsLigne ? (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="flex w-full items-center justify-center gap-2 border-b border-warning/40 bg-warning/10 px-3 py-2 text-left transition-colors hover:bg-warning/15"
+          title="Ouvrir Paramètres"
+        >
+          <KeyRound className="h-3.5 w-3.5 shrink-0 text-warning" />
+          <span className="truncate text-[12px] text-warning">
+            Hermes n'est pas encore connecté — configurez une clé fournisseur ou lancez l'agent.
+          </span>
+          <span className="ml-auto shrink-0 text-[11.5px] font-medium text-warning underline decoration-warning/40 underline-offset-2">
+            Paramètres
+          </span>
+        </button>
+      ) : null}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -442,8 +472,52 @@ export function MessageList({
             ) : null}
 
             {/* Erreur persistante du dernier tour (F-04) : le partiel éventuel
-                est déjà dans le fil au-dessus — ici, la cause et la sortie. */}
+                est déjà dans le fil au-dessus — ici, la cause et la sortie.
+                Loi « une seule voix » (24/11) : l'erreur [HERMES_OFFLINE]
+                (gateway absente, plus de repli pool) affiche une carte
+                dédiée qui renvoie vers Paramètres au lieu d'un échec brut. */}
             {effectiveStreams.length === 0 && turnError ? (
+              turnError.error.includes("[HERMES_OFFLINE]") ? (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning/10 px-3.5 py-2.5"
+                >
+                  <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-medium text-warning">
+                      Hermes n'est pas encore connecté
+                    </p>
+                    <p className="mt-0.5 break-words text-[12.5px] text-muted-foreground">
+                      Configurez une clé fournisseur pour discuter — ou lancez
+                      l'agent Hermes (il se branche tout seul). Tout se passe
+                      dans Paramètres.
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {onOpenSettings ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={onOpenSettings}
+                          className="h-7 rounded-lg px-2.5 text-[12.5px]"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          Configurer dans Paramètres
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={onRetryError}
+                        disabled={isBusy}
+                        className="h-7 rounded-lg px-2.5 text-[12.5px] text-muted-foreground"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Réessayer
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
               <div
                 role="alert"
                 className="flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-2.5"
@@ -478,6 +552,7 @@ export function MessageList({
                   </div>
                 </div>
               </div>
+              )
             ) : null}
             <div className="h-2" />
           </div>

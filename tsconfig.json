@@ -55,6 +55,15 @@
     // avalait tout le dépôt (507 Ko d'erreurs TS2307 en rafale) et
     // l'interface retombait en mode développement. L'agent vit chez nous,
     // il ne fait pas partie de notre build — loi (66).
-    "hermes-agent"
+    "hermes-agent",
+    // desktop/runtime/maj-sauvegarde-*/ : copies de sécurité posées par la
+    // mise à jour GitHub (fichiers locaux mis de côté). Ce sont des
+    // souvenirs, pas du code du projet — un test TS dedans (cas réel du
+    // 24/11, test-source-guards.ts) faisait échouer tout next build.
+    "**/maj-sauvegarde-*/**",
+    // data/cache/scratch/** : copies de secours d'autres projets Hermes
+    // (scratch) — même statut : jamais du code du build (cas réel du 24/11,
+    // test-webchat-flow.ts : TS2339/TS2867 en rafale).
+    "data/cache/scratch/**"
   ]
 }

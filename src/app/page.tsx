@@ -504,6 +504,8 @@ export default function HermesWebPage() {
             onSetVersion={chat.setMessageVersion}
             onRetryError={chat.retryAfterError}
             onDismissError={chat.dismissTurnError}
+            onOpenSettings={() => setSettingsOpen(true)}
+            gatewayMode={chat.mode}
             onEdit={chat.editMessage}
             onDelete={chat.deleteMessage}
             onFork={handleFork}

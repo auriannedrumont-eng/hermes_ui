@@ -593,6 +593,25 @@ const runAssistantTurn = async (
     status: "running" | "done" | "error";
     detail?: string;
   }) => {
+    // Corrélation par nom (24/11) : un done/error ferme la carte « running »
+    // du MÊME outil au lieu d'en pousser une nouvelle — sinon le filet de
+    // clôture créait une carte de plus et le spinner orphelin restait.
+    if (event.status !== "running") {
+      for (let i = toolEvents.length - 1; i >= 0; i--) {
+        const prev = toolEvents[i];
+        if (prev.name === event.name && prev.status === "running") {
+          toolEvents[i] = { ...prev, status: event.status, detail: event.detail ?? prev.detail };
+          io.emit("stream:tool", {
+            conversationId,
+            messageId,
+            event: toolEvents[i],
+            ...(variant ? { variant } : {}),
+          });
+          liveSync({ toolEvents: [...toolEvents] });
+          return;
+        }
+      }
+    }
     const toolEvent: ToolEvent = { ...event, at: new Date().toISOString() };
     toolEvents.push(toolEvent);
     io.emit("stream:tool", {

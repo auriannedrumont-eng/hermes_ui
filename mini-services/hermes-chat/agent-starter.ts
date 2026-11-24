@@ -126,6 +126,10 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
           detached: true,
           env: {
             ...process.env,
+            // ((90)) Maison ÉPINGLÉE : un HERMES_HOME hérité d'une autre
+            // installation faisait démarrer l'agent sur la maison d'à côté
+            // (instance hybride du 23/11 23:42 — elle fauchait notre 9120).
+            HERMES_HOME: join(import.meta.dir, "..", "..", "data"),
             PYTHONIOENCODING: "utf-8",
             PYTHONPATH: [agentDir, process.env.PYTHONPATH]
               .filter(Boolean)
