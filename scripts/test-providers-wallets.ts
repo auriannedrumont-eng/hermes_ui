@@ -72,10 +72,18 @@ function check(label: string, ok: boolean, extra = "") {
 }
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Ack borné (10 s) : un accusé perdu ne doit pas geler le test jusqu'au
+// timeout du runner (300 s) sans aucune trace — le résolveur porte le
+// marqueur __timeout et le détail des acks dans les checks fait le reste.
 function emitAck(s: any, event: string, payload?: unknown): Promise<any> {
   return new Promise((resolve) => {
-    if (payload === undefined) s.emit(event, (res: any) => resolve(res ?? {}));
-    else s.emit(event, payload, (res: any) => resolve(res ?? {}));
+    const t = setTimeout(() => resolve({ __timeout: true }), 10000);
+    const done = (res: any) => {
+      clearTimeout(t);
+      resolve(res ?? {});
+    };
+    if (payload === undefined) s.emit(event, done);
+    else s.emit(event, payload, done);
   });
 }
 
@@ -336,13 +344,15 @@ async function main() {
         baseUrl: MOCK_ORIGIN,
       });
       providerA = add?.provider?.id ?? null;
-      check("fournisseur créé", Boolean(providerA));
+      // Détail systématique : un échec d'ajout muet (ack perdu, doublon,
+      // précondition) doit nommer SA cause dès l'exécution de la suite.
+      check("fournisseur créé", Boolean(providerA), add?.error ?? JSON.stringify(add).slice(0, 120));
       const key = await emitAck(socket, "providers:add-key", {
         providerId: providerA,
         label: "Plan",
         secret: CODING_KEY,
       });
-      check("clé (format standard) ajoutée", Boolean(key?.key?.id));
+      check("clé (format standard) ajoutée", Boolean(key?.key?.id), key?.error ?? (key?.__timeout ? "ack perdu (10 s)" : ""));
 
       const models = await emitAck(socket, "models:list");
       const ids = (models?.models ?? []).map((m: any) => m.id);

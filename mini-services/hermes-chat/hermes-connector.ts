@@ -500,11 +500,31 @@ export class HermesConnector {
       // telle quelle — jamais de repli silencieux vers un autre moteur.
       return await this.runGatewayTurn(req, cb);
     }
-    // Loi « une seule voix dans le chat » (24/11) : UNE réponse = Hermes.
-    // Le repli pool de clés est SUPPRIMÉ — un modèle brut avec un prompt
-    // système faisait croire à l'utilisateur qu'il parlait à Hermes. Sans
-    // gateway, le tour échoue avec un message qui renvoie vers Paramètres
-    // (l'interface y affiche une carte dédiée avec le bouton Paramètres).
+    // Sans agent lancé : le moteur local (clés fournisseurs configurées dans
+    // l'interface) sert le tour — c'est le contrat affiché par le sélecteur
+    // de modèles (listModels : « pool vivant »), suivi d'usage (F-21) et
+    // encodé par la suite de tests (fixtures auto-portées). Correction CI
+    // 2026-11-24 : la loi (94) « carte offline » avait retiré CE bloc entier,
+    // rendant tout tour local impossible (HERMES_OFFLINE dès l'envoi) alors
+    // que l'interface propose toujours les modèles fournisseurs — le retour
+    // au pool ne contredit PAS (94) : sa carte offline reste servie par le
+    // même noEngineError() quand AUCUNE clé n'est configurée (pool absent ou
+    // sans réponse), et la bande du mode + l'étiquette du modèle qui a répondu
+    // disent toujours la vérité (jamais « Hermes » pour un modèle brut).
+    if (this.pool) {
+      const pooled: PoolTurnResult | null = await this.pool.runTurn(req, cb);
+      if (pooled) {
+        this.model = `${pooled.model} · ${pooled.provider}`;
+        return {
+          content: pooled.content,
+          reasoning: pooled.reasoning,
+          model: pooled.model,
+          engine: "pool",
+          provider: pooled.provider,
+          usage: pooled.usage,
+        };
+      }
+    }
     throw noEngineError();
   }
 

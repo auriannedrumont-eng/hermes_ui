@@ -411,8 +411,13 @@ async function main() {
     psN.includes("'-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet'") &&
       shU.includes("-m hermes_cli.main --profile default gateway run --quiet") &&
       shU.includes('PYTHONIOENCODING=utf-8'));
-  check("ps1 : appelé dans le flux juste avant la sonde 9120",
-    /Start-AgentRuntime\r?\n\s*if \(Test-PortBusy 9120\)/.test(psU));
+  // (100) puis revue P1-P7 (B21) : la sonde d'identité 9120 vit DANS
+  // Start-AgentRuntime (après le garde « maison installée »), et l'appel du
+  // flux de boot est suivi du verdict — l'ancienne ligne de sonde qui suivait
+  // l'appel a été retirée (elle écrasait le diagnostic de la sonde).
+  check("ps1 : allumé dans le flux de boot avant le verdict, sonde 9120 portée par Start-AgentRuntime ((100)/(B21))",
+    /(^|\n)    Start-AgentRuntime\r?\n    Write-Sante -pret 'pret'/.test(psN) &&
+      /function Start-AgentRuntime \{[\s\S]*?if \(Test-PortBusy 9120\)/.test(psN));
   check("arrêt propre : marque = le runtime supervise (plus run_api.py), les deux lanceurs",
     psN.includes("Stop-Tree 'AGENT_PID' $MAgent") &&
       psN.includes("$MAgent = 'hermes_cli\\.main.*gateway'") &&
