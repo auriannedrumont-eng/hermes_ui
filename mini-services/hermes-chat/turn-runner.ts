@@ -7,7 +7,7 @@
 import type { Server } from "socket.io";
 import type { Store } from "./store";
 import { toHttpBase, type HermesConnector } from "./hermes-connector";
-import { ensureConversationMotorLink } from "./motor-rest";
+import { ensureConversationMotorLink, motorSessionIdFor } from "./motor-rest";
 import { runWebSearch, webSearchSection, type WebSource } from "./web-search";
 import { modelLabel, DEFAULT_MODEL_ID } from "./models";
 import {
@@ -502,6 +502,26 @@ const runAssistantTurn = async (
     }
   }
   const cut = lastUserIdx >= 0 ? lastUserIdx : existing.length;
+  // Alternance stricte des rôles (94) : la construction ci-dessous peut
+  // empiler deux messages de même rôle — le résumé de compaction (un
+  // `user`) suivi du premier message postérieur (souvent `user` aussi),
+  // un tour échoué sans partiel, une suppression de message assistant,
+  // un échec d'une variante en comparaison. L'API LLM refuse ces
+  // historiques (HTTP 400). La fusion des consécutifs (contenus joints
+  // par \n\n) répare les trois cas d'un seul geste, sans déplacer le
+  // résumé (le déplacer dans systemPrompt le perdrait en gateway, dont
+  // le contrat WS ne transmet pas de prompt système).
+  const fuseRoles = (
+    rows: { role: "user" | "assistant"; content: string }[]
+  ): { role: "user" | "assistant"; content: string }[] => {
+    const out: { role: "user" | "assistant"; content: string }[] = [];
+    for (const row of rows) {
+      const prev = out[out.length - 1];
+      if (prev && prev.role === row.role) prev.content = `${prev.content}\n\n${row.content}`;
+      else out.push({ role: row.role, content: row.content });
+    }
+    return out;
+  };
   let history: { role: "user" | "assistant"; content: string }[];
   const compact = readCompact(conversationId);
   if (compact) {
@@ -512,7 +532,7 @@ const runAssistantTurn = async (
     // postérieurs. L'ancien slice(-MAX_HISTORY) sur le tout éliminait le
     // résumé dès le 30e message postérieur, vidant la session de son
     // contexte sans avertissement.
-    history = [
+    history = fuseRoles([
       {
         role: "user" as const,
         content:
@@ -521,12 +541,12 @@ const runAssistantTurn = async (
       ...after
         .slice(-(MAX_HISTORY - 1))
         .map((m: ChatMessage) => ({ role: m.role, content: m.content })),
-    ];
+    ]);
   } else {
-    history = existing
+    history = fuseRoles(existing
       .slice(0, cut)
       .slice(-MAX_HISTORY)
-      .map((m: ChatMessage) => ({ role: m.role, content: m.content }));
+      .map((m: ChatMessage) => ({ role: m.role, content: m.content })));
   }
 
   const toolEvents: ToolEvent[] = [];
@@ -806,20 +826,26 @@ const runAssistantTurn = async (
       // ne l'expose pas (le webapp 9120 n'a que le GET), aucune trace
       // d'échec pour un chemin qui n'existe pas.
       const motorSessionId =
-        connector.mode === "gateway" &&
-        connector.gatewayUrl &&
-        (await connector.hasRestContract())
-          ? await ensureConversationMotorLink(
-              store,
-              toHttpBase(connector.gatewayUrl),
-              connector.gatewayToken,
-              conversationId,
-              // Le prompt de conversation gateway (même expression que le
-              // tour) : posé à la création de la session, renvoyé à jour
-              // dans le body de chaque tour REST (system_message).
-              store.getConversationPrompt(conversationId)?.content ?? null,
-              controller.signal,
-            )
+        connector.mode === "gateway" && connector.gatewayUrl
+          ? (await connector.hasRestContract())
+            ? await ensureConversationMotorLink(
+                store,
+                toHttpBase(connector.gatewayUrl),
+                connector.gatewayToken,
+                conversationId,
+                // Le prompt de conversation gateway (même expression que le
+                // tour) : posé à la création de la session, renvoyé à jour
+                // dans le body de chaque tour REST (system_message).
+                store.getConversationPrompt(conversationId)?.content ?? null,
+                controller.signal,
+              )
+            // Bascule sessions natives, chemin WS (94) : sans contrat REST,
+            // l'id déterministe part QUAND MÊME au tour — runGatewayTurn s'en
+            // sert comme request_id de session.create, et la gateway rend la
+            // MÊME session à chaque tour (son historique est la mémoire).
+            // Avant (bug 94) : null → session.create {} vierge à chaque
+            // message, la conversation perdait sa mémoire en WS.
+            : motorSessionIdFor(conversationId)
           : null;
       result = await connector.runTurn(
       {

@@ -612,7 +612,16 @@ export class HermesConnector {
           // 1. La session canonique (l'historique vit DANS la gateway ; les
           //    messages de la conversation ne sont pas rejoués — le wire
           //    fermé n'accepte pas d'historique client).
-          const created = await rpc("session.create", {});
+          // Mémoire de conversation en WS (94) : quand la conversation est
+          // liée à une session moteur (motorSessionId, id déterministe
+          // `ui-<conversationId>`), il part comme request_id de
+          // session.create — la gateway dérive l'id de session du triplet
+          // (profil, principal, request_id) et rend LA MÊME session à chaque
+          // tour, avec l'historique de la conversation. Avant : {} à chaque
+          // message → session vierge → l'agent oubliait tout à chaque tour.
+          const created = await rpc("session.create", req.motorSessionId
+            ? { request_id: req.motorSessionId }
+            : {});
           const sid: string | undefined = created?.session_id;
           if (!sid || typeof sid !== "string") {
             finish(new Error("session.create : pas de session_id renvoyé"));

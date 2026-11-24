@@ -9,6 +9,8 @@
 import type { ArtifactRow, Store } from "./store";
 import type { StorageEntry } from "./shared/chat-protocol";
 import { STORAGE_UNDO_MS, isStorageCleanable } from "./shared/chat-protocol";
+import { artifactPdfPath, artifactThumbPath } from "./artifacts";
+import { rmSync } from "node:fs";
 
 /** Transforme une ligne SQL jointe en entrée d'inventaire (§4.1). */
 export function toStorageEntry(r: ArtifactRow & { conversation_title?: string | null; project_id?: string | null; project_name?: string | null }): StorageEntry {
@@ -137,7 +139,22 @@ export function openUndoWindow(rows: ArtifactRow[]): string {
   const win: UndoWindow = {
     rows,
     expiresAt: Date.now() + STORAGE_UNDO_MS,
-    timer: setTimeout(() => undoWindows.delete(token), STORAGE_UNDO_MS),
+    // Fuite de fichiers (94) : à l'expiration, les lignes SQL sont déjà
+    // parties — les fichiers dérivés (.png / .pdf) restaient sur le disque
+    // pour toujours. Supprimés ici ; force:true tolère un fichier jamais
+    // généré, et le try/catch un verrou Windows (fichier servi à l'instant).
+    timer: setTimeout(() => {
+      for (const row of win.rows) {
+        for (const file of [artifactThumbPath(row.id), artifactPdfPath(row.id)]) {
+          try {
+            rmSync(file, { force: true });
+          } catch {
+            /* verrou Windows ou fichier régénéré : conservé, sans incident */
+          }
+        }
+      }
+      undoWindows.delete(token);
+    }, STORAGE_UNDO_MS),
   };
   undoWindows.set(token, win);
   return token;
