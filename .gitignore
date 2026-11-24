@@ -72,3 +72,6 @@ tools/
 # par l'interface, exclu de son build
 /hermes-agent/
 
+
+# caches locaux du lanceur ((91) : home/appdata/localappdata du dossier)
+/.cache/
