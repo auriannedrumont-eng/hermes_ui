@@ -35,7 +35,7 @@
 // validation — comportement inchangé depuis v0.4.1, le branchement
 // gateway:set reste à faire, cf. FORK.md §9).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { Pastille } from "@/components/settings/bits";
 import { ConfirmDestructiveDialog } from "@/components/shared/confirm-destructive-dialog";
@@ -56,6 +56,8 @@ import { getSocket } from "@/lib/socket";
 import type {
   AgentRelease,
   MotorState,
+  MotorOp,
+  MotorControl,
   MotorJournalEntry as JournalWire,
 } from "@/lib/chat-types";
 
@@ -80,110 +82,61 @@ const df = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", 
 const JALONS_MAJ = ["Demande envoyée", "Sauvegarde", "Mise à jour", "Contrôle"];
 const JALONS_RETOUR = ["Demande envoyée", "Arrêt", "Retour aux fichiers", "Contrôle"];
 
-export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectGateway }: AgentMotorCardProps) {
-  const { toast } = useToast();
-  // Revue 95 : champs contrôlés du repli « autre poste » (advOpen existe
-  // déjà plus bas) + verdict de liaison.
-  const [advUrl, setAdvUrl] = useState("");
-  const [advToken, setAdvToken] = useState("");
-  const [advBusy, setAdvBusy] = useState(false);
-  const [state, setState] = useState<MotorState | null>(null);
-  const [journal, setJournal] = useState<JournalWire[]>([]);
-  const [log, setLog] = useState<string | null>(null);
-  const [logAt, setLogAt] = useState(0);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [diagOpen, setDiagOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [advOpen, setAdvOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  // Lot audit 2026-11-21 : états pending + chien de garde des demandes
-  // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
-  const [checking, setChecking] = useState(false);
-  const [requesting, setRequesting] = useState(false);
+// ── Découpage en sous-cartes feuilles (chantier UI 2026-11-25) ─────────
+// La carte (CC 179 au crapper) est démontée en trois feuilles appelées
+// dans l'ordre du rendu, corps déplacés VERBATIM (aucune ligne de JSX ni
+// de handler modifiée — les closures deviennent des props typées du même
+// nom), par chirurgie ancrée (ce script, versionné) :
+//   AgentMotorEnTete  — pastille, le fil (une phrase par état), la cause
+//                       connue et les boutons d'action (toujours rendus) ;
+//   AgentMotorBlocs   — les blocs d'état conditionnels : notes de version,
+//                       scénario « problème », fil live de l'opération ;
+//   AgentMotorReplis  — les replis et le pied de carte : « autre poste »,
+//                       historique, lien documents générés.
+// L'état de la carte reste dans l'orchestrateur (AgentMotorCard), sauf les
+// états purement locaux d'un bloc (replis notes/diagnostic, copie, champs
+// « autre poste ») qui descendent dans leur feuille — même durée de vie
+// (les feuilles sont montées en continu). Structure DOM inchangée (mêmes
+// nœuds dans le même ordre) ; props publiques de la carte inchangées.
+/** Feuille 1 — l'en-tête de la carte : pastille, le fil (une phrase par
+ *  état), la cause connue et les boutons d'action. Corps déplacé VERBATIM
+ *  de l'orchestrateur (chantier UI 2026-11-25) ; la pastille et le libellé
+ *  d'état sont dérivés des mêmes entrées, devenues des props. */
+interface AgentMotorEnTeteProps {
+  connected: boolean;
+  op: MotorOp;
+  installed: string | null;
+  release: AgentRelease | null;
+  previous: string | null;
+  verifieLabel: string | null;
+  stateConnu: boolean;
+  pbDetecte: boolean;
+  state: MotorState | null;
+  checking: boolean;
+  requesting: boolean;
+  requestUpdate: () => void;
+  requestCheck: () => void;
+  setConfirmOpen: Dispatch<SetStateAction<boolean>>;
+  setAdvOpen: Dispatch<SetStateAction<boolean>>;
+}
 
-  /** Applique un snapshot du journal d'opération (toujours réel — appelé
-   *  par le relais en direct ou après une demande explicite). */
-  const appliqueLog = useCallback((snap: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
-    if (!snap?.exists || typeof snap.text !== "string" || !snap.text.trim()) return;
-    setLog(snap.text);
-    if (typeof snap.mtimeMs === "number" && snap.mtimeMs > 0) setLogAt(snap.mtimeMs);
-  }, []);
-
-  useEffect(() => {
-    const socket = getSocket();
-    socket.emit(
-      "agent:motor-state",
-      (res: (MotorState & { journal?: JournalWire[] }) | { installed?: string | null; journal?: JournalWire[] } = {}) => {
-        const st = res as MotorState;
-        setState(st);
-        setJournal(res.journal ?? []);
-        // Le fil de l'opération au (re)montage : vécu si une opération est
-        // EN COURS (le service la connaît en mémoire) ou si le journal est
-        // frais (< 10 min) — sinon un verdict d'hier ne doit pas
-        // ressusciter « Terminé » (v0.5.1, même garde que la carte
-        // application ; l'âge porte sur mtimeMs, horloge du service A-2).
-        socket.emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
-          if (!r?.exists || typeof r.text !== "string" || !r.text.trim()) return;
-          const frais =
-            typeof r.mtimeMs === "number" &&
-            Date.now() - r.mtimeMs < 10 * 60_000;
-          if (st.op || frais) appliqueLog(r);
-        });
-      }
-    );
-    const onState = (s: MotorState) => {
-      setState(s);
-      socket.emit("agent:journal", (r: { journal?: JournalWire[] } = {}) =>
-        setJournal(r.journal ?? [])
-      );
-    };
-    // Le relais ne diffuse que sur changement réel (signature service) :
-    // toute ligne reçue ici est vivante.
-    const onLog = (snap: { text?: string; mtimeMs?: number } = {}) => {
-      appliqueLog({ exists: true, ...snap });
-    };
-    socket.on("agent:motor-changed", onState);
-    socket.on("agent:update-log:changed", onLog);
-    return () => {
-      socket.off("agent:motor-changed", onState);
-      socket.off("agent:update-log:changed", onLog);
-    };
-  }, [appliqueLog]);
-
-  const op = state?.op ?? null;
-  const installed = state?.installed ?? null;
-  const release: AgentRelease | null = state?.release ?? null;
-  const previous = state?.previousVersion ?? null;
-  const control = state?.lastControl ?? null;
-  // Lot audit : « vérifiée aujourd'hui à … » n'est plus affirmé quelle que
-  // soit l'ancienneté — le libellé porte la vraie date si ce n'est pas
-  // aujourd'hui (checkedAt est persisté côté service).
-  const verifieLabel = useMemo(() => {
-    if (!state?.checkedAt) return null;
-    const d = new Date(state.checkedAt);
-    if (Number.isNaN(d.getTime())) return null;
-    const heure = hf.format(d);
-    const memeJour = new Date().toDateString() === d.toDateString();
-    return memeJour
-      ? `vérifiée aujourd'hui à ${heure}`
-      : `vérifiée le ${df.format(d)}`;
-  }, [state?.checkedAt]);
-  /** État moteur reçu au moins une fois — distingue « chargement » de
-   *  « Hermes non détecté » (v0.5.1 : le bouton Revérifier suit). */
-  const stateConnu = state !== null;
-
-  /** Mise à jour récente (< 24 h) vue par l'interface : distingue « Hermes
-   *  n'est pas lancé » (neutre) de « ça a cassé depuis la mise à jour »
-   *  (rouge + retour arrière) — le carnet fait foi. */
-  const majRecente = journal.some(
-    (e) =>
-      e.type === "maj" &&
-      e.resultat !== "echec" &&
-      Date.now() - new Date(e.at).getTime() < 24 * 3600_000
-  );
-  const pbDetecte =
-    !!control && !control.ok && !!control.versionLue && majRecente && !op;
-
+function AgentMotorEnTete({
+  connected,
+  op,
+  installed,
+  release,
+  previous,
+  verifieLabel,
+  stateConnu,
+  pbDetecte,
+  state,
+  checking,
+  requesting,
+  requestUpdate,
+  requestCheck,
+  setConfirmOpen,
+  setAdvOpen,
+}: AgentMotorEnTeteProps) {
   // ── Pastille (liaison coupée > opération > problème > dispo > état) ──
   const tone: "ok" | "warn" | "err" | "off" | "busy" =
     !connected
@@ -212,132 +165,8 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
                 ? "À jour"
                 : "Hermes non détecté";
 
-  /** Revue P1-P7 (B4) : émission via emitAck — omet le payload quand il
-   *  vaut undefined. Sinon le sérialiseur socket.io transforme l'argument
-   *  undefined en null sur le fil et le handler « (cb?) » reçoit
-   *  (null, ackFn) : jamais acquitté, échec toasté à 8 s pendant que le
-   *  serveur exécute l'opération. Le chien de garde interne à emitAck
-   *  résout null au même délai (8 s) — même contrat pour l'appelant. */
-  const demander = useCallback(
-    (
-      event: string,
-      payload: Record<string, unknown> | undefined,
-      onRes: (res: { ok?: boolean; error?: string; started?: boolean } | null) => void
-    ) => {
-      emitAck<{ ok?: boolean; error?: string; started?: boolean }>(event, payload).then(onRes);
-    },
-    []
-  );
-
-  const requestUpdate = () => {
-    if (requesting) return;
-    setRequesting(true);
-    demander("agent:update-request", undefined, (res) => {
-      setRequesting(false);
-      if (res === null) {
-        toast({ title: "Demande non transmise", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
-      } else if (!res.ok && res.error) {
-        // window.alert remplacé par le système de toasts (cohérence volet).
-        toast({ title: "Mise à jour impossible", description: res.error, variant: "destructive" });
-      }
-      // L'opération vient d'être demandée : son journal est vivant.
-      getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
-        appliqueLog(r)
-      );
-    });
-  };
-  const requestRollback = () => {
-    setConfirmOpen(false);
-    if (requesting) return;
-    setRequesting(true);
-    demander("agent:rollback-request", undefined, (res) => {
-      setRequesting(false);
-      if (res === null) {
-        toast({ title: "Demande non transmise", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
-      } else if (!res.ok && res.error) {
-        toast({ title: "Retour arrière impossible", description: res.error, variant: "destructive" });
-      }
-      getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
-        appliqueLog(r)
-      );
-    });
-  };
-  const requestCheck = () => {
-    if (checking) return;
-    setChecking(true);
-    demander("agent:check-request", undefined, (res) => {
-      setChecking(false);
-      if (res === null) {
-        toast({ title: "Vérification impossible", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
-      } else if (res.ok) {
-        toast({ title: "Vérification lancée", duration: 2500 });
-      } else if (res.error) {
-        toast({ title: "Vérification impossible", description: res.error, variant: "destructive" });
-      }
-    });
-  };
-
-  /** Message à transmettre (copier-coller) si le contrôle échoue. */
-  const messageATransmettre = pbDetecte
-    ? [
-        "Message préparé pour la personne qui adapte l'interface :",
-        `— moteur Hermes : ${control?.versionLue ?? "?"} (mise à jour récente vue par l'interface)`,
-        `— liaison gateway : ${control?.liaison === "ok" ? "fonctionne" : "en échec"}`,
-        `— liste des modèles : ${control?.modeles === "ok" ? "fonctionne" : "en échec"}`,
-        `— détail : ${control?.detail ?? "-"}`,
-        previous ? `— retour arrière vers ${previous} : disponible` : "-",
-      ].join("\n")
-    : "";
-  const copierMessage = async () => {
-    try {
-      await navigator.clipboard.writeText(messageATransmettre);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Lot audit : échec de copie = retour visible, plus un clic mort.
-      setCopied(false);
-      toast({
-        title: "Copie impossible",
-        description: "Sélectionnez le texte du message et copiez-le à la main.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // ── Fil de l'opération en cours ─────────────────────────────────────
-  const verdict = log !== null ? verdictMotor(log) : null;
-  const fil = useMemo(() => (log !== null ? parseFil(log, traduireLigneMotor) : []), [log]);
-  const jalonCourant = useMemo(() => {
-    if (verdict === "ok") return -1;
-    let max = 0;
-    for (const l of fil) if (l.jalon > max) max = l.jalon;
-    return max;
-  }, [fil, verdict]);
-
-  const tick = useTick(!!op);
-  const ageLigne = (l: FilLigne): string | null => {
-    if (!l.heure) return null;
-    const age = Math.max(1, Math.round((tick - heureVersMs(l.heure)) / 1000));
-    // Lot audit : format FR — plus de « il y a 600 s » au bout d'une minute.
-    if (age < 60) return `il y a ${age} s`;
-    return `il y a ${Math.floor(age / 60)} min`;
-  };
-
-  // Notes de version : les 3 premières entrées (aperçu borné maquette),
-  // tout le reste au repli — jamais un mur.
-  const notesToutes = (release?.notes ?? "")
-    .split("\n")
-    .filter((l) => l.trim().length > 0);
-  const notesApercu = notesToutes.slice(0, 3);
-  const notesReste = notesToutes.length - notesApercu.length;
-
   return (
     <>
-      {/* ══ CARTE 2 — HERMES ═══════════════════════════════════════════ */}
-      <section
-        aria-labelledby="t-motor"
-        className="rounded-xl border border-border bg-card px-4 py-4"
-      >
         <div className="flex flex-wrap items-start justify-between gap-x-3.5 gap-y-2 max-[560px]:flex-col max-[560px]:items-stretch">
           <div className="min-w-[200px] flex-1">
             <h2 id="t-motor" className="flex flex-wrap items-center gap-2.5 text-[14px] font-bold">
@@ -457,7 +286,94 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
             ) : null}
           </div>
         </div>
+    </>
+  );
+}
 
+/** Feuille 2 — les blocs d'état conditionnels : aperçu des changements de
+ *  la release, scénario « problème » avec message prêt à copier, fil live
+ *  de l'opération (jalons + déroulé + verdict frais). Corps déplacés
+ *  VERBATIM de l'orchestrateur (chantier UI 2026-11-25) ; les états
+ *  purement locaux de ces blocs (replis notes/diagnostic, copie) descendent
+ *  ici — même durée de vie (la feuille est montée en continu). */
+interface AgentMotorBlocsProps {
+  release: AgentRelease | null;
+  op: MotorOp;
+  pbDetecte: boolean;
+  previous: string | null;
+  control: MotorControl | null;
+  log: string | null;
+}
+
+function AgentMotorBlocs({
+  release,
+  op,
+  pbDetecte,
+  previous,
+  control,
+  log,
+}: AgentMotorBlocsProps) {
+  const { toast } = useToast();
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  /** Message à transmettre (copier-coller) si le contrôle échoue. */
+  const messageATransmettre = pbDetecte
+    ? [
+        "Message préparé pour la personne qui adapte l'interface :",
+        `— moteur Hermes : ${control?.versionLue ?? "?"} (mise à jour récente vue par l'interface)`,
+        `— liaison gateway : ${control?.liaison === "ok" ? "fonctionne" : "en échec"}`,
+        `— liste des modèles : ${control?.modeles === "ok" ? "fonctionne" : "en échec"}`,
+        `— détail : ${control?.detail ?? "-"}`,
+        previous ? `— retour arrière vers ${previous} : disponible` : "-",
+      ].join("\n")
+    : "";
+
+  const copierMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(messageATransmettre);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Lot audit : échec de copie = retour visible, plus un clic mort.
+      setCopied(false);
+      toast({
+        title: "Copie impossible",
+        description: "Sélectionnez le texte du message et copiez-le à la main.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ── Fil de l'opération en cours ─────────────────────────────────────
+  const verdict = log !== null ? verdictMotor(log) : null;
+  const fil = useMemo(() => (log !== null ? parseFil(log, traduireLigneMotor) : []), [log]);
+  const jalonCourant = useMemo(() => {
+    if (verdict === "ok") return -1;
+    let max = 0;
+    for (const l of fil) if (l.jalon > max) max = l.jalon;
+    return max;
+  }, [fil, verdict]);
+
+  const tick = useTick(!!op);
+  const ageLigne = (l: FilLigne): string | null => {
+    if (!l.heure) return null;
+    const age = Math.max(1, Math.round((tick - heureVersMs(l.heure)) / 1000));
+    // Lot audit : format FR — plus de « il y a 600 s » au bout d'une minute.
+    if (age < 60) return `il y a ${age} s`;
+    return `il y a ${Math.floor(age / 60)} min`;
+  };
+
+  // Notes de version : les 3 premières entrées (aperçu borné maquette),
+  // tout le reste au repli — jamais un mur.
+  const notesToutes = (release?.notes ?? "")
+    .split("\n")
+    .filter((l) => l.trim().length > 0);
+  const notesApercu = notesToutes.slice(0, 3);
+  const notesReste = notesToutes.length - notesApercu.length;
+
+  return (
+    <>
         {/* Aperçu des changements (état disponible) : 3 lignes + repli +
             marqueur « touche l'interface ». Arbitrage v3 : cet aperçu
             n'existe que pour Hermes — l'application n'a pas de notes de
@@ -613,7 +529,49 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
             </div>
           </div>
         ) : null}
+    </>
+  );
+}
 
+/** Feuille 3 — les replis et le pied de carte : étape guidée « autre poste »
+ *  (formulaire relié à gateway:set), historique (ex carnet de bord) et lien
+ *  documents générés. Corps déplacés VERBATIM de l'orchestrateur (chantier
+ *  UI 2026-11-25) ; les champs contrôlés du formulaire descendent ici. */
+interface AgentMotorReplisProps {
+  op: MotorOp;
+  pbDetecte: boolean;
+  state: MotorState | null;
+  journal: JournalWire[];
+  installed: string | null;
+  onNavigateStorage?: () => void;
+  advOpen: boolean;
+  setAdvOpen: Dispatch<SetStateAction<boolean>>;
+  onConnectGateway?: (
+    url: string,
+    token?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+}
+
+function AgentMotorReplis({
+  op,
+  pbDetecte,
+  state,
+  journal,
+  installed,
+  onNavigateStorage,
+  advOpen,
+  setAdvOpen,
+  onConnectGateway,
+}: AgentMotorReplisProps) {
+  const { toast } = useToast();
+  // Revue 95 : champs contrôlés du repli « autre poste » (advOpen reste à
+  // l'orchestrateur — le lien du fil de l'en-tête l'ouvre aussi).
+  const [advUrl, setAdvUrl] = useState("");
+  const [advToken, setAdvToken] = useState("");
+  const [advBusy, setAdvBusy] = useState(false);
+
+  return (
+    <>
         {/* Le repli « autre poste » : lien discret, étape guidée (v3 —
             plus de formulaire fantôme : rien n'est envoyé sans validation). */}
         {!op && !pbDetecte ? (
@@ -799,6 +757,218 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
             Documents générés par Hermes →
           </Button>
         ) : null}
+    </>
+  );
+}
+
+export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectGateway }: AgentMotorCardProps) {
+  const { toast } = useToast();
+  // État de la carte : la source unique reste dans l'orchestrateur ; les
+  // états purement locaux d'un bloc (replis notes/diagnostic, copie, champs
+  // « autre poste ») vivent dans leur feuille (EnTete/Blocs/Replis).
+  const [state, setState] = useState<MotorState | null>(null);
+  const [journal, setJournal] = useState<JournalWire[]>([]);
+  const [log, setLog] = useState<string | null>(null);
+  const [logAt, setLogAt] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [advOpen, setAdvOpen] = useState(false);
+  // Lot audit 2026-11-21 : états pending + chien de garde des demandes
+  // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
+  const [checking, setChecking] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+
+  /** Applique un snapshot du journal d'opération (toujours réel — appelé
+   *  par le relais en direct ou après une demande explicite). */
+  const appliqueLog = useCallback((snap: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
+    if (!snap?.exists || typeof snap.text !== "string" || !snap.text.trim()) return;
+    setLog(snap.text);
+    if (typeof snap.mtimeMs === "number" && snap.mtimeMs > 0) setLogAt(snap.mtimeMs);
+  }, []);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.emit(
+      "agent:motor-state",
+      (res: (MotorState & { journal?: JournalWire[] }) | { installed?: string | null; journal?: JournalWire[] } = {}) => {
+        const st = res as MotorState;
+        setState(st);
+        setJournal(res.journal ?? []);
+        // Le fil de l'opération au (re)montage : vécu si une opération est
+        // EN COURS (le service la connaît en mémoire) ou si le journal est
+        // frais (< 10 min) — sinon un verdict d'hier ne doit pas
+        // ressusciter « Terminé » (v0.5.1, même garde que la carte
+        // application ; l'âge porte sur mtimeMs, horloge du service A-2).
+        socket.emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) => {
+          if (!r?.exists || typeof r.text !== "string" || !r.text.trim()) return;
+          const frais =
+            typeof r.mtimeMs === "number" &&
+            Date.now() - r.mtimeMs < 10 * 60_000;
+          if (st.op || frais) appliqueLog(r);
+        });
+      }
+    );
+    const onState = (s: MotorState) => {
+      setState(s);
+      socket.emit("agent:journal", (r: { journal?: JournalWire[] } = {}) =>
+        setJournal(r.journal ?? [])
+      );
+    };
+    // Le relais ne diffuse que sur changement réel (signature service) :
+    // toute ligne reçue ici est vivante.
+    const onLog = (snap: { text?: string; mtimeMs?: number } = {}) => {
+      appliqueLog({ exists: true, ...snap });
+    };
+    socket.on("agent:motor-changed", onState);
+    socket.on("agent:update-log:changed", onLog);
+    return () => {
+      socket.off("agent:motor-changed", onState);
+      socket.off("agent:update-log:changed", onLog);
+    };
+  }, [appliqueLog]);
+
+  const op = state?.op ?? null;
+  const installed = state?.installed ?? null;
+  const release: AgentRelease | null = state?.release ?? null;
+  const previous = state?.previousVersion ?? null;
+  const control = state?.lastControl ?? null;
+  // Lot audit : « vérifiée aujourd'hui à … » n'est plus affirmé quelle que
+  // soit l'ancienneté — le libellé porte la vraie date si ce n'est pas
+  // aujourd'hui (checkedAt est persisté côté service).
+  const verifieLabel = useMemo(() => {
+    if (!state?.checkedAt) return null;
+    const d = new Date(state.checkedAt);
+    if (Number.isNaN(d.getTime())) return null;
+    const heure = hf.format(d);
+    const memeJour = new Date().toDateString() === d.toDateString();
+    return memeJour
+      ? `vérifiée aujourd'hui à ${heure}`
+      : `vérifiée le ${df.format(d)}`;
+  }, [state?.checkedAt]);
+  /** État moteur reçu au moins une fois — distingue « chargement » de
+   *  « Hermes non détecté » (v0.5.1 : le bouton Revérifier suit). */
+  const stateConnu = state !== null;
+
+  /** Mise à jour récente (< 24 h) vue par l'interface : distingue « Hermes
+   *  n'est pas lancé » (neutre) de « ça a cassé depuis la mise à jour »
+   *  (rouge + retour arrière) — le carnet fait foi. */
+  const majRecente = journal.some(
+    (e) =>
+      e.type === "maj" &&
+      e.resultat !== "echec" &&
+      Date.now() - new Date(e.at).getTime() < 24 * 3600_000
+  );
+  const pbDetecte =
+    !!control && !control.ok && !!control.versionLue && majRecente && !op;
+
+  /** Revue P1-P7 (B4) : émission via emitAck — omet le payload quand il
+   *  vaut undefined. Sinon le sérialiseur socket.io transforme l'argument
+   *  undefined en null sur le fil et le handler « (cb?) » reçoit
+   *  (null, ackFn) : jamais acquitté, échec toasté à 8 s pendant que le
+   *  serveur exécute l'opération. Le chien de garde interne à emitAck
+   *  résout null au même délai (8 s) — même contrat pour l'appelant. */
+  const demander = useCallback(
+    (
+      event: string,
+      payload: Record<string, unknown> | undefined,
+      onRes: (res: { ok?: boolean; error?: string; started?: boolean } | null) => void
+    ) => {
+      emitAck<{ ok?: boolean; error?: string; started?: boolean }>(event, payload).then(onRes);
+    },
+    []
+  );
+
+  const requestUpdate = () => {
+    if (requesting) return;
+    setRequesting(true);
+    demander("agent:update-request", undefined, (res) => {
+      setRequesting(false);
+      if (res === null) {
+        toast({ title: "Demande non transmise", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
+      } else if (!res.ok && res.error) {
+        // window.alert remplacé par le système de toasts (cohérence volet).
+        toast({ title: "Mise à jour impossible", description: res.error, variant: "destructive" });
+      }
+      // L'opération vient d'être demandée : son journal est vivant.
+      getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
+        appliqueLog(r)
+      );
+    });
+  };
+  const requestRollback = () => {
+    setConfirmOpen(false);
+    if (requesting) return;
+    setRequesting(true);
+    demander("agent:rollback-request", undefined, (res) => {
+      setRequesting(false);
+      if (res === null) {
+        toast({ title: "Demande non transmise", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
+      } else if (!res.ok && res.error) {
+        toast({ title: "Retour arrière impossible", description: res.error, variant: "destructive" });
+      }
+      getSocket().emit("agent:update-log", (r: { exists?: boolean; text?: string; mtimeMs?: number } = {}) =>
+        appliqueLog(r)
+      );
+    });
+  };
+  const requestCheck = () => {
+    if (checking) return;
+    setChecking(true);
+    demander("agent:check-request", undefined, (res) => {
+      setChecking(false);
+      if (res === null) {
+        toast({ title: "Vérification impossible", description: "Le service n'a pas répondu (8 s).", variant: "destructive" });
+      } else if (res.ok) {
+        toast({ title: "Vérification lancée", duration: 2500 });
+      } else if (res.error) {
+        toast({ title: "Vérification impossible", description: res.error, variant: "destructive" });
+      }
+    });
+  };
+
+  return (
+    <>
+      {/* ══ CARTE 2 — HERMES ═══════════════════════════════════════════ */}
+      <section
+        aria-labelledby="t-motor"
+        className="rounded-xl border border-border bg-card px-4 py-4"
+      >
+
+        <AgentMotorEnTete
+          connected={connected}
+          op={op}
+          installed={installed}
+          release={release}
+          previous={previous}
+          verifieLabel={verifieLabel}
+          stateConnu={stateConnu}
+          pbDetecte={pbDetecte}
+          state={state}
+          checking={checking}
+          requesting={requesting}
+          requestUpdate={requestUpdate}
+          requestCheck={requestCheck}
+          setConfirmOpen={setConfirmOpen}
+          setAdvOpen={setAdvOpen}
+        />
+        <AgentMotorBlocs
+          release={release}
+          op={op}
+          pbDetecte={pbDetecte}
+          previous={previous}
+          control={control}
+          log={log}
+        />
+        <AgentMotorReplis
+          op={op}
+          pbDetecte={pbDetecte}
+          state={state}
+          journal={journal}
+          installed={installed}
+          onNavigateStorage={onNavigateStorage}
+          advOpen={advOpen}
+          setAdvOpen={setAdvOpen}
+          onConnectGateway={onConnectGateway}
+        />
       </section>
 
       {/* Fenêtre de confirmation du retour arrière (3 promesses, v0.4).
@@ -826,6 +996,7 @@ export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectG
         confirmLabel={previous ? `Oui, revenir à Hermes ${previous}` : "Confirmer"}
         onConfirm={requestRollback}
       />
+
     </>
   );
 }

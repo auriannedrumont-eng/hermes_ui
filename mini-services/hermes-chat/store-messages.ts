@@ -861,8 +861,13 @@ function buildMessageVersionsMethods(): Pick<
     },
 
     /**
-     * D-02 : purge des versions INACTIVES des groupes dont une version a été
-     * supprimée par une troncature. getMessages() ne voit que la version
+     * D-02 : purge des versions INACTIVES des groupes dont une version va être
+     * supprimée par une troncature. Les removedIds doivent TOUJOURS être en
+     * base au moment de l'appel : c'est AVANT les DELETE que leurs
+     * version_group sont relevés (correctif de l'anomalie constatée sous
+     * vague 4 — appelée APRÈS les DELETE, la détection ne trouvait plus rien
+     * et la purge ne purgeait jamais ; verrou de comportement retourné par
+     * les deux tests de troncature). getMessages() ne voit que la version
      * active : les version_active = 0 situées après le point de troncature
      * restaient en base pour toujours (avec leurs pièces jointes et leurs
      * artefacts) sans jamais être réaffichées. Renvoie ids et pièces jointes
@@ -927,20 +932,24 @@ function buildMessageVersionsMethods(): Pick<
         removedIds.push(m.id);
         removedAttachments.push(...(m.attachments ?? []));
       }
-      for (const id of removedIds) {
-        this.db
-          .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
-          .run(conversationId, id);
-      }
-      // D-02 : les versions inactives des groupes touchés partent aussi —
-      // plus jamais réaffichées, elles n'ont pas lieu de survivre à la
-      // troncature (le régénérateur crée ses propres v(n+1)). F-14 : leurs
+      // D-02 CORRIGÉ (l'anomalie constatée sous vague 4) : la purge est passée
+      // AVANT les DELETE — les groupes des messages tronqués sont relevés tant
+      // que les lignes portent encore leur version_group (appelée après, elle
+      // ne trouvait plus rien et les version_active = 0 survivaient pour
+      // toujours). Les versions inactives des groupes touchés partent donc
+      // d'abord — plus jamais réaffichées, elles n'ont pas lieu de survivre à
+      // la troncature (le régénérateur crée ses propres v(n+1)). F-14 : leurs
       // ids et pièces jointes rejoignent removedIds/removedAttachments pour
       // que l'appelant nettoie leurs artefacts et fichiers.
       const { purgedIds, purgedAttachments } = this.purgeInactiveVersionsOf(
         conversationId,
         removedIds,
       );
+      for (const id of removedIds) {
+        this.db
+          .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
+          .run(conversationId, id);
+      }
       removedIds.push(...purgedIds);
       removedAttachments.push(...purgedAttachments);
       const lastUser = msgs.length > 0 ? msgs[msgs.length - 1] : null;
@@ -971,19 +980,22 @@ function buildMessageVersionsMethods(): Pick<
         purgedAttachments: [],
       };
       this.db.transaction(() => {
-        for (const m of removed) {
-          this.db
-            .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
-            .run(conversationId, m.id);
-        }
-        // D-02 : purge des versions inactives des groupes touchés (même règle
-        // que deleteTrailingAssistant — jamais de lignes fantômes conservées).
+        // D-02 CORRIGÉ (l'anomalie constatée sous vague 4) : la purge des
+        // versions inactives des groupes touchés est passée AVANT les DELETE
+        // — appelée après, elle ne trouvait plus les version_group des lignes
+        // déjà supprimées et ne purgeait jamais (même règle que
+        // deleteTrailingAssistant — jamais de lignes fantômes conservées).
         // F-14 : ids et pièces jointes purgés rejoignent la réponse — leurs
         // artefacts et fichiers doivent être nettoyés eux aussi.
         purged = this.purgeInactiveVersionsOf(
           conversationId,
           removed.map((m) => m.id),
         );
+        for (const m of removed) {
+          this.db
+            .query("DELETE FROM messages WHERE conversation_id = ? AND id = ?")
+            .run(conversationId, m.id);
+        }
         this.db
           .query("UPDATE messages SET content = ? WHERE conversation_id = ? AND id = ?")
           .run(content, conversationId, messageId);

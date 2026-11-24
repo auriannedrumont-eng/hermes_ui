@@ -1,27 +1,4 @@
-###  1. AgentMotorCard  CC=179  (749 lignes, src/components/settings/agent-motor-card.tsx:83-831)
-    entête fichier: // Carte « Hermes » (v3 — v0.5.1), maquette validée | // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire | // que la carte application (system-section.tsx). Ce
-```ts
-export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectGateway }: AgentMotorCardProps) {
-  const { toast } = useToast();
-  // Revue 95 : champs contrôlés du repli « autre poste » (advOpen existe
-  // déjà plus bas) + verdict de liaison.
-  const [advUrl, setAdvUrl] = useState("");
-  const [advToken, setAdvToken] = useState("");
-  const [advBusy, setAdvBusy] = useState(false);
-  const [state, setState] = useState<MotorState | null>(null);
-  const [journal, setJournal] = useState<JournalWire[]>([]);
-  const [log, setLog] = useState<string | null>(null);
-  const [logAt, setLogAt] = useState(0);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [diagOpen, setDiagOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [advOpen, setAdvOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  // Lot audit 2026-11-21 : états pending + chien de garde des demandes
-  // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
-```
-
-###  2. Sidebar  CC=138  (906 lignes, src/components/chat/sidebar.tsx:115-1020)
+###  1. Sidebar  CC=138  (906 lignes, src/components/chat/sidebar.tsx:115-1020)
     entête fichier: // Sidebar : dossiers (arbre à un niveau, sous-dossiers repliables, | // drag & drop pour ranger et réordonner entre frères), recherche | // (dossiers + titres + contenu des messag
 ```ts
 export function Sidebar({
@@ -44,7 +21,7 @@ export function Sidebar({
   onDeleteProject,
 ```
 
-###  3. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
+###  2. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
     entête fichier: // Barre de saisie façon ChatGPT : textarea auto-redimensionnable, | // envoi/stop, pièces jointes (trombone, glisser-déposer, coller), | // sélecteur de modèle, dictée vocale, com
 ```ts
 export function Composer({
@@ -67,7 +44,7 @@ export function Composer({
   expert,
 ```
 
-###  4. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
+###  3. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
     entête fichier: // Page Stockage — explorateur déclaratif des documents générés (v0.3.0). | // Spec §4 : liste intégrale sans pagination, groupement par projet côté | // client, déroulé DÉRIVÉ (ja
 ```ts
 export function StorageSection({ initialProject }: { initialProject?: string | null }) {
@@ -90,7 +67,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
       expireAt: number;
 ```
 
-###  5. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
+###  4. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
     entête fichier: // Section « Système » — v3 (v0.5.1), maquette validée | // design/maquette-systeme-v3.html : DEUX cartes, une par programme | // (« L'application » / « Hermes »), une seule gramma
 ```ts
 export function SystemSection({
@@ -113,7 +90,7 @@ export function SystemSection({
     const d = new Date(majVerifieAt);
 ```
 
-###  6. registerProvidersHandlers  CC=96  (271 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:110-380)
+###  5. registerProvidersHandlers  CC=96  (271 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:110-380)
     entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
 ```ts
 function registerProvidersHandlers(socket: Socket) {
@@ -136,7 +113,7 @@ socket.on(
   (
 ```
 
-###  7. registerExtensionsHandlers  CC=94  (311 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:398-708)
+###  6. registerExtensionsHandlers  CC=94  (311 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:398-708)
     entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
 ```ts
 function registerExtensionsHandlers(socket: Socket) {
@@ -159,7 +136,7 @@ socket.on(
       return;
 ```
 
-###  8. useHermesChat  CC=86  (673 lignes, src/hooks/use-hermes-chat.ts:61-733)
+###  7. useHermesChat  CC=86  (673 lignes, src/hooks/use-hermes-chat.ts:61-733)
     entête fichier: // Hook principal : orchestre les conversations, la sélection de modèle, | // les pièces jointes multimédia et le streaming via socket.io
 ```ts
 export function useHermesChat() {
@@ -182,7 +159,7 @@ export function useHermesChat() {
    *  Mise à jour en effet (react-hooks/refs) — lecture uniquement dans les
 ```
 
-###  9. runAssistantTurn  CC=84  (554 lignes, mini-services/hermes-chat/turn-runner.ts:832-1385)
+###  8. runAssistantTurn  CC=84  (554 lignes, mini-services/hermes-chat/turn-runner.ts:832-1385)
     entête fichier: // Tour assistant : moteur d'exécution — extrait d'index.ts (découpage | // 2026-11, cf. FORK.md §10). Contient runAssistantTurn, les registres des | // tours en vol (running, live
 ```ts
 const runAssistantTurn = async (
@@ -205,7 +182,7 @@ const runAssistantTurn = async (
      *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
 ```
 
-### 10. HermesWebPage  CC=82  (639 lignes, src/app/page.tsx:42-680)
+###  9. HermesWebPage  CC=82  (639 lignes, src/app/page.tsx:42-680)
     entête fichier: // Hermes Web — interface de chat type ChatGPT pour l'agent Hermes de Nous Research. | // Layout : la conversation reste le chef d'orchestre ; l'artefact est un objet | // de premi
 ```ts
 export default function HermesWebPage() {
@@ -228,7 +205,7 @@ export default function HermesWebPage() {
   const [promptOpen, setPromptOpen] = useState(false);
 ```
 
-### 11. useChatSocketEvents  CC=81  (507 lignes, src/hooks/use-chat-socket-events.ts:85-591)
+### 10. useChatSocketEvents  CC=81  (507 lignes, src/hooks/use-chat-socket-events.ts:85-591)
     entête fichier: // Écoute des événements socket du chat — extrait de use-hermes-chat.ts | // (audit CRAP 2026-11 : le useEffect de câblage faisait 462 lignes et portait | // l'essentiel de la comp
 ```ts
 export function useChatSocketEvents(deps: ChatSocketEventsDeps) {
@@ -251,7 +228,7 @@ export function useChatSocketEvents(deps: ChatSocketEventsDeps) {
     screenOutdatedDismissedRef,
 ```
 
-### 12. registerTurnHandlers  CC=77  (279 lignes, mini-services/hermes-chat/handlers/conversations.ts:444-722)
+### 11. registerTurnHandlers  CC=77  (279 lignes, mini-services/hermes-chat/handlers/conversations.ts:444-722)
     entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
 ```ts
 function registerTurnHandlers(socket: Socket) {
@@ -274,7 +251,7 @@ socket.on(
       // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
 ```
 
-### 13. runGatewayTurn  CC=77  (251 lignes, mini-services/hermes-chat/hermes-connector.ts:587-837)
+### 12. runGatewayTurn  CC=77  (251 lignes, mini-services/hermes-chat/hermes-connector.ts:587-837)
     entête fichier: // Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat : | // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent | //   Hermes suffit, rien à
 ```ts
   private async runGatewayTurn(
@@ -297,7 +274,7 @@ socket.on(
       // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
 ```
 
-### 14. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
+### 13. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
     entête fichier: // Section « Chats web » du volet Paramètres v4 — fournisseur « Chats IA web » | // (identifiant stable `webchat`, spec « Piloter des chats IA web »). Règles | // rendues ici plutô
 ```ts
 export function WebchatSection() {
@@ -320,7 +297,7 @@ export function WebchatSection() {
   const load = useCallback(() => {
 ```
 
-### 15. testProviderKey  CC=73  (189 lignes, mini-services/hermes-chat/providers.ts:650-838)
+### 14. testProviderKey  CC=73  (189 lignes, mini-services/hermes-chat/providers.ts:650-838)
     entête fichier: // Fournisseurs & clés + Extensions — logique du chantier « Paramètres v2.2 ». | // Le mini-service est le SEUL détenteur des secrets : il les stocke, les | // masque pour le clien
 ```ts
 export async function testProviderKey(
@@ -343,7 +320,7 @@ export async function testProviderKey(
       }
 ```
 
-### 16. buildMessageVersionsMethods  CC=73  (407 lignes, mini-services/hermes-chat/store-messages.ts:597-1003)
+### 15. buildMessageVersionsMethods  CC=73  (419 lignes, mini-services/hermes-chat/store-messages.ts:597-1015)
     entête fichier: // Store — domaine messages — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
 ```ts
 function buildMessageVersionsMethods(): Pick<
@@ -366,7 +343,7 @@ function buildMessageVersionsMethods(): Pick<
      *  de conversation : version_active=0, avec retro-complétion du groupe
 ```
 
-### 17. ArtifactBody  CC=72  (308 lignes, src/components/chat/artifact-panel.tsx:93-400)
+### 16. ArtifactBody  CC=72  (308 lignes, src/components/chat/artifact-panel.tsx:93-400)
     entête fichier: // Panneau artefact (bureau, split view) + visionneuse plein écran (mobile). | // Un rendu par type : code (coloration + numéros + wrap + diff), image/SVG | // (zoom), HTML (aperçu
 ```ts
 function ArtifactBody({
@@ -389,7 +366,7 @@ function ArtifactBody({
   versions: Artifact[];
 ```
 
-### 18. useTurnActions  CC=70  (436 lignes, src/hooks/use-turn-actions.ts:53-488)
+### 17. useTurnActions  CC=70  (436 lignes, src/hooks/use-turn-actions.ts:53-488)
     entête fichier: // Actions de tour extraites de use-hermes-chat.ts (audit CRAP 2026-11, vague 4) : | // compaction (v2.4 + manuelle), envoi, arrêt, régénération, navigation de | // versions (F-14)
 ```ts
 export function useTurnActions(deps: TurnActionsDeps) {
@@ -412,7 +389,7 @@ export function useTurnActions(deps: TurnActionsDeps) {
     expertRef,
 ```
 
-### 19. createLlmPool  CC=69  (217 lignes, mini-services/hermes-chat/llm-pool.ts:431-647)
+### 18. createLlmPool  CC=69  (217 lignes, mini-services/hermes-chat/llm-pool.ts:431-647)
     entête fichier: // Pools de clés fournisseurs → tours LLM réels (v2.3, cf. FORK.md §7.4). | // Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours | // partent sur l'API d
 ```ts
 export function createLlmPool(store: Store): LlmPoolApi {
@@ -435,7 +412,7 @@ export function createLlmPool(store: Store): LlmPoolApi {
   // dans llm-streams.ts depuis la vague 2.
 ```
 
-### 20. ProviderCard  CC=69  (442 lignes, src/components/settings/providers-section.tsx:92-533)
+### 19. ProviderCard  CC=69  (442 lignes, src/components/settings/providers-section.tsx:92-533)
     entête fichier: // Section « Fournisseurs » (LLM) et « Clés de services » du volet | // Paramètres v4 — porte-clés multi-clés, test réel exécuté par le service, | // stratégie d'ordre d'utilisatio
 ```ts
 function ProviderCard({ provider, api }: { provider: ProviderView; api: ProvidersApi }) {
@@ -458,7 +435,7 @@ function ProviderCard({ provider, api }: { provider: ProviderView; api: Provider
   const hasDefault = api.catalog.some((c) => c.name === provider.name);
 ```
 
-### 21. registerConversationLifecycleHandlers  CC=66  (241 lignes, mini-services/hermes-chat/handlers/conversations.ts:40-280)
+### 20. registerConversationLifecycleHandlers  CC=66  (241 lignes, mini-services/hermes-chat/handlers/conversations.ts:40-280)
     entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
 ```ts
 function registerConversationLifecycleHandlers(socket: Socket) {
@@ -481,7 +458,7 @@ socket.on(
     const src = payload && typeof payload === "object" ? payload : {};
 ```
 
-### 22. parseModelOptions  CC=66  (49 lignes, mini-services/hermes-chat/hermes-connector.ts:135-183)
+### 21. parseModelOptions  CC=66  (49 lignes, mini-services/hermes-chat/hermes-connector.ts:135-183)
     entête fichier: // Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat : | // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent | //   Hermes suffit, rien à
 ```ts
 export function parseModelOptions(data: any): ModelOption[] {
@@ -504,7 +481,7 @@ export function parseModelOptions(data: any): ModelOption[] {
       // étiquette « budget » quand le provider expose un simple interrupteur
 ```
 
-### 23. streamAnthropicTurn  CC=57  (150 lignes, mini-services/hermes-chat/llm-streams.ts:295-444)
+### 22. streamAnthropicTurn  CC=57  (150 lignes, mini-services/hermes-chat/llm-streams.ts:295-444)
     entête fichier: // Mécanique de streaming des tours LLM — extraite de createLlmPool (vague 2). | // Tout est PUR ici : aucune fermeture sur l'état du pool. La garde | // d'inactivité reçoit l'ense
 ```ts
 export async function streamAnthropicTurn(
@@ -527,7 +504,7 @@ export async function streamAnthropicTurn(
     ],
 ```
 
-### 24. ModelPicker  CC=57  (377 lignes, src/components/chat/model-picker.tsx:204-580)
+### 23. ModelPicker  CC=57  (377 lignes, src/components/chat/model-picker.tsx:204-580)
     entête fichier: // Sélecteur de modèle — popover cmdk épuré : déclencheur au NOM du modèle en | // cours (+ chevron ; pastille A/B en comparaison, suivie du nom du slot), | // recherche (nom, id, 
 ```ts
 export function ModelPicker({
@@ -548,6 +525,29 @@ export function ModelPicker({
   const [query, setQuery] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   // Favoris partagés entre pickers (A/B du mode comparaison) : écriture locale
+```
+
+### 24. AgentMotorBlocs  CC=57  (227 lignes, src/components/settings/agent-motor-card.tsx:308-534)
+    entête fichier: // Carte « Hermes » (v3 — v0.5.1), maquette validée | // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire | // que la carte application (system-section.tsx). Ce
+```ts
+function AgentMotorBlocs({
+  release,
+  op,
+  pbDetecte,
+  previous,
+  control,
+  log,
+}: AgentMotorBlocsProps) {
+  const { toast } = useToast();
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  /** Message à transmettre (copier-coller) si le contrôle échoue. */
+  const messageATransmettre = pbDetecte
+    ? [
+        "Message préparé pour la personne qui adapte l'interface :",
+        `— moteur Hermes : ${control?.versionLue ?? "?"} (mise à jour récente vue par l'interface)`,
+        `— liaison gateway : ${control?.liaison === "ok" ? "fonctionne" : "en échec"}`,
 ```
 
 ### 25. registerMessageAndStopHandlers  CC=56  (219 lignes, mini-services/hermes-chat/handlers/conversations.ts:726-944)
@@ -642,7 +642,30 @@ socket.on(
       if (typeof cb === "function") cb({ error: "name requis" });
 ```
 
-### 29. registerPromptHandlers  CC=50  (145 lignes, mini-services/hermes-chat/handlers/settings-system.ts:548-692)
+### 29. AgentMotorCard  CC=52  (239 lignes, src/components/settings/agent-motor-card.tsx:764-1002)
+    entête fichier: // Carte « Hermes » (v3 — v0.5.1), maquette validée | // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire | // que la carte application (system-section.tsx). Ce
+```ts
+export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectGateway }: AgentMotorCardProps) {
+  const { toast } = useToast();
+  // État de la carte : la source unique reste dans l'orchestrateur ; les
+  // états purement locaux d'un bloc (replis notes/diagnostic, copie, champs
+  // « autre poste ») vivent dans leur feuille (EnTete/Blocs/Replis).
+  const [state, setState] = useState<MotorState | null>(null);
+  const [journal, setJournal] = useState<JournalWire[]>([]);
+  const [log, setLog] = useState<string | null>(null);
+  const [logAt, setLogAt] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [advOpen, setAdvOpen] = useState(false);
+  // Lot audit 2026-11-21 : états pending + chien de garde des demandes
+  // (avant : « Revérifier » sans aucun retour, erreurs en window.alert).
+  const [checking, setChecking] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+
+  /** Applique un snapshot du journal d'opération (toujours réel — appelé
+   *  par le relais en direct ou après une demande explicite). */
+```
+
+### 30. registerPromptHandlers  CC=50  (145 lignes, mini-services/hermes-chat/handlers/settings-system.ts:548-692)
     entête fichier: // Handlers « settings-system » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store
 ```ts
 function registerPromptHandlers(socket: Socket) {
@@ -665,7 +688,7 @@ socket.on(
 
 ```
 
-### 30. runAiStudio  CC=48  (219 lignes, mini-services/hermes-chat/webchat/flows.ts:343-561)
+### 31. runAiStudio  CC=48  (219 lignes, mini-services/hermes-chat/webchat/flows.ts:343-561)
     entête fichier: // Flux de pilotage par site (spec §5 « L'algorithme, commun aux trois sites » | // et annexes A/B/C). Rappels non négociables : | // - Attendre un ÉTAT, jamais une durée : toutes 
 ```ts
 export async function runAiStudio(ctx: FlowCtx): Promise<FlowResult> {
@@ -688,7 +711,7 @@ export async function runAiStudio(ctx: FlowCtx): Promise<FlowResult> {
       if (!btn) return null;
 ```
 
-### 31. ModePicker  CC=48  (389 lignes, src/components/chat/mode-picker.tsx:182-570)
+### 32. ModePicker  CC=48  (389 lignes, src/components/chat/mode-picker.tsx:182-570)
     entête fichier: // Sélecteur de modes du compositeur (F-30) — la pastille qui décide comment | // le prochain message sera traité. Un seul décideur du traitement : premier | // contrôle du pied de
 ```ts
 export function ModePicker({
@@ -711,7 +734,7 @@ export function ModePicker({
     return {
 ```
 
-### 32. streamOpenAiTurn  CC=47  (131 lignes, mini-services/hermes-chat/llm-streams.ts:162-292)
+### 33. streamOpenAiTurn  CC=47  (131 lignes, mini-services/hermes-chat/llm-streams.ts:162-292)
     entête fichier: // Mécanique de streaming des tours LLM — extraite de createLlmPool (vague 2). | // Tout est PUR ici : aucune fermeture sur l'état du pool. La garde | // d'inactivité reçoit l'ense
 ```ts
 export async function streamOpenAiTurn(
@@ -734,7 +757,7 @@ export async function streamOpenAiTurn(
     model: modelId,
 ```
 
-### 33. MessageList  CC=47  (396 lignes, src/components/chat/message-list.tsx:195-590)
+### 34. MessageList  CC=47  (396 lignes, src/components/chat/message-list.tsx:195-590)
     entête fichier: // Liste des messages + état vide (accueil façon ChatGPT) + bouton retour en bas | // + rangée d'erreur persistante du dernier tour (F-04 : Réessayer / Masquer).
 ```ts
 export function MessageList({
@@ -757,7 +780,7 @@ export function MessageList({
   engineProviders = null,
 ```
 
-### 34. VersionPopover  CC=43  (275 lignes, src/components/chat/version-popover.tsx:54-328)
+### 35. VersionPopover  CC=43  (275 lignes, src/components/chat/version-popover.tsx:54-328)
     entête fichier: // Journal des versions d'un fichier (F-26) — LE composant unique du | // versionnage : badge de la carte → popover ancré. Réutilisable tel quel | // quand l'espace projet existera
 ```ts
 export function VersionPopover({ artifact, children }: VersionPopoverProps) {
@@ -780,7 +803,30 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
     });
 ```
 
-### 35. useConversations  CC=42  (358 lignes, src/hooks/use-conversations.ts:60-417)
+### 36. AgentMotorEnTete  CC=43  (169 lignes, src/components/settings/agent-motor-card.tsx:123-291)
+    entête fichier: // Carte « Hermes » (v3 — v0.5.1), maquette validée | // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire | // que la carte application (system-section.tsx). Ce
+```ts
+function AgentMotorEnTete({
+  connected,
+  op,
+  installed,
+  release,
+  previous,
+  verifieLabel,
+  stateConnu,
+  pbDetecte,
+  state,
+  checking,
+  requesting,
+  requestUpdate,
+  requestCheck,
+  setConfirmOpen,
+  setAdvOpen,
+}: AgentMotorEnTeteProps) {
+  // ── Pastille (liaison coupée > opération > problème > dispo > état) ──
+```
+
+### 37. useConversations  CC=42  (358 lignes, src/hooks/use-conversations.ts:60-417)
     entête fichier: // CRUD conversations extrait de use-hermes-chat.ts (audit CRAP 2026-11, vague 3). | // Corps des callbacks VERBATIM — mêmes identités de dépendances, mêmes tableaux | // de deps. 
 ```ts
 export function useConversations(deps: ConversationsDeps) {
@@ -803,7 +849,7 @@ export function useConversations(deps: ConversationsDeps) {
     setStreamsRecord,
 ```
 
-### 36. buildMessagesCoreMethods  CC=41  (99 lignes, mini-services/hermes-chat/store-messages.ts:496-594)
+### 38. buildMessagesCoreMethods  CC=41  (99 lignes, mini-services/hermes-chat/store-messages.ts:496-594)
     entête fichier: // Store — domaine messages — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
 ```ts
 function buildMessagesCoreMethods(): Pick<
@@ -826,7 +872,7 @@ function buildMessagesCoreMethods(): Pick<
         )
 ```
 
-### 37. buildConversationMethods  CC=40  (228 lignes, mini-services/hermes-chat/store-messages.ts:266-493)
+### 39. buildConversationMethods  CC=40  (228 lignes, mini-services/hermes-chat/store-messages.ts:266-493)
     entête fichier: // Store — domaine messages — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
 ```ts
 function buildConversationMethods(): Pick<
@@ -849,7 +895,7 @@ function buildConversationMethods(): Pick<
            ORDER BY c.pinned DESC, c.updated_at DESC`
 ```
 
-### 38. ModesSection  CC=40  (661 lignes, src/components/settings/modes-section.tsx:511-1171)
+### 40. ModesSection  CC=40  (661 lignes, src/components/settings/modes-section.tsx:511-1171)
     entête fichier: // Section « Modes de chat » du volet Paramètres (F-30) — les réglages PAR | // DÉFAUT des sept modes, une carte par mode dans l'ordre du sélecteur. | // La maquette fait foi : des
 ```ts
 export function ModesSection({
@@ -872,7 +918,7 @@ export function ModesSection({
   // M-7 (revue 2026-11-19) : true dès la première édition locale — le
 ```
 
-### 39. SingleTabGuard  CC=40  (224 lignes, src/components/single-tab-guard.tsx:88-311)
+### 41. SingleTabGuard  CC=40  (224 lignes, src/components/single-tab-guard.tsx:88-311)
     entête fichier: // Garde « un seul onglet » (2026-11-15) — demande de l'utilisatrice : « que | // le lanceur détecte si un onglet Hermes est déjà ouvert et qu'il ferme ou | // relance sur ce même 
 ```ts
 export function SingleTabGuard() {
@@ -895,7 +941,7 @@ export function SingleTabGuard() {
   useEffect(() => {
 ```
 
-### 40. useChatSettings  CC=39  (222 lignes, src/hooks/use-chat-settings.ts:31-252)
+### 42. useChatSettings  CC=39  (222 lignes, src/hooks/use-chat-settings.ts:31-252)
     entête fichier: // Hook réglages du compositeur — extrait de use-hermes-chat.ts (découpage | // 2026-11, FORK.md §10) : modèles, effort, mode expert (F-22), autorisations, | // recherche web (F-09
 ```ts
 export function useChatSettings() {
@@ -918,7 +964,7 @@ export function useChatSettings() {
     return {
 ```
 
-### 41. AddProviderPanel  CC=37  (161 lignes, src/components/settings/providers-section.tsx:537-697)
+### 43. AddProviderPanel  CC=37  (161 lignes, src/components/settings/providers-section.tsx:537-697)
     entête fichier: // Section « Fournisseurs » (LLM) et « Clés de services » du volet | // Paramètres v4 — porte-clés multi-clés, test réel exécuté par le service, | // stratégie d'ordre d'utilisatio
 ```ts
 function AddProviderPanel({
@@ -941,7 +987,7 @@ function AddProviderPanel({
   // setState synchronement est interdit par la règle react-hooks.
 ```
 
-### 42. buildArtifacts  CC=36  (358 lignes, mini-services/hermes-chat/store-artifacts.ts:59-416)
+### 44. buildArtifacts  CC=36  (358 lignes, mini-services/hermes-chat/store-artifacts.ts:59-416)
     entête fichier: // Store — domaine artifacts — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au protot
 ```ts
 export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
@@ -964,7 +1010,7 @@ export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
       language?: string | null;
 ```
 
-### 43. buildSettings  CC=36  (426 lignes, mini-services/hermes-chat/store-settings.ts:86-511)
+### 45. buildSettings  CC=36  (426 lignes, mini-services/hermes-chat/store-settings.ts:86-511)
     entête fichier: // Store — domaine settings — extrait de store.ts (découpage 2026-11, FORK.md §10). | // Interface fusionnée dans Store (declaration merging) + implémentation | // posée au prototy
 ```ts
 export function buildSettings(): StoreSettingsMethods & ThisType<Store> {
@@ -987,7 +1033,7 @@ export function buildSettings(): StoreSettingsMethods & ThisType<Store> {
       content: string,
 ```
 
-### 44. main  CC=36  (182 lignes, mini-services/hermes-chat/webchat/driver.ts:68-249)
+### 46. main  CC=36  (182 lignes, mini-services/hermes-chat/webchat/driver.ts:68-249)
     entête fichier: // Pilote d'un chat IA web — un processus par tour, UNE ligne JSON sur stdout | // (contrat de la spec §4) : | //   { ok, site, url, text?, files?: [{name, bytes}], refused?, elaps
 ```ts
 async function main(): Promise<number> {
@@ -1010,7 +1056,7 @@ async function main(): Promise<number> {
   if (!fiche.verifie) {
 ```
 
-### 45. ProfilesSection  CC=36  (289 lignes, src/components/settings/profiles-section.tsx:36-324)
+### 47. ProfilesSection  CC=36  (289 lignes, src/components/settings/profiles-section.tsx:36-324)
     entête fichier: // Section « Profils » du volet Paramètres v4 (v2.4) — des préréglages | // complets (modèle, effort, permissions, recherche web, mode expert) | // applicables en un clic. La LISTE
 ```ts
 export function ProfilesSection() {
@@ -1033,7 +1079,7 @@ export function ProfilesSection() {
   const [name, setName] = useState("");
 ```
 
-### 46. PromptPanelBody  CC=36  (267 lignes, src/components/settings/system-prompt-panel.tsx:86-352)
+### 48. PromptPanelBody  CC=36  (267 lignes, src/components/settings/system-prompt-panel.tsx:86-352)
     entête fichier: // Panneau « Prompt système de la conversation » (F-11) — Sheet 460 px depuis | // la droite (même langue que l'ancien sheet Paramètres phase 1 : le chat reste | // visible, la con
 ```ts
 function PromptPanelBody({
@@ -1056,7 +1102,7 @@ function PromptPanelBody({
   const [presetTitle, setPresetTitle] = useState<string | null>(prompt?.presetTitle ?? null);
 ```
 
-### 47. useSystemPrompts  CC=36  (287 lignes, src/hooks/use-system-prompts.ts:30-316)
+### 49. useSystemPrompts  CC=36  (287 lignes, src/hooks/use-system-prompts.ts:30-316)
     entête fichier: // Hook « prompt système & instructions personnalisées » — F-11 / F-19 | // (FORK.md §7.7). Consomme le singleton socket du chat : | //  - prompt actif de la conversation ouverte (
 ```ts
 export function useSystemPrompts(activeConversationId: string | null) {
@@ -1079,7 +1125,7 @@ export function useSystemPrompts(activeConversationId: string | null) {
       socket.emit(
 ```
 
-### 48. createPoolCatalog  CC=35  (140 lignes, mini-services/hermes-chat/llm-pool.ts:290-429)
+### 50. createPoolCatalog  CC=35  (140 lignes, mini-services/hermes-chat/llm-pool.ts:290-429)
     entête fichier: // Pools de clés fournisseurs → tours LLM réels (v2.3, cf. FORK.md §7.4). | // Le moteur local consomme ENFIN le porte-clés du volet Paramètres : les tours | // partent sur l'API d
 ```ts
 function createPoolCatalog(store: Store) {
@@ -1102,7 +1148,7 @@ function createPoolCatalog(store: Store) {
       raw: k,
 ```
 
-### 49. registerSanteSettingsHandlers  CC=34  (107 lignes, mini-services/hermes-chat/handlers/settings-system.ts:209-315)
+### 51. registerSanteSettingsHandlers  CC=34  (107 lignes, mini-services/hermes-chat/handlers/settings-system.ts:209-315)
     entête fichier: // Handlers « settings-system » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store
 ```ts
 function registerSanteSettingsHandlers(socket: Socket) {
@@ -1125,7 +1171,7 @@ socket.on(
       // (audit 2026-11-21) La vue liste ne doit JAMAIS exposer les clés
 ```
 
-### 50. runWebchatTurn  CC=34  (127 lignes, mini-services/hermes-chat/webchat/engine.ts:126-252)
+### 52. runWebchatTurn  CC=34  (127 lignes, mini-services/hermes-chat/webchat/engine.ts:126-252)
     entête fichier: // Intégration côté service (spec §6) — les chats IA web sont un FOURNISSEUR | // DE MODÈLES À PART, identifiant stable `webchat`, pour que les autres écrans | // les distinguent d
 ```ts
 export async function runWebchatTurn(opts: {
@@ -1148,7 +1194,7 @@ export async function runWebchatTurn(opts: {
     );
 ```
 
-### 51. runZai  CC=34  (147 lignes, mini-services/hermes-chat/webchat/flows.ts:136-282)
+### 53. runZai  CC=34  (147 lignes, mini-services/hermes-chat/webchat/flows.ts:136-282)
     entête fichier: // Flux de pilotage par site (spec §5 « L'algorithme, commun aux trois sites » | // et annexes A/B/C). Rappels non négociables : | // - Attendre un ÉTAT, jamais une durée : toutes 
 ```ts
 export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
@@ -1171,7 +1217,7 @@ export async function runZai(ctx: FlowCtx): Promise<FlowResult> {
     // Le textarea doit se vider dans les 6 s (la page re-rend son compositeur
 ```
 
-### 52. ChatHeader  CC=34  (309 lignes, src/components/chat/chat-header.tsx:84-392)
+### 54. ChatHeader  CC=34  (309 lignes, src/components/chat/chat-header.tsx:84-392)
     entête fichier: // En-tête : fil d'Ariane (dossier › sous-dossier › conversation, F-59), | // export, partage public, statut, thème
 ```ts
 export function ChatHeader({
@@ -1194,7 +1240,7 @@ export function ChatHeader({
   const [copied, setCopied] = useState(false);
 ```
 
-### 53. AttachDiskDialog  CC=32  (194 lignes, src/components/chat/attach-disk-dialog.tsx:29-222)
+### 55. AttachDiskDialog  CC=32  (194 lignes, src/components/chat/attach-disk-dialog.tsx:29-222)
     entête fichier: // Dialogue « Ajouter un dossier de mon disque » (F-59 J5, maquette v6 📁↓). | // Liste les répertoires via GET /disk/list (service HTTP 3004, jeton requis, | // BORNÉ AU HOME côté 
 ```ts
 export function AttachDiskDialog({
@@ -1217,7 +1263,7 @@ export function AttachDiskDialog({
 
 ```
 
-### 54. testZaiSurface  CC=30  (97 lignes, mini-services/hermes-chat/providers.ts:547-643)
+### 56. testZaiSurface  CC=30  (97 lignes, mini-services/hermes-chat/providers.ts:547-643)
     entête fichier: // Fournisseurs & clés + Extensions — logique du chantier « Paramètres v2.2 ». | // Le mini-service est le SEUL détenteur des secrets : il les stocke, les | // masque pour le clien
 ```ts
 async function testZaiSurface(
@@ -1240,7 +1286,7 @@ async function testZaiSurface(
       }
 ```
 
-### 55. ArtifactCard  CC=30  (177 lignes, src/components/chat/artifact-card.tsx:88-264)
+### 57. ArtifactCard  CC=30  (177 lignes, src/components/chat/artifact-card.tsx:88-264)
     entête fichier: // Carte artefact inline dans le message : compacte, cliquable, vivante. | // États : génération (squelette + étapes, code qui streame dans la carte), | // rendu en cours (Chrome),
 ```ts
 export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: ArtifactCardProps) {
@@ -1263,7 +1309,30 @@ export function ArtifactCard({ artifact, streamingContent, onOpen, onRetry }: Ar
           type="button"
 ```
 
-### 56. MemoryCard  CC=30  (171 lignes, src/components/settings/memory-card.tsx:26-196)
+### 58. AgentMotorReplis  CC=30  (208 lignes, src/components/settings/agent-motor-card.tsx:555-762)
+    entête fichier: // Carte « Hermes » (v3 — v0.5.1), maquette validée | // design/maquette-systeme-v3.html : LA carte du moteur, même grammaire | // que la carte application (system-section.tsx). Ce
+```ts
+function AgentMotorReplis({
+  op,
+  pbDetecte,
+  state,
+  journal,
+  installed,
+  onNavigateStorage,
+  advOpen,
+  setAdvOpen,
+  onConnectGateway,
+}: AgentMotorReplisProps) {
+  const { toast } = useToast();
+  // Revue 95 : champs contrôlés du repli « autre poste » (advOpen reste à
+  // l'orchestrateur — le lien du fil de l'en-tête l'ouvre aussi).
+  const [advUrl, setAdvUrl] = useState("");
+  const [advToken, setAdvToken] = useState("");
+  const [advBusy, setAdvBusy] = useState(false);
+
+```
+
+### 59. MemoryCard  CC=30  (171 lignes, src/components/settings/memory-card.tsx:26-196)
     entête fichier: // Mémoire utilisateur (F-18) — carte de la section Hermes du volet v4 : | // consultable, éditable, effaçable. Notes persistées côté service sous | // `hermes.memory.notes`, activ
 ```ts
 export function MemoryCard({

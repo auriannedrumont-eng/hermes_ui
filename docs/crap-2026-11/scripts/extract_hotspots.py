@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "/home/z/my-project/repos/crapper/src")
+sys.path.insert(0, "/home/z/my-project/crapper/src")
 from crapper.languages.typescript import functions_in_source  # noqa: E402
 
 ROOT = Path("/home/z/my-project/repos/hermes_ui")
@@ -23,11 +23,14 @@ def ns_to_path(ns: str):
                 return cand
     return None
 
-# fichiers candidats : tout le code production (hors scripts/)
+# fichiers candidats : tout le code production (hors scripts/, .next/,
+# node_modules — les chunks de build de Next polluaient l'extraction du
+# 2026-11-25 : _parse/constructor/decl de bundles node_modules en CC 30-82)
 files = [
     p for p in ROOT.rglob("*")
     if p.is_file() and p.suffix in {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
     and "node_modules" not in p.parts and "target" not in p.parts
+    and ".next" not in p.parts
     and not p.name.endswith(".d.ts")
     and not p.match("scripts/*")
 ]

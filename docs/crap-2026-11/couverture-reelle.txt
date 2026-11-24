@@ -348,3 +348,53 @@ E. Tour assistant — runAssistantTurn (CC 147 → 84)
    CC  84  runAssistantTurn    (reste : orchestration — acceptable)
    L'UI est un autre chantier, avec ses propres outils (React Compiler,
    tests de composants, conventions QA DOM du repo — scripts/qa-*.ts).
+
+══════════════════════════════════════════════════════════════════════════════
+8. SÉANCE UI DU 2026-11-25 — CORRECTIF D-02 + AGENTMOTORCARD EN 3 FEUILLES
+══════════════════════════════════════════════════════════════════════════════
+
+A. Correctif D-02 (l'anomalie latente constatée sous vague 4 est corrigée)
+   La purge des versions inactives (purgeInactiveVersionsOf) était appelée
+   APRÈS les DELETE dans deleteTrailingAssistant et editUserMessageAndTruncate :
+   les lignes supprimées ne portaient plus leur version_group, la détection ne
+   trouvait rien, les version_active = 0 et leurs pièces jointes restaient en
+   base pour toujours. Correctif : la purge est passée AVANT les DELETE — les
+   groupes des lignes tronquées sont relevés tant qu'ils existent ; ids et
+   pièces jointes purgés rejoignent removedIds/removedAttachments (F-14).
+   Les deux verrous de comportement sont retournés (tests renommés
+   « D-02 corrigé ») et parcourent désormais la purge réelle :
+     buildMessageVersionsMethods  couverture 90,9 % → 91,8 %  CRAP 77 → 75,9
+
+B. AgentMotorCard (CC 179, CRAP 32 220) → 4 fonctions < 100
+   Chirurgie ancrée VERBATIM (extract_agent_motor_leaves.py, bornes vérifiées,
+   14 morceaux comparés ligne à ligne au HEAD) — mêmes nœuds DOM dans le même
+   ordre, props publiques inchangées, états locaux des blocs descendus dans
+   leur feuille (même durée de vie) :
+     AgentMotorCard (orchestrateur)   CC 52   CRAP 2756  (état + socket + actions)
+     AgentMotorEnTete (feuille 1)     CC 43   CRAP 1892  pastille, le fil,
+                                                 cause connue, boutons
+     AgentMotorBlocs (feuille 2)      CC 57   CRAP 3306  notes de version,
+                                                 scénario problème, fil live
+     AgentMotorReplis (feuille 3)     CC 30   CRAP  930  « autre poste »,
+                                                 historique, documents
+   QA DOM dédiée : scripts/qa-motor-card-v3-dom.ts — pile complète auto-portée
+   (Caddy :81, front dev, service stubbé : faux `hermes` sur dépôt git taggé,
+   fausse release, gateway 9120 ouverte seulement pour le retour arrière),
+   scénario complet dispo → mise à jour → contrôle en échec → problème →
+   message à transmettre → confirmation → retour arrière → historique →
+   mobile 375 px : 41/41. Captures : download/qa-motor-v3/.
+
+   Découverte de harnais (consignée) : Next dev accepte la montée websocket
+   /socket.io/ sans la relayer — la socket de la page restait ouverte mais
+   morte (« Reconnexion en cours »). Les QA DOM passent par Caddy (:81), le
+   vrai chemin de production (le harnais qa-v040-motor le faisait déjà).
+
+C. Classement crapper après la séance (production, CC ≥ 30 — 59 fonctions)
+   CC 138  Sidebar                      (UI : prochaine cible)
+   CC 110  Composer                     (UI)
+   CC 105  StorageSection               (UI)
+   CC 102  SystemSection                (UI)
+   CC  96  registerProvidersHandlers    (sous-registres)
+   CC  94  registerExtensionsHandlers   (sous-registres)
+   CC  86  useHermesChat                (acceptable)
+   CC  84  runAssistantTurn             (acceptable)

@@ -637,15 +637,12 @@ describe("machine de versions F-14 (buildMessageVersionsMethods)", () => {
     expect(store.purgeInactiveVersionsOf(conv.id, [])).toEqual({ purgedIds: [], purgedAttachments: [] });
   });
 
-  it("deleteTrailingAssistant : retire les réponses finales actives du fil", () => {
-    // ANOMALIE LATENTE CONSTATÉE (vague 4, vérifiée sous bun:sqlite natif ET
-    // node:sqlite) : la purge D-02 des versions inactives des groupes touchés
-    // est appelée APRÈS les DELETE — les lignes supprimées ne portent plus
-    // leur version_group, donc la détection des groupes ne trouve rien et la
-    // purge ne purge jamais (les lignes version_active = 0 et leurs pièces
-    // jointes restent en base). Comportement VERBATIM verrouillé ici tel quel
-    // — le correctif (détecter les groupes AVANT suppression) est un chantier
-    // séparé, hors discipline verbatim de cette vague.
+  it("deleteTrailingAssistant : retire les réponses actives ET les versions inactives des groupes touchés (D-02 corrigé)", () => {
+    // ANOMALIE D-02 CORRIGÉE (constatée sous vague 4, vérifiée sous bun:sqlite
+    // natif ET node:sqlite) : la purge des versions inactives des groupes
+    // touchés est désormais passée AVANT les DELETE — les version_group des
+    // lignes tronquées sont relevés tant qu'ils existent encore. Les lignes
+    // version_active = 0 et leurs pièces jointes partent avec le fil.
     const { conv, u1, a1 } = seededTurn();
     const v1att = addAssistant(conv.id, "v1 att", {
       versionGroup: a1.id,
@@ -656,11 +653,13 @@ describe("machine de versions F-14 (buildMessageVersionsMethods)", () => {
     const v2 = addAssistant(conv.id, "v2", { versionGroup: a1.id, versionIndex: 2 });
     const r = store.deleteTrailingAssistant(conv.id);
     expect(r.lastUser!.id).toBe(u1.id);
-    expect(r.removedIds).toEqual([v2.id, a1.id]); // les deux réponses ACTIVES du fil, de la fin vers le début
-    expect(r.removedAttachments).toEqual([]); // la purge inopérante ne rapporte rien
-    expect(scalar("SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?", conv.id)).toBe(2); // u1 + v1att (survit — anomalie)
+    // Les deux réponses ACTIVES du fil (fin → début), puis la version inactive
+    // du groupe touché (purge D-02, ids annexés en fin — convention F-14).
+    expect(r.removedIds).toEqual([v2.id, a1.id, v1att.id]);
+    expect(r.removedAttachments).toEqual([att("att-v1")]);
+    expect(scalar("SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?", conv.id)).toBe(1); // u1 seul
     expect(store.getMessages(conv.id).map((m) => m.id)).toEqual([u1.id]); // le fil est propre
-    expect(row("SELECT id FROM messages WHERE id = ?", v1att.id)).toBeDefined(); // inactive non purgée (anomalie)
+    expect(row("SELECT id FROM messages WHERE id = ?", v1att.id)).toBeUndefined(); // inactive purgée
   });
 
   it("deleteTrailingAssistant : conversation sans réponse finale → rien n'est retiré", () => {
@@ -694,20 +693,19 @@ describe("machine de versions F-14 (buildMessageVersionsMethods)", () => {
     expect(store.getMessages(conv.id).map((m) => m.id)).toEqual([u1.id]);
   });
 
-  it("editUserMessageAndTruncate : réécrit et tronque (purge D-02 inopérante — anomalie)", () => {
-    // Même anomalie latente que deleteTrailingAssistant (cf. supra) : la
-    // purge des versions inactives du groupe tronqué est appelée APRÈS les
-    // DELETE — elle ne trouve plus les groupes et ne purge jamais. Comportement
-    // VERBATIM verrouillé tel quel, vérifié sous bun:sqlite natif aussi.
+  it("editUserMessageAndTruncate : réécrit et tronque, les versions inactives partent avec (D-02 corrigé)", () => {
+    // Même correctif que deleteTrailingAssistant (cf. supra) : la purge des
+    // versions inactives du groupe tronqué est passée AVANT les DELETE —
+    // l'inactive du groupe part avec le fil au lieu de survivre pour toujours.
     const { conv, u1, a1 } = seededTurn();
     store.supersedeTrailingAssistant(conv.id); // a1 → v1 inactive du groupe
     const v2 = addAssistant(conv.id, "v2", { versionGroup: a1.id, versionIndex: 2 });
     const a2 = addAssistant(conv.id, "réponse 2");
     const r = store.editUserMessageAndTruncate(conv.id, u1.id, "relance")!;
-    expect(r.removedIds).toEqual([v2.id, a2.id]); // les visibles tronqués — sans la purge
+    expect(r.removedIds).toEqual([v2.id, a2.id, a1.id]); // visibles tronqués + inactive purgée (purge en fin)
     expect(r.removedAttachments).toEqual([]);
-    expect(scalar("SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?", conv.id)).toBe(2); // u1 + a1 (survit — anomalie)
-    expect(row("SELECT version_active FROM messages WHERE id = ?", a1.id)!.version_active).toBe(0);
+    expect(scalar("SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?", conv.id)).toBe(1); // u1 seul
+    expect(row("SELECT id FROM messages WHERE id = ?", a1.id)).toBeUndefined(); // inactive purgée
   });
 
   it("editUserMessageAndTruncate : refuse un message non-utilisateur ou inconnu", () => {
