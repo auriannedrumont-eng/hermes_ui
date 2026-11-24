@@ -87,6 +87,15 @@ socket.on(
       if (typeof cb === "function") cb({ error: "conversationId requis" });
       return;
     }
+    // Lot audit passe 2 : refus PROPRE pendant un tour en vol — changer de
+    // mode au milieu d'un déroulé multi-voix modifiait conversationMode à
+    // l'écran en pleine exécution (consignes incohérentes entre les voix).
+    // Même contrat que chat:send : le client arrête (chat:stop) puis change.
+    if (ctx.isRunning(conversationId)) {
+      if (typeof cb === "function")
+        cb({ error: "Un tour est en cours — arrêtez-le avant de changer de mode" });
+      return;
+    }
     const mode = ctx.resolveMode(payload?.mode);
     const config = ctx.normalizeModeConfig(payload?.config);
     const rounds = mode === "debate" ? (config.rounds ?? null) : null;
@@ -572,7 +581,7 @@ socket.on(
     // F-14 : les anciennes réponses ne sont PLUS supprimées — elles
     // passent inactives (conservées, navigables ‹ n/m ›). F-17 : variante
     // donnée → un seul côté ; compare → les deux côtés.
-    const { lastUser, supersededIds, groups } =
+    const { lastUser, supersededIds, groups, activeByGroup } =
       ctx.store.supersedeTrailingAssistant(conversationId, variant);
     if (!lastUser) {
       // (audit 2026-11-21) supersedeTrailingAssistant a DÉJÀ passé les
@@ -594,6 +603,13 @@ socket.on(
       ctx.io.emit("messages:superseded", { conversationId, messageIds: supersededIds });
     }
     if (typeof cb === "function") cb({ ok: true });
+    // Lot audit passe 2 : version affichée de chaque groupe AVANT la
+    // supersession — transmise au tour pour qu'un arrêt/échec à vide
+    // restaure CETTE version (v1 naviguée ‹ 1/2 ›), pas la plus récente.
+    const restoreFor = (g?: string) => {
+      const captured = g ? activeByGroup[g] : undefined;
+      return captured ? { group: g as string, id: captured.id } : null;
+    };
     const turnSettings = {
       reasoningEffort: payload?.effort || undefined,
       permissionsMode: payload?.permissionsMode || undefined,
@@ -617,6 +633,7 @@ socket.on(
           settings: turnSettings,
           variant: "a",
           versionGroup: groups.a,
+          versionRestore: restoreFor(groups.a),
         }),
         ctx.runAssistantTurn(conversationId, {
           content: lastUser.content,
@@ -625,6 +642,7 @@ socket.on(
           settings: turnSettings,
           variant: "b",
           versionGroup: groups.b,
+          versionRestore: restoreFor(groups.b),
         }),
       ]);
       return;
@@ -638,6 +656,7 @@ socket.on(
           settings: turnSettings,
           variant: "a",
           versionGroup: groups.a,
+          versionRestore: restoreFor(groups.a),
         }),
         ctx.runAssistantTurn(conversationId, {
           content: lastUser.content,
@@ -646,6 +665,7 @@ socket.on(
           settings: turnSettings,
           variant: "b",
           versionGroup: groups.b,
+          versionRestore: restoreFor(groups.b),
         }),
       ]);
       return;
@@ -658,6 +678,9 @@ socket.on(
       webSearch: payload?.webSearch === true,
       variant,
       versionGroup: variant === "a" ? groups.a : variant === "b" ? groups.b : groups.plain,
+      versionRestore: restoreFor(
+        variant === "a" ? groups.a : variant === "b" ? groups.b : groups.plain
+      ),
     });
   }
 );

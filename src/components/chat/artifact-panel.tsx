@@ -93,6 +93,8 @@ type ViewMode = "preview" | "code";
 function ArtifactBody({
   artifact,
   source,
+  sourceError,
+  onRetrySource,
   streamingContent,
   versions,
   onRetry,
@@ -100,6 +102,10 @@ function ArtifactBody({
 }: {
   artifact: Artifact;
   source: string | null;
+  /** Lot audit passe 2 : le fetch du source a échoué (hook useArtifactSource). */
+  sourceError?: boolean;
+  /** Relance du chargement du source (bouton « Réessayer »). */
+  onRetrySource?: () => void;
   streamingContent?: string;
   versions: Artifact[];
   onRetry: (id: string) => void;
@@ -212,6 +218,27 @@ function ArtifactBody({
   }
 
   // ── Prêt : rendu par type ──────────────────────────────────────────
+  // Lot audit passe 2 : échec de chargement du source — bandeau explicite
+  // avec relance, à la place du panneau silencieusement vide.
+  const sourceFailed = (sourceError ?? false) && !isLive && source === null;
+  const retryBanner = sourceFailed ? (
+    <div className="flex shrink-0 items-center gap-2 border-b border-border/60 bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive">
+      <AlertTriangle className="h-3.5 w-3.5 flex-none" />
+      <span className="min-w-0 flex-1">Le chargement du contenu de l'artefact a échoué.</span>
+      {onRetrySource ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 shrink-0 gap-1.5 rounded-lg"
+          onClick={onRetrySource}
+        >
+          <RefreshCw className="h-3 w-3" />
+          Réessayer
+        </Button>
+      ) : null}
+    </div>
+  ) : null;
+
   const toggle = hasPreviewToggle ? (
     <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
       {(["preview", "code"] as const).map((m) => (
@@ -316,6 +343,7 @@ function ArtifactBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {retryBanner}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border/60 px-3 py-2">
         {toggle}
         {artifact.kind === "code" || artifact.kind === "html" || artifact.kind === "markdown" ||
@@ -573,7 +601,7 @@ export function ArtifactPanel({
     return artifacts.filter((a) => a.key === selected.key).sort((a, b) => a.version - b.version);
   }, [artifacts, selected]);
 
-  const source = useArtifactSource(selected);
+  const { text: source, error: sourceError, retry: retrySource } = useArtifactSource(selected);
   const streamingContent = selected ? streamingArtifacts[selected.key] : undefined;
   const selectedKey = selected?.key;
   const selectedHasVersions = !!selected && selected.version > 1;
@@ -644,6 +672,8 @@ export function ArtifactPanel({
       <ArtifactBody
         artifact={selected}
         source={source}
+        sourceError={sourceError}
+        onRetrySource={retrySource}
         streamingContent={streamingContent}
         versions={versions}
         onRetry={onRetry}
@@ -722,7 +752,7 @@ export function ArtifactViewerDialog({
     if (!selected) return [];
     return artifacts.filter((a) => a.key === selected.key).sort((a, b) => a.version - b.version);
   }, [artifacts, selected]);
-  const source = useArtifactSource(selected);
+  const { text: source, error: sourceError, retry: retrySource } = useArtifactSource(selected);
   const streamingContent = selected ? streamingArtifacts[selected.key] : undefined;
 
   return (
@@ -795,6 +825,8 @@ export function ArtifactViewerDialog({
             <ArtifactBody
               artifact={selected}
               source={source}
+              sourceError={sourceError}
+              onRetrySource={retrySource}
               streamingContent={streamingContent}
               versions={versions}
               onRetry={onRetry}

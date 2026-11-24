@@ -75,6 +75,11 @@ export interface StoreMessagesMethods {
     lastUser: ChatMessage | null;
     supersededIds: string[];
     groups: { plain?: string; a?: string; b?: string };
+    /** Lot audit passe 2 : version ACTIVE de chaque groupe AVANT la
+     *  supersession — l'utilisateur peut avoir affiché ‹ 1/2 › (v1) et non
+     *  la plus récente (v2) : en cas d'arrêt à vide, c'est CETTE version
+     *  qui doit revenir au fil, pas la dernière du groupe. */
+    activeByGroup: Record<string, { id: string; index: number } | undefined>;
   };
   setMessageVersion(
     conversationId: string,
@@ -86,6 +91,9 @@ export interface StoreMessagesMethods {
    *  avant le premier jeton : l'ancienne réponse revient au lieu de
    *  disparaître définitivement du fil. */
   restoreLatestVersion(conversationId: string, group: string): void;
+  /** Lot audit passe 2 : réactive une version PRÉCISE (celle qui était
+   *  affichée avant la régénération, mémorisée par supersedeTrailingAssistant). */
+  restoreVersionById(conversationId: string, messageId: string): void;
   getMessage(conversationId: string, messageId: string): ChatMessage | null;
   deleteMessage(conversationId: string, messageId: string): ChatMessage | null;
   purgeInactiveVersionsOf(
@@ -546,7 +554,16 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
     /** F-14 — retire DU FIL (sans supprimer) les réponses assistant en fin
      *  de conversation : version_active=0, avec retro-complétion du groupe
      *  (première régénération d'une réponse jamais versionnée). Renvoie le
-     *  groupe de version par côté, pour versionner les nouveaux tours. */
+     *  groupe de version par côté, pour versionner les nouveaux tours.
+     *  Lot audit passe 2 : (1) la garde lastUser est résolue en LECTURE
+     *  avant toute écriture — l'ancien code UPDATEait la fin du fil PUIS
+     *  découvrait l'absence de message utilisateur (le handler devait
+     *  restaurer les groupes touchés) ; (2) la boucle d'UPDATE est ATOMIQUE
+     *  (transaction) — un crash au milieu laissait des réponses à moitié
+     *  passées à version_active = 0 ; (3) activeByGroup mémorise la version
+     *  affichée de chaque groupe avant la supersession — restoreLatestVersion
+     *  réactivait sinon TOUJOURS la plus récente (v2) même quand l'utilisateur
+     *  naviguait ‹ 1/2 ›. */
     supersedeTrailingAssistant(
       conversationId: string,
       variant?: "a" | "b"
@@ -554,43 +571,62 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
       lastUser: ChatMessage | null;
       supersededIds: string[];
       groups: { plain?: string; a?: string; b?: string };
+      activeByGroup: Record<string, { id: string; index: number } | undefined>;
     } {
       const msgs = this.getMessages(conversationId);
+      // 1. Garde en lecture seule : borne du bloc assistant final + dernier
+      //    message utilisateur qui le précède. Aucun utilisateur → aucun
+      //    tour à régénérer → la base n'est PAS touchée (supersededIds
+      //    vides, le handler n'a plus rien à restaurer).
+      let end = msgs.length - 1;
+      while (end >= 0 && msgs[end].role === "assistant") end--;
+      const rest = msgs.slice(0, end + 1);
+      const lastUser = [...rest].reverse().find((m) => m.role === "user") ?? null;
+      if (!lastUser)
+        return { lastUser: null, supersededIds: [], groups: {}, activeByGroup: {} };
+
+      // 2. Supersession atomique : parcours de la fin — on supersede les
+      //    réponses de la variante visée (ou toutes si sans variante), on
+      //    TRAVERSE les réponses de l'autre côté (F-17 : l'ordre
+      //    d'achèvement a/b est aléatoire), et on stoppe au bloc trouvé.
       const supersededIds: string[] = [];
       const groups: { plain?: string; a?: string; b?: string } = {};
-      // Parcours de la fin : on supersede les réponses de la variante visée
-      // (ou toutes si sans variante), on TRAVERSE les réponses de l'autre
-      // côté (F-17 : l'ordre d'achèvement a/b est aléatoire), et on stoppe
-      // au premier message utilisateur.
-      let i = msgs.length - 1;
-      while (i >= 0 && msgs[i].role === "assistant") {
-        const m = msgs[i];
-        if (variant !== undefined && m.variant !== variant) {
+      // Lot audit passe 2 : version affichée par groupe AVANT écriture.
+      const activeByGroup: Record<string, { id: string; index: number } | undefined> = {};
+      this.db.transaction(() => {
+        let i = msgs.length - 1;
+        while (i >= 0 && msgs[i].role === "assistant") {
+          const m = msgs[i];
+          if (variant !== undefined && m.variant !== variant) {
+            i--;
+            continue;
+          }
+          const group = m.versions?.group ?? m.id;
+          // Lot audit passe 2 : la version ACTIVE du groupe (la seule que
+          // getMessages renvoie) est capturée AVANT son UPDATE — c'est elle
+          // qu'un arrêt à vide devra restaurer.
+          if (!activeByGroup[group])
+            activeByGroup[group] = { id: m.id, index: m.versions?.index ?? 1 };
+          // Retro-complétion : une réponse non versionnée devient v1 de son groupe
+          this.db
+            .query(
+              "UPDATE messages SET version_group = ?, version_index = ?, version_active = 0 WHERE conversation_id = ? AND id = ?"
+            )
+            .run(group, m.versions?.index ?? 1, conversationId, m.id);
+          supersededIds.push(m.id);
+          // Lot 3 (audit L3-4) : en régénération SANS variante (Comparer = les
+          // deux côtés), la clé ne doit pas être « plain » pour tout — sinon
+          // groups.a/groups.b restent indéfinis et les nouveaux tours partent
+          // SANS versionGroup : le sélecteur ‹ 1/2 › n'apparaît jamais. La clé
+          // suit la variante du message traversé (a/b), « plain » sans variante.
+          const key = variant === undefined ? (m.variant ?? "plain") : m.variant;
+          if (key === "a" || key === "b" || key === "plain") {
+            if (!groups[key]) groups[key] = group;
+          }
           i--;
-          continue;
         }
-        const group = m.versions?.group ?? m.id;
-        // Retro-complétion : une réponse non versionnée devient v1 de son groupe
-        this.db
-          .query(
-            "UPDATE messages SET version_group = ?, version_index = ?, version_active = 0 WHERE conversation_id = ? AND id = ?"
-          )
-          .run(group, m.versions?.index ?? 1, conversationId, m.id);
-        supersededIds.push(m.id);
-        // Lot 3 (audit L3-4) : en régénération SANS variante (Comparer = les
-        // deux côtés), la clé ne doit pas être « plain » pour tout — sinon
-        // groups.a/groups.b restent indéfinis et les nouveaux tours partent
-        // SANS versionGroup : le sélecteur ‹ 1/2 › n'apparaît jamais. La clé
-        // suit la variante du message traversé (a/b), « plain » sans variante.
-        const key = variant === undefined ? (m.variant ?? "plain") : m.variant;
-        if (key === "a" || key === "b" || key === "plain") {
-          if (!groups[key]) groups[key] = group;
-        }
-        i--;
-      }
-      const rest = msgs.slice(0, i + 1);
-      const lastUser = [...rest].reverse().find((m) => m.role === "user") ?? null;
-      return { lastUser, supersededIds, groups };
+      })();
+      return { lastUser, supersededIds, groups, activeByGroup };
     },
 
     /** F-14 — affiche la version `index` du groupe (les autres passent inactives). */
@@ -650,6 +686,17 @@ export function buildMessages(): StoreMessagesMethods & ThisType<Store> {
           )
           .run(conversationId, latest.id);
       }
+    },
+
+    /** Lot audit passe 2 : réactive UNE version précise — celle qui était
+     *  affichée avant la régénération (mémorisée par activeByGroup), et non
+     *  la plus récente du groupe. */
+    restoreVersionById(conversationId: string, messageId: string): void {
+      this.db
+        .query(
+          "UPDATE messages SET version_active = 1 WHERE conversation_id = ? AND id = ?"
+        )
+        .run(conversationId, messageId);
     },
 
     /** Message individuel (ou null). */

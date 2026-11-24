@@ -5,7 +5,7 @@
 // le panneau et la visionneuse plein écran partagent le même module.
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type Artifact } from "@/lib/chat-types";
@@ -33,8 +33,26 @@ function cacheSource(id: string, text: string | null): void {
   sourceCache.set(id, text);
 }
 
-export function useArtifactSource(artifact: Artifact | null): string | null {
+/** Résultat du hook : le source lu, l'état d'erreur et une relance manuelle.
+ *  Lot audit passe 2 : avant, une erreur de fetch restait INVISIBLE — le
+ *  .catch purgeait le cache sans changer aucune dépendance du useEffect,
+ *  qui ne repartait jamais (panneau vide jusqu'à sa fermeture). */
+export interface ArtifactSourceState {
+  /** null = absent, en erreur ou en cours de (re)chargement. */
+  text: string | null;
+  /** Dernière tentative de fetch terminée en échec (affichable). */
+  error: boolean;
+  /** Relance le chargement (purge l'erreur, incrémente le compteur d'essais). */
+  retry: () => void;
+}
+
+export function useArtifactSource(artifact: Artifact | null): ArtifactSourceState {
   const [, forceRender] = useState(0);
+  const [errored, setErrored] = useState(false);
+  // Lot audit passe 2 : compteur d'essais — dépendance du useEffect, c'est la
+  // seule façon de faire REPARTIR le fetch après un échec (les autres deps
+  // n'ont pas changé) ; retry() l'incrémente.
+  const [attempt, setAttempt] = useState(0);
   const artifactId = artifact?.id ?? null;
   const rawUrl = artifact?.rawUrl ?? null;
   const binaryKind = artifact?.kind === "image" || artifact?.kind === "pdf";
@@ -44,6 +62,15 @@ export function useArtifactSource(artifact: Artifact | null): string | null {
   // obsolète au passage.
   const ready = artifact?.status === "ready" || artifact?.status === "error";
   const fetchable = Boolean(artifactId && rawUrl && !binaryKind && ready);
+
+  // Reset de l'erreur quand on change d'artefact (état dérivé, même pattern
+  // que ArtifactBody pour viewedKey).
+  const [viewedId, setViewedId] = useState(artifactId);
+  if (viewedId !== artifactId) {
+    setViewedId(artifactId);
+    setErrored(false);
+    setAttempt(0);
+  }
 
   useEffect(() => {
     if (!artifactId) return;
@@ -61,21 +88,29 @@ export function useArtifactSource(artifact: Artifact | null): string | null {
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
       .then((text) => {
         cacheSource(artifactId, text);
-        if (!cancelled) forceRender((n) => n + 1);
+        if (!cancelled) {
+          setErrored(false);
+          forceRender((n) => n + 1);
+        }
       })
       .catch(() => {
         cacheSource(artifactId, null); // pas de cache d'échec : recharge possible
-        if (!cancelled) forceRender((n) => n + 1);
+        if (!cancelled) setErrored(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [artifactId, rawUrl, binaryKind, ready, fetchable]);
+  }, [artifactId, rawUrl, binaryKind, ready, fetchable, attempt]);
 
-  // null = absent ou en erreur (rechargeable) ; "" = source vide lu avec succès.
-  if (!artifactId) return null;
+  const retry = useCallback(() => {
+    setErrored(false);
+    setAttempt((n) => n + 1); // repasse dans les deps : le useEffect re-fetch
+  }, []);
+
+  // text null = absent ou en erreur (rechargeable) ; "" = source vide lu avec succès.
+  if (!artifactId) return { text: null, error: false, retry };
   const cached = sourceCache.get(artifactId);
-  return cached === undefined ? null : cached;
+  return { text: cached === undefined ? null : cached, error: errored, retry };
 }
 
 // ── Vues par type ────────────────────────────────────────────────────────

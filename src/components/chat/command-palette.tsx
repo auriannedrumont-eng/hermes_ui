@@ -79,20 +79,29 @@ export function CommandPalette({
   const [hits, setHits] = useState<SearchHit[]>([]);
 
   // Recherche plein-texte débouncée pendant la saisie
+  // Lot audit passe 2 : garde anti-course — `cancelled` est posé par le
+  // cleanup (query changé, palette fermée, démontage) : une réponse lente
+  // pour une requête courte ne peut plus écraser les résultats d'une
+  // requête plus récente.
   useEffect(() => {
+    let cancelled = false;
     const q = query.trim();
     const t = setTimeout(async () => {
       if (!open || q.length < 2) {
-        setHits([]);
+        if (!cancelled) setHits([]);
         return;
       }
       try {
-        setHits(await onSearchMessages(q));
+        const found = await onSearchMessages(q);
+        if (!cancelled) setHits(found);
       } catch {
-        setHits([]);
+        if (!cancelled) setHits([]);
       }
     }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [query, open, onSearchMessages]);
 
   const handleOpenChange = (o: boolean) => {

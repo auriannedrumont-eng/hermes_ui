@@ -544,6 +544,13 @@ export class HermesConnector {
         { handshakeTimeout: HANDSHAKE_TIMEOUT_MS }
       );
 
+      // Lot audit passe 2 : registre des rejets des requêtes JSON-RPC en vol —
+      // finish() draine ce registre pour qu'aucun await rpc() ne survive à la
+      // fermeture de la WebSocket (fuite de promesse + closure). Déclaré AVANT
+      // finish : l'abort peut être déjà posé et finish() appelé de façon
+      // synchrone pendant le montage (temporal dead zone interdite).
+      const rpcRejectors = new Set<(err: Error) => void>();
+
       const finish = (err?: Error) => {
         if (settled) return;
         settled = true;
@@ -579,6 +586,13 @@ export class HermesConnector {
             model: req.model || "hermes (gateway)",
             engine: "gateway",
           });
+        // Lot audit passe 2 : la socket vient de mourir (ou le tour est clôturé)
+        // — TOUTE promesse JSON-RPC encore en vol est rejetée. Sans cela, un
+        // await rpc("session.create"/"prompt.submit") interrompu par une
+        // fermeture restait en attente pour toujours (closure fugitive).
+        for (const rejRpc of rpcRejectors)
+          rejRpc(new Error("Connexion gateway fermée avant la réponse JSON-RPC"));
+        rpcRejectors.clear();
       };
 
       // Stop utilisateur (Lot 1, audit L1-6) : l'abort est câblé à la
@@ -607,10 +621,30 @@ export class HermesConnector {
             }
             if (data?.id !== id) return;
             ws.off("message", onFrame);
+            ws.off("close", onDead);
+            ws.off("error", onErr);
+            rpcRejectors.delete(rejectRpc);
             if (data?.error) rej(new Error(String(data.error.message ?? "Erreur gateway")));
             else res(data?.result);
           };
+          // Lot audit passe 2 : la socket peut mourir AVANT la réponse —
+          // close/error rejettent maintenant la promesse (au lieu de la
+          // laisser pendre indéfiniment avec sa closure).
+          const rejectRpc = (err: Error) => {
+            ws.off("message", onFrame);
+            ws.off("close", onDead);
+            ws.off("error", onErr);
+            rpcRejectors.delete(rejectRpc);
+            rej(err);
+          };
+          const onDead = () =>
+            rejectRpc(new Error("Connexion gateway fermée avant la réponse JSON-RPC"));
+          const onErr = (err: Error) =>
+            rejectRpc(new Error(`Connexion gateway en erreur avant la réponse JSON-RPC : ${err.message}`));
+          rpcRejectors.add(rejectRpc);
           ws.on("message", onFrame);
+          ws.once("close", onDead);
+          ws.once("error", onErr);
           ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
         });
 

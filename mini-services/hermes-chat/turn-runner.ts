@@ -418,6 +418,12 @@ const runAssistantTurn = async (
     /** F-14 : groupe de version — ce tour est une NOUVELLE version de la
      *  réponse qu'il remplace (l'ancienne est conservée, inactive). */
     versionGroup?: string;
+    /** Lot audit passe 2 : version affichée AVANT la régénération (capturée
+     *  par supersedeTrailingAssistant). En cas d'arrêt/échec à vide, c'est
+     *  CETTE version qui revient au fil — restoreLatestVersion réactivait
+     *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
+     *  ‹ 1/2 ›. */
+    versionRestore?: { group: string; id: string } | null;
   }
 ) => {
   const variant = opts.variant;
@@ -967,7 +973,14 @@ const runAssistantTurn = async (
       // AVANT le tour, est réactivée au lieu de disparaître définitivement
       // du fil (aucune nouvelle version n'a été insérée).
       if (opts.versionGroup) {
-        store.restoreLatestVersion(conversationId, opts.versionGroup);
+        // Lot audit passe 2 : la version AFFICHÉE avant la régénération
+        // (versionRestore.id) redevient active — pas la plus récente du
+        // groupe ; repli historique si l'information n'a pas été transmise.
+        if (opts.versionRestore?.id && opts.versionRestore.group === opts.versionGroup) {
+          store.restoreVersionById(conversationId, opts.versionRestore.id);
+        } else {
+          store.restoreLatestVersion(conversationId, opts.versionGroup);
+        }
         const refreshed = store.getMessages(conversationId);
         attachArtifactCards(conversationId, refreshed, true);
         io.emit("messages:refreshed", { conversationId, messages: refreshed });
@@ -984,7 +997,11 @@ const runAssistantTurn = async (
     }
 
     // Clôture du suivi des artefacts (persistance définitive) + quota (F-26)
-    const finalizedRows = tracker.finalize(contentAcc, false);
+    // Lot audit passe 2 : on transmet `stopped` (et non false en dur) — après
+    // un chat:stop, le connecteur résout NORMALEMENT avec le texte partiel et
+    // on arrive ici ; false en dur laissait à vie tout artefact ouvert avec
+    // status = "generating" en base (jamais clôturé en error).
+    const finalizedRows = tracker.finalize(contentAcc, stopped);
     enforceVersionQuota(conversationId, new Set(finalizedRows.map((r) => r.key)));
 
     // Persiste la réponse assistant (INSERT avec l'id du tour)
@@ -1084,7 +1101,13 @@ const runAssistantTurn = async (
       // du groupe restaient à version_active = 0 et la réponse disparaissait
       // définitivement du fil.
       if (!partial && opts.versionGroup) {
-        store.restoreLatestVersion(conversationId, opts.versionGroup);
+        // Lot audit passe 2 : version affichée avant régénération, pas la
+        // plus récente (repli historique si non transmise).
+        if (opts.versionRestore?.id && opts.versionRestore.group === opts.versionGroup) {
+          store.restoreVersionById(conversationId, opts.versionRestore.id);
+        } else {
+          store.restoreLatestVersion(conversationId, opts.versionGroup);
+        }
         const refreshed = store.getMessages(conversationId);
         attachArtifactCards(conversationId, refreshed, true);
         io.emit("messages:refreshed", { conversationId, messages: refreshed });

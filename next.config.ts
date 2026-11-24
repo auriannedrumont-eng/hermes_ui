@@ -29,6 +29,32 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: true,
   devIndicators: false,
+  // Lot audit passe 2 : passerelle INTÉGRÉE sans Caddy. Le client transporte
+  // le port cible dans la requête ?XTransformPort= (jamais dans le chemin —
+  // cf. src/lib/service.ts et src/lib/socket.ts) ; README.md:45 et
+  // DEMARRAGE.md:26 présentent Caddy comme FACULTATIF (`bun dev` + mini-
+  // service), mais aucune règle ne relayait ces requêtes : l'application sur
+  // :3000 était 100 % hors ligne sans Caddy. Ces rewrites reprennent le
+  // filtrage du Caddyfile (SEULS 3003 socket.io et 3004 pièces jointes sont
+  // joignables — toute autre valeur tombe sur l'interface Next). Réécritures
+  // « afterFiles » par défaut : la page « / » reste rendue par Next, seuls les
+  // chemins non servis par l'UI (socket.io, fichiers, artefacts, partage)
+  // partent vers le mini-service. La query d'origine (token, EIO…) est
+  // transmise telle quelle — la destination n'a pas de query propre.
+  async rewrites() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "query", key: "XTransformPort", value: "3003" }],
+        destination: "http://127.0.0.1:3003/:path*",
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "query", key: "XTransformPort", value: "3004" }],
+        destination: "http://127.0.0.1:3004/:path*",
+      },
+    ];
+  },
   // Inlinée à la compilation : chaque composant client voit la même
   // constante, aucune lecture de processus au runtime.
   env: {

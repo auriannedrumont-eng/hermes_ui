@@ -111,6 +111,14 @@ function groupByProject(entries: StorageEntry[]): ProjectGroup[] {
   }
 }
 
+/** Clé de verrou TOUJOURS non nulle (lot audit passe 2) : « Hors projet » a
+ *  id === null et l'état busy vaut aussi null au repos — un verrou posé sur
+ *  g.id serait donc pris en permanence pour ce groupe (bouton « Nettoyer »
+ *  figé sur « Nettoyage… », désactivé, insensible au clic). */
+function groupKey(g: ProjectGroup): string {
+  return g.id ?? "__hors";
+}
+
 /** Dernière version par document — badges + refus de suppression. */
 function maxByDocOf(entries: StorageEntry[]): Map<string, number> {
   const m = new Map<string, number>();
@@ -391,8 +399,9 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
   };
 
   const cleanProject = (g: ProjectGroup) => {
-    if (busy === g.id) return;
-    setBusy(g.id);
+    const k = groupKey(g);
+    if (busy === k) return;
+    setBusy(k);
     // Lot audit : chien de garde — « Nettoyage… » ne reste plus figé pour
     // toujours si le service n'acquitte pas.
     const garde = window.setTimeout(() => {
@@ -669,10 +678,10 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
                           // « Nettoyer » ne déplie JAMAIS le groupe (§2.2).
                           cleanProject(g);
                         }}
-                        disabled={busy === g.id}
+                        disabled={busy === groupKey(g)}
                         className="flex-none rounded-sm border border-border bg-card px-2.5 py-[5px] text-[11px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-wait disabled:opacity-40"
                       >
-                        {busy === g.id ? "Nettoyage…" : "Nettoyer"}
+                        {busy === groupKey(g) ? "Nettoyage…" : "Nettoyer"}
                       </Button>
                     </div>
 

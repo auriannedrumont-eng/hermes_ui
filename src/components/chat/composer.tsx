@@ -547,7 +547,10 @@ export function Composer({
               config={conversationModeConfig}
               models={models}
               onSetMode={onSetConversationMode}
-              disabled={disabled}
+              // Lot audit passe 2 : verrouillé pendant un tour (isBusy) — le
+              // service refuse désormais conversations:setMode en cours de
+              // déroulé ; l'UI suit pour ne pas proposer un choix refusé.
+              disabled={disabled || isBusy}
             />
             <ModelPicker
               models={models}
@@ -559,6 +562,8 @@ export function Composer({
               onEffortChange={onEffortChange}
               expert={expert}
               onExpertChange={onExpertChange}
+              // Lot audit passe 2 : même verrou que le sélecteur de mode.
+              disabled={disabled || isBusy}
             />
 
             {/* F-09 — capacités du tour : recherche web actionnable via les

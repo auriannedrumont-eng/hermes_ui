@@ -8,11 +8,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import {
   existsSync,
-  mkdirSync,
-  readFileSync,
   readdirSync,
-  writeFileSync,
-  unlinkSync,
   rmSync,
   statSync,
 } from "node:fs";
@@ -78,6 +74,12 @@ const LAUNCH_ARGS_BASE = [
   "--force-color-profile=srgb",
   "--font-render-hinting=none",
   "--disable-features=Translate,BackForwardCache",
+  // Lot audit passe 2 : le rendu navigue désormais vers une data URL (origine
+  // opaque, plus aucun accès file://) — ce résolveur coupe en plus TOUT
+  // réseau sortant de l'artefact (DNS → ~NOTFOUND) en laissant uniquement le
+  // loopback pour la sonde interne. Un script embarqué ne peut donc ni lire
+  // le disque local ni joindre l'extérieur pendant la capture PNG/PDF.
+  "--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1",
 ];
 
 /** Arguments de lancement, profil FRAIS à chaque appel (revue 95) :
@@ -325,16 +327,20 @@ export class ChromeRenderer {
     }
   }
 
-  /** Rend un HTML : PNG plein page + PDF vectoriel. Sérialisé par file. */
+  /** Rend un HTML : PNG plein page + PDF vectoriel. Sérialisé par file.
+   *  Lot audit passe 2 : le HTML n'est plus écrit dans un fichier temporaire
+   *  ouvert via file:// (URL malformée sous Windows `file://C:\...`, origine
+   *  avec accès au disque local et au loopback). Il est encodé en data URL
+   *  : la page vit dans une origine OPAQUE, sans lecture possible du disque. */
   renderHtml(html: string): Promise<{ png: Buffer; pdf: Buffer; renderMs: number }> {
     const job = async () => {
       const started = Date.now();
       let targetId: string | null = null;
       let page: CdpPage | null = null;
-      const tmpHtml = join(tmpdir(), `hermes-artifact-${crypto.randomUUID()}.html`);
+      const dataUrl =
+        "data:text/html;charset=utf-8;base64," +
+        Buffer.from(html, "utf-8").toString("base64");
       try {
-        mkdirSync(tmpdir(), { recursive: true });
-        writeFileSync(tmpHtml, html, "utf-8");
         // Auto-bornée : newPage referme elle-même l'onglet si l'ouverture
         // dépasse le délai global (l'ancienne course laissait newPage finir
         // APRÈS l'expiration — onglet et WebSocket fuyants, invisibles du
@@ -351,7 +357,7 @@ export class ChromeRenderer {
         });
         const loaded = page.waitForEvent("Page.loadEventFired", NAV_TIMEOUT_MS);
         const nav = await page.send("Page.navigate", {
-          url: `file://${tmpHtml}`,
+          url: dataUrl,
         });
         if (nav?.errorText) throw new Error(`Navigation échouée : ${nav.errorText}`);
         await loaded;
@@ -394,11 +400,6 @@ export class ChromeRenderer {
       } finally {
         page?.close();
         if (targetId) await this.closeTarget(targetId);
-        try {
-          unlinkSync(tmpHtml);
-        } catch {
-          /* déjà supprimé */
-        }
       }
     };
     // File d'attente : un rendu à la fois (le navigateur singleton est partagé)

@@ -219,7 +219,12 @@ export function Sidebar({
   const hasProjects = projects.length > 0;
 
   // Recherche plein-texte (débouncée) dans le contenu des messages
+  // Lot audit passe 2 : garde anti-course — une réponse lente pour une
+  // requête COURTE peut revenir APRÈS celle d'une requête plus récente et
+  // l'écraser. `cancelled` est posé par le cleanup (q changé, démontage) :
+  // seuls les résultats de la DERNIÈRE requête sont affichés.
   useEffect(() => {
+    let cancelled = false;
     if (!isSearching) {
       setMessageHits([]);
       setSearching(false);
@@ -229,12 +234,15 @@ export function Sidebar({
     const t = setTimeout(async () => {
       try {
         const hits = await onSearchMessages(q);
-        setMessageHits(hits);
+        if (!cancelled) setMessageHits(hits);
       } finally {
-        setSearching(false);
+        if (!cancelled) setSearching(false);
       }
     }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [q, isSearching, onSearchMessages]);
 
   // Tri des conversations à l'intérieur d'un dossier (fork.projects.sort)

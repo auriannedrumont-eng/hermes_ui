@@ -113,6 +113,7 @@ export interface HandlerContext {
       webSearch?: boolean;
       variant?: "a" | "b";
       versionGroup?: string;
+      versionRestore?: { group: string; id: string } | null;
     },
   ) => Promise<void>;
   isRunning: (conversationId: string) => boolean;
@@ -235,6 +236,7 @@ export function bindHandlerContext(deps: {
       webSearch?: boolean;
       variant?: "a" | "b";
       versionGroup?: string;
+      versionRestore?: { group: string; id: string } | null;
     },
   ) => Promise<void>;
     isRunning: (conversationId: string) => boolean;

@@ -312,6 +312,14 @@ export function resolveKnownProvider(
   if (/^https?:\/\//i.test(raw)) {
     try {
       const u = new URL(raw);
+      // Lot audit passe 2 : même garde que le test de clé (testProviderKey)
+      // et que providers:add — https requis, http admis UNIQUEMENT sur la
+      // boucle locale. Sans elle, une adresse http:// collée dans le champ
+      // NOM créait le fournisseur en base en contournant la garde de
+      // providers:add (qui ne filtre que le champ baseUrl explicite).
+      const local =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
+      if (u.protocol !== "https:" && !(u.protocol === "http:" && local)) return null;
       return { custom: { name: u.hostname, baseUrl: raw.replace(/\/+$/, "") } };
     } catch {
       return null;
@@ -1027,7 +1035,12 @@ async function fetchRepoSnapshotUncached(
     const channel = branch || info.default_branch || "main";
     const commitsRes = await fetch(
       `https://api.github.com/repos/${ref.owner}/${ref.repo}/commits?sha=${encodeURIComponent(channel)}&per_page=6`,
-      { headers: GH_HEADERS, signal: AbortSignal.timeout(9000) },
+      // Lot audit passe 2 : redirect: "error" comme sur /repos et /tags —
+      // une 302 (redirection) ne doit jamais être suivie en silence.
+      { redirect: "error",
+        headers: GH_HEADERS,
+        signal: AbortSignal.timeout(9000),
+      },
     );
     if (!commitsRes.ok)
       throw new Error(`Commits indisponibles (HTTP ${commitsRes.status})`);
