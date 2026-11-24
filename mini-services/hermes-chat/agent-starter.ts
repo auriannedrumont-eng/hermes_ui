@@ -144,6 +144,14 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
           resolve(result);
         };
         child.once("error", () => finish(false));
+        // Revue 95 : un candidat qui DÉMARRE puis quitte aussitôt avec un
+        // code non nul (alias Windows Store, binaire cassé) ne doit pas
+        // gagner par défaut — le timer de 2 s seul résolvait true sur un
+        // processus déjà mort, et les candidats suivants n'étaient jamais
+        // essayés. Une sortie non nulle avant l'échéance rattrape le verdict.
+        child.once("exit", (code) => {
+          if (code !== 0 && code !== null) finish(false);
+        });
         const probe = setTimeout(() => finish(true), 2_000);
         probe.unref?.();
         child.unref();

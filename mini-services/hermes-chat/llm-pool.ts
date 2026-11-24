@@ -625,6 +625,10 @@ export function createLlmPool(store: Store): LlmPoolApi {
         buffer = lines.pop() ?? "";
         for (const line of lines) consume(line);
       }
+      // Fin de flux sans \n final (revue 95) : le résidu du buffer — le
+      // dernier jeton ou l'objet usage de la dernière trame SSE — était
+      // perdu si le serveur clôturait le flux sans sauter de ligne.
+      if (buffer.trim()) consume(buffer);
     } catch (err) {
       // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
       // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif
@@ -772,6 +776,10 @@ export function createLlmPool(store: Store): LlmPoolApi {
         buffer = lines.pop() ?? "";
         for (const line of lines) consume(line);
       }
+      // Fin de flux sans \n final (revue 95) : le résidu du buffer — le
+      // dernier jeton ou l'objet usage de la dernière trame SSE — était
+      // perdu si le serveur clôturait le flux sans sauter de ligne.
+      if (buffer.trim()) consume(buffer);
     } catch (err) {
       // Stop utilisateur pendant le vol : on rend le partiel reçu. Une garde
       // d'inactivité déclenchée n'est PAS un arrêt utilisateur : le motif

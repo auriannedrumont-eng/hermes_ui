@@ -177,6 +177,32 @@ export async function runRestTurn(
         sep = buffer.indexOf("\n\n");
       }
     }
+    // Fin de flux sans séparateur final (revue 95) : une dernière trame non
+    // suivie de « \n\n » restait dans le buffer — son assistant.completed ou
+    // son run.completed (le verdict `terminal`) était perdu et le tour
+    // échouait en `rest_chat_stream_close_premature` alors que tout était
+    // arrivé. Le résidu est consommé avant la sortie de boucle.
+    if (buffer.trim()) {
+      const parsed = parseSseFrame(buffer);
+      if (parsed) {
+        handleEvent(parsed.name, parsed.data, {
+          onDelta: (t) => {
+            if (t) {
+              content += t;
+              callbacks.onDelta(t);
+            }
+          },
+          onReasoning: (t) => {
+            if (t) {
+              reasoning += t;
+              callbacks.onReasoning(t);
+            }
+          },
+          onStatus: callbacks.onStatus,
+          onToolEvent: callbacks.onToolEvent,
+        }, (v) => { finalContent = v; }, (v) => { terminal = v; });
+      }
+    }
   } finally {
     clearTimeout(timer);
     signal.removeEventListener("abort", onOuterAbort);

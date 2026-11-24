@@ -274,8 +274,13 @@ function runLogged(
     if (!opts.quiet) logLine(deps, `$ ${cmd} ${args.join(" ")}`);
     let output = "";
     let settled = false;
+    // Revue 95 : plus de shell Windows — avec shell:true, node concatène les
+    // arguments SANS les guillemeter, et un chemin contenant un espace
+    // (le retour arrière git -C <dir>, un HERMES_AGENT_BIN sous
+    // « Program Files ») éclatait en plusieurs arguments fantômes. spawn
+    // sans shell passe chaque argument tel quel : aucun requoting, la
+    // résolution de `hermes`/`git` via le PATH reste intacte.
     const child = spawn(cmd, args, {
-      shell: process.platform === "win32",
       windowsHide: true,
     });
     const timer = setTimeout(() => {

@@ -13,7 +13,8 @@
 // - `listModels()` interroge l'API REST de la gateway
 //   (GET /api/model/options) et retombe sur le catalogue Hermes.
 import WebSocket from "ws";
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { resolve as pathResolve, join } from "node:path";
 import { existsSync } from "node:fs";
 import { catalogModelsResult } from "./models";
@@ -73,22 +74,34 @@ function ticketPythonCandidates(): string[] {
  *  ((90)) La maison est ÉPINGLÉE (HERMES_HOME du dossier) : un héritage de
  *  l'environnement d'une AUTRE installation Hermes (console de lancement,
  *  IDE) faisait répondre la gateway de l'autre maison — ticket d'un autre
- *  profil, refus 4403 à l'upgrade, tours muets sans cause visible. */
-function mintGatewayTicket(): string | null {
+ *  profil, refus 4403 à l'upgrade, tours muets sans cause visible.
+ *  Asynchrone (revue 95) : l'ancien spawnSync gelait TOUTE la boucle
+ *  d'événements du service (sockets, HTTP, streams en vol) pendant chaque
+ *  essai python — jusqu'à 4 candidats × 15 s = 60 s de service figé, à
+ *  chaque re-sonde périodique (toutes les 30 s en mode local) et au départ
+ *  de chaque tour gateway. execFile promisifié libère la boucle. */
+const execFileP = promisify(execFile);
+
+async function mintGatewayTicket(): Promise<string | null> {
   const maison = pathResolve(join(import.meta.dir, "..", "..", "data"));
   const env = { ...process.env, HERMES_HOME: maison };
   const cwd = resolveAgentDir() ?? process.cwd();
   for (const cmd of ticketPythonCandidates()) {
     try {
       const args = cmd === "py" ? ["-3"] : [];
-      const out = spawnSync(cmd, [...args, "-m", "hermes_cli.main", "gateway", "attach", "--json"], {
-        timeout: TICKET_TIMEOUT_MS,
-        encoding: "utf-8",
-        windowsHide: true,
-        env,
-        cwd,
-      });
-      if (out.status !== 0 || !out.stdout) continue;
+      const out = await execFileP(
+        cmd,
+        [...args, "-m", "hermes_cli.main", "gateway", "attach", "--json"],
+        {
+          timeout: TICKET_TIMEOUT_MS,
+          encoding: "utf-8",
+          windowsHide: true,
+          env,
+          cwd,
+          maxBuffer: 4 * 1024 * 1024,
+        },
+      );
+      if (!out.stdout) continue;
       const parsed = JSON.parse(out.stdout) as { ticket?: string; protocols?: string[] };
       const ticket = parsed.ticket
         ?? parsed.protocols?.find((p) => p.startsWith(TICKET_PROTOCOL_PREFIX))?.slice(TICKET_PROTOCOL_PREFIX.length);
@@ -310,7 +323,13 @@ export class HermesConnector {
     }
   }
 
-  private probe(timeoutMs: number = HANDSHAKE_TIMEOUT_MS): Promise<boolean> {
+  private async probe(timeoutMs: number = HANDSHAKE_TIMEOUT_MS): Promise<boolean> {
+    // Sonde canonique : un upgrade accepté exige un ticket one-use en
+    // sous-protocole. Pas de ticket minter → gateway absente (rien à sonder).
+    // Ticket minté ASYNCHRONE avant la promesse socket (revue 95) : jamais
+    // de boucle d'événements figée pendant les essais python.
+    const ticket = await mintGatewayTicket();
+    if (!ticket) return false;
     return new Promise((resolve) => {
       let settled = false;
       const done = (ok: boolean) => {
@@ -330,13 +349,6 @@ export class HermesConnector {
         }
         resolve(ok);
       };
-      // Sonde canonique : un upgrade accepté exige un ticket one-use en
-      // sous-protocole. Pas de ticket minter → gateway absente (rien à sonder).
-      const ticket = mintGatewayTicket();
-      if (!ticket) {
-        resolve(false);
-        return;
-      }
       const ws = new WebSocket(
         toWsUrl(this.gatewayUrl!),
         [GATEWAY_PROTOCOL, TICKET_PROTOCOL_PREFIX + ticket],
@@ -506,10 +518,20 @@ export class HermesConnector {
   // par tour sont limités au contrat fermé du canonical wire : le modèle
   // demandé passe par model_override ; effort / permissions / prompt système /
   // mémoire / température ne font pas partie du contrat (ignorés).
-  private runGatewayTurn(
+  private async runGatewayTurn(
     req: TurnRequest,
     cb: TurnCallbacks
   ): Promise<TurnOutcome> {
+    // Ticket one-use : sans gateway vivante, `attach --json` échoue →
+    // erreur claire (la re-sonde rebranchera au tour suivant). Minté
+    // ASYNCHRONE avant la promesse socket (revue 95) — jamais de boucle
+    // d'événements figée pendant les essais python.
+    const ticket = await mintGatewayTicket();
+    if (!ticket) {
+      throw new Error(
+        "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
+      );
+    }
     return new Promise((resolve, reject) => {
       let settled = false;
       // true = la gateway a annoncé la fin (message.complete). Une
@@ -518,15 +540,6 @@ export class HermesConnector {
       let endedProperly = false;
       let content = "";
       let reasoning = "";
-      // Ticket one-use : sans gateway vivante, `attach --json` échoue →
-      // erreur claire (la re-sonde rebranchera au tour suivant).
-      const ticket = mintGatewayTicket();
-      if (!ticket) {
-        reject(new Error(
-          "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
-        ));
-        return;
-      }
       const ws = new WebSocket(
         toWsUrl(this.gatewayUrl!),
         [GATEWAY_PROTOCOL, TICKET_PROTOCOL_PREFIX + ticket],
