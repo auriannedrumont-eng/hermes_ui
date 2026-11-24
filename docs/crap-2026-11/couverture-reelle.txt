@@ -398,3 +398,62 @@ C. Classement crapper après la séance (production, CC ≥ 30 — 59 fonctions)
    CC  94  registerExtensionsHandlers   (sous-registres)
    CC  86  useHermesChat                (acceptable)
    CC  84  runAssistantTurn             (acceptable)
+
+9. VAGUE 5 UI (2) — SIDEBAR (CC 138, CRAP 19 182) → 8 FONCTIONS < 100
+══════════════════════════════════════════════════════════════════════════════
+
+A. Chirurgie ancrée VERBATIM (extract_sidebar_leaves.py, bornes vérifiées
+   AVANT écriture ; preuve_sidebar_verbatim.py, 23 plages comparées)
+   Le composant le plus complexe du front (dossiers en arbre à un niveau,
+   drag & drop de rangement et réordonnancement F-59, recherche multi-cibles
+   insensible aux accents, archives F-60, carte de statut §9 (62), gardes de
+   destruction C5.1) est démonté en cinq feuilles appelées dans l'ordre du
+   rendu + deux algorithmes de module PURES — aucune ligne de JSX ni de
+   handler modifiée, les closures deviennent des props typées du même nom ;
+   976 lignes déplacées prouvées identiques octet par octet au HEAD ;
+   structure DOM inchangée (mêmes nœuds dans le même ordre) ; props
+   publiques de Sidebar inchangées ; tout l'état reste à l'orchestrateur.
+     Sidebar (orchestrateur)       CC 74   CRAP 5550  état + memos + handlers
+     SidebarRecherche (feuille 1)  CC  8   CRAP   72  branche « recherche » :
+                                                 arbre filtré, groupes de
+                                                 dates, hits « dans les
+                                                 messages »
+     SidebarDossiers (feuille 2)   CC  8   CRAP   72  branche « avec dossiers » :
+                                                 ProjectGroup, « Sans dossier »,
+                                                 Archives, lien disque
+     SidebarHistorique (feuille 3) CC  2   CRAP    6  branche « sans dossier » :
+                                                 épinglées + groupes de dates
+     SidebarStatut (feuille 4)     CC 13   CRAP  182  carte de statut du moteur
+     SidebarDialogues (feuille 5)  CC 15   CRAP  240  gardes de destruction
+     computeSearchTree (module)    CC 11   CRAP  132  arbre filtré de la
+                                                 recherche (le memo appelle)
+     reorderProjectsFlat (module)  CC 15   CRAP  240  réordonnancement F-59
+                                                 entre frères — retours early
+                                                 d'origine → `return null`,
+                                                 même comportement
+   Bilan : CRAP du fichier 19 182 → 6 494 (−66 %) ; plus aucune fonction
+   du fichier au-dessus de CC 74.
+
+B. Validation
+   tsc ×3 : 0 erreur · eslint : 0 erreur (mêmes 196 warnings pré-existants)
+   · suite autonome 33/33 · gardes de source 0 échec · Vitest 144/144.
+   Le typecheck est l'auditeur des props : la première passe a révélé une
+   prop omise (itemProps de la feuille Recherche), corrigée dans le script
+   puis chirurgie relancée sur fichier restauré — jamais de retouche à la
+   main du fichier produit.
+
+C. Classement crapper après la vague 5 (production, CC ≥ 30 — 59 fonctions)
+   CC 110  Composer                     (UI : prochaine cible)
+   CC 105  StorageSection               (UI)
+   CC 102  SystemSection                (UI)
+   CC  96  registerProvidersHandlers    (sous-registres)
+   CC  94  registerExtensionsHandlers   (sous-registres)
+   CC  86  useHermesChat                (acceptable)
+   CC  84  runAssistantTurn             (acceptable)
+   CC  82  HermesWebPage                (UI)
+   CC  81  useChatSocketEvents          (acceptable)
+   CC  77  registerTurnHandlers         (sous-registres)
+   CC  77  runGatewayTurn               (sous-registres)
+   CC  75  WebchatSection               (UI)
+   CC  74  Sidebar                      (acceptable — feuilles 2-15)
+

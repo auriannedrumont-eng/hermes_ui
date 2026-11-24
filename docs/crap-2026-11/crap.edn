@@ -1,6 +1,5 @@
 {:entries [
   {:name "main", :namespace "scripts.test-providers-wallets", :complexity 183, :coverage 0.0, :crap 33672.0}
-  {:name "Sidebar", :namespace "components.chat.sidebar", :complexity 138, :coverage 0.0, :crap 19182.0}
   {:name "main", :namespace "scripts.test-source-guards", :complexity 128, :coverage 0.0, :crap 16512.0}
   {:name "main", :namespace "scripts.test-integration-fixes", :complexity 115, :coverage 0.0, :crap 13340.0}
   {:name "Composer", :namespace "components.chat.composer", :complexity 110, :coverage 0.0, :crap 12210.0}
@@ -20,6 +19,7 @@
   {:name "registerTurnHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 77, :coverage 0.0, :crap 6006.0}
   {:name "runGatewayTurn", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 77, :coverage 0.0, :crap 6006.0}
   {:name "WebchatSection", :namespace "components.settings.webchat-section", :complexity 75, :coverage 0.0, :crap 5700.0}
+  {:name "Sidebar", :namespace "components.chat.sidebar", :complexity 74, :coverage 0.0, :crap 5550.0}
   {:name "unitTests", :namespace "scripts.test-modes-flow", :complexity 74, :coverage 0.0, :crap 5550.0}
   {:name "main", :namespace "scripts.test-version-flow", :complexity 74, :coverage 0.0, :crap 5550.0}
   {:name "testProviderKey", :namespace "mini-services.hermes-chat.providers", :complexity 73, :coverage 0.0, :crap 5402.0}
@@ -187,6 +187,8 @@
   {:name "ArtifactPanel", :namespace "components.chat.artifact-panel", :complexity 15, :coverage 0.0, :crap 240.0}
   {:name "DiffView", :namespace "components.chat.artifact-views", :complexity 15, :coverage 0.0, :crap 240.0}
   {:name "ContextGauge", :namespace "components.chat.context-gauge", :complexity 15, :coverage 0.0, :crap 240.0}
+  {:name "SidebarDialogues", :namespace "components.chat.sidebar", :complexity 15, :coverage 0.0, :crap 240.0}
+  {:name "reorderProjectsFlat", :namespace "components.chat.sidebar", :complexity 15, :coverage 0.0, :crap 240.0}
   {:name "useContinuousSpeech", :namespace "hooks.use-speech", :complexity 15, :coverage 0.0, :crap 240.0}
   {:name "registerAgentMotorHandlers", :namespace "mini-services.hermes-chat.handlers.agent-motor", :complexity 15, :coverage 0.0, :crap 240.0}
   {:name "runTurn", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 15, :coverage 0.0, :crap 240.0}
@@ -219,6 +221,7 @@
   {:name "_parse", :namespace ".next.dev.static.chunks.node_modules_next_dist_compiled_next-devtools_index_1dd7fb59.z", :complexity 13, :coverage 0.0, :crap 182.0}
   {:name "useVersionHistory", :namespace "components.chat.artifact-panel", :complexity 13, :coverage 0.0, :crap 182.0}
   {:name "ComparePair", :namespace "components.chat.message-list", :complexity 13, :coverage 0.0, :crap 182.0}
+  {:name "SidebarStatut", :namespace "components.chat.sidebar", :complexity 13, :coverage 0.0, :crap 182.0}
   {:name "ToolsExtensionsSection", :namespace "components.settings.outils-extensions-section", :complexity 13, :coverage 0.0, :crap 182.0}
   {:name "useProjects", :namespace "hooks.use-projects", :complexity 13, :coverage 0.0, :crap 182.0}
   {:name "stripArtifactBlocks", :namespace "lib.artifact-utils", :complexity 13, :coverage 0.0, :crap 182.0}
@@ -257,6 +260,7 @@
   {:name "onpacket", :namespace ".next.dev.static.chunks.node_modules_cf89e8f1._.Socket", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "format", :namespace ".next.dev.static.chunks.node_modules_next_dist_compiled_next-devtools_index_1dd7fb59.o", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "ModeFlowCard", :namespace "components.chat.mode-flow", :complexity 11, :coverage 0.0, :crap 132.0}
+  {:name "computeSearchTree", :namespace "components.chat.sidebar", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "diffLines", :namespace "lib.artifact-utils", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "conversationToMarkdown", :namespace "lib.export", :complexity 11, :coverage 0.0, :crap 132.0}
   {:name "toArtifactCandidates", :namespace "mini-services.hermes-chat.artifacts", :complexity 11, :coverage 0.0, :crap 132.0}
@@ -368,6 +372,8 @@
   {:name "log", :namespace ".next.dev.static.chunks.node_modules_next_dist_f3530cac._.ClientFileLogger", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "KindIcon", :namespace "components.chat.artifact-card", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "modeFlowSummary", :namespace "components.chat.mode-flow", :complexity 8, :coverage 0.0, :crap 72.0}
+  {:name "SidebarDossiers", :namespace "components.chat.sidebar", :complexity 8, :coverage 0.0, :crap 72.0}
+  {:name "SidebarRecherche", :namespace "components.chat.sidebar", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "SidebarArchives", :namespace "components.chat.sidebar-archives", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "sortEntries", :namespace "components.settings.storage-section", :complexity 8, :coverage 0.0, :crap 72.0}
   {:name "InfoTip", :namespace "components.shared.info-tip", :complexity 8, :coverage 0.0, :crap 72.0}
@@ -977,7 +983,9 @@
   {:name "Slider", :namespace "components.ui.slider", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "Toaster", :namespace "components.ui.toaster", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "band", :namespace "docs.crap-2026-11.scripts.analyze_crap_edn", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "dedent", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "line_of", :namespace "docs.crap-2026-11.scripts.inventory_effect3", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "dedent", :namespace "docs.crap-2026-11.scripts.preuve_sidebar_verbatim", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "fileToBase64", :namespace "hooks.use-attachments-wiring", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "load", :namespace "hooks.use-pricing", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "usePricingState", :namespace "hooks.use-pricing", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -1314,6 +1322,7 @@
   {:name "ThemeToggle", :namespace "components.chat.chat-header", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "readFavoriteIds", :namespace "components.chat.model-picker", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "DropZone", :namespace "components.chat.project-group", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "SidebarHistorique", :namespace "components.chat.sidebar", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "SlashMenu", :namespace "components.chat.slash-menu", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "derniereLigne", :namespace "components.settings.fil-live", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "heureVersMs", :namespace "components.settings.fil-live", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -1338,6 +1347,7 @@
   {:name "ResizableHandle", :namespace "components.ui.resizable", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "top", :namespace "docs.crap-2026-11.scripts.analyze_crap_edn", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_agent_motor_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-pricing", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-profiles", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "addToRemoveQueue", :namespace "hooks.use-toast", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -2087,6 +2097,7 @@
   {:name "ModeTag", :namespace "components.chat.mode-flow", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "Stepper", :namespace "components.chat.mode-picker", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "norm", :namespace "components.chat.model-picker", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "foldAccents", :namespace "components.chat.sidebar", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "SidebarSectionHeader", :namespace "components.chat.sidebar-section-header", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "AddLine", :namespace "components.settings.bits", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "Pastille", :namespace "components.settings.bits", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -2185,11 +2196,13 @@
   {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_agent_motor_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.extract_conversations_hook", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_conversations_hook", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "chk", :namespace "docs.crap-2026-11.scripts.extract_socket_events", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect2", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect3", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_sidebar_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "replace", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.refactor_llm_pool", :complexity 1, :coverage 0.0, :crap 2.0}

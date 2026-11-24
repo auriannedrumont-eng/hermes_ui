@@ -1,27 +1,4 @@
-###  1. Sidebar  CC=138  (906 lignes, src/components/chat/sidebar.tsx:115-1020)
-    entête fichier: // Sidebar : dossiers (arbre à un niveau, sous-dossiers repliables, | // drag & drop pour ranger et réordonner entre frères), recherche | // (dossiers + titres + contenu des messag
-```ts
-export function Sidebar({
-  conversations,
-  projects,
-  activeId,
-  mode,
-  serverModel,
-  engineProviders,
-  updateAvailable = null,
-  connected,
-  onNew,
-  onOpen,
-  onDelete,
-  onRename,
-  onTogglePin,
-  onSearchMessages,
-  onCreateProject,
-  onRenameProject,
-  onDeleteProject,
-```
-
-###  2. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
+###  1. Composer  CC=110  (622 lignes, src/components/chat/composer.tsx:113-734)
     entête fichier: // Barre de saisie façon ChatGPT : textarea auto-redimensionnable, | // envoi/stop, pièces jointes (trombone, glisser-déposer, coller), | // sélecteur de modèle, dictée vocale, com
 ```ts
 export function Composer({
@@ -44,7 +21,7 @@ export function Composer({
   expert,
 ```
 
-###  3. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
+###  2. StorageSection  CC=105  (646 lignes, src/components/settings/storage-section.tsx:162-807)
     entête fichier: // Page Stockage — explorateur déclaratif des documents générés (v0.3.0). | // Spec §4 : liste intégrale sans pagination, groupement par projet côté | // client, déroulé DÉRIVÉ (ja
 ```ts
 export function StorageSection({ initialProject }: { initialProject?: string | null }) {
@@ -67,7 +44,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
       expireAt: number;
 ```
 
-###  4. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
+###  3. SystemSection  CC=102  (477 lignes, src/components/settings/system-section.tsx:86-562)
     entête fichier: // Section « Système » — v3 (v0.5.1), maquette validée | // design/maquette-systeme-v3.html : DEUX cartes, une par programme | // (« L'application » / « Hermes »), une seule gramma
 ```ts
 export function SystemSection({
@@ -90,7 +67,7 @@ export function SystemSection({
     const d = new Date(majVerifieAt);
 ```
 
-###  5. registerProvidersHandlers  CC=96  (271 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:110-380)
+###  4. registerProvidersHandlers  CC=96  (271 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:110-380)
     entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
 ```ts
 function registerProvidersHandlers(socket: Socket) {
@@ -113,7 +90,7 @@ socket.on(
   (
 ```
 
-###  6. registerExtensionsHandlers  CC=94  (311 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:398-708)
+###  5. registerExtensionsHandlers  CC=94  (311 lignes, mini-services/hermes-chat/handlers/providers-extensions.ts:398-708)
     entête fichier: // Handlers « providers-extensions » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.
 ```ts
 function registerExtensionsHandlers(socket: Socket) {
@@ -136,7 +113,7 @@ socket.on(
       return;
 ```
 
-###  7. useHermesChat  CC=86  (673 lignes, src/hooks/use-hermes-chat.ts:61-733)
+###  6. useHermesChat  CC=86  (673 lignes, src/hooks/use-hermes-chat.ts:61-733)
     entête fichier: // Hook principal : orchestre les conversations, la sélection de modèle, | // les pièces jointes multimédia et le streaming via socket.io
 ```ts
 export function useHermesChat() {
@@ -159,7 +136,7 @@ export function useHermesChat() {
    *  Mise à jour en effet (react-hooks/refs) — lecture uniquement dans les
 ```
 
-###  8. runAssistantTurn  CC=84  (554 lignes, mini-services/hermes-chat/turn-runner.ts:832-1385)
+###  7. runAssistantTurn  CC=84  (554 lignes, mini-services/hermes-chat/turn-runner.ts:832-1385)
     entête fichier: // Tour assistant : moteur d'exécution — extrait d'index.ts (découpage | // 2026-11, cf. FORK.md §10). Contient runAssistantTurn, les registres des | // tours en vol (running, live
 ```ts
 const runAssistantTurn = async (
@@ -182,7 +159,7 @@ const runAssistantTurn = async (
      *  sinon toujours la plus récente (v2) même si l'utilisateur naviguait
 ```
 
-###  9. HermesWebPage  CC=82  (639 lignes, src/app/page.tsx:42-680)
+###  8. HermesWebPage  CC=82  (639 lignes, src/app/page.tsx:42-680)
     entête fichier: // Hermes Web — interface de chat type ChatGPT pour l'agent Hermes de Nous Research. | // Layout : la conversation reste le chef d'orchestre ; l'artefact est un objet | // de premi
 ```ts
 export default function HermesWebPage() {
@@ -205,7 +182,7 @@ export default function HermesWebPage() {
   const [promptOpen, setPromptOpen] = useState(false);
 ```
 
-### 10. useChatSocketEvents  CC=81  (507 lignes, src/hooks/use-chat-socket-events.ts:85-591)
+###  9. useChatSocketEvents  CC=81  (507 lignes, src/hooks/use-chat-socket-events.ts:85-591)
     entête fichier: // Écoute des événements socket du chat — extrait de use-hermes-chat.ts | // (audit CRAP 2026-11 : le useEffect de câblage faisait 462 lignes et portait | // l'essentiel de la comp
 ```ts
 export function useChatSocketEvents(deps: ChatSocketEventsDeps) {
@@ -228,7 +205,7 @@ export function useChatSocketEvents(deps: ChatSocketEventsDeps) {
     screenOutdatedDismissedRef,
 ```
 
-### 11. registerTurnHandlers  CC=77  (279 lignes, mini-services/hermes-chat/handlers/conversations.ts:444-722)
+### 10. registerTurnHandlers  CC=77  (279 lignes, mini-services/hermes-chat/handlers/conversations.ts:444-722)
     entête fichier: // Handlers « conversations » — extraits d'index.ts (découpage 2026-11, FORK.md §10). | // Pose ses socket.on(...) via register*(socket) ; les identifiants libres | // (ctx.store, 
 ```ts
 function registerTurnHandlers(socket: Socket) {
@@ -251,7 +228,7 @@ socket.on(
       // F-09/F-12 : recherche web du tour (Tavily/Exa — ignorée en comparaison)
 ```
 
-### 12. runGatewayTurn  CC=77  (251 lignes, mini-services/hermes-chat/hermes-connector.ts:587-837)
+### 11. runGatewayTurn  CC=77  (251 lignes, mini-services/hermes-chat/hermes-connector.ts:587-837)
     entête fichier: // Connecteur moteur Hermes — la gateway est le chemin UNIQUE du chat : | // - URL automatique par défaut (ws://127.0.0.1:9120/api/ws) : lancer l'agent | //   Hermes suffit, rien à
 ```ts
   private async runGatewayTurn(
@@ -274,7 +251,7 @@ socket.on(
       // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
 ```
 
-### 13. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
+### 12. WebchatSection  CC=75  (417 lignes, src/components/settings/webchat-section.tsx:68-484)
     entête fichier: // Section « Chats web » du volet Paramètres v4 — fournisseur « Chats IA web » | // (identifiant stable `webchat`, spec « Piloter des chats IA web »). Règles | // rendues ici plutô
 ```ts
 export function WebchatSection() {
@@ -295,6 +272,29 @@ export function WebchatSection() {
   const [showAdv, setShowAdv] = useState(false);
 
   const load = useCallback(() => {
+```
+
+### 13. Sidebar  CC=74  (501 lignes, src/components/chat/sidebar.tsx:890-1390)
+    entête fichier: // Sidebar : dossiers (arbre à un niveau, sous-dossiers repliables, | // drag & drop pour ranger et réordonner entre frères), recherche | // (dossiers + titres + contenu des messag
+```ts
+export function Sidebar({
+  conversations,
+  projects,
+  activeId,
+  mode,
+  serverModel,
+  engineProviders,
+  updateAvailable = null,
+  connected,
+  onNew,
+  onOpen,
+  onDelete,
+  onRename,
+  onTogglePin,
+  onSearchMessages,
+  onCreateProject,
+  onRenameProject,
+  onDeleteProject,
 ```
 
 ### 14. testProviderKey  CC=73  (189 lignes, mini-services/hermes-chat/providers.ts:650-838)

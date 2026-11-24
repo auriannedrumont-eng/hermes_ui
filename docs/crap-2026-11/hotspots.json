@@ -1,26 +1,5 @@
 [
  {
-  "name": "Sidebar",
-  "ns": "components.chat.sidebar",
-  "cc": 138,
-  "start": 115,
-  "end": 1020,
-  "lines": 906,
-  "file": "src/components/chat/sidebar.tsx",
-  "decisions": {
-   "if": 34,
-   "else if": 4,
-   "for/while": 6,
-   "catch": 2,
-   "ternaire": 67,
-   "&&": 12,
-   "||": 12,
-   "??": 18,
-   "?.": 7,
-   "case": 0
-  }
- },
- {
   "name": "Composer",
   "ns": "components.chat.composer",
   "cc": 110,
@@ -269,6 +248,27 @@
    "||": 11,
    "??": 26,
    "?.": 9,
+   "case": 0
+  }
+ },
+ {
+  "name": "Sidebar",
+  "ns": "components.chat.sidebar",
+  "cc": 74,
+  "start": 890,
+  "end": 1390,
+  "lines": 501,
+  "file": "src/components/chat/sidebar.tsx",
+  "decisions": {
+   "if": 26,
+   "else if": 4,
+   "for/while": 3,
+   "catch": 2,
+   "ternaire": 22,
+   "&&": 7,
+   "||": 7,
+   "??": 9,
+   "?.": 7,
    "case": 0
   }
  },

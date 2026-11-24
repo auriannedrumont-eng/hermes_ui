@@ -14,17 +14,17 @@ Vitest ajoutés au mini-service en sont la **première couverture mesurable**.
 | Fichier | Rôle |
 | --- | --- |
 | `audit-cc30.txt` | Phase 1 — audit des 44 fonctions de production CC ≥ 30 (1052 fonctions analysées), familles A-E. |
-| `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séance UI du 25/11 — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
-| `suite-tests.log` | Preuves de validation brutes (dernière séance) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM carte v3 41/41, preuve VERBATIM du découpage, retournement des verrous D-02. |
-| `refactoring.patch` | Vagues 1+2+3+4 + séance UI — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
-| `table-crap.txt` | Snapshot crapper complet après la séance UI du 25/11 (fonction, namespace, CC, couverture, CRAP). |
-| `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la séance UI du 25/11. |
+| `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séances UI du 25/11 — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
+| `suite-tests.log` | Preuves de validation brutes (dernière séance) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM carte v3 41/41, preuve VERBATIM du découpage AgentMotorCard (14 morceaux) puis Sidebar (23 plages, 976 lignes), retournement des verrous D-02. |
+| `refactoring.patch` | Vagues 1+2+3+4 + séances UI — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
+| `table-crap.txt` | Snapshot crapper complet après la vague 5 UI du 25/11 (fonction, namespace, CC, couverture, CRAP). |
+| `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la vague 5 UI du 25/11. |
 | `crap.edn` | Métriques au format EDN pour uml-viewer. |
-| `hotspots.json` | Les 59 fonctions de production CC ≥ 30 après la séance UI du 25/11 (chunks .next/ exclus de l'extraction), avec spans et décompte des décisions (if/ternaire/&&/…). |
+| `hotspots.json` | Les 59 fonctions de production CC ≥ 30 après la vague 5 UI du 25/11 (chunks .next/ exclus de l'extraction), avec spans et décompte des décisions (if/ternaire/&&/…). |
 | `digest-hotspots.txt` | Digest de lecture des hotspots : en-tête de fichier, signature, corps (le Top 15 = entrées 1-15). |
 | `lcov-mini-service.info` | LCOV Vitest du mini-service (store-messages 81,8-100 %, providers-validate 100 %, parseRepoInput 100 %, models 100 %, modes 98 %, prompts 97 %, fiches 95 %, parseModelOptions 100 %). |
 
-## Refactoring — bilan des quatre vagues + séance UI (corps VERBATIM)
+## Refactoring — bilan des quatre vagues + séances UI (corps VERBATIM)
 
 | Fonction initiale | CC avant | CC après | Unités extraites |
 | --- | --- | --- | --- |
@@ -35,6 +35,7 @@ Vitest ajoutés au mini-service en sont la **première couverture mesurable**.
 | buildMessages | 186 | 1 | 5 builders domaine (18-73), fusion par spread |
 | registerSettingsSystemHandlers | 157 | 1 | 7 sous-registres thématiques (8-50) |
 | AgentMotorCard | 179 | 52 | 3 sous-cartes feuilles VERBATIM : AgentMotorEnTete 43, AgentMotorBlocs 57, AgentMotorReplis 30 — séance UI 25/11 (QA DOM dédiée 41/41) |
+| Sidebar | 138 | 74 | 5 feuilles VERBATIM (Recherche 8, Dossiers 8, Historique 2, Statut 13, Dialogues 15) + 2 algorithmes de module purs (computeSearchTree 11, reorderProjectsFlat 15) — vague 5 UI 25/11, 23 plages prouvées au HEAD |
 | runAssistantTurn | 147 | 84 | 7 étapes module-level (3-24) — vague 4 |
 | registerProvidersHandlers | 114 | 96 | validations d'URL/clés → providers-validate.ts (8 helpers purs testés) — vague 4 |
 | registerArtifactsSharesHandlers | 59 | 1 | 3 sous-registres (14-28) — vague 4 |
@@ -48,6 +49,9 @@ crap 5402 → 77 sur la machine F-14), un 4e registre démontlé (artifacts-shar
 59 → 1), les validations d'URL/clés réunies en un module pur testé
 (providers-validate.ts, 100 %), le hook géant sous la barre des 100 (86) et
 le tour assistant décomposé en étapes (147 → 84). Vitest : 67 → 144 tests.
+Les séances UI du 25/11 démontent les deux pires composants du front en
+feuilles VERBATIM : AgentMotorCard 179 → 52 et Sidebar 138 → 74 — plus
+aucune fonction UI au-dessus de la barre des 100 dans ces deux fichiers.
 
 Anomalie D-02 constatée en vague 4, **CORRIGÉE dans la séance UI du 25/11** :
 la purge des versions inactives est passée AVANT les DELETE dans
@@ -64,10 +68,19 @@ gateway 9120 pilotée) ; découverte de harnais consignée : Next dev accepte la
 montée websocket /socket.io/ sans la relayer — les QA passent par Caddy, le
 vrai chemin de production.
 
-Prochaines cibles (classement après la séance UI) : Sidebar 138 · Composer
-110 · StorageSection 105 · SystemSection 102 · registerProvidersHandlers 96
-· registerExtensionsHandlers 94 — même discipline pour l'UI : sous-cartes
-feuilles VERBATIM + QA DOM dédiée par composant.
+Vague 5 UI (2) du 25/11 (§9 de couverture-reelle.txt) : **Sidebar 138 → 74**
+(CRAP 19 182 → 6 494) — 5 feuilles VERBATIM (SidebarRecherche 8 ·
+SidebarDossiers 8 · SidebarHistorique 2 · SidebarStatut 13 · SidebarDialogues
+15) + 2 algorithmes de module purs (computeSearchTree 11 ·
+reorderProjectsFlat 15) ; 976 lignes déplacées prouvées identiques octet par
+octet au HEAD (preuve_sidebar_verbatim.py), structure DOM et props publiques
+inchangées, tout l'état reste à l'orchestrateur.
+
+Prochaines cibles (classement après la vague 5) : Composer 110 ·
+StorageSection 105 · SystemSection 102 · registerProvidersHandlers 96 ·
+registerExtensionsHandlers 94 — même discipline pour l'UI : sous-cartes
+feuilles VERBATIM + preuve de découpage versionnée (la QA DOM dédiée reste à
+prévoir par composant, comme qa-motor-card-v3-dom.ts).
 
 ## Scripts de mesure et de chirurgie (`scripts/`)
 
@@ -81,7 +94,9 @@ feuilles VERBATIM + QA DOM dédiée par composant.
   et `split_store_messages.py` (vague 3), `store_jetables.py`,
   `split_artifacts_shares.py`, `providers_valide.py`, `extract_turn_actions.py`
   et `split_turn_stages.py` (vague 4), `extract_agent_motor_leaves.py`
-  (séance UI 25/11 — AgentMotorCard en 3 feuilles, JSX déplacé VERBATIM).
+  (séance UI 25/11 — AgentMotorCard en 3 feuilles, JSX déplacé VERBATIM),
+  `extract_sidebar_leaves.py` + `preuve_sidebar_verbatim.py` (vague 5 UI —
+  Sidebar en 5 feuilles + 2 algorithmes purs, 23 plages prouvées au HEAD).
 - QA DOM de la carte moteur : `scripts/qa-motor-card-v3-dom.ts` (à la racine
   du repo, harnais auto-porté : Caddy :81 + front dev + service stubbé —
   scénario complet de la carte v3, 41 vérifications).
