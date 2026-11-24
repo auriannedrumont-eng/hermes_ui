@@ -186,10 +186,31 @@ function Wait-Http([string]$url, [int]$want, [int]$tries, [string]$label) {
     for ($i = 1; $i -le $tries; $i++) {
         $code = Get-HttpCode $url 3
         if ($code -eq $want) { Log "  OK $label pret (HTTP $code)"; return $true }
+        # Cas reel du 24/11 : pendant l'attente du mini-service, la console
+        # restait muette (derniere ligne : le jeton) — l'utilisateur croyait
+        # un blocage. Un point d'etat toutes les 10 s rend l'attente visible.
+        if (($i % 10) -eq 0) { Log "  ... $label toujours muet apres $i s (HTTP $code)" }
         Start-Sleep -Seconds 1
     }
     Log "  ECHEC $label : HTTP $code apres ${tries}s (attendu $want)"
     return $false
+}
+# Affiche la FIN des journaux d'un composant : quand il ne repond pas, la
+# cause reelle (crash au boot, import manquant, port refuse) est dans ces
+# lignes — renvoyer l'utilisateur ouvrir les fichiers a la main laissait le
+# diagnostic inaccessible (cas reel du 24/11 : « ne repond pas » sans cause
+# lisible). Dernieres lignes seulement : le boot lui-meme peut etre long.
+function Show-LogTail([string]$base) {
+    foreach ($suffix in @('.log', '-err.log')) {
+        $f = Join-Path $LogDir ($base + $suffix)
+        if (-not (Test-Path $f)) { continue }
+        Log ("---- fin de {0} ----" -f (Split-Path -Leaf $f))
+        try {
+            $tail = Get-Content $f -Tail 25 -ErrorAction SilentlyContinue
+            foreach ($l in $tail) { Log ("  " + $l) }
+        } catch { }
+        Log ("---- {0} : fin ----" -f (Split-Path -Leaf $f))
+    }
 }
 function Pick-Port([int[]]$candidates) {
     foreach ($p in $candidates) { if (-not (Test-PortBusy $p)) { return $p } }
@@ -1174,7 +1195,12 @@ function Start-Chat {
     $chatScript = Join-Path $Root 'mini-services\hermes-chat\index.ts'   # chemin absolu : marque le processus comme nôtre
     $p = Start-Component 'bun' @($chatScript) (Join-Path $Root 'mini-services\hermes-chat') 'mini-service'
     State-Set 'CHAT_PID' $p.Id; State-Set 'CHAT_OWNED' 1
-    if (-not (Wait-Http "http://127.0.0.1:$ChatPort/socket.io/?EIO=4&transport=polling" 200 40 'mini-service')) {
+    # 90 s (ancien 40) : le premier scan de bun.exe par l'antivirus ou une
+    # initialisation lente ne doivent plus tuer la pile — le service ouvre
+    # ses ports des la premiere seconde, cette marge n'est la QUE pour les
+    # cas extremes, et l'attente est maintenant visible (points toutes les 10 s).
+    if (-not (Wait-Http "http://127.0.0.1:$ChatPort/socket.io/?EIO=4&transport=polling" 200 90 'mini-service')) {
+        Show-LogTail 'mini-service'
         Die "le mini-service ne repond pas — consultez $LogDir\mini-service-err.log"
     }
     return $true
@@ -1214,6 +1240,7 @@ function Start-Ui {
     State-Set 'UI_PID' $p.Id; State-Set 'UI_OWNED' 1
     # le premier build dev peut etre long : 120 s de marge
     if (-not (Wait-Http "http://127.0.0.1:$port/" 200 120 ("interface (" + (State-Get 'UI_MODE') + ")"))) {
+        Show-LogTail 'interface'
         Die "l'interface ne repond pas — consultez $LogDir\interface-err.log"
     }
     return $true
@@ -1237,7 +1264,7 @@ function Start-Gateway {
     Log ("• demarrage de la passerelle Caddy sur :$port (-> interface :" + (State-Get 'UI_PORT') + ")...")
     $p = Start-Component 'caddy' @('run', '--config', $cf, '--adapter', 'caddyfile') $Root 'passerelle'
     State-Set 'GW_PID' $p.Id; State-Set 'GW_OWNED' 1
-    if (-not (Wait-Http $url 200 20 'passerelle')) { Die "la passerelle ne repond pas — consultez $LogDir\passerelle-err.log" }
+    if (-not (Wait-Http $url 200 20 'passerelle')) { Show-LogTail 'passerelle'; Die "la passerelle ne repond pas — consultez $LogDir\passerelle-err.log" }
     return $true
 }
 function Open-Browser([string]$url) {

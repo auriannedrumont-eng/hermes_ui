@@ -774,9 +774,63 @@ io.on("connection", (socket) => {
   });
 });
 
-connector
-  .init()
-  .then(async () => {
+// ── Boot : les ports s'ouvrent D'ABORD, l'état se stabilise ensuite ──────
+// Cas réel du 24/11 (lanceur bloqué après la ligne du jeton) : le port 3003
+// n'était ouvert QU'APRÈS la sonde WS de l'agent, le démarrage automatique
+// de l'agent (jusqu'à ~20 s : spawn python + attente du port) et la
+// précharge des modèles fournisseurs (jusqu'à ~8 s PAR fournisseur actif,
+// en série) — sur un poste lent (Defender au premier scan de bun, réseau
+// absent ou filtré, 9120 tenu par une autre installation) la chaîne
+// dépassait la fenêtre de 40 s du lanceur, qui déclarait « le mini-service
+// ne répond pas » sans aucune vraie panne, console restée muette pendant
+// toute l'attente. Désormais la porte s'ouvre dès la première seconde : le
+// lanceur voit un service vivant immédiatement ; sonde d'agent, lancement
+// automatique et précharge continuent en arrière-plan et le hello
+// rediffusé porte l'état réellement stabilisé (l'interface reste honnête :
+// mode « local » jusqu'à preuve du contraire, bascule annoncée par le
+// hello — le sondage périodique de ((90)) prend le relais ensuite).
+const logListen = (what: string, port: number) => {
+  console.log(`[hermes-chat] ${what} démarré sur ${HOST}:${port}`);
+  trace("boot", `${what} écoutant sur ${HOST}:${port}`);
+};
+httpServer.listen(PORT, HOST, () => logListen("service", PORT));
+httpServer.on("error", (err) => {
+  // Port principal refusé : le service est inutilisable — message clair
+  // (l'absence d'écoute aurait laissé le lanceur mourir sur son timeout
+  // sans cause lisible) puis sortie, même verdict qu'un crash d'écoute.
+  console.error("[hermes-chat] port principal indisponible :", err);
+  process.exit(1);
+});
+filesServer.listen(FILES_PORT, HOST, () =>
+  logListen("service des pièces jointes", FILES_PORT)
+);
+filesServer.on("error", (err) => {
+  // Pièces jointes muettes : le chat continue (dégradation annoncée) — le
+  // lanceur a déjà vérifié les ports libres, ce cas est une course rare.
+  console.error("[hermes-chat] port des pièces jointes indisponible :", err);
+});
+// v0.3.3 / v0.4.0 : sondes périodiques — elles n'attendent plus l'état de
+// l'agent pour démarrer (aucune dépendance à connector.mode).
+startUpdateWatchdog();
+startAgentMotorWatchdog({
+  store,
+  connector,
+  emit: (event, payload) => io.emit(event, payload),
+});
+// Audit passe 3, F-04 ; durci Lot 1 (L1-1) : sans jeton, les gardes
+// d'origine limitent l'accès aux origines boucle locale — le jeton du
+// lanceur reste la protection complète (données lues par une page).
+if (!SERVICE_TOKEN) {
+  console.warn(
+    `[hermes-chat] ⚠ HERMES_SERVICE_TOKEN non défini : accès limité aux origines boucle locale (garde Origin). Le lanceur génère ce jeton ; le définir pour tout usage exposé.`
+  );
+}
+// Chaîne d'état en arrière-plan. L'ordre de la revue P1-P7 est conservé :
+// réglages persistés appliqués plus haut, puis sonde, puis agent, puis
+// précharge des modèles — simplement APRÈS l'écoute, jamais devant.
+void (async () => {
+  try {
+    await connector.init();
     // Revue P1-P7 : l'agent démarre ICI — après init (sonde faite) et après
     // l'application des réglages persistés (URL/jeton ci-dessus).
     await startAgentGatewayOnce();
@@ -794,69 +848,22 @@ connector
     } catch {
       /* liste chargée à la demande par le client */
     }
-    httpServer.listen(PORT, HOST, () => {
-      console.log(`[hermes-chat] service démarré sur ${HOST}:${PORT} — mode : ${connector.mode}`);
-      trace("boot", `service écoutant sur ${HOST}:${PORT} — mode ${connector.mode}`);
-      // v0.3.3 : vérification de mise à jour au démarrage puis toutes
-      // les 6 h — l'utilisateur est informé sans ouvrir la page Système.
-      startUpdateWatchdog();
-      // v0.4.0 : sonde du moteur Hermes (version installée + dernière
-      // release) au démarrage puis toutes les 6 h — même idiome que la
-      // carte Mise à jour de l'application.
-      startAgentMotorWatchdog({
-        store,
-        connector,
-        emit: (event, payload) => io.emit(event, payload),
-      });
-      // Chantier sessions natives (74) : sonde REST en lecture seule au
-      // démarrage — détecte la capacité /api/sessions du moteur installé,
-      // n'écrit rien côté moteur, ne bloque aucun chemin du service.
-      void probeMotorSessionsOnce(connector, toHttpBase);
-      filesServer.listen(FILES_PORT, HOST, () => {
-        console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
-        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
-      });
-      if (connector.mode === "local") {
-        console.log(
-          `[hermes-chat] agent Hermes non detecte (defaut ${connector.gatewayUrl}) — lancer l'agent, ou ajouter une cle fournisseur`
-        );
-      }
-      // Audit passe 3, F-04 ; durci Lot 1 (L1-1) : sans jeton, les gardes
-      // d'origine limitent l'accès aux origines boucle locale — le jeton du
-      // lanceur reste la protection complète (données lues par une page).
-      if (!SERVICE_TOKEN) {
-        console.warn(
-          `[hermes-chat] ⚠ HERMES_SERVICE_TOKEN non défini : accès limité aux origines boucle locale (garde Origin). Le lanceur génère ce jeton ; le définir pour tout usage exposé.`
-        );
-      }
-    });
-  })
-  .catch((err) => {
+    if (connector.mode === "local") {
+      console.log(
+        `[hermes-chat] agent Hermes non detecte (defaut ${connector.gatewayUrl}) — lancer l'agent, ou ajouter une cle fournisseur`
+      );
+    }
+    // Chantier sessions natives (74) : sonde REST en lecture seule —
+    // détecte la capacité /api/sessions du moteur installé, n'écrit rien
+    // côté moteur, ne bloque aucun chemin du service.
+    void probeMotorSessionsOnce(connector, toHttpBase);
+  } catch (err) {
     console.error("[hermes-chat] échec d'initialisation du connecteur :", err);
-    httpServer.listen(PORT, HOST, () => {
-      console.log(`[hermes-chat] service démarré sur ${HOST}:${PORT} — mode : ${connector.mode}`);
-      trace("boot", `service écoutant sur ${HOST}:${PORT} — mode ${connector.mode}`);
-      // v0.3.3 : vérification de mise à jour au démarrage puis toutes
-      // les 6 h — l'utilisateur est informé sans ouvrir la page Système.
-      startUpdateWatchdog();
-      // v0.4.0 : sonde du moteur Hermes (version installée + dernière
-      // release) au démarrage puis toutes les 6 h — même idiome que la
-      // carte Mise à jour de l'application.
-      startAgentMotorWatchdog({
-        store,
-        connector,
-        emit: (event, payload) => io.emit(event, payload),
-      });
-      // Chantier sessions natives (74) : sonde REST en lecture seule au
-      // démarrage — détecte la capacité /api/sessions du moteur installé,
-      // n'écrit rien côté moteur, ne bloque aucun chemin du service.
-      void probeMotorSessionsOnce(connector, toHttpBase);
-      filesServer.listen(FILES_PORT, HOST, () => {
-        console.log(`[hermes-chat] service des pièces jointes démarré sur le port ${FILES_PORT}`);
-        trace("boot", `HTTP fichiers + diagnostics écoutant sur ${HOST}:${FILES_PORT}`);
-      });
-    });
-  });
+  }
+  // État stabilisé (ou échec assumé) : le hello rediffusé porte le mode
+  // réel — les clients déjà connectés suivent la bascule sans recharger.
+  io.emit("hello", helloPayload());
+})();
 
 // Arrêt propre (audit passe 3, F-09) : on cesse D'ABORD d'accepter (ports
 // fermés, sockets clientes déconnectées), on laisse un battement aux

@@ -359,10 +359,27 @@ wait_http() { # url attendu tentative_s label
   for ((i = 1; i <= tries; i++)); do
     code="$(http_code "$url" 3)"
     if [ "$code" = "$want" ]; then log "  ✓ $label prêt (HTTP $code)"; return 0; fi
+    # Pendant l'attente d'un composant, la console restait muette —
+    # l'utilisateur croyait à un blocage (cas réel du 24/11). Un point
+    # d'état toutes les 10 s rend l'attente visible.
+    if (( i % 10 == 0 )); then log "  … $label toujours muet après ${i}s (HTTP $code)"; fi
     sleep 1
   done
   log "  ✗ $label : HTTP $code après ${tries}s (attendu $want)"
   return 1
+}
+# Affiche la FIN des journaux d'un composant : quand il ne répond pas, la
+# cause réelle (crash au boot, import manquant, port refusé) est dans ces
+# lignes — renvoyer l'utilisateur ouvrir les fichiers à la main laissait le
+# diagnostic inaccessible. Dernières lignes seulement : le boot peut être long.
+show_log_tail() { # fichier...
+  local f l
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    log "---- fin de $(basename "$f") ----"
+    while IFS= read -r l; do log "  $l"; done < <(tail -n 25 "$f" 2>/dev/null)
+    log "---- $(basename "$f") : fin ----"
+  done
 }
 
 # ── État persistant (PID/ports/ownership) ───────────────────────────────
@@ -769,8 +786,11 @@ start_chat() {
   ( cd "$ROOT/mini-services/hermes-chat" && exec nohup bun index.ts >>"$CHAT_LOG" 2>&1 </dev/null ) &
   state_set CHAT_PID "$!"
   state_set CHAT_OWNED 1
-  wait_http "http://127.0.0.1:$CHAT_PORT/socket.io/?EIO=4&transport=polling" 200 40 "mini-service" \
-    || die "le mini-service ne répond pas — consultez $CHAT_LOG"
+  # 90 s (ancien 40) : une initialisation lente ne doit plus tuer la pile —
+  # le service ouvre ses ports dès la première seconde, cette marge n'est
+  # là QUE pour les cas extrêmes, et l'attente est visible (points / 10 s).
+  wait_http "http://127.0.0.1:$CHAT_PORT/socket.io/?EIO=4&transport=polling" 200 90 "mini-service" \
+    || { show_log_tail "$CHAT_LOG" "$CHAT_LOG.err"; die "le mini-service ne répond pas — consultez $CHAT_LOG"; }
 }
 
 start_ui() {
@@ -793,7 +813,7 @@ start_ui() {
   state_set UI_OWNED 1
   # le premier build dev peut être long : 120 s de marge
   wait_http "http://127.0.0.1:$port/" 200 120 "interface ($(state_get UI_MODE))" \
-    || die "l'interface ne répond pas — consultez $UI_LOG"
+    || { show_log_tail "$UI_LOG" "$UI_LOG.err"; die "l'interface ne répond pas — consultez $UI_LOG"; }
 }
 
 start_gateway() {
@@ -813,7 +833,7 @@ start_gateway() {
   ( cd "$ROOT" && exec nohup caddy run --config "$cf" --adapter caddyfile >>"$GW_LOG" 2>&1 </dev/null ) &
   state_set GW_PID "$!"
   state_set GW_OWNED 1
-  wait_http "$url" 200 20 "passerelle" || die "la passerelle ne répond pas — consultez $GW_LOG"
+  wait_http "$url" 200 20 "passerelle" || { show_log_tail "$GW_LOG" "$GW_LOG.err"; die "la passerelle ne répond pas — consultez $GW_LOG"; }
 }
 
 open_browser() {
