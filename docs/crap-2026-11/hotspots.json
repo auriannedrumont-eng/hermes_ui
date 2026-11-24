@@ -1,47 +1,5 @@
 [
  {
-  "name": "registerProvidersHandlers",
-  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
-  "cc": 96,
-  "start": 110,
-  "end": 380,
-  "lines": 271,
-  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
-  "decisions": {
-   "if": 46,
-   "else if": 0,
-   "for/while": 0,
-   "catch": 1,
-   "ternaire": 22,
-   "&&": 4,
-   "||": 7,
-   "??": 10,
-   "?.": 15,
-   "case": 0
-  }
- },
- {
-  "name": "registerExtensionsHandlers",
-  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
-  "cc": 94,
-  "start": 398,
-  "end": 708,
-  "lines": 311,
-  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
-  "decisions": {
-   "if": 60,
-   "else if": 0,
-   "for/while": 0,
-   "catch": 4,
-   "ternaire": 13,
-   "&&": 2,
-   "||": 3,
-   "??": 4,
-   "?.": 11,
-   "case": 0
-  }
- },
- {
   "name": "useHermesChat",
   "ns": "hooks.use-hermes-chat",
   "cc": 86,
@@ -378,6 +336,27 @@
   }
  },
  {
+  "name": "registerProvidersMutationsHandlers",
+  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
+  "cc": 57,
+  "start": 146,
+  "end": 299,
+  "lines": 154,
+  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
+  "decisions": {
+   "if": 27,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 0,
+   "ternaire": 12,
+   "&&": 3,
+   "||": 4,
+   "??": 5,
+   "?.": 10,
+   "case": 0
+  }
+ },
+ {
   "name": "streamAnthropicTurn",
   "ns": "mini-services.hermes-chat.llm-streams",
   "cc": 57,
@@ -693,6 +672,27 @@
   }
  },
  {
+  "name": "registerExtensionsImportHandlers",
+  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
+  "cc": 45,
+  "start": 501,
+  "end": 673,
+  "lines": 173,
+  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
+  "decisions": {
+   "if": 28,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 2,
+   "ternaire": 8,
+   "&&": 2,
+   "||": 0,
+   "??": 4,
+   "?.": 4,
+   "case": 0
+  }
+ },
+ {
   "name": "Composer",
   "ns": "components.chat.composer",
   "cc": 45,
@@ -878,6 +878,27 @@
    "||": 3,
    "??": 5,
    "?.": 1,
+   "case": 0
+  }
+ },
+ {
+  "name": "registerProvidersKeysHandlers",
+  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
+  "cc": 38,
+  "start": 304,
+  "end": 408,
+  "lines": 105,
+  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
+  "decisions": {
+   "if": 17,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 1,
+   "ternaire": 10,
+   "&&": 1,
+   "||": 3,
+   "??": 5,
+   "?.": 5,
    "case": 0
   }
  },
@@ -1172,6 +1193,27 @@
    "||": 4,
    "??": 2,
    "?.": 4,
+   "case": 0
+  }
+ },
+ {
+  "name": "registerExtensionsRepoHandlers",
+  "ns": "mini-services.hermes-chat.handlers.providers-extensions",
+  "cc": 30,
+  "start": 678,
+  "end": 760,
+  "lines": 83,
+  "file": "mini-services/hermes-chat/handlers/providers-extensions.ts",
+  "decisions": {
+   "if": 18,
+   "else if": 0,
+   "for/while": 0,
+   "catch": 2,
+   "ternaire": 5,
+   "&&": 0,
+   "||": 2,
+   "??": 0,
+   "?.": 2,
    "case": 0
   }
  },

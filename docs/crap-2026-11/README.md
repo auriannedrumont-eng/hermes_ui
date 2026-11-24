@@ -99,10 +99,16 @@ et `scripts/qa-system-dom.ts` **16/16** (harnais auto-porté, sonde réelle
 « Vérification… » observée) ; `qa-motor-card-v3-dom.ts` TOUT VERT (41).
 **Plus aucune fonction de production au-dessus de CC 100.**
 
-Prochaines cibles (classement après la vague 7) : registerProvidersHandlers
-96 · registerExtensionsHandlers 94 — le motif « sous-registres » (vagues 1-3)
-reprend ; l'UI restante est sous la barre (HermesWebPage 82, WebchatSection
-75, à la demande).
+Suite backend de la vague 7 (même séance) : `extract_sous_registres_providers_extensions.py`
++ `preuve_sous_registres_verbatim.py` (11 plages, 690 lignes) —
+registerProvidersHandlers **96 → 1** (Catalog 3 · Mutations 57 · Keys 38) et
+registerExtensionsHandlers **94 → 1** (Gestion 21 · Import 45 · Repo 30) ;
+hotspots 60 → 62, le top global retombe à useHermesChat 86.
+
+Prochaines cibles (classement après la vague 7 complète) : plus aucune
+fonction de production au-dessus de CC 100 ; la file reste à la demande
+(HermesWebPage 82 · WebchatSection 75 côté UI, registres 77/77 côté service) —
+le chantier CRAP atteint son objectif posé à l'ouverture.
 
 ## Scripts de mesure et de chirurgie (`scripts/`)
 

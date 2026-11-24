@@ -613,3 +613,48 @@ qa-motor-card-v3-dom. Preuves brutes complètes : suite-tests.log (vague 7).
    CC  52  AgentMotorCard               (acceptable — feuilles 30-57)
    CC  45  Composer                     (acceptable — feuilles 2-38)
    CC  38  ComposerSaisie               (feuille du Composer)
+
+### E. Suite backend de la vague 7 — sous-registres de providers-extensions.ts
+
+Même séance, commit intermédiaire 5b70e91 (UI) puis chirurgie backend : les
+deux registres monolithiques du fichier (9 et 8 socket.on) sont démontés en
+**trois sous-registres thématiques chacun** (motif des vagues 1-3) par
+`extract_sous_registres_providers_extensions.py`, bornes vérifiées AVANT
+écriture, corps des handlers déplacés VERBATIM par plages contiguës, seules
+les accolades d'encadrement changent ; les wrappers gardent leurs noms et le
+dispatcher son ordre d'origine ; chaque sous-registre porte les handlers dans
+leur ordre d'origine :
+
+- registerProvidersHandlers **96 → 1** : Catalog 3 (list + catalog) ·
+  Mutations 57 (add / remove / set-strategy / set-base) · Keys 38 (add-key /
+  remove-key / test-key — déduplication et migration d'endpoint v2.5
+  conservées) ;
+- registerExtensionsHandlers **94 → 1** : Gestion 21 (list / toggle / remove
+  / pin) · Import 45 (extensions:add + registry:install, l'ajout unifié
+  v2.6) · Repo 30 (check / update, diff réel via l'API GitHub).
+
+`preuve_sous_registres_verbatim.py` : **11 plages (690 lignes) identiques
+octet par octet au HEAD, dont 561 déplacées**. Un refus propre (compteur
+socket.on sous-estimé : 21 handlers + 2 mentions en commentaires = 23), le
+fichier n'est jamais écrit en échec. QA complète relancée : tsc ×3 0 erreur ·
+eslint 0 erreur (ensembles inchangés) · suite autonome 33/33 · gardes 0
+échec · Vitest 144/144. Mesure : hotspots 60 → **62** (les deux wrappers
+sortent de la liste, quatre sous-registres y entrent) ; **le top global
+retombe à useHermesChat 86** — les quatre cibles annoncées en (6) sont
+traitées, plus aucune fonction de production au-dessus de CC 100.
+
+### F. Classement crapper après la vague 7 complète (production, CC ≥ 30 — 62 fonctions)
+   CC  86  useHermesChat                (acceptable)
+   CC  84  runAssistantTurn             (acceptable)
+   CC  82  HermesWebPage                (UI — à la demande)
+   CC  81  useChatSocketEvents          (acceptable)
+   CC  77  registerTurnHandlers         (acceptable — sous-registres possibles)
+   CC  77  runGatewayTurn               (acceptable)
+   CC  75  WebchatSection               (UI — à la demande)
+   CC  74  Sidebar                      (acceptable — feuilles 2-15)
+   CC  57  registerProvidersMutationsHandlers  (sous-registre vague 7)
+   CC  52  AgentMotorCard               (acceptable — feuilles 30-57)
+   CC  45  Composer                     (acceptable — feuilles 2-38)
+   CC  45  registerExtensionsImportHandlers    (sous-registre vague 7)
+   CC  38  ComposerSaisie               (feuille du Composer)
+   CC  38  registerProvidersKeysHandlers       (sous-registre vague 7)

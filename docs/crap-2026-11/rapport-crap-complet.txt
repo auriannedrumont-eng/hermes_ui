@@ -8,9 +8,7 @@ main                                  scripts.test-providers-wallets            
 main                                  scripts.test-source-guards                                                128   0.0%  16512.0
 main                                  scripts.test-integration-fixes                                            115   0.0%  13340.0
 main                                  scripts.test-reattach-stream                                              109   0.0%  11990.0
-registerProvidersHandlers             mini-services.hermes-chat.handlers.providers-extensions                    96   0.0%   9312.0
 main                                  scripts.test-providers-opencode                                            95   0.0%   9120.0
-registerExtensionsHandlers            mini-services.hermes-chat.handlers.providers-extensions                    94   0.0%   8930.0
 useHermesChat                         hooks.use-hermes-chat                                                      86   0.0%   7482.0
 runAssistantTurn                      mini-services.hermes-chat.turn-runner                                      84   0.0%   7140.0
 main                                  scripts.test-providers-zai-coding                                          84   0.0%   7140.0
@@ -33,6 +31,7 @@ registerConversationLifecycleHandlers mini-services.hermes-chat.handlers.convers
 main                                  scripts.test-429-reasons                                                   60   0.0%   3660.0
 ModelPicker                           components.chat.model-picker                                               57   0.0%   3306.0
 AgentMotorBlocs                       components.settings.agent-motor-card                                       57   0.0%   3306.0
+registerProvidersMutationsHandlers    mini-services.hermes-chat.handlers.providers-extensions                    57   0.0%   3306.0
 streamAnthropicTurn                   mini-services.hermes-chat.llm-streams                                      57   0.0%   3306.0
 main                                  scripts.test-pool-flow                                                     57   0.0%   3306.0
 registerMessageAndStopHandlers        mini-services.hermes-chat.handlers.conversations                           56   0.0%   3192.0
@@ -52,6 +51,7 @@ streamOpenAiTurn                      mini-services.hermes-chat.llm-streams     
 main                                  scripts.test-providers-flow                                                47   0.0%   2256.0
 main                                  scripts.test-share-flow                                                    46   0.0%   2162.0
 Composer                              components.chat.composer                                                   45   0.0%   2070.0
+registerExtensionsImportHandlers      mini-services.hermes-chat.handlers.providers-extensions                    45   0.0%   2070.0
 VersionPopover                        components.chat.version-popover                                            43   0.0%   1892.0
 AgentMotorEnTete                      components.settings.agent-motor-card                                       43   0.0%   1892.0
 main                                  scripts.test-cost-flow                                                     43   0.0%   1892.0
@@ -63,6 +63,7 @@ useChatSettings                       hooks.use-chat-settings                   
 handleKeyDown                         .next.dev.server.chunks.ssr.node_modules_@dnd-kit_core_dist_core_esm_57071f37.KeyboardSensor   38   0.0%   1482.0
 handleKeyDown                         .next.dev.static.chunks.node_modules_@dnd-kit_core_dist_core_esm_3ed85ea0.KeyboardSensor   38   0.0%   1482.0
 ComposerSaisie                        components.chat.composer                                                   38   0.0%   1482.0
+registerProvidersKeysHandlers         mini-services.hermes-chat.handlers.providers-extensions                    38   0.0%   1482.0
 main                                  scripts.run-tests                                                          38   0.0%   1482.0
 main                                  scripts.test-stop-error-flow                                               38   0.0%   1482.0
 AddProviderPanel                      components.settings.providers-section                                      37   0.0%   1406.0
@@ -91,6 +92,7 @@ main                                  scripts.test-projects-nested-flow         
 ArtifactCard                          components.chat.artifact-card                                              30   0.0%    930.0
 AgentMotorReplis                      components.settings.agent-motor-card                                       30   0.0%    930.0
 MemoryCard                            components.settings.memory-card                                            30   0.0%    930.0
+registerExtensionsRepoHandlers        mini-services.hermes-chat.handlers.providers-extensions                    30   0.0%    930.0
 testZaiSurface                        mini-services.hermes-chat.providers                                        30   0.0%    930.0
 useDictation                          hooks.use-dictation                                                        29   0.0%    870.0
 ModelesPane                           components.settings.models-section                                         28   0.0%    812.0
@@ -143,6 +145,7 @@ startAgentGatewayIfDown               mini-services.hermes-chat.agent-starter   
 main                                  scripts.qa-projects-dom                                                    22   0.0%    506.0
 SanteCard                             components.settings.sante-card                                             21   0.0%    462.0
 useComposerAttachments                hooks.use-composer-attachments                                             21   0.0%    462.0
+registerExtensionsGestionHandlers     mini-services.hermes-chat.handlers.providers-extensions                    21   0.0%    462.0
 handleArtifactZip                     mini-services.hermes-chat.http-server                                      21   0.0%    462.0
 handleEvent                           mini-services.hermes-chat.motor-rest                                       21   0.0%    462.0
 runAuto                               mini-services.hermes-chat.orchestrator                                     21   0.0%    462.0
@@ -1030,6 +1033,7 @@ startAgentMotorWatchdog               mini-services.hermes-chat.agent-motor     
 formatBytes                           mini-services.hermes-chat.artifacts                                         3   0.0%     12.0
 sanitizeFileName                      mini-services.hermes-chat.artifacts                                         3   0.0%     12.0
 findExtensionBySource                 mini-services.hermes-chat.handlers.providers-extensions                     3   0.0%     12.0
+registerProvidersCatalogHandlers      mini-services.hermes-chat.handlers.providers-extensions                     3   0.0%     12.0
 binaireNavigateur                     mini-services.hermes-chat.handlers.settings-system                          3   0.0%     12.0
 init                                  mini-services.hermes-chat.hermes-connector.HermesConnector                  3   0.0%     12.0
 USE                                   mini-services.hermes-chat.index                                             3   0.0%     12.0
@@ -1377,6 +1381,7 @@ top                                   docs.crap-2026-11.scripts.analyze_crap_edn
 ancre                                 docs.crap-2026-11.scripts.extract_agent_motor_leaves                        2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_composer_leaves                           2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_sidebar_leaves                            2   0.0%      6.0
+ancre                                 docs.crap-2026-11.scripts.extract_sous_registres_providers_extensions       2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_storage_leaves                            2   0.0%      6.0
 ancre                                 docs.crap-2026-11.scripts.extract_system_leaves                             2   0.0%      6.0
 notify                                hooks.use-pricing                                                           2   0.0%      6.0
@@ -2230,6 +2235,7 @@ L                                     docs.crap-2026-11.scripts.extract_conversa
 replace                               docs.crap-2026-11.scripts.extract_conversations_hook                        1   0.0%      2.0
 morceau                               docs.crap-2026-11.scripts.extract_sidebar_leaves                            1   0.0%      2.0
 chk                                   docs.crap-2026-11.scripts.extract_socket_events                             1   0.0%      2.0
+morceau                               docs.crap-2026-11.scripts.extract_sous_registres_providers_extensions       1   0.0%      2.0
 morceau                               docs.crap-2026-11.scripts.extract_storage_leaves                            1   0.0%      2.0
 morceau                               docs.crap-2026-11.scripts.extract_system_leaves                             1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.extract_turn_actions                              1   0.0%      2.0
@@ -2238,6 +2244,7 @@ strip_noise                           docs.crap-2026-11.scripts.inventory_effect
 strip_noise                           docs.crap-2026-11.scripts.inventory_effect3                                 1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_composer_verbatim                          1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_sidebar_verbatim                           1   0.0%      2.0
+slice_head                            docs.crap-2026-11.scripts.preuve_sous_registres_verbatim                    1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_storage_verbatim                           1   0.0%      2.0
 slice_head                            docs.crap-2026-11.scripts.preuve_system_verbatim                            1   0.0%      2.0
 L                                     docs.crap-2026-11.scripts.providers_valide                                  1   0.0%      2.0
@@ -2299,7 +2306,9 @@ openBunDatabase                       mini-services.hermes-chat.db-driver       
 registerArtifactsSharesHandlers       mini-services.hermes-chat.handlers.artifacts-shares                         1   0.0%      2.0
 bindHandlerContext                    mini-services.hermes-chat.handlers.context                                  1   0.0%      2.0
 registerConversationsHandlers         mini-services.hermes-chat.handlers.conversations                            1   0.0%      2.0
+registerExtensionsHandlers            mini-services.hermes-chat.handlers.providers-extensions                     1   0.0%      2.0
 registerProvidersExtensionsHandlers   mini-services.hermes-chat.handlers.providers-extensions                     1   0.0%      2.0
+registerProvidersHandlers             mini-services.hermes-chat.handlers.providers-extensions                     1   0.0%      2.0
 currentUpdateState                    mini-services.hermes-chat.handlers.settings-system                          1   0.0%      2.0
 registerSettingsSystemHandlers        mini-services.hermes-chat.handlers.settings-system                          1   0.0%      2.0
 noEngineError                         mini-services.hermes-chat.hermes-connector                                  1   0.0%      2.0

@@ -3,9 +3,7 @@
   {:name "main", :namespace "scripts.test-source-guards", :complexity 128, :coverage 0.0, :crap 16512.0}
   {:name "main", :namespace "scripts.test-integration-fixes", :complexity 115, :coverage 0.0, :crap 13340.0}
   {:name "main", :namespace "scripts.test-reattach-stream", :complexity 109, :coverage 0.0, :crap 11990.0}
-  {:name "registerProvidersHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 96, :coverage 0.0, :crap 9312.0}
   {:name "main", :namespace "scripts.test-providers-opencode", :complexity 95, :coverage 0.0, :crap 9120.0}
-  {:name "registerExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 94, :coverage 0.0, :crap 8930.0}
   {:name "useHermesChat", :namespace "hooks.use-hermes-chat", :complexity 86, :coverage 0.0, :crap 7482.0}
   {:name "runAssistantTurn", :namespace "mini-services.hermes-chat.turn-runner", :complexity 84, :coverage 0.0, :crap 7140.0}
   {:name "main", :namespace "scripts.test-providers-zai-coding", :complexity 84, :coverage 0.0, :crap 7140.0}
@@ -28,6 +26,7 @@
   {:name "main", :namespace "scripts.test-429-reasons", :complexity 60, :coverage 0.0, :crap 3660.0}
   {:name "ModelPicker", :namespace "components.chat.model-picker", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "AgentMotorBlocs", :namespace "components.settings.agent-motor-card", :complexity 57, :coverage 0.0, :crap 3306.0}
+  {:name "registerProvidersMutationsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "streamAnthropicTurn", :namespace "mini-services.hermes-chat.llm-streams", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "main", :namespace "scripts.test-pool-flow", :complexity 57, :coverage 0.0, :crap 3306.0}
   {:name "registerMessageAndStopHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 56, :coverage 0.0, :crap 3192.0}
@@ -47,6 +46,7 @@
   {:name "main", :namespace "scripts.test-providers-flow", :complexity 47, :coverage 0.0, :crap 2256.0}
   {:name "main", :namespace "scripts.test-share-flow", :complexity 46, :coverage 0.0, :crap 2162.0}
   {:name "Composer", :namespace "components.chat.composer", :complexity 45, :coverage 0.0, :crap 2070.0}
+  {:name "registerExtensionsImportHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 45, :coverage 0.0, :crap 2070.0}
   {:name "VersionPopover", :namespace "components.chat.version-popover", :complexity 43, :coverage 0.0, :crap 1892.0}
   {:name "AgentMotorEnTete", :namespace "components.settings.agent-motor-card", :complexity 43, :coverage 0.0, :crap 1892.0}
   {:name "main", :namespace "scripts.test-cost-flow", :complexity 43, :coverage 0.0, :crap 1892.0}
@@ -58,6 +58,7 @@
   {:name "handleKeyDown", :namespace ".next.dev.server.chunks.ssr.node_modules_@dnd-kit_core_dist_core_esm_57071f37.KeyboardSensor", :complexity 38, :coverage 0.0, :crap 1482.0}
   {:name "handleKeyDown", :namespace ".next.dev.static.chunks.node_modules_@dnd-kit_core_dist_core_esm_3ed85ea0.KeyboardSensor", :complexity 38, :coverage 0.0, :crap 1482.0}
   {:name "ComposerSaisie", :namespace "components.chat.composer", :complexity 38, :coverage 0.0, :crap 1482.0}
+  {:name "registerProvidersKeysHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 38, :coverage 0.0, :crap 1482.0}
   {:name "main", :namespace "scripts.run-tests", :complexity 38, :coverage 0.0, :crap 1482.0}
   {:name "main", :namespace "scripts.test-stop-error-flow", :complexity 38, :coverage 0.0, :crap 1482.0}
   {:name "AddProviderPanel", :namespace "components.settings.providers-section", :complexity 37, :coverage 0.0, :crap 1406.0}
@@ -86,6 +87,7 @@
   {:name "ArtifactCard", :namespace "components.chat.artifact-card", :complexity 30, :coverage 0.0, :crap 930.0}
   {:name "AgentMotorReplis", :namespace "components.settings.agent-motor-card", :complexity 30, :coverage 0.0, :crap 930.0}
   {:name "MemoryCard", :namespace "components.settings.memory-card", :complexity 30, :coverage 0.0, :crap 930.0}
+  {:name "registerExtensionsRepoHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 30, :coverage 0.0, :crap 930.0}
   {:name "testZaiSurface", :namespace "mini-services.hermes-chat.providers", :complexity 30, :coverage 0.0, :crap 930.0}
   {:name "useDictation", :namespace "hooks.use-dictation", :complexity 29, :coverage 0.0, :crap 870.0}
   {:name "ModelesPane", :namespace "components.settings.models-section", :complexity 28, :coverage 0.0, :crap 812.0}
@@ -138,6 +140,7 @@
   {:name "main", :namespace "scripts.qa-projects-dom", :complexity 22, :coverage 0.0, :crap 506.0}
   {:name "SanteCard", :namespace "components.settings.sante-card", :complexity 21, :coverage 0.0, :crap 462.0}
   {:name "useComposerAttachments", :namespace "hooks.use-composer-attachments", :complexity 21, :coverage 0.0, :crap 462.0}
+  {:name "registerExtensionsGestionHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 21, :coverage 0.0, :crap 462.0}
   {:name "handleArtifactZip", :namespace "mini-services.hermes-chat.http-server", :complexity 21, :coverage 0.0, :crap 462.0}
   {:name "handleEvent", :namespace "mini-services.hermes-chat.motor-rest", :complexity 21, :coverage 0.0, :crap 462.0}
   {:name "runAuto", :namespace "mini-services.hermes-chat.orchestrator", :complexity 21, :coverage 0.0, :crap 462.0}
@@ -1025,6 +1028,7 @@
   {:name "formatBytes", :namespace "mini-services.hermes-chat.artifacts", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "sanitizeFileName", :namespace "mini-services.hermes-chat.artifacts", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "findExtensionBySource", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 3, :coverage 0.0, :crap 12.0}
+  {:name "registerProvidersCatalogHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "binaireNavigateur", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "init", :namespace "mini-services.hermes-chat.hermes-connector.HermesConnector", :complexity 3, :coverage 0.0, :crap 12.0}
   {:name "USE", :namespace "mini-services.hermes-chat.index", :complexity 3, :coverage 0.0, :crap 12.0}
@@ -1372,6 +1376,7 @@
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_agent_motor_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_composer_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
+  {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_sous_registres_providers_extensions", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_storage_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "ancre", :namespace "docs.crap-2026-11.scripts.extract_system_leaves", :complexity 2, :coverage 0.0, :crap 6.0}
   {:name "notify", :namespace "hooks.use-pricing", :complexity 2, :coverage 0.0, :crap 6.0}
@@ -2225,6 +2230,7 @@
   {:name "replace", :namespace "docs.crap-2026-11.scripts.extract_conversations_hook", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_sidebar_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "chk", :namespace "docs.crap-2026-11.scripts.extract_socket_events", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_sous_registres_providers_extensions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_storage_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "morceau", :namespace "docs.crap-2026-11.scripts.extract_system_leaves", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.extract_turn_actions", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -2233,6 +2239,7 @@
   {:name "strip_noise", :namespace "docs.crap-2026-11.scripts.inventory_effect3", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_composer_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_sidebar_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_sous_registres_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_storage_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "slice_head", :namespace "docs.crap-2026-11.scripts.preuve_system_verbatim", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "L", :namespace "docs.crap-2026-11.scripts.providers_valide", :complexity 1, :coverage 0.0, :crap 2.0}
@@ -2294,7 +2301,9 @@
   {:name "registerArtifactsSharesHandlers", :namespace "mini-services.hermes-chat.handlers.artifacts-shares", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "bindHandlerContext", :namespace "mini-services.hermes-chat.handlers.context", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "registerConversationsHandlers", :namespace "mini-services.hermes-chat.handlers.conversations", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "registerExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "registerProvidersExtensionsHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 1, :coverage 0.0, :crap 2.0}
+  {:name "registerProvidersHandlers", :namespace "mini-services.hermes-chat.handlers.providers-extensions", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "currentUpdateState", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "registerSettingsSystemHandlers", :namespace "mini-services.hermes-chat.handlers.settings-system", :complexity 1, :coverage 0.0, :crap 2.0}
   {:name "noEngineError", :namespace "mini-services.hermes-chat.hermes-connector", :complexity 1, :coverage 0.0, :crap 2.0}

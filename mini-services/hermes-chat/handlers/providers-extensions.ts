@@ -14,9 +14,15 @@ import {
 } from "../providers-validate";
 
 // registerProvidersExtensionsHandlers ne pose plus 21 socket.on() dans un
-// seul corps : quatre sous-registres thématiques, appelés dans l'ordre
-// d'origine du fichier. Corps des handlers VERBATIM — seules les accolades
-// d'encadrement changent.
+// seul corps : quatre registres thématiques, appelés dans l'ordre d'origine
+// du fichier. Corps des handlers VERBATIM — seules les accolades
+// d'encadrement changent. Vague 7 (2026-11-25) : Providers et Extensions,
+// eux-mêmes, sont démontés en trois sous-registres thématiques chacun
+// (lecture / mutations / clés · gestion / import / dépôts) par chirurgie
+// ancrée versionnée (extract_sous_registres_providers_extensions.py) — les
+// wrappers gardent leurs noms et l'ordre d'origine, chaque sous-registre
+// porte les handlers dans leur ordre d'origine.
+
 
 function registerSessionCatalogHandlers(socket: Socket) {
 
@@ -111,6 +117,16 @@ function registerProvidersHandlers(socket: Socket) {
 
 // ── Fournisseurs & clés (Paramètres v2.2) ──────────────────────────
 
+  registerProvidersCatalogHandlers(socket);
+  registerProvidersMutationsHandlers(socket);
+  registerProvidersKeysHandlers(socket);
+
+}
+
+/** Sous-registre — lecture : liste et catalogue des fournisseurs
+ *  (sélecteur d'ajout v2.5). Corps déplacés VERBATIM (vague 7, 2026-11-25). */
+function registerProvidersCatalogHandlers(socket: Socket) {
+
 socket.on("providers:list", (cb?: (data: unknown) => void) => {
   if (typeof cb === "function") cb({ providers: ctx.providersWire() });
 });
@@ -121,6 +137,13 @@ socket.on("providers:list", (cb?: (data: unknown) => void) => {
 socket.on("providers:catalog", (cb?: (data: unknown) => void) => {
   if (typeof cb === "function") cb({ catalog: ctx.knownProviderCatalog() });
 });
+
+}
+
+/** Sous-registre — mutations : ajout, retrait, stratégie, adresse
+ *  (endpoint éditable v2.5, validations providers-validate.ts). Corps
+ *  déplacés VERBATIM (vague 7, 2026-11-25). */
+function registerProvidersMutationsHandlers(socket: Socket) {
 
 socket.on(
   "providers:add",
@@ -273,6 +296,12 @@ socket.on(
   }
 );
 
+}
+
+/** Sous-registre — clés : ajout (déduplication lot audit), retrait,
+ *  test réel réseau avec migration d'endpoint v2.5. Corps déplacés
+ *  VERBATIM (vague 7, 2026-11-25). */
+function registerProvidersKeysHandlers(socket: Socket) {
 
 socket.on(
   "providers:add-key",
@@ -376,8 +405,8 @@ socket.on(
   }
 );
 
-
 }
+
 
 // ── Extensions : dépôts importés + serveurs MCP ───────────────────
 
@@ -397,11 +426,80 @@ function findExtensionBySource(
 
 function registerExtensionsHandlers(socket: Socket) {
 
+  registerExtensionsGestionHandlers(socket);
+  registerExtensionsImportHandlers(socket);
+  registerExtensionsRepoHandlers(socket);
+
+}
+
+/** Sous-registre — gestion de la liste : lecture, activation, épingle,
+ *  retrait. Corps déplacés VERBATIM (vague 7, 2026-11-25) ; l'ordre
+ *  d'origine des handlers est conservé (list 400, toggle 576, remove 597,
+ *  pin 608). */
+function registerExtensionsGestionHandlers(socket: Socket) {
+
 socket.on("extensions:list", (cb?: (data: unknown) => void) => {
   if (typeof cb === "function") cb({ extensions: ctx.extensionsWire() });
 });
 
-// Import d'un dépôt GitHub : résolution réelle (infos, branche, tête)
+
+socket.on(
+  "extensions:toggle",
+  (payload: { id?: string; enabled?: boolean }, cb?: (data: unknown) => void) => {
+    const id = payload?.id;
+    if (!id) {
+      if (typeof cb === "function") cb({ error: "id requis" });
+      return;
+    }
+    // `applied` n'est PAS touché : le footer compte les écarts et le
+    // redémarrage du service prendra le nouvel état en compte.
+    const row = ctx.store.updateExtensionRow(id, { enabled: !!payload?.enabled });
+    if (!row) {
+      if (typeof cb === "function") cb({ error: "Extension introuvable" });
+      return;
+    }
+    if (typeof cb === "function") cb({ extension: ctx.extensionWire(row) });
+    ctx.broadcastExtensions();
+  }
+);
+
+
+socket.on("extensions:remove", (payload: { id?: string }, cb?: (data: unknown) => void) => {
+  const id = payload?.id;
+  if (!id || !ctx.store.getExtensionRow(id)) {
+    if (typeof cb === "function") cb({ error: "Extension introuvable" });
+    return;
+  }
+  ctx.store.deleteExtension(id);
+  if (typeof cb === "function") cb({ ok: true });
+  ctx.broadcastExtensions();
+});
+
+socket.on(
+  "extensions:pin",
+  (payload: { id?: string; pinned?: boolean }, cb?: (data: unknown) => void) => {
+    const id = payload?.id;
+    if (!id) {
+      if (typeof cb === "function") cb({ error: "id requis" });
+      return;
+    }
+    const row = ctx.store.updateExtensionRow(id, { pinned: !!payload?.pinned });
+    if (!row) {
+      if (typeof cb === "function") cb({ error: "Extension introuvable" });
+      return;
+    }
+    if (typeof cb === "function") cb({ extension: ctx.extensionWire(row) });
+    ctx.broadcastExtensions();
+  }
+);
+
+}
+
+/** Sous-registre — import : extensions:add (dépôt GitHub résolu réellement)
+ *  et registry:install (l'ajout unifié v2.6 : dépôt / https / commande /
+ *  nom connu). Corps déplacés VERBATIM (vague 7, 2026-11-25). */
+function registerExtensionsImportHandlers(socket: Socket) {
+
 socket.on(
   "extensions:add",
   async (
@@ -572,59 +670,13 @@ socket.on(
   }
 );
 
+}
 
-socket.on(
-  "extensions:toggle",
-  (payload: { id?: string; enabled?: boolean }, cb?: (data: unknown) => void) => {
-    const id = payload?.id;
-    if (!id) {
-      if (typeof cb === "function") cb({ error: "id requis" });
-      return;
-    }
-    // `applied` n'est PAS touché : le footer compte les écarts et le
-    // redémarrage du service prendra le nouvel état en compte.
-    const row = ctx.store.updateExtensionRow(id, { enabled: !!payload?.enabled });
-    if (!row) {
-      if (typeof cb === "function") cb({ error: "Extension introuvable" });
-      return;
-    }
-    if (typeof cb === "function") cb({ extension: ctx.extensionWire(row) });
-    ctx.broadcastExtensions();
-  }
-);
+/** Sous-registre — dépôts : « Vérifier » (diff réel local ↔ distant) et
+ *  « Mettre à jour » (suivi du commit distant). Corps déplacés VERBATIM
+ *  (vague 7, 2026-11-25). */
+function registerExtensionsRepoHandlers(socket: Socket) {
 
-
-socket.on("extensions:remove", (payload: { id?: string }, cb?: (data: unknown) => void) => {
-  const id = payload?.id;
-  if (!id || !ctx.store.getExtensionRow(id)) {
-    if (typeof cb === "function") cb({ error: "Extension introuvable" });
-    return;
-  }
-  ctx.store.deleteExtension(id);
-  if (typeof cb === "function") cb({ ok: true });
-  ctx.broadcastExtensions();
-});
-
-socket.on(
-  "extensions:pin",
-  (payload: { id?: string; pinned?: boolean }, cb?: (data: unknown) => void) => {
-    const id = payload?.id;
-    if (!id) {
-      if (typeof cb === "function") cb({ error: "id requis" });
-      return;
-    }
-    const row = ctx.store.updateExtensionRow(id, { pinned: !!payload?.pinned });
-    if (!row) {
-      if (typeof cb === "function") cb({ error: "Extension introuvable" });
-      return;
-    }
-    if (typeof cb === "function") cb({ extension: ctx.extensionWire(row) });
-    ctx.broadcastExtensions();
-  }
-);
-
-
-// « Vérifier » : diff réel local ↔ distant via l'API GitHub.
 socket.on(
   "extensions:check",
   async (payload: { id?: string }, cb?: (data: unknown) => void) => {
@@ -706,6 +758,7 @@ socket.on(
 );
 
 }
+
 
 export function registerProvidersExtensionsHandlers(socket: Socket) {
   registerSessionCatalogHandlers(socket);
