@@ -411,7 +411,11 @@ function Update-FromGit {
     # eternellement vrai pendant que GitHub avancait — cas reel du 23/11
     # 15:32 : « aucune nouvelle version » a chaque boot, aucune reparation
     # ne pouvait jamais arriver.
-    $fork = if ($env:HERMES_FORK_URL) { $env:HERMES_FORK_URL } else { 'https://github.com/auriannedrummont-eng/hermes_ui.git' }
+    # ((102)) L'ADRESSE ETAIT FAUSSE (« drummon t » au lieu de « drumont ») :
+    # le lanceur realignait donc origin sur un depot inexistant a chaque
+    # demarrage — tout push repondait 404, et la correction manuelle de
+    # l'URL etait annulee au boot suivant. Une seule source de verite ici.
+    $fork = if ($env:HERMES_FORK_URL) { $env:HERMES_FORK_URL } else { 'https://github.com/auriannedrumont-eng/hermes_ui.git' }
     $r = Invoke-Git @('remote', 'get-url', 'origin')
     if ($r.Code -ne 0) {
         Log "• mise a jour auto : ce dossier n'a pas de depot distant — origin est aligne sur le depot du projet."
@@ -881,7 +885,28 @@ function Ensure-PortableSetup {
 }
 
 function Ensure-Build([string]$nodeDir) {
-    if (Test-Path (Join-Path $Root '.next\standalone\server.js')) { return }
+    # ((102)) Un build ne vaut que pour la revision qui l a produit : sans ce
+    # marqueur, un dossier aligne sur une autre revision (pull fait a la main,
+    # retour en arriere, dossier recopie) continuait de servir l ancienne
+    # interface SANS le dire — Ensure-Build ne regardait que l existence de
+    # server.js, jamais la provenance du build. Revision vide (git absent ou
+    # dossier non clone) = aucune comparaison possible : comportement historique.
+    $buildRev = Get-RepoRevision
+    $revFile  = Join-Path $Root '.next\build-rev'
+    if (Test-Path (Join-Path $Root '.next\standalone\server.js')) {
+        $builtRev = ''
+        try {
+            $builtRev = [string](Get-Content $revFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if ($builtRev) { $builtRev = $builtRev.Trim() }
+        } catch { }
+        if ((-not $buildRev) -or ($builtRev -eq $buildRev)) { return }
+        $dit = 'inconnue (build anterieur au marqueur)'
+        if ($builtRev) { $dit = $builtRev.Substring(0, [Math]::Min(7, $builtRev.Length)) }
+        $actuelle = $buildRev.Substring(0, [Math]::Min(7, $buildRev.Length))
+        Log "• l interface servie a ete construite sur la revision $dit et le dossier est en $actuelle -> reconstruction (1 a 3 minutes)..."
+        Write-MajLog "interface construite sur une autre revision — reconstruction lancee (1 a 3 minutes)..."
+        Remove-Item -Recurse -Force (Join-Path $Root '.next') -ErrorAction SilentlyContinue
+    }
     $flag = Join-Path $ToolsDir 'build-echoue.flag'
     if (Test-Path $flag) {
         # Le marqueur memorise la revision git ET l heure de la tentative
@@ -922,6 +947,11 @@ function Ensure-Build([string]$nodeDir) {
         # Marqueur du jeton inliné dans ce build (Lot 1, L1-1) : permet au
         # lanceur de détecter un build fait avec un autre jeton.
         Set-Content -Path (Join-Path $Root '.next\service-token') -Value $Script:ServiceToken -Encoding ASCII
+        # Marqueur de la revision construite : c est sur lui que s appuie la
+        # comparaison en tete de fonction au demarrage suivant.
+        if ($buildRev) {
+            Set-Content -Path $revFile -Value $buildRev -Encoding ASCII
+        }
     } else {
         $revForFlag = Get-RepoRevision
         $tsForFlag  = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()

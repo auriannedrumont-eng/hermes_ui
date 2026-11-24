@@ -583,7 +583,12 @@ async function main() {
   const sh85 = read("desktop/hermes-ui.sh");
   const harn85 = read("scripts/test-lanceur-certification.sh");
   check("ps1 : la référence du dépôt du projet est en dur (surchargeable)",
-    ps185.includes("auriannedrummont-eng/hermes_ui.git") && ps185.includes("HERMES_FORK_URL"));
+    ps185.includes("auriannedrumont-eng/hermes_ui.git") && ps185.includes("HERMES_FORK_URL"));
+  // ((102)) la faute « drummont » (double m) rendait l'URL 404 : le lanceur
+  // realignait origin dessus a chaque boot, donc tout push echouait et la
+  // correction manuelle etait annulee au demarrage suivant.
+  check("ps1 : l'adresse du dépôt ne porte pas la faute historique (double m)",
+    !ps185.toLowerCase().includes("drummont-eng"));
   check("ps1 : plus AUCUNE comparaison sur la branche suivie @{u} (hors commentaires)",
     !ps185.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").includes("@{u}"));
   check("ps1 : comparaison sur origin/main explicite + réalignement d'origin",
@@ -591,7 +596,9 @@ async function main() {
   check("ps1 : ligne de transparence branche · dossier · dépôt",
     ps185.includes("verifie : branche {0} · dossier {1} · depot {2}"));
   check("sh : la référence du dépôt du projet est en dur (surchargeable)",
-    sh85.includes("auriannedrummont-eng/hermes_ui.git") && sh85.includes("HERMES_FORK_URL"));
+    sh85.includes("auriannedrumont-eng/hermes_ui.git") && sh85.includes("HERMES_FORK_URL"));
+  check("sh : l'adresse du dépôt ne porte pas la faute historique (double m)",
+    !sh85.toLowerCase().includes("drummont-eng"));
   check("sh : plus AUCUNE comparaison sur la branche suivie @{u} (hors commentaires)",
     !sh85.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").includes("@{u}"));
   check("sh : comparaison sur origin/main explicite + réalignement d'origin",

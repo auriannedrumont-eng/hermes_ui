@@ -1087,7 +1087,9 @@ do_start() {
   # affiche SA dernière ligne git — plus jamais muet (cas réel du 23/11
   # 15:55 : 13 secondes, aucune cause dite).
   local avant="" apres="" fork="" urlactuel="" branche="" okfetch=0 errf=""
-  fork="${HERMES_FORK_URL:-https://github.com/auriannedrummont-eng/hermes_ui.git}"
+  # ((102)) adresse corrigee : « drummon t » n'existe pas, origin etait
+  # realigne sur un 404 a chaque demarrage (cf. hermes-ui.ps1, meme correctif).
+  fork="${HERMES_FORK_URL:-https://github.com/auriannedrumont-eng/hermes_ui.git}"
   urlactuel="$(git -C "$ROOT" remote get-url origin 2>/dev/null || echo '')"
   if [ -z "$urlactuel" ]; then
     git -C "$ROOT" remote add origin "$fork" 2>/dev/null || true
