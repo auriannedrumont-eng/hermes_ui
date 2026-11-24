@@ -121,6 +121,10 @@ interface MessageListProps {
   /** Bandeau d'avance (24/11) : mode moteur vu par le service — null tant
    *  que le hello n'est pas reçu (pas de faux avertissement au boot). */
   gatewayMode?: "gateway" | "local" | null;
+  /** Revue 95 : fournisseurs actionnables du hello (ids, ex. zai, openrouter)
+   *  — en mode local AVEC clés actives, le bandeau « non connecté » serait
+   *  faux : les tours partiront sur ces clés. */
+  engineProviders?: string[] | null;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onFork: (messageId: string) => void;
@@ -205,6 +209,7 @@ export function MessageList({
   onDismissError,
   onOpenSettings,
   gatewayMode = null,
+  engineProviders = null,
   onEdit,
   onDelete,
   onFork,
@@ -219,7 +224,13 @@ export function MessageList({
   /** Tour simple (sans variante) — la bulle de stream en bas de fil. */
   // Store de stream (bonus perf) : la page ne transporte plus les deltas.
   const storeStreams = useStreamsRecord();
-  const effectiveStreams = streams ?? Object.values(storeStreams);
+  // Mémorisé (revue 95) : Object.values crée un NOUVEAU tableau à chaque
+  // rendu — l'effet de suivi du bas, dépendant de [effectiveStreams],
+  // repartait à chaque rendu même sans delta.
+  const effectiveStreams = useMemo(
+    () => streams ?? Object.values(storeStreams),
+    [streams, storeStreams]
+  );
   const streaming = effectiveStreams.find((st) => !st.variant) ?? null;
   // F-30 — réglages du déroulé (hermes.modes.showFlow / showModels) : lus
   // au rendu et suivis par le bus des réglages (idiome InterfacePane).
@@ -299,7 +310,13 @@ export function MessageList({
   // quand le service n'est PAS branché à la gateway — l'utilisateur sait AVANT
   // d'envoyer un message que ses clés doivent être configurées (ou l'agent
   // lancé), plus jamais un tour qui échoue en surprise.
-  const horsLigne = gatewayMode !== null && gatewayMode !== "gateway";
+  // Revue 95 : en mode local AVEC clés actionnables, le bandeau serait FAUX
+  // (les tours partiront sur ces clés) — il n'apparaît que si rien n'est
+  // utilisable (pas de clé configurée).
+  const horsLigne =
+    gatewayMode !== null &&
+    gatewayMode !== "gateway" &&
+    !(engineProviders?.length);
 
   return (
     <div className="relative min-h-0 flex-1">

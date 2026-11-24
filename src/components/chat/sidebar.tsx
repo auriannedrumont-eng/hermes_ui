@@ -263,14 +263,19 @@ export function Sidebar({
     [conversations, conversationsByProject]
   );
 
+  // Recherche insensible aux ACCENTS (revue 95) : « reunion » doit trouver
+  // « Réunion » — normalisation NFD + retrait des diacritiques des deux côtés.
+  const foldAccents = (s: string): string =>
+    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   // Recherche : groupes de dates des conversations « Sans dossier » (avec
   // dossiers, l'arbre filtré ci-dessous porte les conversations rangées).
   const searchGroups = useMemo(() => {
-    const ql = q.toLowerCase();
+    const ql = foldAccents(q);
     const pool = conversations.filter(
       (c) =>
-        (c.title.toLowerCase().includes(ql) ||
-          c.preview.toLowerCase().includes(ql)) &&
+        (foldAccents(c.title).includes(ql) ||
+          foldAccents(c.preview).includes(ql)) &&
         (!hasProjects || !c.projectId || !conversationsByProject.has(c.projectId))
     );
     const map = new Map<string, ConversationMeta[]>();
@@ -288,9 +293,9 @@ export function Sidebar({
   // sont hors de la recherche : ils vivent dans les Archives.
   const searchTree = useMemo(() => {
     if (!isSearching || !hasProjects) return [];
-    const ql = q.toLowerCase();
+    const ql = foldAccents(q);
     const matchConv = (c: ConversationMeta) =>
-      c.title.toLowerCase().includes(ql) || c.preview.toLowerCase().includes(ql);
+      foldAccents(c.title).includes(ql) || foldAccents(c.preview).includes(ql);
     const nodes: {
       project: Project;
       convs: ConversationMeta[];
@@ -308,10 +313,10 @@ export function Sidebar({
           convs: (conversationsByProject.get(s.id) ?? []).filter(matchConv),
         }))
         .filter(
-          (s) => s.project.name.toLowerCase().includes(ql) || s.convs.length > 0
+          (s) => foldAccents(s.project.name).includes(ql) || s.convs.length > 0
         );
       const convs = (conversationsByProject.get(root.id) ?? []).filter(matchConv);
-      if (root.name.toLowerCase().includes(ql) || convs.length > 0 || kids.length > 0) {
+      if (foldAccents(root.name).includes(ql) || convs.length > 0 || kids.length > 0) {
         nodes.push({ project: root, convs, subs: kids });
       }
     }

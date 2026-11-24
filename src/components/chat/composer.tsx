@@ -176,32 +176,43 @@ export function Composer({
   // Chargé à la MONTÉE de chaque conversation : la valeur initiale vient
   // du registre (lecture directe, pas d'état dans l'effet) ; le focus suit.
   const [draftLoaded, setDraftLoaded] = useState<string | null>(null);
+  // Brouillon SORTANT : flush du localStorage DÉPLACÉ dans le cleanup
+  // d'effet (revue 95) — l'écriture pendant le rendu, sous React 19
+  // strict (rendu doublé), rejouait le flush APRÈS que le second rendu
+  // a déjà réinitialisé `value` : le brouillon sortant était écrasé
+  // par une chaîne vide. Le cleanup capture `value` au moment où
+  // draftLoaded change encore l'ancienne conversation, avant reset.
+  const outgoingDraftRef = useRef<{ key: string; value: string } | null>(null);
   if (draftLoaded !== draftKey) {
     // re-render immédiat : motif React officiel « adjust state on prop
-    // change » — l'écriture pendant le rendu est autorisée ici (React
-    // rejoue le rendu avant de committer), pas dans un effet.
-    // (audit 2026-11-21) flush du brouillon SORTANT : le changement de
-    // conversation annule le timer de debounce — sans cette écriture
-    // immédiate sous l'ANCIENNE clé, les frappes des derniers 300 ms
-    // étaient perdues (et c'est ici, et nulle part après, que `value`
-    // contient encore l'ancien brouillon).
+    // change » — la lecture de `value` (contient encore l'ANCIEN
+    // brouillon) est mémorisée pour le cleanup ; plus AUCUNE écriture
+    // disque dans le corps du rendu.
     if (draftLoaded) {
+      outgoingDraftRef.current = { key: draftLoaded, value };
+    }
+    setDraftLoaded(draftKey);
+  }
+  useEffect(() => {
+    return () => {
+      const out = outgoingDraftRef.current;
+      outgoingDraftRef.current = null;
+      if (!out) return;
       try {
-        if (value.trim()) {
-          window.localStorage.setItem(draftStorageKey(draftLoaded), value);
+        if (out.value.trim()) {
+          window.localStorage.setItem(draftStorageKey(out.key), out.value);
         } else {
-          window.localStorage.removeItem(draftStorageKey(draftLoaded));
+          window.localStorage.removeItem(draftStorageKey(out.key));
         }
       } catch {
         /* stockage indisponible */
       }
-    }
-    setDraftLoaded(draftKey);
-    try {
-      setValue(window.localStorage.getItem(draftStorageKey(draftKey)) ?? "");
-    } catch {
-      setValue("");
-    }
+    };
+  }, [draftKey]);
+  try {
+    setValue(window.localStorage.getItem(draftStorageKey(draftKey)) ?? "");
+  } catch {
+    setValue("");
   }
   useEffect(() => {
     if (textareaRef.current) textareaRef.current.focus();

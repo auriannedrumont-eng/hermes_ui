@@ -132,7 +132,10 @@ export function exportPdf(conversation: ConversationMeta, messages: ChatMessage[
 ${parts.join("\n")}
 </body></html>`;
   const win = window.open("", "_blank", "width=800,height=900");
-  if (!win) return;
+  // Pop-up bloquée (revue 95) : une sortie silencieuse faisait afficher un
+  // FAUX toast « Impression PDF lancée » — l'erreur remonte, l'appelant
+  // (page.tsx) affiche le vrai motif.
+  if (!win) throw new Error("Fenêtre bloquée par le navigateur — autorisez les pop-ups pour ce site");
   win.document.write(html);
   win.document.close();
   win.focus();

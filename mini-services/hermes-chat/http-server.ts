@@ -75,11 +75,20 @@ export function createFilesServer(deps: HttpDeps) {
     //     /raw, /download, /thumb et /pdf.
     const isShareRoute = u.pathname.startsWith("/share/");
     const isPublicViewRoute = /^\/artifacts\/[a-zA-Z0-9-]{8,64}\/view$/.test(u.pathname);
+    // Revue 95 : une page tierce peut embarquer <iframe src=".../artifacts/<id>/view">
+    // ou /artifacts/<id>/thumb sans en-tête Origin (les navigations embarquées
+    // n'en envoient pas) — la garde d'origine ci-dessus laissait passer. Le
+    // contexte de requête navigateur dit la vérité : sec-fetch-site:cross-site
+    // = initié par un site distant, refusé SAUF /share/ (le destinataire d'un
+    // lien de partage peut venir de n'importe où). Les clients non navigateurs
+    // (curl, <img> du même site) n'envoient pas sec-fetch-site : inchangés.
+    const fetchSite = req.headers["sec-fetch-site"];
+    const crossSite = fetchSite === "cross-site";
     if (
       SERVICE_TOKEN &&
       !isShareRoute &&
-      !isPublicViewRoute &&
-      !httpAuthorized(req, u)
+      (crossSite ||
+        (!isPublicViewRoute && !httpAuthorized(req, u)))
     ) {
       res.writeHead(401, { "Content-Type": "text/plain", "WWW-Authenticate": "Bearer" });
       res.end("Jeton de service requis");
@@ -389,7 +398,16 @@ async function handleArtifactZip(u: URL, res: ServerResponse, store: Store): Pro
       fileNames.push(name);
       const pdfPath = artifactPdfPath(row.id);
       if (row.kind === "html" && existsSync(pdfPath)) {
-        const pdfName = name.replace(/\.html?$/, "") + ".pdf";
+        // Dédoublonné via le MÊME ensemble `used` (revue 95) : un artefact
+        // « rapport.html » + « rapport.pdf » venus de deux ids differents
+        // ecrasaient silencieusement le premier PDF dans l'archive.
+        let pdfName = name.replace(/\.html?$/, "") + ".pdf";
+        let pn = 2;
+        while (used.has(pdfName.toLowerCase())) {
+          pdfName = `${name.replace(/\.html?$/, "")}-${pn}.pdf`;
+          pn++;
+        }
+        used.add(pdfName.toLowerCase());
         writeFileSync(join(tmp, pdfName), readFileSync(pdfPath));
         fileNames.push(pdfName);
       }
@@ -414,14 +432,14 @@ async function handleArtifactZip(u: URL, res: ServerResponse, store: Store): Pro
         return false;
       }
     };
-    let ok = await compress("zip", ["-q", "-X", zipPath, ...fileNames]);
+    let ok = await compress("zip", ["-q", "-X", zipPath, "--", ...fileNames]);
     if (!ok && process.platform === "win32") {
       try {
         rmSync(zipPath, { force: true });
       } catch {
         /* rien à effacer */
       }
-      ok = await compress("tar", ["-a", "-c", "-f", zipPath, ...fileNames]);
+      ok = await compress("tar", ["-a", "-c", "-f", zipPath, "--", ...fileNames]);
     }
     if (!ok || !existsSync(zipPath)) {
       res.writeHead(500, { "Content-Type": "text/plain" });

@@ -136,7 +136,7 @@ export function ContextGauge({
           <Button
             variant="ghost"
             size="icon"
-            title={`Contexte : ≈ ${formatK(usage.total)} / ${formatK(usage.windowTokens)} tokens`}
+            title={`Contexte : ≈ ${formatK(usage.total)} / ${formatK(usage.windowTokens)} jetons`}
             aria-label={`Contexte : ${pctInt} % de la fenêtre utilisés. Ouvrir le détail`}
             className="relative h-9 w-[34px] shrink-0 rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground"
           >
@@ -164,7 +164,7 @@ export function ContextGauge({
             </div>
             <div className="min-w-0">
               <div className="text-[15px] font-bold tracking-tight">
-                ≈ {formatK(usage.total)} tokens
+                ≈ {formatK(usage.total)} jetons
               </div>
               <div className="mt-px text-[11px] text-muted-foreground">
                 fenêtre {usage.windowEstimated ? "estimée" : ""} :{" "}
@@ -273,7 +273,7 @@ export function ContextGauge({
             <AlertDialogDescription>
               Hermes résume {historyCompacted ? "à nouveau " : ""}l&apos;historique (
               {historyCount} messages
-              {historyRow ? ` · ≈ ${formatK(historyRow.tokens)} tokens` : ""}) en une
+              {historyRow ? ` · ≈ ${formatK(historyRow.tokens)} jetons` : ""}) en une
               synthèse conservée en tête de session. La conversation continue, dans la
               même session.
             </AlertDialogDescription>

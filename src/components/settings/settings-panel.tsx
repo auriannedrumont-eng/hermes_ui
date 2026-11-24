@@ -268,6 +268,7 @@ export function SettingsPanel({
               appRevision={appRevision}
               updateAvailable={updateAvailable}
               onNavigateStorage={() => goto("stockage")}
+              onConnectGateway={onConnectGateway}
             />
           );
       // v0.3.0 : page Stockage — explorateur des documents générés

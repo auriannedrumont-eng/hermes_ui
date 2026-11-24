@@ -70,7 +70,7 @@ const CHROME_CANDIDATES = [
   "/usr/bin/chromium",
 ];
 
-const LAUNCH_ARGS = [
+const LAUNCH_ARGS_BASE = [
   "--remote-debugging-port=0",
   "--no-sandbox",
   "--disable-gpu",
@@ -78,11 +78,20 @@ const LAUNCH_ARGS = [
   "--force-color-profile=srgb",
   "--font-render-hinting=none",
   "--disable-features=Translate,BackForwardCache",
-  // Profil unique par incarnation du service : un chrome orphelin (hot-reload,
-  // redémarrage) ne doit jamais verrouiller le profil du suivant.
-  "--user-data-dir=" + join(tmpdir(), `hermes-chrome-${crypto.randomUUID()}`),
-  "about:blank",
 ];
+
+/** Arguments de lancement, profil FRAIS à chaque appel (revue 95) :
+ *  l'ancien tableau figé générait l'UUID de --user-data-dir UNE fois au
+ *  chargement du module — un chrome qui plantait puis redémarrait via
+ *  ensureStarted() réutilisait le même dossier de profil (verrous stales,
+ *  préférences corrompues). */
+function launchArgs(): string[] {
+  return [
+    ...LAUNCH_ARGS_BASE,
+    "--user-data-dir=" + join(tmpdir(), `hermes-chrome-${crypto.randomUUID()}`),
+    "about:blank",
+  ];
+}
 
 const VIEWPORT_WIDTH = 1280;
 const NAV_TIMEOUT_MS = 20_000;
@@ -225,7 +234,7 @@ export class ChromeRenderer {
         this.proc = null;
       }
       await new Promise<void>((resolve, reject) => {
-        const p = spawn(bin, LAUNCH_ARGS, { stdio: ["ignore", "pipe", "pipe"] });
+        const p = spawn(bin, launchArgs(), { stdio: ["ignore", "pipe", "pipe"] });
         let settled = false;
         const onData = (chunk: Buffer) => {
           const s = chunk.toString();

@@ -59,8 +59,10 @@ export interface TurnRunnerDeps {
   renderHtmlArtifact: (row: import("./store").ArtifactRow) => Promise<void>;
   /** F-26 : quota du journal de versions + purge des fichiers dérivés. */
   enforceVersionQuota: (conversationId: string, keys: Iterable<string>) => void;
-  /** Attache les cartes d'artefacts aux messages d'une conversation. */
-  attachArtifactCards: (conversationId: string, messages: ChatMessage[]) => void;
+  /** Attache les cartes d'artefacts aux messages d'une conversation
+   *  (fullHistory : l'appelant a fourni le fil COMPLET — pas de relecture
+   *  SQLite, cf. revue 95). */
+  attachArtifactCards: (conversationId: string, messages: ChatMessage[], fullHistory?: boolean) => void;
 }
 
 export function createTurnRunner({
@@ -967,7 +969,7 @@ const runAssistantTurn = async (
       if (opts.versionGroup) {
         store.restoreLatestVersion(conversationId, opts.versionGroup);
         const refreshed = store.getMessages(conversationId);
-        attachArtifactCards(conversationId, refreshed);
+        attachArtifactCards(conversationId, refreshed, true);
         io.emit("messages:refreshed", { conversationId, messages: refreshed });
       }
       const conversation = store.touchConversation(conversationId) ?? undefined;
@@ -1084,7 +1086,7 @@ const runAssistantTurn = async (
       if (!partial && opts.versionGroup) {
         store.restoreLatestVersion(conversationId, opts.versionGroup);
         const refreshed = store.getMessages(conversationId);
-        attachArtifactCards(conversationId, refreshed);
+        attachArtifactCards(conversationId, refreshed, true);
         io.emit("messages:refreshed", { conversationId, messages: refreshed });
       }
       // Erreur réelle : le partiel persisté part avec l'événement — le client

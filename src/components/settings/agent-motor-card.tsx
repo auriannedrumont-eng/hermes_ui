@@ -64,6 +64,13 @@ export interface AgentMotorCardProps {
   connected?: boolean;
   /** Navigation vers la page Stockage (lien « documents générés »). */
   onNavigateStorage?: () => void;
+  /** Revue 95 : branchement d'une gateway distante (repli « autre poste »)
+   *  — l'ancien formulaire fantôme (champs muets) est maintenant relié :
+   *  la validation appelle gateway:set via SettingsPanel. */
+  onConnectGateway?: (
+    url: string,
+    token?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const hf = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -72,8 +79,13 @@ const df = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", 
 const JALONS_MAJ = ["Demande envoyée", "Sauvegarde", "Mise à jour", "Contrôle"];
 const JALONS_RETOUR = ["Demande envoyée", "Arrêt", "Retour aux fichiers", "Contrôle"];
 
-export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMotorCardProps) {
+export function AgentMotorCard({ connected = true, onNavigateStorage, onConnectGateway }: AgentMotorCardProps) {
   const { toast } = useToast();
+  // Revue 95 : champs contrôlés du repli « autre poste » (advOpen existe
+  // déjà plus bas) + verdict de liaison.
+  const [advUrl, setAdvUrl] = useState("");
+  const [advToken, setAdvToken] = useState("");
+  const [advBusy, setAdvBusy] = useState(false);
   const [state, setState] = useState<MotorState | null>(null);
   const [journal, setJournal] = useState<JournalWire[]>([]);
   const [log, setLog] = useState<string | null>(null);
@@ -627,6 +639,8 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Adresse du moteur</span>
                   <Input
                     type="text"
+                    value={advUrl}
+                    onChange={(e) => setAdvUrl(e.target.value)}
                     placeholder="https://adresse-du-poste"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
                   />
@@ -635,10 +649,51 @@ export function AgentMotorCard({ connected = true, onNavigateStorage }: AgentMot
                   <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Code d&apos;accès</span>
                   <Input
                     type="password"
+                    value={advToken}
+                    onChange={(e) => setAdvToken(e.target.value)}
                     placeholder="••••••••"
                     className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus-visible:border-hermes/60"
                   />
                 </label>
+                {/* Revue 95 : la validation câble le branchement (gateway:set
+                    via SettingsPanel) — rien ne part sans ce bouton. */}
+                <Button
+                  type="button"
+                  disabled={advBusy || !advUrl.trim() || !onConnectGateway}
+                  onClick={async () => {
+                    if (!onConnectGateway || !advUrl.trim()) return;
+                    setAdvBusy(true);
+                    try {
+                      const res = await onConnectGateway(
+                        advUrl.trim(),
+                        advToken.trim() || undefined,
+                      );
+                      if (res.ok) {
+                        toast({ title: "Gateway reliée", description: `Branché sur ${advUrl.trim()}.` });
+                        setAdvOpen(false);
+                        setAdvUrl("");
+                        setAdvToken("");
+                      } else {
+                        toast({
+                          title: "Branchement refusé",
+                          description: res.error ?? "La gateway n'a pas répondu.",
+                          variant: "destructive",
+                        });
+                      }
+                    } catch (err) {
+                      toast({
+                        title: "Branchement refusé",
+                        description: err instanceof Error ? err.message : "Erreur inconnue",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setAdvBusy(false);
+                    }
+                  }}
+                  className="mt-3 h-8 w-full rounded-lg bg-hermes text-[12.5px] font-semibold text-hermes-foreground hover:bg-hermes/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {advBusy ? "Branchement…" : "Relier cette gateway"}
+                </Button>
               </div>
             ) : null}
           </>

@@ -302,8 +302,14 @@ export default function HermesWebPage() {
                 ? "Fichier JSON généré."
                 : "Choisissez « Enregistrer au format PDF » dans la boîte d'impression.",
         });
-      } catch {
-        toast({ title: "Échec de l'export", variant: "destructive" });
+      } catch (err) {
+        // Revue 95 : le motif réel (pop-up bloquée…) part dans le toast au
+        // lieu d'un « Échec de l'export » muet.
+        toast({
+          title: "Échec de l'export",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
       }
     },
     [activeConversation, chat.messages, toast]
@@ -506,6 +512,7 @@ export default function HermesWebPage() {
             onDismissError={chat.dismissTurnError}
             onOpenSettings={() => setSettingsOpen(true)}
             gatewayMode={chat.mode}
+            engineProviders={chat.engineProviders}
             onEdit={chat.editMessage}
             onDelete={chat.deleteMessage}
             onFork={handleFork}

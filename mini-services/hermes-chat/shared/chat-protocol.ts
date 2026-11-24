@@ -127,6 +127,10 @@ export interface ModeConfig {
   debateParallel?: boolean;
   /** Modèle par voix — null/absent = modèle de la conversation. */
   voices?: Record<string, Record<string, string | null>>;
+  /** F-30b : modèle du mode (chat/plan/code) — l'assignment du mode remplace
+   *  le modèle de la conversation (aligné avec src/lib/modes.ts et
+   *  mini-services/hermes-chat/modes.ts, qui le déclaraient seuls). */
+  model?: Record<string, string | null>;
 }
 
 // ── Rôles et pièces jointes ─────────────────────────────────────────────

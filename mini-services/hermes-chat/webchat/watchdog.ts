@@ -6,7 +6,8 @@
 // que sa ligne de commande porte le --user-data-dir du profil applicatif
 // (isAppBrowserPid) — le navigateur personnel ne peut jamais être visé.
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { activityPath, killPilotBrowser, readPilotInfo } from "./browser";
 
 function argOf(flag: string): string | null {
@@ -28,9 +29,23 @@ const idleMin: number = idleArg;
 const IDLE_MS = idleMin * 60_000;
 const POLL_MS = 30_000;
 
+// Revue 95 : le PID-file est effacé À CHAQUE sortie du veilleur — sinon un
+// OS qui réattribue le pid à un autre processus faisait croire au pilote
+// (launchWatchdog) que le veilleur vivait encore, et plus AUCUN veilleur
+// n'était relancé (le navigateur restait ouvert pour toujours).
+const selfPidFile = join(profileDir, "watchdog.pid");
+function retirePidFile(): void {
+  try {
+    rmSync(selfPidFile, { force: true });
+  } catch {
+    /* best effort : la relance nettoie un pid périmé de toute façon */
+  }
+}
+
 async function tick(): Promise<void> {
   const info = readPilotInfo(profileDir);
   if (!info || info.pid <= 0) {
+    retirePidFile();
     process.exit(0); // rien à surveiller : le veilleur se retire
   }
   let lastActivity = 0;
@@ -49,8 +64,16 @@ async function tick(): Promise<void> {
     // S-03 : killPilotBrowser est async (vérification CIM de la ligne de
     // commande sous Windows) — un pid non vérifiable ne peut pas être tué.
     const killed = await killPilotBrowser(info.pid, profileDir);
+    retirePidFile();
     process.exit(killed ? 0 : 1);
   }
+}
+
+// Inscription du pid du veilleur courant (le pilote la lit pour l'idempotence).
+try {
+  writeFileSync(selfPidFile, String(process.pid));
+} catch {
+  /* best effort : sans PID-file, la prochaine relance doublonnera */
 }
 
 await tick();
@@ -59,5 +82,6 @@ const timer = setInterval(() => void tick(), POLL_MS);
 // après 2 h (le pilote suivant relance un veilleur neuf de toute façon).
 setTimeout(() => {
   clearInterval(timer);
+  retirePidFile();
   process.exit(0);
 }, 2 * 60 * 60_000).unref?.();

@@ -163,7 +163,7 @@ export function VersionPopover({ artifact, children }: VersionPopoverProps) {
   /** Télécharger la version sélectionnée (sinon la courante). */
   const download = useCallback(() => {
     const target = selected ?? artifact;
-    window.open(artifactUrl(target.url), "_blank");
+    window.open(artifactUrl(target.url), "_blank", "noopener");
   }, [selected, artifact]);
 
   return (

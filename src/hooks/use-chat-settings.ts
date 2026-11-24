@@ -197,9 +197,20 @@ export function useChatSettings() {
     setEffortResolvedFor(effortSignature);
     if (effortForScale !== effort && effortForScale != null) {
       setEffortState(effortForScale);
-      writeClientSetting(EFFORT_SETTING_KEY, effortForScale);
     }
   }
+  // Persistance DÉPLACÉE hors du rendu (revue 95) : writeClientSetting
+  // émettait un CustomEvent SYNCHRONE depuis le corps du rendu — les
+  // composants écoutant cet événement font setState pendant le rendu
+  // en cours (interdit React, source de « Cannot update a component
+  // while rendering a different component »). L'effet ne part que sur
+  // CHANGEMENT du cran résolu, exactement quand l'ancien code écrivait.
+  useEffect(() => {
+    if (effortResolvedFor === null) return; // premier rendu : rien à écrire
+    if (effortForScale !== effort && effortForScale != null) {
+      writeClientSetting(EFFORT_SETTING_KEY, effortForScale);
+    }
+  }, [effortResolvedFor, effortForScale, effort]);
 
   /** F-09/F-12 — bascule la recherche web du tour (persistée hermes.tools.web). */
   const toggleWebSearch = useCallback(() => {

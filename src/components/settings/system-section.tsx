@@ -65,6 +65,12 @@ interface SystemSectionProps {
   appRevision?: string | null;
   /** Navigation vers la page Stockage. */
   onNavigateStorage?: () => void;
+  /** Revue 95 : branchement d'une gateway distante (repli « autre poste »
+   *  de la carte Hermes) — câblé depuis SettingsPanel (gateway:set). */
+  onConnectGateway?: (
+    url: string,
+    token?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 /** Réponse de system:update-check (contrat du service). */
@@ -82,6 +88,7 @@ export function SystemSection({
   updateAvailable = null,
   appRevision: _appRevision = null,
   onNavigateStorage,
+  onConnectGateway,
 }: SystemSectionProps) {
   // ── État de vérification (à jour / disponible / erreur) ───────────────
   const [majEtat, setMajEtat] = useState<"inconnu" | "ajour" | "disponible" | "erreur">("inconnu");
@@ -544,7 +551,7 @@ export function SystemSection({
 
         {/* ══ CARTE 2 — HERMES (le moteur) ═══════════════════════════════
             Même grammaire que la carte application — agent-motor-card. */}
-        <AgentMotorCard connected={connected} onNavigateStorage={onNavigateStorage} />
+        <AgentMotorCard connected={connected} onNavigateStorage={onNavigateStorage} onConnectGateway={onConnectGateway} />
         {/* Refonte (68) : le manifeste du dernier démarrage — la même
             vérité que la fenêtre du lanceur (prérequis ✓/✗, agent, verdict).
             N'existe qu'une fois qu'un lanceur à jour a écrit sante.json. */}

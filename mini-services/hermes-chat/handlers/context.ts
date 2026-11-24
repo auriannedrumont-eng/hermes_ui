@@ -134,7 +134,7 @@ export interface HandlerContext {
   // Artefacts
   wireArtifact: (conversationId: string, key: string, row: ArtifactRow) => unknown;
   broadcastArtifact: (conversationId: string, row: ArtifactRow) => void;
-  attachArtifactCards: (conversationId: string, messages: import("../types").ChatMessage[]) => void;
+  attachArtifactCards: (conversationId: string, messages: import("../types").ChatMessage[], fullHistory?: boolean) => void;
   renderHtmlArtifact: (row: ArtifactRow) => Promise<void>;
   deleteArtifactFiles: (rows: ArtifactRow[]) => void;
   enforceVersionQuota: (conversationId: string, keys: Iterable<string>) => void;
@@ -256,7 +256,7 @@ export function bindHandlerContext(deps: {
   artifacts: {
     wireArtifact: (conversationId: string, key: string, row: ArtifactRow) => unknown;
     broadcastArtifact: (conversationId: string, row: ArtifactRow) => void;
-    attachArtifactCards: (conversationId: string, messages: import("../types").ChatMessage[]) => void;
+    attachArtifactCards: (conversationId: string, messages: import("../types").ChatMessage[], fullHistory?: boolean) => void;
     renderHtmlArtifact: (row: ArtifactRow) => Promise<void>;
     deleteArtifactFiles: (rows: ArtifactRow[]) => void;
     enforceVersionQuota: (conversationId: string, keys: Iterable<string>) => void;

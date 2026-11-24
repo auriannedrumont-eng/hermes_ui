@@ -167,7 +167,7 @@ socket.on("conversations:open", (payload: { id?: string }, cb?: (data: unknown) 
     return;
   }
   const messages = ctx.store.getMessages(id);
-  ctx.attachArtifactCards(id, messages);
+  ctx.attachArtifactCards(id, messages, true);
   const compact = ctx.compactInfoWire(id);
   // Ré-attache : les tours en vol de cette conversation (contenu accumulé
   // inclus) partent avec le snapshot — le client qui revit la conversation
@@ -584,7 +584,7 @@ socket.on(
       for (const g of touchedGroups) ctx.store.restoreLatestVersion(conversationId, g as string);
       if (touchedGroups.length) {
         const refreshed = ctx.store.getMessages(conversationId);
-        ctx.attachArtifactCards(conversationId, refreshed);
+        ctx.attachArtifactCards(conversationId, refreshed, true);
         ctx.io.emit("messages:refreshed", { conversationId, messages: refreshed });
       }
       if (typeof cb === "function") cb({ error: "Aucun message à régénérer" });
@@ -813,7 +813,7 @@ socket.on(
     // événement que message:setVersion ; message:deleted reste émis pour
     // les clients qui nettoient un état local (tours optimistes…).
     const refreshed = ctx.store.getMessages(conversationId);
-    ctx.attachArtifactCards(conversationId, refreshed);
+    ctx.attachArtifactCards(conversationId, refreshed, true);
     // F-14 (compaction) : compactInfoWire (vue wire, pas le résumé brut de
     // readCompact) et TOUJOURS présent — même null quand le résumé vient
     // d'être invalidé, sinon le client garde sa jauge périmée.
@@ -858,7 +858,7 @@ socket.on(
     // F-14 : les cartes d'artefacts doivent suivre le fil rediffusé — sans
     // l'attachement, TOUTES les cartes de la conversation disparaissaient
     // de l'écran dès qu'on naviguait entre ‹ 1/2 ›.
-    ctx.attachArtifactCards(conversationId, messages);
+    ctx.attachArtifactCards(conversationId, messages, true);
     ctx.io.emit("messages:refreshed", { conversationId, messages });
   }
 );

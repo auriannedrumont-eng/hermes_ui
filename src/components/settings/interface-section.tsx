@@ -135,18 +135,20 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
         <div className="flex w-[196px] flex-none items-center gap-2.5">
           <Slider
             aria-label="Largeur de la colonne"
-            // Maquette ligne 448 : min 12, max 30 (audit design §2.5 — les
-            // bornes avaient silencieusement divergé ; la valeur stockée
-            // hors bornes est ramenée dans la grille à l'affichage).
-            value={[Math.min(30, Math.max(12, Math.round(values.width ?? 19)))]}
+            // Bornes ALIGNÉES sur page.tsx (revue 95) : le curseur s'arrêtait
+            // à 30 % pendant que l'application autorisait 34 % — l'étiquette
+            // affichait une valeur hors bornes que le curseur ne pouvait
+            // plus rattraper. Maquette ligne 448 : min 12, max 30 ; la
+            // grille a bougé, le curseur suit.
+            value={[Math.min(34, Math.max(12, Math.round(values.width ?? 19)))]}
             min={12}
-            max={30}
+            max={34}
             step={1}
             onValueChange={([v]) => write("fork.ui.sidebar.width", v)}
             className="flex-1"
           />
           <span className="w-[38px] flex-none text-right text-[11px] font-semibold tabular-nums text-hermes-text">
-            {Math.round(values.width ?? 19)} %
+            {Math.round(Math.min(34, Math.max(12, values.width ?? 19)))} %
           </span>
         </div>
       </SettingRow>

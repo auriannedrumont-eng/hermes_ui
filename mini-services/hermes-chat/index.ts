@@ -310,19 +310,25 @@ function broadcastArtifact(conversationId: string, row: ArtifactRow): void {
   });
 }
 
-/** Attache les cartes d'artefacts aux messages d'une conversation. */
-function attachArtifactCards(conversationId: string, messages: ChatMessage[]): void {
+/** Attache les cartes d'artefacts aux messages d'une conversation.
+ *  fullHistory (revue 95) : l'appelant déclare s'il a fourni le fil COMPLET
+ *  — l'ancien test `messages.length > 1` rechargeait toute la conversation
+ *  depuis SQLite à chaque ouverture d'une conversation à UN message. */
+function attachArtifactCards(
+  conversationId: string,
+  messages: ChatMessage[],
+  fullHistory = false
+): void {
   const rows = store.listConversationArtifacts(conversationId);
   if (rows.length === 0) return;
   // P-01 : ids des messages en UN chargement (l'ancien code rechargeait
   // TOUTE la conversation dans artifactAnchor à chaque clé d'artefact).
-  // F-29 (perf) : quand l'appelant fournit déjà le fil complet (> 1
-  // message), on s'appuie sur SES ids — le rechargement complet ne reste
-  // qu'en fin de tour, où seul [doneMessage] est passé (≤ 1 message).
-  const ids =
-    messages.length > 1
-      ? new Set(messages.map((m) => m.id))
-      : new Set(store.getMessages(conversationId).map((m) => m.id));
+  // F-29 (perf) : quand l'appelant fournit déjà le fil complet, on s'appuie
+  // sur SES ids — le rechargement complet ne reste qu'en fin de tour, où
+  // seul [doneMessage] est passé (≤ 1 message, pas un fil complet).
+  const ids = fullHistory
+    ? new Set(messages.map((m) => m.id))
+    : new Set(store.getMessages(conversationId).map((m) => m.id));
   const byKey = new Map<string, ArtifactRow[]>();
   for (const r of rows) {
     if (!byKey.has(r.key)) byKey.set(r.key, []);

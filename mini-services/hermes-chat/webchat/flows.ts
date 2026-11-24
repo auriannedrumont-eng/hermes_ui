@@ -86,9 +86,15 @@ const ZAI_TEXT_EXPR = `(() => {
 /** Crochet de récupération de fichiers : mémorise /api/v1/storage/ et
  *  neutralise HTMLAnchorElement.prototype.click (dialogue natif impossible
  *  sur un profil nu). Posé dans la page — meurt avec elle, jamais utilisé
- *  comme signal de fin. */
+ *  comme signal de fin. L'onglet VIT entre les tours (revue 95) : si le
+ *  crochet existe déjà, ses URLs du tour précédent sont VIDÉES avant
+ *  lecture — sinon le tour suivant re-téléchargeait les fichiers de
+ *  l'avant-dernier tour (navigation SPA, la page ne se recharge pas). */
 const ZAI_HOOK_EXPR = `(() => {
-  if (window.__hermesPilotHook) return window.__hermesPilotHook.urls.slice();
+  if (window.__hermesPilotHook) {
+    window.__hermesPilotHook.urls.length = 0;
+    return window.__hermesPilotHook.urls.slice();
+  }
   const urls = [];
   const origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {

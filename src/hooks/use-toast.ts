@@ -142,9 +142,12 @@ let memoryState: State = { toasts: [] }
 
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
-  listeners.forEach((listener) => {
+  // Copie itérée (revue 95) : un listener peut s'inscrire/désinscrire
+  // pendant la boucle (setState dans un effet qui suit le toast) — la
+  // mutation de `listeners` sous forEach faisait SAUTER des écouteurs.
+  for (const listener of [...listeners]) {
     listener(memoryState)
-  })
+  }
 }
 
 type Toast = Omit<ToasterToast, "id">
@@ -189,7 +192,10 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+    // Abonnement STABLE (revue 95) : dépendre de [state] réinscrivait les
+    // ~15 composants abonnés à CHAQUE toast (push + splice en masse pendant
+    // que dispatch itère) — l'origine des écouteurs sautés.
+  }, [])
 
   return {
     ...state,
