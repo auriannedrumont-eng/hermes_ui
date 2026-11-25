@@ -81,11 +81,6 @@ export function SidebarDemarrage({
           </button>
         )}
       </div>
-      <p className="pb-1 text-[12.5px] leading-relaxed text-muted-foreground">
-        Choisissez un dossier pour votre première conversation — les suivantes
-        restent libres. Pour en créer un neuf : explorateur Windows, puis
-        l&apos;icône ci-dessus.
-      </p>
 
       {projects.length > 0 ? (
         <ul className="space-y-0.5">

@@ -134,11 +134,6 @@ interface MessageListProps {
   conversationMode?: ConversationMode;
   /** F-30 — déroulé vivant du tour multi-voix (modes orchestrés). */
   modeFlowLive?: { messageId: string; rows: NonNullable<ChatMessage["modeFlow"]> } | null;
-  /** 2026-11-25 — base vide (aucune conversation) : l'accueil indique le
-   *  premier pas (choisir un dossier dans la sidebar) au lieu des
-   *  suggestions. Le verrou côté service bloque l'envoi sans dossier :
-   *  l'écran le dit AVANT le clic. */
-  baseVide?: boolean;
 }
 
 /** Une colonne de comparaison : réponse persistée et/ou stream en cours. */
@@ -222,7 +217,6 @@ export function MessageList({
   onRetryArtifact,
   conversationMode = "chat",
   modeFlowLive = null,
-  baseVide = false,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
@@ -359,15 +353,6 @@ export function MessageList({
             <p className="mt-1.5 text-center text-[15px] text-muted-foreground">
               Comment puis-je vous aider aujourd&apos;hui ?
             </p>
-            {baseVide ? (
-              // 2026-11-25 — premier pas sur base vide : une seule ligne,
-              // placée avant les suggestions (le verrou bloque l'envoi sans
-              // dossier, l'écran le dit ici plutôt qu'en erreur).
-              <p className="mt-3 text-center text-[12.5px] text-muted-foreground">
-                Première fois ici&nbsp;? Choisissez d&apos;abord un dossier
-                dans la colonne de gauche.
-              </p>
-            ) : null}
             <div className="mt-8 grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2">
               {SUGGESTIONS.map((s) => (
                 <button
