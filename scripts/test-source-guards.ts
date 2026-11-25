@@ -193,7 +193,10 @@ async function main() {
   check("eslint : hermes-agent ignoré",
     read("eslint.config.mjs").includes('"hermes-agent/**"'));
   check("gitignore : la copie fraîche reste hors versionnage",
-    read(".gitignore").includes("/hermes-agent/"));
+    // Les deux graphies sont correctes (git ignore le dossier racine) :
+    // « /hermes-agent/ » (dir seule) ou « /hermes-agent » (dir+file) —
+    // c'est l'ABSENCE de l'entrée que la garde condamne.
+    read(".gitignore").includes("/hermes-agent"));
 
   console.log("[9] manifeste de santé : une seule vérité, écrite et lue partout (§10 (68))");
   // La chaîne complète : ps1 + sh écrivent sante.json (et Die y consigne

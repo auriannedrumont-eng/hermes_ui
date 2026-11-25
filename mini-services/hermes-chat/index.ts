@@ -321,6 +321,33 @@ function broadcastArtifact(conversationId: string, row: ArtifactRow): void {
   });
 }
 
+// ── Auto-réparation de l'aperçu (« mes artefacts ne se chargent plus ») ────
+// La miniature n'est posée sur le wire que si le FICHIER existe
+// (toWireArtifact → existsSync, artifacts.ts). Un échec TRANSITOIRE du rendu
+// (Chrome occupé ou crashé, mise à jour du service en plein rendu, statut
+// « rendering » coincé par un processus tué, dossier de fichiers perdu
+// derrière une base restaurée) laisse donc un artefact SANS miniature et
+// souvent SANS statut d'erreur : le panneau affiche « Aperçu indisponible »
+// pour toujours — le bouton Réessayer des cartes ne couvre que les rangées
+// en « error ». Réparation à la vue : à l'ouverture d'une conversation, tout
+// HTML de dernière version dont la miniature manque est re-rendu (dédupliqué
+// par artefact, fire-and-forget) ; chaque artifact:updated de
+// renderHtmlArtifact met carte et panneau ouverts à jour en direct.
+const rendusEnCours = new Set<string>();
+
+function scheduleMissingRenders(rows: ArtifactRow[]): void {
+  // Dernière version par clé : la carte n'affiche qu'elle (versions[last]) —
+  // on ne déclenche pas N rendus historiques d'un coup.
+  const derniereParCle = new Map<string, ArtifactRow>();
+  for (const r of rows) derniereParCle.set(r.key, r);
+  for (const row of derniereParCle.values()) {
+    if (row.kind !== "html" || rendusEnCours.has(row.id)) continue;
+    if (existsSync(artifactThumbPath(row.id))) continue;
+    rendusEnCours.add(row.id);
+    void renderHtmlArtifact(row).finally(() => rendusEnCours.delete(row.id));
+  }
+}
+
 /** Attache les cartes d'artefacts aux messages d'une conversation.
  *  fullHistory (revue 95) : l'appelant déclare s'il a fourni le fil COMPLET
  *  — l'ancien test `messages.length > 1` rechargeait toute la conversation
@@ -332,6 +359,9 @@ function attachArtifactCards(
 ): void {
   const rows = store.listConversationArtifacts(conversationId);
   if (rows.length === 0) return;
+  // Auto-réparation : re-rendre les HTML dont la miniature manque (cf. le
+  // bloc « Auto-réparation de l'aperçu » ci-dessus) — fire-and-forget.
+  scheduleMissingRenders(rows);
   // P-01 : ids des messages en UN chargement (l'ancien code rechargeait
   // TOUTE la conversation dans artifactAnchor à chaque clé d'artefact).
   // F-29 (perf) : quand l'appelant fournit déjà le fil complet, on s'appuie

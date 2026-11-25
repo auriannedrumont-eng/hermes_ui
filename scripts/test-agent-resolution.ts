@@ -10,7 +10,7 @@
 // HERMES_AGENT_DIR reste pour les tests et les bac à sable.
 // Tout est construit en dossiers temporaires : aucun état du dépôt n'est
 // touché (les marqueurs sont posés puis nettoyés).
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -29,6 +29,21 @@ function poseMarqueur(dir: string) {
 
 async function main() {
   const { resolveAgentDir } = await import("../mini-services/hermes-chat/agent-motor");
+
+  // Étanchéité machine (auto-réparation aperçu, séance « continue ») : un
+  // moteur RÉEL peut être provisionné dans l'interface (clone du lanceur,
+  // symlink de bac à sable) — alors [1] trouverait la maison au lieu de
+  // null et [2]/[3] écriraient leurs marqueurs DANS le vrai moteur (vu en
+  // direct : gateway/run_api.py écrasé à travers un symlink). On met la
+  // maison de côté par RENAME (un rename ne suit pas un symlink) et on la
+  // restitue dans le finally — le test ne suppose plus un checkout nu.
+  const maisonReelle = join(repoRoot, "hermes-agent");
+  let moteurMiseDeCote: string | null = null;
+  if (existsSync(maisonReelle)) {
+    moteurMiseDeCote = join(tmpdir(), `hermes-agent-reel-${Date.now()}`);
+    renameSync(maisonReelle, moteurMiseDeCote);
+    console.log("  (moteur réel provisionné mis de côté pour l'isolement)");
+  }
 
   // Isolation : sans surcharge ni marqueur, la résolution ne doit rien
   // inventer (les vrais emplacements du bac à sable ne sont pas des agents).
@@ -88,6 +103,10 @@ async function main() {
   } finally {
     process.env.HOME = vraiHome;
     rmSync(isolDir, { recursive: true, force: true });
+    if (moteurMiseDeCote) {
+      renameSync(moteurMiseDeCote, maisonReelle);
+      console.log("  (moteur réel provisionné restitué)");
+    }
   }
 
   console.log(failures === 0 ? "\nRésolution agent : 0 échec" : `\nRésolution agent : ${failures} échec(s)`);
