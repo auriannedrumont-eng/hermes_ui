@@ -729,10 +729,12 @@ export class HermesConnector {
   //   3. prompt.submit {session_id, text, submission_id [, attachments]}
   //   <- événements JSON-RPC (method=event) : message.delta (payload.text),
   //      reasoning.delta, tool.* / status.update, message.complete (final).
-  // L'ancienne enveloppe api_turn_v1 est refusée par la gateway. Les réglages
-  // par tour sont limités au contrat fermé du canonical wire : le modèle
-  // demandé passe par model_override ; effort / permissions / prompt système /
-  // mémoire / température ne font pas partie du contrat (ignorés).
+// L'ancienne enveloppe api_turn_v1 est refusée par la gateway. Le contrat
+// par tour est fermé : le modèle demandé passe par model_override ; les
+// instructions du tour (F-11/F-18/F-19/F-30, rôles des voix) partent dans
+// le TEXTE du tour (bloc en tête) — le contrat n'a pas de champ prompt
+// système. Température / maxTokens / graine (F-22) restent hors contrat :
+// jamais transmis (badges « local » à l'écran).
   private async runGatewayTurn(
     req: TurnRequest,
     cb: TurnCallbacks
@@ -777,13 +779,26 @@ export class HermesConnector {
       // honore VRAIMENT — le modèle, son fournisseur (celui de la liste
       // GATEWAY uniquement : une paire modèle×fournisseur incohérente est
       // refusée par le garde amont) et l'échelle d'effort du compositeur
-      // (settings.reasoningEffort). Le reste des réglages (prompt de
-      // conversation, mémoire F-18, température) n'existe pas dans le
-      // contrat prompt.submit : l'écran le DIT au lieu de l'avaler.
+      // (settings.reasoningEffort).
       const override = this.modelOverrideFor(req);
+      // Raccordement des consignes (25/11, demande utilisateur) : le contrat
+      // fermé prompt.submit n'a pas de champ prompt système — l'ancien code
+      // construisait req.systemPrompt (prompt de conversation F-11, consigne
+      // du mode F-30, rôle d'une voix orchestrateur, mémoire F-18,
+      // instructions F-19) puis le JETAIT : l'agent réel n'en voyait rien,
+      // les modes tournaient « à vide ». Ces instructions partent désormais
+      // dans le TEXTE du tour, en bloc en tête clairement délimité — même
+      // esprit que le chemin REST (system_message) et les chats IA web
+      // (prépende au message). La température / maxTokens / graine
+      // (réglages expert F-22) restent hors contrat : aucune transmission
+      // possible, l'écran le dit (badges « local »).
+      const instructions = req.systemPrompt?.trim();
+      const text = instructions
+        ? `${instructions}\n\n---\n\n${req.content}`
+        : req.content;
       const admitted = await submitTurnPrompt(wire, cb.signal, {
         session_id: sid,
-        text: req.content,
+        text,
         submission_id: `hw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         ...(override ? { model_override: override } : {}),
         ...(attachments ? { attachments } : {}),

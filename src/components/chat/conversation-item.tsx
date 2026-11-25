@@ -9,8 +9,10 @@ import { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import {
   Check,
+  FileText,
   Folder,
   FolderInput,
+  Hash,
   Inbox,
   MessageSquare,
   MoreHorizontal,
@@ -43,6 +45,11 @@ export interface ConvItemShared {
   onTogglePin: (id: string) => void;
   onDelete: (id: string) => void;
   onMove: (id: string, projectId: string | null) => void;
+  /** Export Markdown depuis la menu (page.tsx : conversation active ou
+   *  conversations:export pour les autres — le téléchargement reste client). */
+  onExportMarkdown: (id: string) => void;
+  /** Copie l'identifiant complet de la conversation dans le presse-papiers. */
+  onCopyId: (id: string) => void;
   projects: Project[];
 }
 
@@ -58,6 +65,8 @@ export function ConversationItem({
   onOpen,
   setRenamingId,
   onMove,
+  onExportMarkdown,
+  onCopyId,
   projects,
   dndEnabled,
 }: ConvItemShared & {
@@ -227,6 +236,18 @@ export function ConversationItem({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onExportMarkdown(c.id)}>
+              <FileText className="h-3.5 w-3.5" />
+              Exporter en Markdown
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onCopyId(c.id)}>
+              <Hash className="h-3.5 w-3.5" />
+              Copier l&apos;identifiant
+              <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+                {c.id.slice(0, 8)}
+              </span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => onDelete(c.id)}>
               <Trash2 className="h-3.5 w-3.5" />

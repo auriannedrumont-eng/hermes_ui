@@ -61,7 +61,7 @@ import {
   LiveSourceView,
 } from "@/components/chat/artifact-views";
 import { ArtifactTerminal } from "@/components/chat/artifact-terminal";
-import { serviceFetchInit } from "@/lib/service";
+import { FILES_PORT, serviceFetchInit, serviceUrl } from "@/lib/service";
 import { useStreamTurnTools } from "@/lib/stream-store";
 
 // ── Encart terminal du tour porteur (F-29, régression §60) ───────────────
@@ -115,6 +115,11 @@ function ArtifactBody({
   const [wrap, setWrap] = useState(false);
   const [diff, setDiff] = useState(false);
   const [prevSource, setPrevSource] = useState<string | null>(null);
+  // Vue HTML « Aperçu » : interactive (iframe sur la route /view, le jeu ou
+  // la page TOURNE) par défaut, miniature PNG (rendu Chrome) en second.
+  // Le PNG seul était la cause « le jeu ne s'ouvre pas dans l'aperçu » :
+  // un jeu n'est pas une image.
+  const [htmlInteractive, setHtmlInteractive] = useState(true);
   // Reset des vues quand on change d'artefact (état dérivé, pattern React)
   const [viewedKey, setViewedKey] = useState(artifact.key);
   const [viewedVersion, setViewedVersion] = useState(artifact.version);
@@ -124,6 +129,7 @@ function ArtifactBody({
     setMode("preview");
     setDiff(false);
     setPrevSource(null);
+    setHtmlInteractive(true);
   } else if (viewedVersion !== artifact.version) {
     setViewedVersion(artifact.version);
     setDiff(false);
@@ -240,21 +246,41 @@ function ArtifactBody({
   ) : null;
 
   const toggle = hasPreviewToggle ? (
-    <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
-      {(["preview", "code"] as const).map((m) => (
-        <button
-          key={m}
-          onClick={() => setMode(m)}
-          className={`rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
-            mode === m
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          aria-pressed={mode === m}
-        >
-          {m === "preview" ? "Aperçu" : "Code"}
-        </button>
-      ))}
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+        {(["preview", "code"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+              mode === m
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-pressed={mode === m}
+          >
+            {m === "preview" ? "Aperçu" : "Code"}
+          </button>
+        ))}
+      </div>
+      {artifact.kind === "html" && mode === "preview" ? (
+        <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+          {([true, false] as const).map((v) => (
+            <button
+              key={String(v)}
+              onClick={() => setHtmlInteractive(v)}
+              className={`rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+                htmlInteractive === v
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              aria-pressed={htmlInteractive === v}
+            >
+              {v ? "Interactif" : "Miniature"}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   ) : null;
 
@@ -262,11 +288,23 @@ function ArtifactBody({
   if (artifact.kind === "html") {
     body =
       mode === "preview" ? (
-        artifact.thumbnailUrl ? (
+        htmlInteractive && artifact.viewUrl ? (
+          // Vue interactive : la page RENDUE (route /view publique, sans
+          // jeton — S-01 : un script de la page lit location.search) tourne
+          // dans le panneau, comme un navigateur. key par version : une
+          // nouvelle version recharge la vue.
+          <iframe
+            key={`${artifact.id}-${artifact.version}`}
+            src={serviceUrl(artifact.viewUrl, FILES_PORT, { auth: false })}
+            title={`Aperçu interactif de ${artifact.name}`}
+            allow="autoplay; fullscreen; clipboard-write"
+            className="min-h-0 flex-1 border-0 bg-background"
+          />
+        ) : artifact.thumbnailUrl ? (
           <ImageView src={artifactUrl(artifact.thumbnailUrl)} alt={`Aperçu de ${artifact.name}`} />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-            Aperçu indisponible.
+            Miniature indisponible — la vue « Interactif » reste disponible.
           </div>
         )
       ) : (

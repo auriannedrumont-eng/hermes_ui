@@ -43,54 +43,135 @@ import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import type { Artifact, ChatMessage, ModeFlowRow, ToolEvent, WebSource } from "@/lib/chat-types";
 import type { ConversationMode } from "@/lib/modes";
 
-function ToolEventRow({ event }: { event: ToolEvent }) {
+/** Groupe d'outils du tour — UNE ligne discrète (idiome Pastille du repo)
+ *  qui résume l'activité outil ; le détail se déplie au chevron. L'ancien
+ *  rendu empilait une carte par événement : dix outils = dix blocs, le fil
+ *  devenait illisible. Ouvert automatiquement tant qu'un outil tourne
+ *  (suivi en direct), refermé quand tout est fini ; un choix manuel de
+ *  l'utilisateur reste maître jusqu'à la transition suivante. */
+function ToolEventsGroup({ events }: { events: ToolEvent[] }) {
+  const runningCount = events.filter((e) => e.status === "running").length;
+  const errorCount = events.filter((e) => e.status === "error").length;
+  const current = [...events].reverse().find((e) => e.status === "running");
+  const running = runningCount > 0;
+  // Suivi vivant : ouvert tant qu'un outil tourne, refermé quand c'est fini —
+  // état dérivé ajusté PENDANT le rendu (pattern du repo, règles set-state-
+  // in-effect / refs-during-render). `override` porte le choix manuel, remis
+  // à zéro à chaque transition running → fini (l'auto reprend la main).
+  const [override, setOverride] = useState<boolean | null>(null);
+  const [prevRunning, setPrevRunning] = useState(running);
+  if (prevRunning !== running) {
+    setPrevRunning(running);
+    setOverride(null);
+  }
+  const open = override ?? running;
+  if (events.length === 0) return null;
+  const label = running
+    ? `Outil en cours — ${current?.name ?? "…"}`
+    : `${events.length} outil${events.length > 1 ? "s" : ""} utilisé${events.length > 1 ? "s" : ""}`;
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12.5px]">
-      <Wrench className="h-3.5 w-3.5 shrink-0 text-hermes-text" />
-      <span className="font-mono">{event.name}</span>
-      {event.detail ? (
-        <span className="truncate text-muted-foreground">— {event.detail}</span>
-      ) : null}
-      {event.status === "running" ? (
-        <Loader2 className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-      ) : (
-        <Check
-          className={`ml-auto h-3.5 w-3.5 shrink-0 ${
-            event.status === "error" ? "text-destructive" : "text-success"
-          }`}
-        />
-      )}
-    </div>
-  );
-}
-
-function ReasoningBlock({
-  reasoning,
-  defaultOpen = false,
-}: {
-  reasoning: string;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (!reasoning.trim()) return null;
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible open={open} onOpenChange={(o) => setOverride(o)}>
       <CollapsibleTrigger asChild>
         <button
-          className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted"
+          className="flex w-fit items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-expanded={open}
         >
-          <Brain className="h-3.5 w-3.5 text-hermes-text" />
-          Raisonnement
+          {running ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-hermes-text" />
+          ) : (
+            <Wrench className="h-3.5 w-3.5 text-hermes-text" />
+          )}
+          <span className="truncate">{label}</span>
+          {errorCount > 0 ? (
+            <span className="text-destructive">· {errorCount} en erreur</span>
+          ) : null}
           <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+            className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
           />
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <p className="mt-2 whitespace-pre-wrap border-l-2 border-hermes/50 pl-3 text-[12.5px] italic leading-relaxed text-muted-foreground">
-          {reasoning}
-        </p>
+        <div className="mt-1.5 space-y-0.5 border-l border-border/60 pl-3">
+          {events.map((ev, i) => (
+            <div
+              key={`${ev.name}-${i}`}
+              className="flex items-center gap-2 text-[12.5px] text-muted-foreground"
+            >
+              {ev.status === "running" ? (
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+              ) : ev.status === "error" ? (
+                <X className="h-3 w-3 shrink-0 text-destructive" />
+              ) : (
+                <Check className="h-3 w-3 shrink-0 text-success" />
+              )}
+              <span className="shrink-0 font-mono text-foreground/80">{ev.name}</span>
+              {ev.detail ? (
+                <span className="truncate">— {ev.detail}</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/** Raisonnement — bloc repliable qui se remplit EN DIRECT pendant le tour
+ *  (idiome Claude) : ouvert dès que l'agent réfléchit, refermé quand la
+ *  réponse commence à écrire, rouvrable à tout moment par le chevron.
+ *  Le corps est borné en hauteur avec défilement (et suit le bas du texte
+ *  pendant le stream) : un raisonnement long ne pousse plus la réponse
+ *  hors de l'écran. */
+function ReasoningBlock({
+  reasoning,
+  live = false,
+  answerStarted = false,
+}: {
+  reasoning: string;
+  live?: boolean;
+  answerStarted?: boolean;
+}) {
+  const thinking = live && !answerStarted;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // Ouvert pendant que l'agent réfléchit, refermé quand la réponse commence
+  // — état dérivé ajusté PENDANT le rendu (pattern du repo, règles set-
+  // state-in-effect / refs-during-render). `override` porte le choix
+  // manuel, remis à zéro à la transition pensée → réponse.
+  const [override, setOverride] = useState<boolean | null>(null);
+  const [prevThinking, setPrevThinking] = useState(thinking);
+  if (prevThinking !== thinking) {
+    setPrevThinking(thinking);
+    setOverride(null);
+  }
+  const open = override ?? thinking;
+  // Suivi du bas du texte pendant le stream (seulement si déplié).
+  useEffect(() => {
+    if (open && live) bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
+  }, [reasoning, open, live]);
+  if (!reasoning.trim()) return null;
+  return (
+    <Collapsible open={open} onOpenChange={(o) => setOverride(o)}>
+      <CollapsibleTrigger asChild>
+        <button
+          className="flex w-fit items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-expanded={open}
+        >
+          <Brain className="h-3.5 w-3.5 text-hermes-text" />
+          {thinking ? <span className="animate-pulse">Raisonnement…</span> : "Raisonnement"}
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div
+          ref={bodyRef}
+          className="mt-1.5 max-h-56 overflow-y-auto border-l-2 border-hermes/50 pl-3"
+        >
+          <p className="whitespace-pre-wrap text-[12.5px] italic leading-relaxed text-muted-foreground">
+            {reasoning}
+          </p>
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -440,17 +521,15 @@ export const MessageBubble = memo(function MessageBubble({
             showModels={showFlowModels}
           />
         ) : null}
-        {tools.length > 0 ? (
-          <div className="space-y-1.5">
-            {tools.map((ev, i) => (
-              <ToolEventRow key={`${ev.name}-${i}`} event={ev} />
-            ))}
-          </div>
+        {reasoning ? (
+          <ReasoningBlock
+            reasoning={reasoning}
+            live={isStreaming}
+            answerStarted={isStreaming && !!content}
+          />
         ) : null}
 
-        {reasoning ? (
-          <ReasoningBlock reasoning={reasoning} defaultOpen={isStreaming} />
-        ) : null}
+        {tools.length > 0 ? <ToolEventsGroup events={tools} /> : null}
 
         {waitingFirstToken ? (
           <div className="flex items-center gap-2 py-1 text-[14px] text-muted-foreground">

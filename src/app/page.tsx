@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, X } from "lucide-react";
 import { flashTitle, playCompletionBeep, setGeneratingTitle } from "@/lib/notify";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
-import type { Artifact, ShareView, TurnTools } from "@/lib/chat-types";
+import type { Artifact, ConversationMeta, ChatMessage, ShareView, TurnTools } from "@/lib/chat-types";
 
 const SIDEBAR_WIDTH_KEY = "fork.ui.sidebar.width"; // registre des réglages (FORK.md §6)
 
@@ -315,6 +315,68 @@ export default function HermesWebPage() {
     [activeConversation, chat.messages, toast]
   );
 
+  // ── Menu conversation (sidebar) : export Markdown d'UNE conversation ──
+  // La conversation active réutilise le fil déjà chargé ; les autres passent
+  // par conversations:export (lecture seule — ouvrir déplacerait la
+  // conversation active). Le téléchargement reste côté client (export.ts).
+  const handleSidebarExport = useCallback(
+    (id: string) => {
+      const conv = chat.conversations.find((c) => c.id === id);
+      if (!conv) return;
+      const finish = (messages: ChatMessage[], conversation: ConversationMeta) => {
+        try {
+          exportMarkdown(conversation, messages);
+          toast({ title: "Export téléchargé", description: "Fichier Markdown généré." });
+        } catch (err) {
+          toast({
+            title: "Échec de l'export",
+            description: err instanceof Error ? err.message : undefined,
+            variant: "destructive",
+          });
+        }
+      };
+      if (id === chat.activeId) {
+        finish(chat.messages, conv);
+        return;
+      }
+      getSocket().emit(
+        "conversations:export",
+        { id },
+        (res: { conversation?: ConversationMeta; messages?: ChatMessage[]; error?: string }) => {
+          if (res?.error || !res.conversation || !res.messages) {
+            toast({
+              title: "Échec de l'export",
+              description: res?.error ?? "Conversation introuvable",
+              variant: "destructive",
+            });
+            return;
+          }
+          finish(res.messages, res.conversation);
+        },
+      );
+    },
+    [chat.conversations, chat.activeId, chat.messages, toast]
+  );
+
+  // ── Menu conversation (sidebar) : copie de l'identifiant ────────────
+  const handleCopyConversationId = useCallback(
+    (id: string) => {
+      navigator.clipboard
+        .writeText(id)
+        .then(() => toast({ title: "Identifiant copié", description: id }))
+        .catch(() => {
+          // Presse-papiers refusé (HTTP non sécurisé, permission…) : le
+          // motif réel s'affiche au lieu d'un silence.
+          toast({
+            title: "Copie impossible",
+            description: "Le presse-papiers est indisponible dans ce navigateur.",
+            variant: "destructive",
+          });
+        });
+    },
+    [toast]
+  );
+
   // ── Raccourcis clavier globaux ─────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -417,6 +479,8 @@ export default function HermesWebPage() {
       onSetProjectArchived={chat.setProjectArchived}
       onReorderProjects={chat.reorderProjects}
       onMoveConversation={chat.moveConversation}
+      onExportConversation={handleSidebarExport}
+      onCopyConversationId={handleCopyConversationId}
       onOpenSettings={() => {
         setSettingsOpen(true);
         setMobileOpen(false); // mobile : le sheet remplace la sidebar

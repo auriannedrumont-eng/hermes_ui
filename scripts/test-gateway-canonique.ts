@@ -22,7 +22,11 @@
 //       session.resume par l'id DURABLE — la conversation retrouve sa
 //       session, create reste à 1 ;
 //   [9] battement de cœur : gateway.ping périodique vu sur le canal
-//       vivant entre les tours (15 s, cadence C5).
+//       vivant entre les tours (15 s, cadence C5) ;
+//   [10] raccordement des consignes (25/11) : le prompt de conversation
+//       voyage DANS le texte de prompt.submit (contrat sans champ prompt
+//       système — l'ancien code le jetait) et la soumission ne porte
+//       aucun param hors contrat.
 import { io } from "socket.io-client";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -300,6 +304,37 @@ async function main() {
     const pingsBefore = stats.pings;
     await wait(16_500);
     check("[9] gateway.ping vu entre les tours", stats.pings > pingsBefore, `pings=${stats.pings} (avant ${pingsBefore})`);
+
+    // ── [10] Raccordement des consignes (25/11) : le prompt de conversation
+    // part dans le TEXTE du tour — le contrat fermé prompt.submit n'a pas de
+    // champ prompt système et l'ancien code construisait req.systemPrompt
+    // puis le JETAIT (les modes tournaient à vide sur l'agent réel).
+    await emitAck(socket, "system-prompt:set", {
+      conversationId: cid,
+      content: "CONSIGNE-CANONIQUE : réponds en haïku.",
+    });
+    const t10 = awaitTurn(socket, cid);
+    await emitAck(socket, "chat:send", { conversationId: cid, content: "message consigné" });
+    const r10 = await t10;
+    check("[10] tour avec consigne achevé", r10.kind === "done", `${r10.kind}: ${r10.error.slice(0, 90)}`);
+    const text10 = String(stats.submits[stats.submits.length - 1]?.text ?? "");
+    check(
+      "[10] la CONSIGNE voyage dans le texte soumis",
+      text10.includes("CONSIGNE-CANONIQUE"),
+      JSON.stringify(text10.slice(0, 90))
+    );
+    check(
+      "[10] le message utilisateur suit le bloc d'instructions",
+      text10.includes("---") && text10.trimEnd().endsWith("message consigné"),
+      JSON.stringify(text10.slice(-60))
+    );
+    const ALLOWED_SUBMIT_KEYS = new Set(["session_id", "text", "submission_id", "model_override", "attachments"]);
+    const keys10 = Object.keys(stats.submits[stats.submits.length - 1] ?? {});
+    check(
+      "[10] aucun param hors contrat (garde invalid_params du vrai moteur)",
+      keys10.length > 0 && keys10.every((k) => ALLOWED_SUBMIT_KEYS.has(k)),
+      keys10.join(",")
+    );
   } catch (err) {
     failures++;
     console.error("Erreur du test :", err instanceof Error ? err.message : err);

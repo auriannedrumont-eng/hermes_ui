@@ -202,6 +202,26 @@ socket.on("conversations:open", (payload: { id?: string }, cb?: (data: unknown) 
   else socket.emit("conversations:messages", { conversationId: id, messages, compact, live });
 });
 
+// Export Markdown (menu de la sidebar) : lecture seule — la conversation et
+// son fil sans effet de bord (conversations:open change la conversation
+// active côté client ; ici l'export d'une conversation en arrière-plan ne
+// doit rien déplacer). Mêmes gardes que conversations:open.
+socket.on("conversations:export", (payload: { id?: string }, cb?: (data: unknown) => void) => {
+  const id = payload?.id;
+  if (!id) {
+    if (typeof cb === "function") cb({ error: "conversationId requis" });
+    return;
+  }
+  const conversation = ctx.store.getConversation(id);
+  if (!conversation) {
+    if (typeof cb === "function") cb({ error: "Conversation introuvable" });
+    return;
+  }
+  const messages = ctx.store.getMessages(id);
+  ctx.attachArtifactCards(id, messages, true);
+  if (typeof cb === "function") cb({ conversation, messages });
+});
+
 // ── Artefacts ─────────────────────────────────────────────────────────
 
 // Toutes les versions d'artefacts d'une conversation (métadonnées, sans contenu)

@@ -306,23 +306,30 @@ function handleArtifactFile(
     const name = encodeURIComponent(row.name);
     if (action === "view" && row.kind === "html") {
       // Vue « nouvel onglet » du HTML : servi rendu (text/html) derrière un
-      // bac à sable CSP — origine opaque, ni cookies ni stockage ni jetons de
-      // l'application accessibles. /raw reste texte brut (img, fetch panel).
+      // bac à sable CSP — ni cookies ni jetons de l'application accessibles.
+      // /raw reste texte brut (img, fetch panel).
       // S-01 : cette page est publique (route exemptée de jeton) — le HTML
       // généré par le LLM s'exécute AVEC scripts : un jeton dans l'URL serait
-      // lisible par window.location.search et exfiltrable. On boucle en plus
-      // toutes les sorties réseau explicites (default-src/connect-src
-      // 'none') et on coupe le Referer : un script qui tenterait d'exfiltrer
-      // quoi que ce soit (jeton, contenu) vers l'extérieur est bloqué par la
-      // CSP même s'il arrive à lire la barre d'adresse.
-      // S-03 : plus de allow-forms / allow-popups — sans form-action 'none'
-      // ni restriction de navigation, une soumission de formulaire ou un
-      // window.open() permettait d'exfiltrer vers une origine tierce.
+      // lisible par window.location.search et exfiltrable. On coupe les
+      // sorties réseau vers des ORIGINES (connect-src data:/blob: seulement —
+      // pas de http/https/ws) et le Referer : toute exfiltration vers
+      // l'extérieur est bloquée par la CSP même si le script lit la barre
+      // d'adresse.
+      // S-03 : pas de allow-forms / allow-popups — form-action 'none' coupe
+      // la soumission, default-src 'none' coupe les navigations.
+      // Jeux HTML (vue interactive du panneau, 2026-11-25) : le bac à sable
+      // strict cassait les pages autonomes normales — localStorage levait
+      // une SecurityError (origine opaque, hautscores perdus), l'audio était
+      // bloqué (media-src), les Web Workers blob: rejetés. allow-same-origin
+      // redonne un stockage fonctionnel : l'origine est celle du 3004 local,
+      // qui ne porte AUCUNE donnée applicative (le service est côté serveur,
+      // l'app vit sur une autre origine) — le compromis est borné à la
+      // machine de l'utilisatrice.
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Length": Buffer.byteLength(row.content, "utf-8"),
         "Content-Security-Policy":
-          "sandbox allow-scripts allow-modals; default-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+          "sandbox allow-scripts allow-modals allow-same-origin; default-src 'none'; form-action 'none'; base-uri 'none'; img-src data: blob:; media-src data: blob:; font-src data: blob:; style-src 'unsafe-inline' data: blob:; script-src 'unsafe-inline' data: blob:; worker-src blob:; connect-src data: blob:",
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
       });

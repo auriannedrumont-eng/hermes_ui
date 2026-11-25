@@ -328,6 +328,13 @@ function startService(): Promise<ChildProcess> {
     HERMES_CHAT_PORT: "3356",
     HERMES_CHAT_FILES_PORT: "3357",
     HERMES_CHAT_DB: join(DB_DIR, "hermes-chat.sqlite"),
+    // Le service mintera son ticket via le MÊME moteur que celui démarré
+    // par ce harnais : resolveAgentDir ne connaît que <repo>/hermes-agent
+    // (§9 (65)) alors que le harnais accepte aussi le dépôt SIBLING — sans
+    // cette surcharge documentée « pour les tests et les bac à sable »,
+    // un moteur sibling démarrait vert puis le service restait « local »
+    // (mint par le python système sans ruamel → null → HERMES_OFFLINE).
+    HERMES_AGENT_DIR: ENGINE_DIR,
   };
   // AUCUNE couture : le mint du ticket passe par le chemin python réel.
   delete env.HERMES_GATEWAY_ATTACH_JSON;

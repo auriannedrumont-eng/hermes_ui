@@ -90,6 +90,10 @@ interface SidebarProps {
   onSetProjectArchived: (id: string, archived: boolean) => void;
   onReorderProjects: (ids: string[]) => void;
   onMoveConversation: (id: string, projectId: string | null) => void;
+  /** Menu conversation : export Markdown (téléchargé côté client). */
+  onExportConversation: (id: string) => void;
+  /** Menu conversation : copie l'identifiant de la conversation. */
+  onCopyConversationId: (id: string) => void;
   /** Ouvre le sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
   onOpenSettings: () => void;
 }
@@ -908,6 +912,8 @@ export function Sidebar({
   onSetProjectArchived,
   onReorderProjects,
   onMoveConversation,
+  onExportConversation,
+  onCopyConversationId,
   onOpenSettings,
 }: SidebarProps) {
   const [query, setQuery] = useState("");
@@ -1098,6 +1104,8 @@ export function Sidebar({
       if (c) setDeleteConvTarget(c);
     },
     onMove: onMoveConversation,
+    onExportMarkdown: onExportConversation,
+    onCopyId: onCopyConversationId,
     projects,
   };
   // ── Dossiers : actions locales ────────────────────────────────────
@@ -1224,6 +1232,8 @@ export function Sidebar({
       if (c) setDeleteConvTarget(c);
     },
     onMove: onMoveConversation,
+    onExportMarkdown: onExportConversation,
+    onCopyId: onCopyConversationId,
     projects,
   };
   return (

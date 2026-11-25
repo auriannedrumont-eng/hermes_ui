@@ -27,9 +27,11 @@ export interface TurnSettings {
   reasoningEffort?: string;
   /** ask : confirmation avant chaque action · auto : tout exécuter. */
   permissionsMode?: "ask" | "auto";
-  // ── Mémoire utilisateur (F-18) — transmis au moteur réel ───────────
-  /** Notes de mémoire actives pour ce tour (undefined si mémoire coupée). */
-  memoryNotes?: string;
+  // ── Mémoire utilisateur (F-18) ─────────────────────────────────────
+  // Les NOTES de mémoire voyagent dans systemPrompt des deux moteurs
+  // (composeLocalSystemPrompt / gatewayContextSection) — pas ici : le champ
+  // memoryNotes de ce littéral n'était lu par aucun connecteur (constat
+  // 25/11). Seul l'apprentissage reste un réglage de tour.
   /** Apprentissage automatique demandé au moteur. */
   memoryAutoLearn?: boolean;
   // ── Mode expert (F-22) — température, plafond de sortie, graine ────

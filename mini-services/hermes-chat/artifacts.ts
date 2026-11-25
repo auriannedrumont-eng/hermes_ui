@@ -436,7 +436,24 @@ export class ArtifactTracker {
     this.update(fullContent);
     const rows: ArtifactRow[] = [];
     for (const t of this.tracked.values()) {
-      if (!t.complete && aborted) {
+      if (!t.complete && !aborted) {
+        // Tour terminé NORMALEMENT et bloc jamais refermé (l'agent a oublié
+        // la ligne de backticks) : la fin du message CLÔT le bloc — sinon la
+        // carte restait « generating » pour toujours (aperçu mort sans
+        // erreur ni bouton). Même transition qu'une clôture normale dans
+        // update() : contenu déjà persisté par le update() d'entrée.
+        t.complete = true;
+        const isHtml = t.row.kind === "html";
+        const row = this.store.updateArtifact(t.row.id, {
+          status: isHtml ? "rendering" : "ready",
+          statusLabel: isHtml ? "Rendu de l'aperçu (Chrome)…" : null,
+        });
+        if (row) {
+          t.row = row;
+          this.events.onUpdated(toWireArtifact(row));
+          if (isHtml) this.events.onHtmlReady(row);
+        }
+      } else if (!t.complete && aborted) {
         const row = this.store.updateArtifact(t.row.id, {
           status: "error",
           statusLabel: null,

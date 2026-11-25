@@ -41,11 +41,11 @@ interface HermesSectionProps {
   /** v2.4 — fenêtre du modèle sélectionné (carte Conversations longues). */
   models: ModelOption[];
   selectedModel: string | null;
-  /** C6 (25/11) : true = l'agent Hermes est branché (mode gateway) — les
-   *  réglages de cette section (instructions, mémoire) restent utiles au
-   *  moteur LOCAL mais ne partent PAS au moteur agent : le contrat
-   *  prompt.submit ne les reçoit pas. L'écran le dit au lieu de l'avaler
-   *  en silence (constat n°6 du plan de correction). */
+  /** C6 (25/11) puis raccordement (25/11, séance modes) : true = l'agent
+   *  Hermes est branché (mode gateway). Instructions (F-19) et mémoire
+   *  (F-18) partent DÉSORMAIS à l'agent — bloc d'instructions en tête du
+   *  texte du tour (le contrat prompt.submit n'a pas de champ prompt
+   *  système), system_message sur le chemin REST sessions natives. */
   engineGateway: boolean;
 }
 
@@ -362,9 +362,10 @@ export function HermesSection({
       {/* ── Mémoire utilisateur (F-18) ─────────────────────────────── */}
       <div className="mt-4">
         {engineGateway && (
-          <div className="mb-1.5 text-[11.5px] leading-snug text-warning">
-            Mémoire sans effet sur l'agent Hermes branché — voir la
-            configuration du profil de l'agent (C6).
+          <div className="mb-1.5 text-[11.5px] leading-snug text-muted-foreground">
+            Transmise à l&apos;agent Hermes branché à chaque tour — bloc
+            d&apos;instructions en tête du message (contrat gateway sans
+            champ prompt système).
           </div>
         )}
         <MemoryCard

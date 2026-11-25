@@ -185,6 +185,36 @@ function localSystemPrompt(conversationId: string): string {
   });
 }
 
+/** Contexte transmis à l'agent RÉEL (gateway) — tout sauf le prompt de base
+ *  local (la gateway garde ses instructions propres). Le contrat fermé
+ *  prompt.submit n'a PAS de champ prompt système : ces sections partent dans
+ *  le TEXTE du tour (bloc en tête posé par hermes-connector) ou dans le
+ *  system_message du chemin REST sessions natives. Y compris la mémoire F-18
+ *  (si active) et les instructions F-19 — avant ce chantier, elles étaient
+ *  construites puis JETÉES sur le chemin WS : l'agent n'en voyait rien.
+ *  Libellés de sections identiques à composeLocalSystemPrompt ; recomposé à
+ *  chaque envoi. */
+function gatewayContextSection(conversationId: string): string | null {
+  const sections: string[] = [];
+  const memory = store.getSettingBool(MEMORY_ENABLED_KEY, true)
+    ? (store.getSetting(MEMORY_NOTES_KEY) ?? "").trim()
+    : "";
+  if (memory) {
+    sections.push(
+      `Mémoire de l'utilisateur (ce qu'Hermes retient des échanges) :\n${memory}`
+    );
+  }
+  const custom = (store.getSetting(CUSTOM_INSTRUCTIONS_KEY) ?? "").trim();
+  if (custom) {
+    sections.push(`Instructions personnalisées de l'utilisateur :\n${custom}`);
+  }
+  const conv = (store.getConversationPrompt(conversationId)?.content ?? "").trim();
+  if (conv) {
+    sections.push(`Prompt système de cette conversation :\n${conv}`);
+  }
+  return sections.join("\n\n") || null;
+}
+
 // ── Modes du compositeur (F-30) — le service fait foi, relu à chaque envoi ──
 
 /** État du mode d'une conversation : mode résolu (inconnu → chat), tours
@@ -1080,10 +1110,13 @@ const runAssistantTurn = async (
           modelId: opts.modelId ?? null,
           // C-07 : instructions locales composées (base + mémoire F-18 +
           // instructions F-19 + prompt de conversation F-11) — chaque
-          // voix les reçoit au-dessus de sa consigne de rôle.
+          // voix les reçoit au-dessus de sa consigne de rôle. En gateway :
+          // le contexte réel (mémoire F-18 + instructions F-19 + prompt F-11,
+          // sans la base locale) — l'orchestrateur le compose au-dessus de la
+          // consigne de rôle et le connecteur le transmet à l'agent.
           localSystemPrompt: connector.mode === "local"
             ? localSystemPrompt(conversationId)
-            : (store.getConversationPrompt(conversationId)?.content ?? null),
+            : gatewayContextSection(conversationId),
           // C-07/F-09 : sources web du tour (si le bouton Web est actif).
           webSearchSection: webSources ? webSearchSection(webSources) : null,
           userContent: opts.content,
@@ -1215,20 +1248,22 @@ const runAssistantTurn = async (
         modelId: turnModelId,
         attachments,
         motorSessionId,
-        // Réglages du tour : effort/permissions du composer + mémoire
-        // utilisateur (F-18) — les notes ne partent que si la mémoire est
-        // active (mode gateway ; en local elles vivent dans systemPrompt).
+        // Réglages du tour : effort/permissions du composer + apprentissage
+        // mémoire (F-18, exploité par le moteur). Les NOTES de mémoire ne
+        // passent plus ici : elles vivent dans systemPrompt des DEUX moteurs
+        // (local composeLocalSystemPrompt / gateway gatewayContextSection) —
+        // l'ancien champ memoryNotes de ce littéral n'était lu par AUCUN
+        // connecteur (construit puis jeté, constat du 25/11).
         settings: {
           ...opts.settings,
-          memoryNotes:
-            store.getSettingBool(MEMORY_ENABLED_KEY, true)
-              ? (store.getSetting(MEMORY_NOTES_KEY) ?? "").trim() || undefined
-              : undefined,
           memoryAutoLearn: store.getSettingBool(MEMORY_AUTO_KEY, false),
         },
         // Instructions système du tour (F-11/F-19) : composées par le
-        // service sans agent (pool de clés) ; en mode gateway, le prompt de
-        // conversation part seul (la gateway garde ses instructions de base).
+        // service sans agent (pool de clés) ; en mode gateway, le CONTEXTE
+        // réel (mémoire F-18 + instructions F-19 + prompt de conversation
+        // F-11 — gatewayContextSection) + la consigne du mode F-30. Le
+        // connecteur transmet cet ensemble à l'agent : system_message sur
+        // le chemin REST, bloc en tête du texte sur le chemin WS.
         // F-12 : les résultats de recherche web sont ajoutés en fin de
         // prompt système du tour local (pool).
         // F-30 : la consigne du mode (chat/plan/code) est ajoutée dans les
@@ -1239,9 +1274,9 @@ const runAssistantTurn = async (
               (modeSection ? `\n\n${modeSection}` : "") +
               (webSources ? webSearchSection(webSources) : "")
             : (() => {
-                const conv = store.getConversationPrompt(conversationId)?.content ?? null;
-                const withMode = conv || modeSection
-                  ? [conv ?? "", modeSection].filter(Boolean).join("\n\n")
+                const gatewayCtx = gatewayContextSection(conversationId);
+                const withMode = gatewayCtx || modeSection
+                  ? [gatewayCtx ?? "", modeSection].filter(Boolean).join("\n\n")
                   : null;
                 return withMode || null;
               })(),
