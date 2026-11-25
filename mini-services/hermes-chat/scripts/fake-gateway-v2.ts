@@ -47,8 +47,8 @@ export interface FakeGatewayStats {
   /** Une entrée par prompt.submit : le corps exact reçu (le harnais
    *  y asserte model_override C6, les attachments C3, session_id). */
   submits: Array<Record<string, unknown>>;
-  /** Une entrée par image.attach_bytes. */
-  attaches: Array<{ filename: string; ext: string; bytes: number }>;
+  /** Une entrée par image.attach_bytes (session_id exigée, journal 19). */
+  attaches: Array<{ filename: string; ext: string; bytes: number; session_id: string }>;
 }
 
 interface FakeSession {
@@ -153,6 +153,14 @@ export function startFakeGateway(port = 9321, slowMs = 600): FakeGateway {
         }
         case "image.attach_bytes": {
           const p = req?.params ?? {};
+          // Journal 19 (moteur réel) : le moteur exige session_id dans les
+          // params (_sess_building) — sans lui, 4000 invalid_params. La
+          // fausse DOIT refuser pareil, sinon elle validerait un contrat
+          // que le vrai moteur rejette.
+          if (typeof p?.session_id !== "string" || !p.session_id || !bySid.has(p.session_id)) {
+            replyError(ws, req.id, 4000, "invalid_params: session_id requis (contrat moteur)");
+            return;
+          }
           const b64 = String(p?.content_base64 ?? "");
           // Longueur DÉCODÉE (padding compris) — ce que le moteur reçoit.
           const bytes =
@@ -162,6 +170,7 @@ export function startFakeGateway(port = 9321, slowMs = 600): FakeGateway {
             filename: String(p?.filename ?? "?"),
             ext: String(p?.ext ?? "?"),
             bytes,
+            session_id: p.session_id,
           });
           reply(ws, req.id, {
             attached: true,

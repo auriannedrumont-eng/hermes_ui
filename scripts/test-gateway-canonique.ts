@@ -218,10 +218,11 @@ async function main() {
     const r5 = await t5;
     check("[5] tour avec image achevé", r5.kind === "done", `${r5.kind}: ${r5.error.slice(0, 120)}`);
     check(
-      "[5] image.attach_bytes reçu (octets complets)",
+      "[5] image.attach_bytes reçu (octets complets, SUR la session)",
       stats.attaches.length === 1 &&
         stats.attaches[0].filename === IMAGE_NAME &&
-        stats.attaches[0].bytes === imageBytes.length,
+        stats.attaches[0].bytes === imageBytes.length &&
+        stats.attaches[0].session_id === stats.submits[stats.submits.length - 1]?.session_id,
       JSON.stringify(stats.attaches)
     );
     const submitted = stats.submits[stats.submits.length - 1]?.attachments as any[] | undefined;

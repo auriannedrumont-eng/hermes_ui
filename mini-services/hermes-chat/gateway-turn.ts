@@ -49,13 +49,16 @@ export async function submitTurnPrompt(
   wire: GatewayWire,
   signal: AbortSignal,
   params: Record<string, unknown>
-): Promise<void> {
+): Promise<any> {
   try {
-    await wire.rpc("prompt.submit", params);
+    // Journal 19 : le reçu d'admission (admission_id, status…) est RENDU —
+    // le connecteur le retient pour solder une éventuelle exécution
+    // « unknown » à la reconnexion après un crash moteur.
+    return await wire.rpc("prompt.submit", params);
   } catch (err) {
     if (!isBusyRefusal(err) || signal.aborted) throw err;
     await sleep(BUSY_RETRY_MS);
-    await wire.rpc("prompt.submit", params);
+    return await wire.rpc("prompt.submit", params);
   }
 }
 

@@ -314,3 +314,26 @@ crapper --changed --no-coverage
 ```
 
 Lecture : en `--no-coverage`, la colonne CC est la métrique de pilotage — c'est elle que les budgets bornent. Un dépassement à la clôture exige une entrée de journal §9 qui le justifie.
+
+## 9. Post-scriptum — validation sur moteur réel (2026-11-25, journal (19))
+
+Les sept chantiers livrés (jalons 1 et 2, commits `6017d92` et `7cab9f1`), la QA
+reposait encore sur `fake-gateway-v2`. Le dernier maillon — le **vrai moteur
+hermes-agent** — a été branché en direct : `scripts/test-gateway-reel.ts` démarre
+`gateway run` (HERMES_HOME = `data/` de l'interface), simule uniquement le
+backend LLM (`scripts/mock-llm-provider.py`, recette des e2e Desktop) et lance
+le service **sans aucune couture** : le connecteur minte son ticket par le
+chemin python réel. La confrontation a révélé **quatre divergences** entre le
+contrat simulé et le contrat réel, toutes corrigées :
+
+| # | Divergence découverte | Correctif |
+|---|---|---|
+| 1 | `image.attach_bytes` exige `session_id` dans les params (`session_registry._sess_building`) — refus 4000 sinon | RPC d'attach lié à la session dans `runGatewayTurn` ; la fausse gateway exige désormais pareil (le canonique asserte) |
+| 2 | Les routes HTTP (`/api/model/options`) exigent un ticket `native-http` (en-tête `x-hermes-gateway-ticket`, usage unique, mint sur le socket de contrôle `gateway.sock`) | Nouveau module `gateway-http-ticket.ts` (le service compose le socket en direct) ; `parseModelOptions` préfère le **slug** du provider |
+| 3 | Crash en plein tour → admission « unknown » → FIFO en pause : le tour suivant ne part jamais (silence) | `submitTurnPrompt` rend le reçu d'admission ; à la reconnexion, `ensureWireSession` solde par `prompt.receipt` → `prompt.resolve_unknown` |
+| 4 | SIGTERM = arrêt gracieux (drain du tour en vol), pas une coupure | Le harnais coupe en SIGKILL pour le scénario de coupure |
+
+Vérifications finales : **canonique 31/31, moteur réel 18/18, Vitest 144/144,
+tsc 0 erreur, eslint 0 problème**. La leçon d'ensemble rejoint celle du
+chantier C5 : un simulateur, même canonique, ne remplace pas la confrontation
+directe — le kit moteur réel rejoint la suite autonome comme barre à tenir.

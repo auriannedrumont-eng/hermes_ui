@@ -76,7 +76,7 @@ tools/
 # copie fraîche de l'agent clonée par le lanceur DANS le dossier de
 # l'application (§9 (63)/(65)/(66)) — dépôt séparé, jamais versionné
 # par l'interface, exclu de son build
-/hermes-agent/
+/hermes-agent
 
 
 # caches locaux du lanceur ((91) : home/appdata/localappdata du dossier)

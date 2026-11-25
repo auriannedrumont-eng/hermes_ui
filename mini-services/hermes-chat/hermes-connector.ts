@@ -23,6 +23,7 @@ import type { GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./local-engine";
 import { runRestTurn } from "./motor-rest";
 import { buildGatewayAttachments } from "./gateway-attachments";
+import { mintNativeHttpTicket } from "./gateway-http-ticket";
 import { GatewayChannel, openGatewaySocket } from "./gateway-channel";
 import type { GatewayWire } from "./gateway-wire";
 import { beginGatewayTurn, submitTurnPrompt, requireSessionId } from "./gateway-turn";
@@ -141,10 +142,17 @@ function attachFromStdout(stdout: string): GatewayAttachInfo | null {
   return { ticket, url: url || null };
 }
 
+/** La « maison » HERMES_HOME du service (dossier data/ de l'interface) :
+ *  le socket de contrôle du moteur (gateway.sock) y vit — c'est là que le
+ *  ticket natif HTTP se minte (journal 19). */
+function hermesHome(): string {
+  return pathResolve(join(import.meta.dir, "..", "..", "data"));
+}
+
 async function mintGatewayAttach(): Promise<GatewayAttachInfo | null> {
   const seam = await seamAttachInfo();
   if (seam) return seam;
-  const maison = pathResolve(join(import.meta.dir, "..", "..", "data"));
+  const maison = hermesHome();
   const env = { ...process.env, HERMES_HOME: maison };
   const cwd = resolveAgentDir() ?? process.cwd();
   for (const cmd of ticketPythonCandidates()) {
@@ -225,15 +233,18 @@ export function parseModelOptions(data: any): ModelOption[] {
       contextWindow,
     });
   };
-  const providers = data?.providers ?? data?.result?.providers;
-  if (Array.isArray(providers)) {
-    for (const p of providers) {
-      const models = p?.models ?? p?.model_options;
-      if (Array.isArray(models)) {
-        for (const m of models) pushModel(m, p?.name ?? p?.id);
+    const providers = data?.providers ?? data?.result?.providers;
+    if (Array.isArray(providers)) {
+      for (const p of providers) {
+        const models = p?.models ?? p?.model_options;
+        if (Array.isArray(models)) {
+          // Journal 19 : le moteur appaire model_override.provider aux SLUGS
+          // du config (user_providers) — « mock », pas le nom affiché
+          // « Mock » (gateway/session_cli_turn.py).
+          for (const m of models) pushModel(m, p?.slug ?? p?.name ?? p?.id);
+        }
       }
     }
-  }
   const flat = data?.models ?? data?.result?.models ?? data?.options;
   if (Array.isArray(flat)) {
     for (const m of flat) pushModel(m);
@@ -303,7 +314,16 @@ export class HermesConnector {
    *  (reconnexion) = resume par stored_session_id. */
   private readonly wireSessions = new Map<
     string,
-    { wire: GatewayWire; sid: string; stored: string | null }
+    {
+      wire: GatewayWire;
+      sid: string;
+      stored: string | null;
+      /** Dernière admission rendue par prompt.submit (journal 19) : à la
+       *  reconnexion, si le moteur l'a marquée « unknown » (crash en plein
+       *  tour), elle doit être SOLDÉE (prompt.resolve_unknown) sinon la
+       *  FIFO du moteur reste en pause et le tour suivant ne part jamais. */
+      lastAdmission?: string | null;
+    }
   >();
   /** Bascule REST (93) : le moteur annonce-t-il le contrat sessions natives
    *  (/v1/capabilities → session_create + session_chat_stream) ? null = pas
@@ -392,15 +412,21 @@ export class HermesConnector {
 
   private async fetchGatewayModels(): Promise<ModelsResult | null> {
     try {
+      // Journal 19 (moteur réel) : les routes HTTP du moteur exigent un
+      // ticket natif à usage unique dans l'en-tête x-hermes-gateway-ticket
+      // (mint sur le socket de contrôle) — sans lui, 401 Unauthorized et
+      // repli catalogue alors que la gateway répond très bien.
+      const nativeGrant = await mintNativeHttpTicket(hermesHome());
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), MODELS_TIMEOUT_MS);
       const res = await fetch(
         `${toHttpBase(this.gatewayUrl!)}/api/model/options?include_unconfigured=1`,
         { redirect: "error",
           signal: controller.signal,
-          headers: this.gatewayToken
-            ? { Authorization: `Bearer ${this.gatewayToken}` }
-            : undefined,
+          headers: {
+            ...(this.gatewayToken ? { Authorization: `Bearer ${this.gatewayToken}` } : {}),
+            ...(nativeGrant ? { "x-hermes-gateway-ticket": nativeGrant.ticket } : {}),
+          },
         }
       );
       clearTimeout(timer);
@@ -733,7 +759,10 @@ export class HermesConnector {
       // prompt.submit : une pièce non image jette une erreur claire, le tour
       // ne part pas, rien n'atteint le moteur.
       const attachments = await buildGatewayAttachments(
-        (method, params) => wire.rpc(method, params),
+        // Journal 19 (moteur réel) : les RPC d'attach vivent SUR la session
+        // — le moteur exige session_id dans les params (tui_gateway/
+        // session_registry._sess_building), sans lui : 4000 invalid_params.
+        (method, params) => wire.rpc(method, { ...params, session_id: sid }),
         req.attachments,
       );
       // Revue P1-P7 (B8, conservée par beginGatewayTurn) : le flux est
@@ -752,13 +781,22 @@ export class HermesConnector {
       // conversation, mémoire F-18, température) n'existe pas dans le
       // contrat prompt.submit : l'écran le DIT au lieu de l'avaler.
       const override = this.modelOverrideFor(req);
-      await submitTurnPrompt(wire, cb.signal, {
+      const admitted = await submitTurnPrompt(wire, cb.signal, {
         session_id: sid,
         text: req.content,
         submission_id: `hw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         ...(override ? { model_override: override } : {}),
         ...(attachments ? { attachments } : {}),
       });
+      // Journal 19 : admission rendue par le moteur — retenue pour le
+      // soldage « unknown » à la reconnexion (ensureWireSession).
+      const admissionId =
+        typeof admitted?.admission_id === "string" ? admitted.admission_id : null;
+      const entryKey = req.motorSessionId ?? null;
+      if (entryKey) {
+        const entry = this.wireSessions.get(entryKey);
+        if (entry) entry.lastAdmission = admissionId;
+      }
       return await turn.done;
     } finally {
       // Désabonne TOUT (événements, mort, abort, garde) — la socket,
@@ -787,7 +825,15 @@ export class HermesConnector {
       try {
         const resumed = await wire.rpc("session.resume", { session_id: bound.stored });
         const sid = requireSessionId(resumed, "session.resume");
-        if (key) this.wireSessions.set(key, { wire, sid, stored: bound.stored });
+        // Journal 19 (moteur réel) : un crash moteur en plein tour laisse
+        // l'admission en « unknown » — la FIFO de la session est alors EN
+        // PAUSE (session_authority._claim_next refuse unknown_execution) et
+        // le tour soumis après la reprise ne part JAMAIS (silence). Le
+        // contrat canonique prévoit prompt.receipt → prompt.resolve_unknown
+        // pour solder le tour perdu ; tolérant : un moteur sans ces verbes
+        // (l'ancien, la fausse gateway) passe outre.
+        await this.settleUnknownAdmission(wire, sid, bound.lastAdmission ?? null);
+        if (key) this.wireSessions.set(key, { wire, sid, stored: bound.stored, lastAdmission: bound.lastAdmission ?? null });
         return sid;
       } catch {
         // Récoltée/archivée pendant la déconnexion → session fraîche.
@@ -798,9 +844,40 @@ export class HermesConnector {
     if (key) {
       const stored =
         typeof created?.stored_session_id === "string" ? created.stored_session_id : null;
-      this.wireSessions.set(key, { wire, sid, stored });
+      this.wireSessions.set(key, { wire, sid, stored, lastAdmission: null });
     }
     return sid;
+  }
+
+  /** Solder une admission « unknown » après reconnexion (journal 19) :
+   *  prompt.receipt lit le statut, prompt.resolve_unknown l'acquitte —
+   *  « Acknowledge a turn lost across an owner restart; the FIFO behind
+   *  it resumes ». Jamais bloquant : échec = on soumet quand même. */
+  private async settleUnknownAdmission(
+    wire: GatewayWire,
+    sid: string,
+    admissionId: string | null,
+  ): Promise<void> {
+    if (!admissionId) return;
+    try {
+      const receipt = await wire.rpc("prompt.receipt", {
+        session_id: sid,
+        admission_id: admissionId,
+      });
+      if (receipt?.status !== "unknown") return;
+      const generation =
+        typeof receipt?.execution_generation === "number" ? receipt.execution_generation : 0;
+      await wire.rpc("prompt.resolve_unknown", {
+        session_id: sid,
+        admission_id: admissionId,
+        execution_generation: generation,
+      });
+      console.log(
+        `[hermes-chat] admission « unknown » soldée après reconnexion (session ${sid.slice(0, 8)}…) — la FIFO du moteur reprend`,
+      );
+    } catch {
+      /* moteur sans les verbes canoniques : le tour part quand même */
+    }
   }
 
   /** C6 (25/11) : model_override enrichi — modèle + fournisseur (uniquement
