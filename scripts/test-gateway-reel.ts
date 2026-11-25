@@ -368,6 +368,18 @@ function connectSocket(): Promise<any> {
 }
 
 async function main() {
+  // SKIP neutre (convention du runner : exit 42) — journal §9 (20) : le kit
+  // exige un moteur hermes-agent RÉEL provisionné (résolu comme le
+  // connecteur : HERMES_AGENT_DIR ou hermes-agent/ à côté du dépôt, avec
+  // son runtime — recette (19) : clone + uv sync). Sans moteur (CI, bac à
+  // sable nu), le test s'annonce SKIP au lieu de peindre la suite en rouge
+  // : la validation moteur réel reste la barre du sandbox provisionné.
+  if (!existsSync(join(ENGINE_DIR, "hermes_cli", "main.py"))) {
+    console.log(
+      `IGNORÉ : moteur hermes-agent non provisionné (${ENGINE_DIR} absent — cf. §9 (19)/(20))`
+    );
+    process.exit(42);
+  }
   let service: ChildProcess | null = null;
   let socket: any = null;
   let provider: ChildProcess | null = null;
