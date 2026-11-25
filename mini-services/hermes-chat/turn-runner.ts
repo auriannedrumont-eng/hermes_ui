@@ -1195,12 +1195,16 @@ const runAssistantTurn = async (
                 store.getConversationPrompt(conversationId)?.content ?? null,
                 controller.signal,
               )
-            // Bascule sessions natives, chemin WS (94) : sans contrat REST,
-            // l'id déterministe part QUAND MÊME au tour — runGatewayTurn s'en
-            // sert comme request_id de session.create, et la gateway rend la
-            // MÊME session à chaque tour (son historique est la mémoire).
-            // Avant (bug 94) : null → session.create {} vierge à chaque
-            // message, la conversation perdait sa mémoire en WS.
+            // Bascule sessions natives, chemin WS (94, corrigé par C5) : sans
+            // contrat REST, l'id déterministe part quand même au tour — il
+            // est la CLÉ de la session wire de la conversation : premier tour
+            // → session.create (rend l'id durable stored_session_id), tours
+            // suivants → session réutilisée sur le canal persistant (chaude),
+            // reconnexion → session.resume par stored_session_id. Vérifié sur
+            // le moteur réel : le champ request_id de session.create est IGNORÉ
+            // par le build actuel — l'ancienne lecture (même session dérivée
+            // du triplet profil/principal/request_id) n'était validée que par
+            // la fausse gateway, la mémoire WS passait à travers.
             : motorSessionIdFor(conversationId)
           : null;
       result = await connector.runTurn(

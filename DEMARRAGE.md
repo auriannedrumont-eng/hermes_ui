@@ -14,7 +14,7 @@ sans casser la compatibilité amont. Principe directeur : **la conversation rest
 chef d'orchestre** (un artefact s'ouvre dans le chat, jamais l'inverse).
 
 Deux modes, basculés automatiquement : **Gateway** (URL joignable → tours envoyés à
-l'agent Hermes réel, protocole `api_turn_v1`) ou **Local** (pool de clés fournisseurs ;
+l'agent Hermes réel, protocole canonique `hermes-gateway-v1`) ou **Local** (pool de clés fournisseurs ;
 sans moteur ni clé, erreur claire — le mode Démo simulé a été retiré).
 
 ## Démarrage

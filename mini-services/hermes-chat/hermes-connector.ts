@@ -23,6 +23,10 @@ import type { GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./local-engine";
 import { runRestTurn } from "./motor-rest";
 import { buildGatewayAttachments } from "./gateway-attachments";
+import { GatewayChannel, openGatewaySocket } from "./gateway-channel";
+import type { GatewayWire } from "./gateway-wire";
+import { beginGatewayTurn, submitTurnPrompt, requireSessionId } from "./gateway-turn";
+import { readFile } from "node:fs/promises";
 import { trace } from "./trace";
 import { portablePythonPath } from "./agent-starter";
 import { resolveAgentDir } from "./agent-motor";
@@ -34,13 +38,6 @@ const ENV_GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? null;
 const ENV_GATEWAY_TOKEN = process.env.HERMES_GATEWAY_TOKEN ?? null;
 const HANDSHAKE_TIMEOUT_MS = 3000;
 const REPROBE_TIMEOUT_MS = 1500;
-// C4 (25/11, constat n°4) : le plafond de DURÉE (180 s) coupait les tours
-// longs de l'agent (outils, sous-agents). Remplacé par une garde
-// d'INACTIVITÉ : le tour vit tant qu'un événement arrive (delta, outil,
-// statut…) ; ce silence maximal clôture avec cause lisible. L'abort
-// utilisateur reste immédiat, le partiel reçu reste rendu.
-const TURN_INACTIVITY_MS = 240_000;
-const HEARTBEAT_INTERVAL_MS = 15_000;
 const MODELS_TIMEOUT_MS = 4000;
 
 // Protocole canonique de la gateway (hermes-gateway-v1) : l'upgrade exige un
@@ -48,7 +45,9 @@ const MODELS_TIMEOUT_MS = 4000;
 // minter par `python -m hermes_cli.main gateway attach --json` (30 s TTL,
 // une seule utilisation). L'ancienne enveloppe `api_turn_v1` est refusée :
 // un tour est maintenant session.create → prompt.submit (JSON-RPC 2.0).
-const GATEWAY_PROTOCOL = "hermes-gateway-v1";
+// (C5) : le sous-protocole de protocole et le prefix vivent dans
+// gateway-channel.ts ; ici ne reste que le prefix utile au parse du
+// `attach --json`.
 const TICKET_PROTOCOL_PREFIX = "hermes-gateway-ticket.";
 const TICKET_TIMEOUT_MS = 15_000;
 // Candidats python pour minter le ticket (même ordre de confiance que le
@@ -99,7 +98,52 @@ export interface GatewayAttachInfo {
   url: string | null;
 }
 
+/** Couture QA (C7, 25/11) : un harnais SANS moteur python peut injecter la
+ *  réponse d'attachement (JSON inline, ou « @fichier » lu depuis le disque)
+ *  — la fausse gateway canonique s'en sert pour tester le chemin nominal
+ *  (ticket, URL d'attachement C2, tours). Variable jamais posée en
+ *  production ; une couture invalide retombe sur le chemin python normal. */
+async function seamAttachInfo(): Promise<GatewayAttachInfo | null> {
+  const seam = process.env.HERMES_GATEWAY_ATTACH_JSON;
+  if (!seam) return null;
+  const raw = seam.startsWith("@")
+    ? await readFile(seam.slice(1), "utf-8").catch(() => null)
+    : seam;
+  return parseSeamAttach(raw);
+}
+
+function parseSeamAttach(raw: string | null): GatewayAttachInfo | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { ticket?: string; url?: string };
+    const ticket = typeof parsed.ticket === "string" ? parsed.ticket.trim() : "";
+    if (!ticket) return null;
+    return {
+      ticket,
+      url: typeof parsed.url === "string" && parsed.url.trim() ? parsed.url.trim() : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** La sortie de `gateway attach --json` → ticket + URL d'attachement.
+ *  C2 (25/11) : l'URL accompagne le ticket — c'est l'origine RÉELLE de
+ *  l'écouteur, port éphémère compris. Tolérance : un moteur ancien sans
+ *  champ url → null, le repli 9120 reste. Jette sur JSON invalide
+ *  (l'appelant traite ça comme un candidat python à sauter). */
+function attachFromStdout(stdout: string): GatewayAttachInfo | null {
+  const parsed = JSON.parse(stdout) as { ticket?: string; url?: string; protocols?: string[] };
+  const ticket = parsed.ticket
+    ?? parsed.protocols?.find((p) => p.startsWith(TICKET_PROTOCOL_PREFIX))?.slice(TICKET_PROTOCOL_PREFIX.length);
+  if (!ticket) return null;
+  const url = typeof parsed.url === "string" ? parsed.url.trim() : "";
+  return { ticket, url: url || null };
+}
+
 async function mintGatewayAttach(): Promise<GatewayAttachInfo | null> {
+  const seam = await seamAttachInfo();
+  if (seam) return seam;
   const maison = pathResolve(join(import.meta.dir, "..", "..", "data"));
   const env = { ...process.env, HERMES_HOME: maison };
   const cwd = resolveAgentDir() ?? process.cwd();
@@ -119,16 +163,8 @@ async function mintGatewayAttach(): Promise<GatewayAttachInfo | null> {
         },
       );
       if (!out.stdout) continue;
-      const parsed = JSON.parse(out.stdout) as { ticket?: string; url?: string; protocols?: string[] };
-      const ticket = parsed.ticket
-        ?? parsed.protocols?.find((p) => p.startsWith(TICKET_PROTOCOL_PREFIX))?.slice(TICKET_PROTOCOL_PREFIX.length);
-      // C2 (25/11) : l'URL d'attachement accompagne le ticket — c'est
-      // l'origine RÉELLE de l'écouteur, port éphémère compris. Tolérance :
-      // un moteur ancien sans champ url → null, le repli 9120 reste.
-      if (ticket) {
-        const url = typeof parsed.url === "string" ? parsed.url.trim() : "";
-        return { ticket, url: url || null };
-      }
+      const fromOut = attachFromStdout(out.stdout);
+      if (fromOut) return fromOut;
     } catch {
       /* candidat suivant */
     }
@@ -215,46 +251,15 @@ function noEngineError(): Error {
   );
 }
 
-/** C4 (25/11, constat n°4) : garde d'inactivité + battement de cœur d'un
- *  tour — À LA PLACE du plafond de durée 180 s qui coupait les tours longs
- *  de l'agent. Retourne les commandes du tour : noteActivity (tout événement
- *  de l'agent réarme la garde ; les pongs ne comptent PAS — sinon un agent
- *  muet sur connexion vivante ne clôturerait jamais) et stop (nettoyage à
- *  la clôture, idempotent). Budget CRAP du plan : ≤ 10. */
-function startTurnGuard(
-  ws: WebSocket,
-  nextRpcId: () => number,
-  finish: (err?: Error) => void,
-): { noteActivity: () => void; stop: () => void } {
-  let lastActivity = Date.now();
-  let inactivityTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
-    // Garde d'inactivité : silence événementiel ≥ 240 s → clôture AVEC
-    // cause (l'ancien « Timeout du tour gateway » ne disait rien).
-    if (Date.now() - lastActivity >= TURN_INACTIVITY_MS) {
-      finish(new Error("Aucune activité de l'agent depuis 4 minutes — tour clôturé (garde d'inactivité, C4)"));
-    }
-  }, 5_000);
-  // Battement de cœur : gateway.ping toutes les 15 s (cadence des clients
-  // natifs du projet, tui_gateway/ws.py) — une connexion morte se voit en
-  // quinze secondes par error/close → finish, au lieu d'attendre la garde.
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ jsonrpc: "2.0", id: nextRpcId(), method: "gateway.ping", params: {} }));
-      } catch {
-        /* error/close suivra → finish */
-      }
-    }
-  }, HEARTBEAT_INTERVAL_MS);
-  return {
-    noteActivity: () => { lastActivity = Date.now(); },
-    stop: () => {
-      if (inactivityTimer !== null) clearInterval(inactivityTimer);
-      if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
-      inactivityTimer = null;
-      heartbeatTimer = null;
-    },
-  };
+/** Fermeture silencieuse d'une socket de sonde (C5 : le dial partagé
+ *  openGatewaySocket laisse une garde error no-op à vie — L2-8 ; ici on
+ *  n'a plus qu'à fermer proprement, sans jamais retirer les listeners). */
+function closeQuietly(ws: WebSocket): void {
+  try {
+    ws.close();
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Résultat d'un tour, augmenté du moteur qui l'a produit. */
@@ -286,6 +291,20 @@ export class HermesConnector {
    *  false = défaut/env/interface : la découverte peut s'appliquer, une
    *  URL EXPLICITEMENT choisie n'est jamais écrasée. */
   private autoGatewayUrl = false;
+  /** C5 (25/11, constat n°5) : canal WebSocket PERSISTANT — UNE socket
+   *  par service, vivante entre les tours (aucune récolte d'orphelin à
+   *  20 s côté moteur : la session reste attachée), ticket re-minté à
+   *  chaque (re)connexion, battement de cœur 15 s. Jeté quand la
+   *  destination change volontairement. */
+  private channel: GatewayChannel | null = null;
+  /** C5 : sessions moteur par conversation (clé = motorSessionId
+   *  déterministe). L'entrée porte le WIRE de la connexion qui l'a créée :
+   *  même wire = session CHAUDE réutilisée sans create ; autre wire
+   *  (reconnexion) = resume par stored_session_id. */
+  private readonly wireSessions = new Map<
+    string,
+    { wire: GatewayWire; sid: string; stored: string | null }
+  >();
   /** Bascule REST (93) : le moteur annonce-t-il le contrat sessions natives
    *  (/v1/capabilities → session_create + session_chat_stream) ? null = pas
    *  encore sondé. Le listener 9120 du webapp n'a que le GET /api/sessions
@@ -342,6 +361,14 @@ export class HermesConnector {
     this.autoGatewayUrl = false;
     // Nouvelle destination (93) : le verdict REST repart de zéro.
     this.restContract = null;
+    if (urlChanged) {
+      // C5 (25/11) : autre destination → l'ancien canal (socket vivante,
+      // sessions liées) est jeté — les sessions du nouveau point d'accès
+      // repartent de zéro ; les tours en vol échouent proprement.
+      this.channel?.close();
+      this.channel = null;
+      this.wireSessions.clear();
+    }
     await this.init();
     return this.mode;
   }
@@ -420,6 +447,26 @@ export class HermesConnector {
     );
   }
 
+  /** C5 (25/11) : le canal persistant, créé paresseusement au premier
+   *  tour gateway. Le dialer mint le ticket one-use, applique l'origine
+   *  réelle (C2) puis dial — à CHAQUE (re)connexion : un ticket ne vit
+   *  qu'une fois, un port éphémère change au redémarrage du moteur. */
+  private gatewayChannel(): GatewayChannel {
+    if (!this.channel) {
+      this.channel = new GatewayChannel(async () => {
+        const attach = await mintGatewayAttach();
+        if (!attach) {
+          throw new Error(
+            "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
+          );
+        }
+        this.applyAttachUrl(attach.url);
+        return openGatewaySocket(toWsUrl(this.gatewayUrl!), attach.ticket, HANDSHAKE_TIMEOUT_MS);
+      });
+    }
+    return this.channel;
+  }
+
   private async probe(timeoutMs: number = HANDSHAKE_TIMEOUT_MS): Promise<boolean> {
     // Sonde canonique : un upgrade accepté exige un ticket one-use en
     // sous-protocole. Pas de ticket minter → gateway absente (rien à sonder).
@@ -427,44 +474,18 @@ export class HermesConnector {
     // de boucle d'événements figée pendant les essais python.
     // C2 (25/11) : l'origine réelle de l'écouteur est appliquée AVANT le
     // dial — le 9120 en dur ne sert que de repli.
+    // C5 (25/11) : la sonde reste une socket ÉPHÉMÈRE (dial partagé avec
+    // le canal persistant) — elle ne prouve que la joignabilité.
     const attach = await mintGatewayAttach();
     if (!attach) return false;
     this.applyAttachUrl(attach.url);
-    const ticket = attach.ticket;
-    return new Promise((resolve) => {
-      let settled = false;
-      const done = (ok: boolean) => {
-        if (settled) return;
-        settled = true;
-        try {
-          ws.removeAllListeners();
-          // Lot 2 (famille audit L2-8) : fermer une socket ENCORE EN CONNEXION
-          // fait émettre un « error » par la lib ws — sans listener, le
-          // processus ENTIER meurt (Unhandled error), ce qui tuait le service
-          // à chaque gateway:set vers une adresse qui stalle. Un no-op absorbe.
-          ws.on("error", () => {});
-          ws.on("close", () => {});
-          ws.close();
-        } catch {
-          /* ignore */
-        }
-        resolve(ok);
-      };
-      const ws = new WebSocket(
-        toWsUrl(this.gatewayUrl!),
-        [GATEWAY_PROTOCOL, TICKET_PROTOCOL_PREFIX + ticket],
-        { handshakeTimeout: timeoutMs }
-      );
-      const timer = setTimeout(() => done(false), timeoutMs);
-      ws.on("open", () => {
-        clearTimeout(timer);
-        done(true);
-      });
-      ws.on("error", () => {
-        clearTimeout(timer);
-        done(false);
-      });
-    });
+    try {
+      const ws = await openGatewaySocket(toWsUrl(this.gatewayUrl!), attach.ticket, timeoutMs);
+      closeQuietly(ws);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Re-sonde silencieuse (throttlée) : l'agent lancé APRÈS le service se
@@ -690,271 +711,112 @@ export class HermesConnector {
     req: TurnRequest,
     cb: TurnCallbacks
   ): Promise<TurnOutcome> {
-    // Ticket one-use : sans gateway vivante, `attach --json` échoue →
-    // erreur claire (la re-sonde rebranchera au tour suivant). Minté
-    // ASYNCHRONE avant la promesse socket (revue 95) — jamais de boucle
-    // d'événements figée pendant les essais python.
-    // C2 (25/11) : l'origine réelle (port éphémère compris) prime sur le
-    // 9120 en dur quand l'URL active est encore le défaut — même priorité
-    // que la sonde (interface > env > attach > défaut).
-    const attach = await mintGatewayAttach();
-    if (!attach) {
-      throw new Error(
-        "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
+    // C5 (25/11, constat n°5) : le tour est LOCATAIRE du canal persistant
+    // — plus de socket (ni ticket) par tour. La WebSocket vit ENTRE les
+    // tours (session chaude : le moteur ne détache plus la session à chaque
+    // déconnexion, aucun ws_orphan_reap à 20 s), le re-mint du ticket et
+    // l'origine réelle (C2) se font à la (re)connexion DANS le canal. Les
+    // garanties du code d'origine sont conservées : abort immédiat avec
+    // partiel rendu (désormais via session.interrupt, la socket survit),
+    // partiel rendu, fermeture SANS fin annoncée = erreur jamais un succès
+    // tronqué (L1-6), garde d'inactivité 240 s (C4).
+    const wire = await this.gatewayChannel().ensureConnected();
+    const turn = beginGatewayTurn(wire, req, cb);
+    try {
+      if (cb.signal.aborted) return await turn.done; // partiel (vide), rien n'est envoyé
+      const sid = await this.ensureWireSession(wire, req);
+      turn.bindSession(sid);
+      // Pièces jointes (C3, 25/11) : dépôt canonique via image.attach_bytes
+      // — le moteur n'accepte que des images de SON cache de staging ; les
+      // chemins db/ de l'interface étaient refusés (invalid_params). Lancé
+      // APRÈS session.create (le RPC vit sur la session en main) et AVANT
+      // prompt.submit : une pièce non image jette une erreur claire, le tour
+      // ne part pas, rien n'atteint le moteur.
+      const attachments = await buildGatewayAttachments(
+        (method, params) => wire.rpc(method, params),
+        req.attachments,
       );
-    }
-    this.applyAttachUrl(attach.url);
-    const ticket = attach.ticket;
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      // true = la gateway a annoncé la fin (message.complete). Une
-      // fermeture SANS fin annoncée résout en erreur, pas en « succès » avec
-      // un contenu tronqué présenté comme complet (Lot 1, audit L1-6).
-      let endedProperly = false;
-      let content = "";
-      let reasoning = "";
-      const ws = new WebSocket(
-        toWsUrl(this.gatewayUrl!),
-        [GATEWAY_PROTOCOL, TICKET_PROTOCOL_PREFIX + ticket],
-        { handshakeTimeout: HANDSHAKE_TIMEOUT_MS }
-      );
-
-      // Lot audit passe 2 : registre des rejets des requêtes JSON-RPC en vol —
-      // finish() draine ce registre pour qu'aucun await rpc() ne survive à la
-      // fermeture de la WebSocket (fuite de promesse + closure). Déclaré AVANT
-      // finish : l'abort peut être déjà posé et finish() appelé de façon
-      // synchrone pendant le montage (temporal dead zone interdite).
-      const rpcRejectors = new Set<(err: Error) => void>();
-
-      // C4 (25/11) : garde d'inactivité + battement de cœur (startTurnGuard),
-      // arrêtée dans finish. Déclarée AVANT finish (même loi que rpcRejectors :
-      // l'abort peut être déjà posé et finish() appelé de façon synchrone
-      // pendant le montage — temporal dead zone interdite ; null = rien à
-      // nettoyer).
-      let turnGuard: ReturnType<typeof startTurnGuard> | null = null;
-      const clearTurnTimers = () => {
-        turnGuard?.stop();
-        turnGuard = null;
-      };
-
-      const finish = (err?: Error) => {
-        if (settled) return;
-        settled = true;
-        clearTurnTimers();
-        cb.signal.removeEventListener("abort", onAbort);
-        try {
-          ws.removeAllListeners();
-          // Lot 2 (famille audit L2-8) : même garde que la sonde — la
-          // fermeture d'une WebSocket en connexion émet un « error » sans
-          // listener qui tuerait le service.
-          ws.on("error", () => {});
-          ws.on("close", () => {});
-          ws.close();
-        } catch {
-          /* ignore */
-        }
-        if (err) reject(err);
-        else if (cb.signal.aborted)
-          // Stop utilisateur : le partiel reçu est rendu — le tour se clôt
-          // avec le marqueur « stopped », pas une erreur (contrat index.ts).
-          resolve({
-            content,
-            reasoning,
-            model: req.model || "hermes (gateway)",
-            engine: "gateway",
-          });
-        else if (!endedProperly)
-          reject(new Error("Connexion gateway fermée avant la fin du tour"));
-        else
-          resolve({
-            content,
-            reasoning,
-            model: req.model || "hermes (gateway)",
-            engine: "gateway",
-          });
-        // Lot audit passe 2 : la socket vient de mourir (ou le tour est clôturé)
-        // — TOUTE promesse JSON-RPC encore en vol est rejetée. Sans cela, un
-        // await rpc("session.create"/"prompt.submit") interrompu par une
-        // fermeture restait en attente pour toujours (closure fugitive).
-        for (const rejRpc of rpcRejectors)
-          rejRpc(new Error("Connexion gateway fermée avant la réponse JSON-RPC"));
-        rpcRejectors.clear();
-      };
-
-      // Stop utilisateur (Lot 1, audit L1-6) : l'abort est câblé à la
-      // WebSocket — fermeture immédiate et partiel rendu, au lieu de courir
-      // jusqu'au timeout 180 s avec un fil qui ne s'arrête jamais.
-      const onAbort = () => finish();
-      if (cb.signal.aborted) onAbort();
-      else cb.signal.addEventListener("abort", onAbort, { once: true });
-
-      // C4 (25/11) : si le tour est déjà clôturé (abort synchrone pendant le
-      // montage), la garde ne démarre même pas — un timer démarré après un
-      // finish() définitif ne serait jamais nettoyé.
-      if (!settled) turnGuard = startTurnGuard(ws, () => nextRpcId++, finish);
-
-      let nextRpcId = 1;
-      // Outils en cours (tool.start sans tool.complete) : clos d'office à la
-      // fin du tour — aucun spinner ne survit à la réponse livrée.
-      const outilsOuverts = new Set<string>();
-      // Réponse à une requête JSON-RPC par id ; null si la socket meurt avant.
-      const rpc = (method: string, params: Record<string, unknown>): Promise<any> =>
-        new Promise((res, rej) => {
-          const id = nextRpcId++;
-          const onFrame = (raw: unknown) => {
-            let data: any;
-            try {
-              data = JSON.parse(String(raw));
-            } catch {
-              return;
-            }
-            if (data?.id !== id) return;
-            ws.off("message", onFrame);
-            ws.off("close", onDead);
-            ws.off("error", onErr);
-            rpcRejectors.delete(rejectRpc);
-            if (data?.error) rej(new Error(String(data.error.message ?? "Erreur gateway")));
-            else res(data?.result);
-          };
-          // Lot audit passe 2 : la socket peut mourir AVANT la réponse —
-          // close/error rejettent maintenant la promesse (au lieu de la
-          // laisser pendre indéfiniment avec sa closure).
-          const rejectRpc = (err: Error) => {
-            ws.off("message", onFrame);
-            ws.off("close", onDead);
-            ws.off("error", onErr);
-            rpcRejectors.delete(rejectRpc);
-            rej(err);
-          };
-          const onDead = () =>
-            rejectRpc(new Error("Connexion gateway fermée avant la réponse JSON-RPC"));
-          const onErr = (err: Error) =>
-            rejectRpc(new Error(`Connexion gateway en erreur avant la réponse JSON-RPC : ${err.message}`));
-          rpcRejectors.add(rejectRpc);
-          ws.on("message", onFrame);
-          ws.once("close", onDead);
-          ws.once("error", onErr);
-          ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
-        });
-
-      ws.on("error", (err) => finish(err));
-      ws.on("close", () => finish());
-
-      ws.on("open", async () => {
-        try {
-          cb.onStatus("Gateway Hermes connectée…");
-          // 1. La session canonique (l'historique vit DANS la gateway ; les
-          //    messages de la conversation ne sont pas rejoués — le wire
-          //    fermé n'accepte pas d'historique client).
-          // Mémoire de conversation en WS (94) : quand la conversation est
-          // liée à une session moteur (motorSessionId, id déterministe
-          // `ui-<conversationId>`), il part comme request_id de
-          // session.create — la gateway dérive l'id de session du triplet
-          // (profil, principal, request_id) et rend LA MÊME session à chaque
-          // tour, avec l'historique de la conversation. Avant : {} à chaque
-          // message → session vierge → l'agent oubliait tout à chaque tour.
-          const created = await rpc("session.create", req.motorSessionId
-            ? { request_id: req.motorSessionId }
-            : {});
-          const sid: string | undefined = created?.session_id;
-          if (!sid || typeof sid !== "string") {
-            finish(new Error("session.create : pas de session_id renvoyé"));
-            return;
-          }
-          // 2. La soumission : submission_id OBLIGATOIRE (identité de la
-          //    soumission, sert aux reprises/replays côté gateway).
-          const submissionId = `hw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          // Pièces jointes (C3, 25/11) : dépôt canonique via image.attach_bytes
-          // — le moteur n'accepte que des images de SON cache de staging ; les
-          // chemins db/ de l'interface étaient refusés (invalid_params). Lancé
-          // APRÈS session.create (le RPC vit sur la session en main) et AVANT
-          // prompt.submit : une pièce non image jette une erreur claire, le
-          // tour ne part pas, rien n'atteint le moteur.
-          const attachments = await buildGatewayAttachments(rpc, req.attachments);
-          // 3. Le stream : frames d'événements (method=event, params.type).
-          // Revue P1-P7 (B8) : l'écouteur est posé AVANT prompt.submit —
-          // la gateway peut émettre message.delta / error / message.complete
-          // dès la RÉCEPTION de la soumission ; ces trames arrivaient avant
-          // le tour de boucle qui posait onEvent, étaient ignorées par
-          // onFrame (id inconnu) et figeaient le tour jusqu'au timeout.
-          const onEvent = (raw: unknown) => {
-            if (cb.signal.aborted) return finish();
-            let data: any;
-            try {
-              data = JSON.parse(String(raw));
-            } catch {
-              return;
-            }
-            if (data?.method !== "event") return;
-            // C4 : tout événement de l'agent réarme la garde d'inactivité.
-            turnGuard?.noteActivity();
-            const params = data?.params ?? {};
-            const evt: string = params?.type ?? "";
-            const payload = params?.payload ?? {};
-            if (evt === "message.delta") {
-              const delta = payload?.text;
-              if (typeof delta === "string" && delta) {
-                content += delta;
-                cb.onDelta(delta);
-              }
-            } else if (evt === "reasoning.delta" || evt === "thinking.delta") {
-              const think = payload?.text;
-              if (typeof think === "string" && think) {
-                reasoning += think;
-                cb.onReasoning(think);
-              }
-            } else if (evt.startsWith("tool.")) {
-              // Loi du fil propre (24/11) : SEUL le couple tool.start →
-              // tool.complete crée/ferme une carte. Les autres variantes
-              // (tool.generating, tool.progress, tool.output_risk) sont des
-              // signaux intermédiaires : les transformer en cartes créait
-              // des spinners JAMAIS fermés après la réponse livrée (capture
-              // du 24/11 : 3 web_extract, 6 terminal, 8 read_file figés).
-              if (evt === "tool.start" || evt === "tool.complete") {
-                const toolName = payload?.name ?? payload?.tool ?? "outil";
-                if (evt === "tool.complete") outilsOuverts.delete(toolName);
-                else outilsOuverts.add(toolName);
-                cb.onToolEvent({
-                  name: toolName,
-                  status: evt === "tool.complete" ? "done" : "running",
-                  detail: payload?.summary ?? payload?.preview,
-                });
-              }
-            } else if (evt === "status.update") {
-              cb.onStatus(String(payload?.text ?? payload?.status ?? "Hermes travaille…"));
-            } else if (evt === "message.complete") {
-              // Texte final autoritaire ; usage disponible dans le payload.
-              // Filet : tout outil resté "running" (complete perdu) est clos —
-              // le fil ne garde AUCUN spinner après la réponse livrée.
-              for (const nom of outilsOuverts) {
-                cb.onToolEvent({ name: nom, status: "done" });
-              }
-              outilsOuverts.clear();
-              const finalText = payload?.text ?? payload?.content;
-              if (typeof finalText === "string" && finalText && !cb.signal.aborted) {
-                content = finalText;
-                cb.onDelta("");
-              }
-              endedProperly = true;
-              ws.off("message", onEvent);
-              finish();
-            } else if (evt === "error") {
-              ws.off("message", onEvent);
-              finish(new Error(String(payload?.error ?? payload?.message ?? "Erreur gateway")));
-            }
-          };
-          ws.on("message", onEvent);
-          await rpc("prompt.submit", {
-            session_id: sid,
-            text: req.content,
-            submission_id: submissionId,
-            ...(req.modelId ? { model_override: { model: req.modelId } } : {}),
-            ...(attachments ? { attachments } : {}),
-          });
-        } catch (err) {
-          finish(err instanceof Error ? err : new Error(String(err)));
-        }
+      // Revue P1-P7 (B8, conservée par beginGatewayTurn) : le flux est
+      // abonné AVANT la soumission — la gateway peut émettre des
+      // événements dès la réception de prompt.submit.
+      // submission_id OBLIGATOIRE (identité de la soumission, reprises/
+      // replays côté gateway) ; busy 4009 → UNE réessai (interrupt-then-
+      // retry du contrat amont, le running d'une interruption met ~1 s à
+      // retomber).
+      if (cb.signal.aborted) return await turn.done;
+      // C6 (25/11, constat n°6) : model_override porte ce que le moteur
+      // honore VRAIMENT — le modèle, son fournisseur (celui de la liste
+      // GATEWAY uniquement : une paire modèle×fournisseur incohérente est
+      // refusée par le garde amont) et l'échelle d'effort du compositeur
+      // (settings.reasoningEffort). Le reste des réglages (prompt de
+      // conversation, mémoire F-18, température) n'existe pas dans le
+      // contrat prompt.submit : l'écran le DIT au lieu de l'avaler.
+      const override = this.modelOverrideFor(req);
+      await submitTurnPrompt(wire, cb.signal, {
+        session_id: sid,
+        text: req.content,
+        submission_id: `hw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        ...(override ? { model_override: override } : {}),
+        ...(attachments ? { attachments } : {}),
       });
-    });
+      return await turn.done;
+    } finally {
+      // Désabonne TOUT (événements, mort, abort, garde) — la socket,
+      // elle, reste OUVERTE pour le tour suivant : c'est le cœur de C5.
+      turn.dispose();
+    }
+  }
+
+  /** C5 (25/11) : la session moteur du tour, par conversation (clé =
+   *  motorSessionId déterministe). Même wire que la liaison = session
+   *  CHAUDE, réutilisée telle quelle (pas de create, pas de reap) ;
+   *  wire différent (reconnexion) = resume par stored_session_id —
+   *  l'id DURABLE que session.create rend dès le premier tour et que
+   *  le vrai moteur honore (le champ request_id de session.create est
+   *  ignoré par le build actuel : la dérivation de session par triplet
+   *  supposée au chantier 94 n'existe pas sur le moteur réel, elle
+   *  n'était validée que par la fausse gateway). Session récoltée ou
+   *  resume refusé → session fraîche, le tour part quand même. Sans
+   *  identité de conversation (voix orchestrées, cas défensif) :
+   *  session fraîche non liée, exactement comme avant C5. */
+  private async ensureWireSession(wire: GatewayWire, req: TurnRequest): Promise<string> {
+    const key = req.motorSessionId ?? null;
+    const bound = key ? this.wireSessions.get(key) : undefined;
+    if (bound && bound.wire === wire) return bound.sid;
+    if (bound?.stored) {
+      try {
+        const resumed = await wire.rpc("session.resume", { session_id: bound.stored });
+        const sid = requireSessionId(resumed, "session.resume");
+        if (key) this.wireSessions.set(key, { wire, sid, stored: bound.stored });
+        return sid;
+      } catch {
+        // Récoltée/archivée pendant la déconnexion → session fraîche.
+      }
+    }
+    const created = await wire.rpc("session.create", {});
+    const sid = requireSessionId(created, "session.create");
+    if (key) {
+      const stored =
+        typeof created?.stored_session_id === "string" ? created.stored_session_id : null;
+      this.wireSessions.set(key, { wire, sid, stored });
+    }
+    return sid;
+  }
+
+  /** C6 (25/11) : model_override enrichi — modèle + fournisseur (uniquement
+   *  si la liste vient de LA gateway branchée) + effort de raisonnement du
+   *  compositeur. Null sans modèle choisi (le profil moteur décide seul). */
+  private modelOverrideFor(req: TurnRequest): Record<string, string> | null {
+    if (!req.modelId) return null;
+    const provider =
+      this.modelsCache?.source === "gateway"
+        ? this.modelsCache.models.find((m) => m.id === req.modelId)?.provider
+        : undefined;
+    const reasoning = req.settings?.reasoningEffort?.trim() || undefined;
+    return {
+      model: req.modelId,
+      ...(provider ? { provider } : {}),
+      ...(reasoning ? { reasoning } : {}),
+    };
   }
 }

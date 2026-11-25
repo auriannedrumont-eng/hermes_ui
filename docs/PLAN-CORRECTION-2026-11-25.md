@@ -6,6 +6,8 @@
 **Barre du dépôt** : aucune fonction de production au-dessus de CC 100
 **Date** : 25 novembre 2026
 
+**État d'avancement (25/11, soir)** : C1 à C4 livrés (journal §9-17), **C5, C6 et C7 livrés** (journal §9-18) — le plan est intégralement exécuté. Mesures finales crapper : runGatewayTurn **78 → 5** (budget ≤ 25), handle 17 ≤ 20, dispatch 12 ≤ 12, mintGatewayAttach 8 ≤ 12 ; QA canonique 30/30 (fausse gateway v2 parlant le contrat réel), suite 34/34, Vitest 144/144.
+
 ---
 
 ## 1. Synthèse du plan

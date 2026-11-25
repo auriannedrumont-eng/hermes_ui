@@ -235,6 +235,7 @@ export function SettingsPanel({
             onSaveMemoryNotes={memoryApi.saveNotes}
             models={models}
             selectedModel={selectedModel}
+            engineGateway={connected && mode === "gateway"}
           />
         );
       case "profils":

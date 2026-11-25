@@ -41,6 +41,12 @@ interface HermesSectionProps {
   /** v2.4 — fenêtre du modèle sélectionné (carte Conversations longues). */
   models: ModelOption[];
   selectedModel: string | null;
+  /** C6 (25/11) : true = l'agent Hermes est branché (mode gateway) — les
+   *  réglages de cette section (instructions, mémoire) restent utiles au
+   *  moteur LOCAL mais ne partent PAS au moteur agent : le contrat
+   *  prompt.submit ne les reçoit pas. L'écran le dit au lieu de l'avaler
+   *  en silence (constat n°6 du plan de correction). */
+  engineGateway: boolean;
 }
 
 /** Éditeur d'un preset (création ou modification) — ligne dépliable du volet.
@@ -225,6 +231,7 @@ export function HermesSection({
   onSaveMemoryNotes,
   models,
   selectedModel,
+  engineGateway,
 }: HermesSectionProps) {
   // Éditeur ouvert : preset existant (id) ou création (null)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -307,6 +314,12 @@ export function HermesSection({
             <div className="mt-px text-[12.5px] leading-snug text-muted-foreground">
               Vos préférences durables, appliquées à toutes les conversations.
             </div>
+            {engineGateway && (
+              <div className="mt-1 text-[11.5px] leading-snug text-warning">
+                Sans effet sur l'agent Hermes branché — voir la configuration
+                du profil de l'agent (C6).
+              </div>
+            )}
           </div>
           <Pastille
             tone={instructionsValue.trim() ? "ok" : "off"}
@@ -348,6 +361,12 @@ export function HermesSection({
 
       {/* ── Mémoire utilisateur (F-18) ─────────────────────────────── */}
       <div className="mt-4">
+        {engineGateway && (
+          <div className="mb-1.5 text-[11.5px] leading-snug text-warning">
+            Mémoire sans effet sur l'agent Hermes branché — voir la
+            configuration du profil de l'agent (C6).
+          </div>
+        )}
         <MemoryCard
           state={memory}
           onSetEnabled={onSetMemoryEnabled}
