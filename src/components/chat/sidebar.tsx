@@ -42,6 +42,7 @@ import { ConversationItem, type ConvItemShared } from "@/components/chat/convers
 import { DropZone, ProjectGroup } from "@/components/chat/project-group";
 import { type SubControls } from "@/components/chat/project-subgroup";
 import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
+import { SidebarDemarrage } from "@/components/chat/sidebar-demarrage";
 import { SidebarArchives } from "@/components/chat/sidebar-archives";
 import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
 import { buildProjectTree, subtreeIds, type ProjectNode } from "@/lib/project-tree";
@@ -624,11 +625,16 @@ function SidebarDossiers({
               ) : null}
               {/* (audit 2026-11-21) ce bloc vit DANS la branche hasProjects :
                   !hasProjects y est toujours faux et le message ne s'affichait
-                  jamais — projets existants + zéro conversation = zone vide. */}
+                  jamais — projets existants + zéro conversation = zone vide.
+                  2026-11-25 : carte « Premiers pas » (feuille 6) à la place
+                  du simple texte — trois chemins vers une première
+                  conversation RANGÉE (verrou côté service). */}
               {pinned.length === 0 && conversations.length === 0 ? (
-                <p className="px-2 pt-6 text-center text-[12.5px] text-muted-foreground">
-                  Pas encore de conversation.
-                </p>
+                <SidebarDemarrage
+                  projects={projects.filter((p) => !p.archived)}
+                  onNew={onNew}
+                  onCreateProject={onCreateProject}
+                />
               ) : null}
               <AttachDiskDialog
                 open={attachDiskOpen}
@@ -1341,9 +1347,11 @@ export function Sidebar({
               conversations={conversations}
             />
           ) : conversations.length === 0 ? (
-            <p className="px-2 pt-6 text-center text-[12.5px] text-muted-foreground">
-              Pas encore de conversation.
-            </p>
+            <SidebarDemarrage
+              projects={projects.filter((p) => !p.archived)}
+              onNew={onNew}
+              onCreateProject={onCreateProject}
+            />
           ) : (
             <SidebarHistorique
               pinned={pinned}
