@@ -43,8 +43,19 @@ jobs:
         run: bunx tsc --noEmit
         working-directory: mini-services/hermes-chat
 
+      - name: Typecheck scripts (le 3e de qa_rapide — harnais et tests)
+        run: bunx tsc --noEmit -p scripts
+
       - name: Lint (eslint)
         run: npm run lint
 
       - name: Tests autonomes (runner scripts/test-*.ts)
         run: bun scripts/run-tests.ts
+
+      # Vitest (144 tests) : unitaires du mini-service (modes, prompts,
+      # providers, store-messages…). Il tourne APRÈS l'install du
+      # mini-service — le même bun.lock que les fixtures utilise.
+      - name: Vitest (unitaires du mini-service)
+        run: bunx vitest run
+        working-directory: mini-services/hermes-chat
+
