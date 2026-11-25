@@ -161,12 +161,16 @@ function startProvider(): Promise<ChildProcess> {
 
 let engine: ChildProcess | null = null;
 function startEngine(): Promise<ChildProcess> {
-  const proc = spawn(ENGINE_PY, ["-m", "hermes_cli.main", "gateway", "run", "-v"], {
-    cwd: ENGINE_DIR,
-    env: engineEnv(),
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  engine = proc;
+  return (async () => {
+    // « One gateway per host » : libérer la maison d'un moteur résiduel
+    // AVANT de booter (sinon le nôtre sort en exit 0 aussitôt).
+    await clearServingEngine();
+    const proc = spawn(ENGINE_PY, ["-m", "hermes_cli.main", "gateway", "run", "-v"], {
+      cwd: ENGINE_DIR,
+      env: engineEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    engine = proc;
   const stamp = () => appendFileSync(ENGINE_LOG, `\n===== [${new Date().toISOString()}] moteur pid=${proc.pid} =====\n`);
   stamp();
   for (const s of [proc.stdout, proc.stderr]) {
@@ -207,17 +211,61 @@ function startEngine(): Promise<ChildProcess> {
         });
     }, 500);
   });
+  })();
+}
+
+/** Attend la mort RÉELLE du process (exitCode renseigné), bornée. */
+function waitExit(proc: ChildProcess, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (proc.exitCode !== null || proc.signalCode !== null) return resolve();
+    const t = setTimeout(resolve, ms);
+    proc.on("exit", () => { clearTimeout(t); resolve(); });
+  });
+}
+
+/** Tue un pid système et attend sa disparition (kill(pid, 0) échoue quand
+ *  mort). Garde en dur : le run du 25/11 04:05 a laissé un moteur ORPHELIN
+ *  (pid vivant après un teardown "réussi" — exit signalé, process vivant) ;
+ *  on ne fait plus confiance au seul évènement exit du child. */
+async function killPidAndWait(pid: number, label: string): Promise<void> {
+  const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  if (!alive()) return;
+  console.log(`  [teardown] arrêt du moteur résiduel ${label} pid=${pid}…`);
+  try { process.kill(pid, "SIGTERM"); } catch { /* déjà parti */ }
+  for (let i = 0; i < 20 && alive(); i++) await wait(500);
+  if (alive()) {
+    try { process.kill(pid, "SIGKILL"); } catch { /* déjà parti */ }
+    for (let i = 0; i < 10 && alive(); i++) await wait(500);
+  }
+  if (alive()) console.warn(`  [teardown] ATTENTION : pid ${pid} (${label}) survit même à SIGKILL`);
+}
+
+/** Le moteur applique « one gateway per host » : un moteur DÉJÀ vivant sur
+ *  la maison fait sortir le nôtre aussitôt (exit 0, « already serves »).
+ *  Le kit veut un moteur qu'il possède : on arrête l'existant AVANT de
+ *  booter (état stale « running » d'un moteur tué → pid mort → rien à
+ *  faire, la détection est par pid VIVANT, pas par le fichier). */
+async function clearServingEngine(): Promise<void> {
+  try {
+    const st = JSON.parse(readFileSync(join(HERMES_HOME, "gateway_state.json"), "utf-8"));
+    const pid = typeof st.pid === "number" ? st.pid : null;
+    if (pid && st.gateway_state === "running") await killPidAndWait(pid, "moteur en place");
+  } catch { /* pas de fichier d'état : rien */ }
 }
 
 async function stopEngine(): Promise<void> {
   const proc = engine;
   engine = null;
-  if (!proc || proc.exitCode !== null) return;
-  proc.kill("SIGTERM");
-  await new Promise<void>((resolve) => {
-    const t = setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* déjà mort */ } resolve(); }, 10_000);
-    proc.on("exit", () => { clearTimeout(t); resolve(); });
-  });
+  if (!proc || (proc.exitCode !== null && proc.signalCode !== null)) {
+    if (proc?.pid) await killPidAndWait(proc.pid, "moteur du harnais");
+    return;
+  }
+  try { proc.kill("SIGTERM"); } catch { /* déjà mort */ }
+  await waitExit(proc, 10_000);
+  // Garde : l'évènement exit du child ne suffit PAS (orphelin observé) —
+  // on vérifie le pid au niveau système, SIGKILL au besoin.
+  await killPidAndWait(proc.pid!, "moteur du harnais");
+  await waitExit(proc, 5_000);
 }
 
 /** Coupure BRUTALE (journal 19) : SIGTERM = arrêt GRACIEUX du moteur (il
@@ -228,11 +276,8 @@ async function hardKillEngine(): Promise<void> {
   const proc = engine;
   engine = null;
   if (!proc || proc.exitCode !== null) return;
-  proc.kill("SIGKILL");
-  await new Promise<void>((resolve) => {
-    const t = setTimeout(resolve, 5_000);
-    proc.on("exit", () => { clearTimeout(t); resolve(); });
-  });
+  try { proc.kill("SIGKILL"); } catch { /* déjà mort */ }
+  await waitExit(proc, 5_000);
 }
 
 /** Mint d'un attach (ticket à usage unique + URL réelle) — comme le connecteur. */
@@ -482,6 +527,10 @@ async function main() {
     service?.kill();
     provider?.kill();
     await stopEngine();
+    // Ceinture ET bretelles : même un moteur que le child "exit" croit mort
+    // mais qui survit (l'orphelin observé) est arrêté — par le pid VIVANT
+    // du fichier d'état, pas par l'évènement.
+    await clearServingEngine();
     // Forensic : en cas d'échec, les logs moteur + service restent sur
     // disque (gateway.log, service.log dans DB_DIR) — nettoyés sinon.
     if (failures === 0) {
