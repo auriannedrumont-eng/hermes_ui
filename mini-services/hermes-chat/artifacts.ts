@@ -454,14 +454,25 @@ export class ArtifactTracker {
           if (isHtml) this.events.onHtmlReady(row);
         }
       } else if (!t.complete && aborted) {
+        // Tour INTERROMPU (stop utilisateur, coupure, service relancé) et
+        // bloc non refermé : la carte vivait en « error » et le jeu/page
+        // déjà écrits étaient PERDUS pour l'utilisatrice (constat du 25/11 :
+        // un stream coupé en pleine phrase tuait l'artefact du jeu demandé).
+        // Le contenu ARRIVÉ reste utile : on clôt le bloc comme au tour
+        // normal — la carte porte l'étiquette « partiel », le message reste
+        // marqué stopped. Le HTML tronqué peut être incomplet : c'est dit,
+        // et l'aperçu tente quand même (souvent le corps entier est là,
+        // seule la prose de queue manque).
+        t.complete = true;
+        const isHtml = t.row.kind === "html";
         const row = this.store.updateArtifact(t.row.id, {
-          status: "error",
-          statusLabel: null,
-          error: "Génération interrompue",
+          status: isHtml ? "rendering" : "ready",
+          statusLabel: isHtml ? "Partiel — tour interrompu ; rendu de l'aperçu…" : "Partiel — tour interrompu",
         });
         if (row) {
           t.row = row;
           this.events.onUpdated(toWireArtifact(row));
+          if (isHtml) this.events.onHtmlReady(row);
         }
       }
       rows.push(t.row);

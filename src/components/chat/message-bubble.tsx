@@ -39,6 +39,7 @@ import { ModeFlowCard, ModeTag, modeFromTag, modeFlowSummary } from "@/component
 import { useSpeech, useContinuousSpeech } from "@/hooks/use-speech";
 import { UsageRow } from "@/components/chat/usage-row";
 import { stripArtifactBlocks, downloadArtifactZip } from "@/lib/artifact-utils";
+import { useSmoothText } from "@/lib/use-smooth-text";
 import { onSettingsChanged, readClientSetting } from "@/lib/settings";
 import type { Artifact, ChatMessage, ModeFlowRow, ToolEvent, WebSource } from "@/lib/chat-types";
 import type { ConversationMode } from "@/lib/modes";
@@ -316,6 +317,12 @@ export const MessageBubble = memo(function MessageBubble({
     isStreaming ? (streamingContent ?? "") : "",
     isStreaming
   );
+  // Révélation douce (25/11) : le texte affiché rattrape la cible du
+  // stream en continu (rAF adaptatif) au lieu de sauter par paquets quand
+  // le moteur livre une rafale après une pause outils/réflexion. À la
+  // clôture, le message persisté (complet) prend le relais tel quel.
+  // (Hook AVANT tout retour conditionnel — loi de l'ordre des hooks.)
+  const streamed = useSmoothText(streamingContent ?? "", Boolean(isStreaming));
   // Réglage « Afficher le raisonnement » (fork.ui.showReasoning) — suivi
   // en direct via le bus `hermes-ui:settings-changed`. Initialisation
   // paresseuse (lecture au 1er rendu), l'effet ne fait que s'abonner.
@@ -471,7 +478,7 @@ export const MessageBubble = memo(function MessageBubble({
   }
 
   // ── Assistant ────────────────────────────────────────────────────────
-  const rawContent = isStreaming ? (streamingContent ?? "") : message.content;
+  const rawContent = isStreaming ? streamed : message.content;
   // Les blocs devenus artefacts disparaissent du flux : la carte les remplace
   const content = stripArtifactBlocks(rawContent);
   const reasoning = showReasoning
