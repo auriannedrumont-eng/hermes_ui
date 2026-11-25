@@ -32,9 +32,9 @@ function LigneOutil({ event }: { event: ToolEvent }) {
       {event.status === "running" ? (
         <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-zinc-400" />
       ) : event.status === "error" ? (
-        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-400" />
+        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-danger-bright" />
       ) : (
-        <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
+        <Check className="mt-0.5 h-3 w-3 shrink-0 text-success-bright" />
       )}
       <span className="shrink-0 text-zinc-500">{heure(event.at)}</span>
       <span className="shrink-0 text-zinc-200">{event.name}</span>
@@ -92,7 +92,7 @@ export function ArtifactTerminal({
         <span>Terminal</span>
         {live ? (
           <span
-            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500"
+            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success-canvas"
             aria-hidden="true"
           />
         ) : (

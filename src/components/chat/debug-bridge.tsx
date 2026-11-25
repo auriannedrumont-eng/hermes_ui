@@ -186,7 +186,7 @@ export function DebugBridge() {
             // est précisément affiché dans cet état) ; un point fixe rouge
             // dit la même chose, à coût nul.
             "h-2 w-2 shrink-0 rounded-full " +
-            (connected ? "bg-emerald-500" : "bg-destructive")
+            (connected ? "bg-success" : "bg-destructive")
           }
           aria-hidden
         />
@@ -243,7 +243,7 @@ export function DebugBridge() {
           Copier le diagnostic
         </Button>
         {copied ? (
-          <span className="text-[12.5px] text-emerald-600">copié ✓ collez-le à l&apos;agent</span>
+          <span className="text-[12.5px] text-success">copié ✓ collez-le à l&apos;agent</span>
         ) : null}
       </div>
       {report && !copied ? (

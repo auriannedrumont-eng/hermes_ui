@@ -45,6 +45,20 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
+  /* ── Passe design 2026-11-25 — statut des artefacts (journal §9 (16)) ──
+     Le canon thémé est --success/--warning (paire clair/sombre, déjà posés).
+     Ces tokens STATIques servent les canvas sombres FIXES (diff et terminal
+     d'artefacts, fond #161b22/#0d1117 indépendant du thème) : valeurs = la
+     palette Tailwind au bit près, zéro delta visuel (preuve qa-design-dom :
+     computed style du token == computed style de la classe brute d'origine).
+     KIND_TINT (artifact-card) reste en palette catégorique assumée —
+     catégorie ≠ sémantique ; zinc sur ces mêmes canvas idem. */
+  --color-success-canvas: oklch(69.6% 0.17 162.48);      /* emerald-500 — points/fonds teintés /10 /20 du canvas */
+  --color-success-bright: oklch(76.5% 0.177 163.223);    /* emerald-400 — texte du canvas sombre */
+  --color-success-soft: oklch(90.5% 0.093 164.15);       /* emerald-200 — lignes ajoutées du diff */
+  --color-danger: oklch(63.7% 0.237 25.331);             /* red-500 — fonds teintés du canvas (le thémé reste destructive) */
+  --color-danger-bright: oklch(70.4% 0.191 22.216);      /* red-400 — texte du canvas sombre */
+  --color-danger-soft: oklch(88.5% 0.062 18.334);        /* red-200 — lignes supprimées du diff */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

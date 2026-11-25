@@ -495,7 +495,7 @@ function ArtifactHeaderActions({
         aria-label="Copier le source"
         title="Copier le source"
       >
-        {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
       </Button>
       <Button
         variant="ghost"

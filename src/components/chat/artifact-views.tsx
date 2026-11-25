@@ -191,10 +191,10 @@ export function DiffView({ oldSource, newSource }: { oldSource: string; newSourc
   return (
     <div className="font-mono text-[12.5px] leading-relaxed">
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-700/60 bg-[#161b22] px-3 py-1.5 text-[11px] text-zinc-400">
-        <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-400">
+        <span className="rounded bg-success-canvas/20 px-1.5 py-0.5 text-success-bright">
           +{stats.add}
         </span>
-        <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-red-400">
+        <span className="rounded bg-danger/20 px-1.5 py-0.5 text-danger-bright">
           −{stats.del}
         </span>
         <span className="ml-auto">comparaison ligne à ligne</span>
@@ -205,9 +205,9 @@ export function DiffView({ oldSource, newSource }: { oldSource: string; newSourc
             key={i}
             className={`flex ${
               r.type === "add"
-                ? "bg-emerald-500/10"
+                ? "bg-success-canvas/10"
                 : r.type === "del"
-                  ? "bg-red-500/10"
+                  ? "bg-danger/10"
                   : ""
             }`}
           >
@@ -220,9 +220,9 @@ export function DiffView({ oldSource, newSource }: { oldSource: string; newSourc
             <span
               className={`w-5 shrink-0 select-none text-center ${
                 r.type === "add"
-                  ? "text-emerald-400"
+                  ? "text-success-bright"
                   : r.type === "del"
-                    ? "text-red-400"
+                    ? "text-danger-bright"
                     : "text-zinc-700"
               }`}
             >
@@ -230,7 +230,7 @@ export function DiffView({ oldSource, newSource }: { oldSource: string; newSourc
             </span>
             <pre
               className={`flex-1 whitespace-pre-wrap px-2 ${
-                r.type === "same" ? "text-zinc-300" : r.type === "add" ? "text-emerald-200" : "text-red-200"
+                r.type === "same" ? "text-zinc-300" : r.type === "add" ? "text-success-soft" : "text-danger-soft"
               }`}
             >
               {r.text || " "}

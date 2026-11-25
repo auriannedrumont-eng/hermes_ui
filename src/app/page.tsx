@@ -437,8 +437,8 @@ export default function HermesWebPage() {
           que la page n'est pas rechargée — JAMAIS de rechargement forcé,
           l'utilisatrice choisit son moment (pas en plein tour). */}
       {chat.screenOutdated ? (
-        <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 border-b border-amber-500/30 bg-background/95 px-4 py-2 text-sm text-foreground shadow-sm backdrop-blur">
-          <RefreshCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+        <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 border-b border-warning/30 bg-background/95 px-4 py-2 text-sm text-foreground shadow-sm backdrop-blur">
+          <RefreshCw className="size-4 shrink-0 text-warning" aria-hidden="true" />
           <span className="truncate">
             Hermes a été mis à jour — cette page affiche encore l'ancienne version.
           </span>
