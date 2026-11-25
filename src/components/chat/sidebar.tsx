@@ -756,7 +756,7 @@ function SidebarStatut({
               }`}
               aria-hidden="true"
             />
-            <p className="truncate text-[13px] font-semibold leading-none text-foreground">
+            <p className="truncate text-[12.5px] font-semibold leading-none text-foreground">
               {/* Dictionnaire (loi « tout simplement », 2026-11-22) : le sujet
                   est toujours Hermes, en mots simples — plus de « moteur local ».
                   Hermes éteint : l'application l'allume seule s'il est installé. */}

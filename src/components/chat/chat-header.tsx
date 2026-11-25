@@ -164,7 +164,7 @@ export function ChatHeader({
               <>
                 {crumb.parent ? (
                   <>
-                    <span className="hidden min-w-0 max-w-28 truncate text-[12px] text-muted-foreground min-[520px]:inline">
+                    <span className="hidden min-w-0 max-w-28 truncate text-[12.5px] text-muted-foreground min-[520px]:inline">
                       {crumb.parent.name}
                     </span>
                     {/* Revue P1-P7 : le chevron suit le seuil du NOM — caché
@@ -175,7 +175,7 @@ export function ChatHeader({
                     </span>
                   </>
                 ) : null}
-                <span className="hidden min-w-0 max-w-32 truncate text-[12px] text-muted-foreground min-[420px]:inline">
+                <span className="hidden min-w-0 max-w-32 truncate text-[12.5px] text-muted-foreground min-[420px]:inline">
                   {crumb.folder.name}
                 </span>
                 {/* Revue P1-P7 : même règle à 420 px — plus de chevron
@@ -185,7 +185,7 @@ export function ChatHeader({
                 </span>
               </>
             ) : (
-              <span className="hidden shrink-0 text-[12px] text-muted-foreground min-[420px]:inline">
+              <span className="hidden shrink-0 text-[12.5px] text-muted-foreground min-[420px]:inline">
                 Sans dossier ›
               </span>
             )}

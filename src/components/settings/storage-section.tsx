@@ -147,7 +147,7 @@ function KindBadge({ kind }: { kind: string }) {
       kind
     ] ?? kind.toUpperCase().slice(0, 4);
   return (
-    <span className="grid h-[22px] w-[34px] flex-none place-items-center rounded-[4px] bg-muted text-[8.5px] font-bold tracking-[0.03em] text-muted-foreground">
+    <span className="grid h-[22px] w-[34px] flex-none place-items-center rounded-[4px] bg-muted text-[11px] font-bold tracking-[0.03em] text-muted-foreground">
       {label}
     </span>
   );
@@ -157,7 +157,7 @@ function VersionTag({ entry, isLast }: { entry: StorageEntry; isLast: boolean })
   return (
     <span
       className={cn(
-        "flex-none rounded-full px-[7px] py-px text-[9.5px] font-bold",
+        "flex-none rounded-full px-[7px] py-px text-[11px] font-bold",
         isLast ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
       )}
     >
@@ -286,7 +286,7 @@ function StorageBarreFiltres({
                   if (type === "Tous") setProjetOuvert(null);
                   inputRef.current?.focus();
                 }}
-                className="h-auto flex-none px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
+                className="h-auto flex-none px-0 py-0 text-[11px] font-semibold text-hermes-text hover:underline"
               >
                 effacer
               </Button>
@@ -296,7 +296,7 @@ function StorageBarreFiltres({
             value={tri}
             onChange={(e) => setTri(e.target.value as SortKey)}
             aria-label="Trier les versions"
-            className="h-[34px] flex-none cursor-pointer rounded-md border border-border bg-card px-2 text-[12px] font-semibold text-foreground outline-none focus-visible:border-hermes/60"
+            className="h-[34px] flex-none cursor-pointer rounded-md border border-border bg-card px-2 text-[12.5px] font-semibold text-foreground outline-none focus-visible:border-hermes/60"
           >
             <option value="taille">Tri : taille</option>
             <option value="date">Tri : date</option>
@@ -367,7 +367,7 @@ function StorageBandeau({
                 (type === "Tous" || e.kind.toUpperCase() === type)
             ).length;
             return (
-              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3.5 py-2 text-[11.5px] text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3.5 py-2 text-[11px] text-muted-foreground">
                 {nb > 0 ? (
                   <span>
                     <b className="text-foreground">{nb}</b> fichiers correspondent
@@ -470,13 +470,13 @@ function StorageGroupe({
                       >
                         <span
                           className={cn(
-                            "min-w-0 flex-1 truncate text-[13px] font-bold",
+                            "min-w-0 flex-1 truncate text-[12.5px] font-bold",
                             g.hors && "font-semibold text-muted-foreground"
                           )}
                         >
                           {g.name}
                         </span>
-                        <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
+                        <span className="flex-none text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
                           {g.entries.length}
                           {g.entries.length > 1 ? " documents" : " document"} · {formatArtifactBytes(g.bytes)}
                         </span>
@@ -514,7 +514,7 @@ function StorageGroupe({
                             return (
                               <div
                                 key={e.id}
-                                className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12px] hover:bg-muted"
+                                className="flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-[12.5px] hover:bg-muted"
                               >
                                 <KindBadge kind={e.kind} />
                                 <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -526,7 +526,7 @@ function StorageGroupe({
                                     </span>
                                   ) : null}
                                 </span>
-                                <span className="flex-none text-[11.5px] whitespace-nowrap text-muted-foreground tabular-nums">
+                                <span className="flex-none text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
                                   {formatArtifactBytes(e.size)} · {df.format(parseDate(e.createdAt))}
                                 </span>
                                 <Button
@@ -553,7 +553,7 @@ function StorageGroupe({
                           })}
                           {/* Projet vidé : en-tête conservé (§2.2), message honnête */}
                           {visibles.length === 0 && !filtrageActif ? (
-                            <div className="px-1.5 py-2 text-center text-[12px] text-muted-foreground">
+                            <div className="px-1.5 py-2 text-center text-[12.5px] text-muted-foreground">
                               Aucune version — ce projet a été entièrement nettoyé.
                             </div>
                           ) : null}
@@ -597,7 +597,7 @@ function StorageToasts({ toasts, undo }: StorageToastsProps) {
           >
             <div className="min-w-0 flex-1">
               <div className="text-[12.5px] font-semibold">{t.title}</div>
-              <div className="text-[11.5px] leading-snug text-muted-foreground">{t.description}</div>
+              <div className="text-[11px] leading-snug text-muted-foreground">{t.description}</div>
             </div>
             {t.undo ? (
               <Button
@@ -606,7 +606,7 @@ function StorageToasts({ toasts, undo }: StorageToastsProps) {
                 onClick={() => void undo(t.undo!.token, t.undo!.bytes, t.undo!.n)}
                 disabled={Date.now() >= t.expireAt}
                 title={Date.now() >= t.expireAt ? "Fenêtre d'annulation expirée" : undefined}
-                className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex-none rounded-md border border-border bg-background px-3 py-1.5 text-[12.5px] font-semibold text-foreground transition-colors hover:border-hermes/60 hover:text-hermes-text disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Annuler
               </Button>
@@ -965,7 +965,7 @@ export function StorageSection({ initialProject }: { initialProject?: string | n
             </div>
           ) : error ? (
             <div className="px-5 py-8 text-center" role="alert">
-              <div className="text-[13.5px] font-semibold">Impossible de charger le stockage</div>
+              <div className="text-[14px] font-semibold">Impossible de charger le stockage</div>
               <div className="mx-auto mt-1.5 max-w-[420px] text-[12.5px] leading-relaxed text-muted-foreground">
                 {error} Rien n&apos;est mis en cache : réessayez quand le service répond.
               </div>

@@ -132,7 +132,7 @@ export function AttachDiskDialog({
           >
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
           </Button>
-          <p className="truncate text-[12px] text-muted-foreground" title={listing?.path}>
+          <p className="truncate text-[12.5px] text-muted-foreground" title={listing?.path}>
             {listing ? listing.path : "…"}
           </p>
         </div>
@@ -186,7 +186,7 @@ export function AttachDiskDialog({
                         <span className="min-w-0 flex-1 truncate text-[12.5px]">{d.name}</span>
                       </button>
                       {linked ? (
-                        <span className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10.5px] text-muted-foreground">
+                        <span className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[11px] text-muted-foreground">
                           déjà lié
                         </span>
                       ) : (
@@ -212,7 +212,7 @@ export function AttachDiskDialog({
         </div>
 
         {error ? (
-          <p className="text-[12px] text-destructive" role="alert">
+          <p className="text-[12.5px] text-destructive" role="alert">
             {error}
           </p>
         ) : null}

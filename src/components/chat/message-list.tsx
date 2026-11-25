@@ -326,10 +326,10 @@ export function MessageList({
           title="Ouvrir Paramètres"
         >
           <KeyRound className="h-3.5 w-3.5 shrink-0 text-warning" />
-          <span className="truncate text-[12px] text-warning">
+          <span className="truncate text-[12.5px] text-warning">
             Hermes n'est pas encore connecté — lancez l'agent (Hermes-Web.bat) ou vérifiez la liaison dans Paramètres.
           </span>
-          <span className="ml-auto shrink-0 text-[11.5px] font-medium text-warning underline decoration-warning/40 underline-offset-2">
+          <span className="ml-auto shrink-0 text-[11px] font-medium text-warning underline decoration-warning/40 underline-offset-2">
             Paramètres
           </span>
         </button>

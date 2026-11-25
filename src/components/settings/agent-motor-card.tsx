@@ -382,7 +382,7 @@ function AgentMotorBlocs({
           <div className="mt-3">
             {release.touchesInterface ? (
               <p
-                className="mb-2 flex items-start gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12px] font-medium text-warning"
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12.5px] font-medium text-warning"
                 role="alert"
               >
                 <span aria-hidden>⚠</span>
@@ -393,7 +393,7 @@ function AgentMotorBlocs({
               // Revue P1-P7 : le bloc déplié sort du clamp — l'ancien
               // conteneur max-h-[132px] overflow-hidden cachait aussi la
               // liste complète (notesOpen) : texte déplié invisible.
-              <div className={`rounded-lg border border-border px-3 py-2.5 text-[12px] text-muted-foreground ${notesOpen ? "" : "max-h-[132px] overflow-hidden"}`}>
+              <div className={`rounded-lg border border-border px-3 py-2.5 text-[12.5px] text-muted-foreground ${notesOpen ? "" : "max-h-[132px] overflow-hidden"}`}>
                 <p className="mb-1.5 text-[12.5px] font-semibold text-foreground">
                   Ce qui change dans {release.name ?? release.tag}
                 </p>
@@ -407,7 +407,7 @@ function AgentMotorBlocs({
                         type="button"
                         variant="link"
                         onClick={() => setNotesOpen((v) => !v)}
-                        className="h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
+                        className="h-auto px-0 py-0 text-[12.5px] font-semibold text-hermes-text hover:underline"
                       >
                         {notesOpen ? "Réduire la liste" : `Toute la liste (+${notesReste})`}
                       </Button>
@@ -417,7 +417,7 @@ function AgentMotorBlocs({
                         href={release.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
+                        className="h-auto px-0 py-0 text-[12.5px] font-semibold text-hermes-text hover:underline"
                       >
                         Voir sur GitHub →
                       </a>
@@ -433,7 +433,7 @@ function AgentMotorBlocs({
                 ) : null}
               </div>
             ) : (
-              <p className="text-[11.5px] text-muted-foreground">(pas de liste publiée)</p>
+              <p className="text-[11px] text-muted-foreground">(pas de liste publiée)</p>
             )}
           </div>
         ) : null}
@@ -443,18 +443,18 @@ function AgentMotorBlocs({
             à copier ensuite. */}
         {pbDetecte && !op ? (
           <div className="mt-3 rounded-lg border border-border px-3.5 py-3">
-            <p className="text-[13px] font-bold">Deux façons de s&apos;en sortir</p>
-            <p className="mt-0.5 mb-2 text-[12px] leading-relaxed text-muted-foreground">
+            <p className="text-[12.5px] font-bold">Deux façons de s&apos;en sortir</p>
+            <p className="mt-0.5 mb-2 text-[12.5px] leading-relaxed text-muted-foreground">
               La plus simple d&apos;abord — le retour arrière utilise la procédure
               officielle de Hermes et ne touche à rien d&apos;autre.
             </p>
             {!previous ? (
-              <p className="text-[12px] text-muted-foreground">
+              <p className="text-[12.5px] text-muted-foreground">
                 (La version d&apos;avant n&apos;est plus en réserve — «&nbsp;Revérifier&nbsp;»
                 pour retenter la liaison.)
               </p>
             ) : null}
-            <p className="text-[12px] leading-relaxed text-muted-foreground">
+            <p className="text-[12.5px] leading-relaxed text-muted-foreground">
               Si vous préférez décrire le problème à la personne qui maintient
               l&apos;application&nbsp;:{" "}
               <Button
@@ -475,7 +475,7 @@ function AgentMotorBlocs({
                   type="button"
                   variant="link"
                   onClick={copierMessage}
-                  className="mt-1.5 inline-flex h-auto cursor-pointer items-center gap-1.5 px-0 py-0 text-[11.5px] font-semibold text-hermes-text hover:underline"
+                  className="mt-1.5 inline-flex h-auto cursor-pointer items-center gap-1.5 px-0 py-0 text-[11px] font-semibold text-hermes-text hover:underline"
                 >
                   {copied ? <Check className="size-[13px]" strokeWidth={2.5} /> : <Copy className="size-[13px]" strokeWidth={2.5} />}
                   {copied ? "Copié" : "Copier le message"}
@@ -510,7 +510,7 @@ function AgentMotorBlocs({
                     }
                   >
                     {l.heure ? (
-                      <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground opacity-80">
+                      <span className="flex-none font-mono text-[11px] tabular-nums text-muted-foreground opacity-80">
                         {l.heure}
                       </span>
                     ) : null}
@@ -522,7 +522,7 @@ function AgentMotorBlocs({
                 ))}
               </div>
               {!op && verdict === "ok" ? (
-                <p className="mt-2 text-[11.5px] text-muted-foreground">
+                <p className="mt-2 text-[11px] text-muted-foreground">
                   Terminé — l&apos;historique ci-dessous garde la trace complète.
                 </p>
               ) : null}
@@ -581,7 +581,7 @@ function AgentMotorReplis({
               variant="ghost"
               onClick={() => setAdvOpen((v) => !v)}
               aria-expanded={advOpen}
-              className="mt-2 inline-flex cursor-pointer items-center gap-1.5 py-1 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              className="mt-2 inline-flex cursor-pointer items-center gap-1.5 py-1 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
               <ChevronDown
                 className={"size-[11px] transition-transform " + (advOpen ? "rotate-180" : "")}
@@ -591,14 +591,14 @@ function AgentMotorReplis({
             </Button>
             {advOpen ? (
               <div className="mt-1.5 rounded-[10px] border border-dashed border-border px-4 py-3.5">
-                <p className="text-[13px] font-bold">Le relier à cette application</p>
+                <p className="text-[12.5px] font-bold">Le relier à cette application</p>
                 <p className="mb-3 mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
                   Si Hermes tourne sur un autre ordinateur que celui-ci, indiquez
                   ici son adresse et son code d&apos;accès. Rien ne change avant que
                   vous validiez.
                 </p>
                 <label className="mt-2.5 block">
-                  <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Adresse du moteur</span>
+                  <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Adresse du moteur</span>
                   <Input
                     type="text"
                     value={advUrl}
@@ -608,7 +608,7 @@ function AgentMotorReplis({
                   />
                 </label>
                 <label className="mt-2.5 block">
-                  <span className="mb-1 block text-[11.5px] font-semibold text-muted-foreground">Code d&apos;accès</span>
+                  <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Code d&apos;accès</span>
                   <Input
                     type="password"
                     value={advToken}
@@ -700,7 +700,7 @@ function AgentMotorReplis({
             carte séparée, plus de redite. <details> natif : l'état ouvert
             vit dans le DOM, pas dans React. */}
         <details className="mt-2 group">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 py-1 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 py-1 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
             <ChevronDown className="size-[11px] transition-transform group-open:rotate-180" strokeWidth={3} />
             Historique · {journal.length} étape{journal.length > 1 ? "s" : ""}
           </summary>
@@ -716,7 +716,7 @@ function AgentMotorReplis({
                     key={e.id}
                     className="flex flex-wrap items-baseline justify-between gap-x-3.5 gap-y-0.5 border-b border-border py-1.5 last:border-b-0"
                   >
-                    <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                    <span className="flex-none font-mono text-[11px] tabular-nums text-muted-foreground">
                       {df.format(new Date(e.at))}
                     </span>
                     <span className="min-w-0 flex-1 text-[12.5px]">
@@ -752,7 +752,7 @@ function AgentMotorReplis({
             type="button"
             variant="link"
             onClick={onNavigateStorage}
-            className="mt-1 h-auto px-0 py-0 text-[12px] font-semibold text-hermes-text hover:underline"
+            className="mt-1 h-auto px-0 py-0 text-[12.5px] font-semibold text-hermes-text hover:underline"
           >
             Documents générés par Hermes →
           </Button>

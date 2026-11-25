@@ -339,6 +339,27 @@ export function ModePicker({
           className="max-h-[290px] overflow-y-auto p-1.5"
           role="listbox"
           aria-label="Modes du compositeur"
+          // Lot 5 (audit : rôles mensongers) — une listbox DOIT être navigable
+          // aux flèches (APG) : ↑/↓ déplacent le focus, Home/End sautent aux
+          // extrémités ; Entrée active l'option (le Button reste focusable).
+          onKeyDown={(e) => {
+            if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+            const opts = Array.from(
+              e.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
+            );
+            if (opts.length === 0) return;
+            e.preventDefault();
+            const cur = opts.indexOf(document.activeElement as HTMLElement);
+            const next =
+              e.key === "ArrowDown"
+                ? Math.min((cur < 0 ? -1 : cur) + 1, opts.length - 1)
+                : e.key === "ArrowUp"
+                  ? Math.max(cur - 1, 0)
+                  : e.key === "Home"
+                    ? 0
+                    : opts.length - 1;
+            opts[cur < 0 ? 0 : next].focus();
+          }}
         >
           {MODES.map((m) => {
             const sel = m.id === mode;
@@ -349,6 +370,8 @@ export function ModePicker({
                 type="button"
                 role="option"
                 aria-selected={sel}
+                // tabindex roving : une seule option dans l'ordre de tabulation
+                tabIndex={sel ? 0 : -1}
                 onClick={() => switchTo(m.id)}
                 className={cn(
                   "flex h-auto w-full items-start gap-2.5 whitespace-normal rounded-lg px-2 py-2 text-left font-normal transition-colors",

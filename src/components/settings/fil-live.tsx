@@ -284,14 +284,14 @@ export function jalonsHtml(labels: string[], cur: number): React.ReactNode[] {
       <span
         key={`jalon-${i}`}
         className={
-          "inline-flex items-center gap-1.5 text-[11.5px] font-semibold " +
+          "inline-flex items-center gap-1.5 text-[11px] font-semibold " +
           (done ? "text-foreground" : now ? "text-hermes-text" : "text-muted-foreground")
         }
       >
         <i
           aria-hidden
           className={
-            "grid size-[17px] flex-none place-items-center rounded-full border-2 text-[9px] font-bold text-white " +
+            "grid size-[19px] flex-none place-items-center rounded-full border-2 text-[11px] font-bold text-white " +
             (done ? "border-success bg-success" : now ? "animate-pulse border-hermes" : "border-border")
           }
         >

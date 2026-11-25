@@ -178,7 +178,7 @@ export function ProjectSubgroup({
                 aria-label={`Liaison disque : ${project.diskPath}`}
               />
             ) : null}
-            <span className="ml-0.5 shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10.5px] tabular-nums text-muted-foreground">
+            <span className="ml-0.5 shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[11px] tabular-nums text-muted-foreground">
               {conversations.length}
             </span>
           </button>
@@ -237,7 +237,7 @@ export function ProjectSubgroup({
         // une conversation dans un sous-dossier gagne ~22 px au total.
         <div className="mb-0.5 ml-[18px] border-l border-sidebar-border pl-1.5 sm:ml-[20px]">
           {conversations.length === 0 ? (
-            <p className="px-2 py-1.5 text-[12px] italic text-muted-foreground">
+            <p className="px-2 py-1.5 text-[12.5px] italic text-muted-foreground">
               Aucune conversation.
             </p>
           ) : (

@@ -307,7 +307,7 @@ function SystemFilApp({
                       }
                     >
                       {l.heure ? (
-                        <span className="flex-none font-mono text-[10.5px] tabular-nums text-muted-foreground opacity-80">
+                        <span className="flex-none font-mono text-[11px] tabular-nums text-muted-foreground opacity-80">
                           {l.heure}
                         </span>
                       ) : null}
@@ -321,7 +321,7 @@ function SystemFilApp({
 
                 {/* Reconnexion : la pile relance par la mise à jour. */}
                 {majReconnect && majDone === null ? (
-                  <p className="mt-2 text-[11.5px] text-muted-foreground" role="status">
+                  <p className="mt-2 text-[11px] text-muted-foreground" role="status">
                     La connexion coupe et revient — c&apos;est prévu pendant le redémarrage.
                   </p>
                 ) : null}
@@ -330,7 +330,7 @@ function SystemFilApp({
                 {majStale && majDone === null ? (
                   <div
                     role="alert"
-                    className="mt-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12px] font-medium leading-relaxed text-warning"
+                    className="mt-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-[12.5px] font-medium leading-relaxed text-warning"
                   >
                     Aucune nouvelle depuis {majAttendGitHub ? "45" : "30"} secondes
                     {ageJournal ? ` (dernière écriture il y a ${ageJournal} s)` : ""}. Ce n&apos;est
@@ -350,7 +350,7 @@ function SystemFilApp({
             </div>
           ) : majEtat === "disponible" ? (
             /* État disponible sans journal : ce que le lanceur fera. */
-            <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
+            <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
               La mise à jour est installée par le petit programme «&nbsp;Hermes Web&nbsp;» qui a
               lancé l&apos;application&nbsp;: il prend la demande dans les 15&nbsp;secondes, met tout
               à jour, puis relance tout seul. Si vous aviez modifié des fichiers de
@@ -655,7 +655,7 @@ export function SystemSection({
 
 
           {updateError ? (
-            <p className="mt-2 text-[11.5px] font-medium text-destructive" role="alert">
+            <p className="mt-2 text-[11px] font-medium text-destructive" role="alert">
               {updateError}
             </p>
           ) : null}

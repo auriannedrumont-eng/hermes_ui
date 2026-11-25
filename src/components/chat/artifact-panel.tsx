@@ -662,12 +662,37 @@ export function ArtifactPanel({
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
           role="tablist"
           aria-label="Artefacts de la conversation"
+          // Lot 5 (audit : rôles mensongers) — une tablist DOIT être navigable
+          // aux flèches (APG) : ←/→ déplacent le focus, Home/End sautent aux
+          // extrémités ; Entrée/Espace activent l'onglet (bouton natif).
+          onKeyDown={(e) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+            const tabs_ = Array.from(
+              e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')
+            );
+            if (tabs_.length === 0) return;
+            e.preventDefault();
+            const cur = tabs_.indexOf(document.activeElement as HTMLElement);
+            const next =
+              e.key === "ArrowRight"
+                ? Math.min((cur < 0 ? -1 : cur) + 1, tabs_.length - 1)
+                : e.key === "ArrowLeft"
+                  ? Math.max(cur - 1, 0)
+                  : e.key === "Home"
+                    ? 0
+                    : tabs_.length - 1;
+            tabs_[cur < 0 ? 0 : next].focus();
+          }}
         >
           {tabs.map((t) => (
             <button
               key={t.key}
+              id={`artifact-tab-${t.key}`}
               role="tab"
               aria-selected={t.key === selected.key}
+              aria-controls="artifact-tabpanel"
+              // tabindex roving : un seul onglet dans l'ordre de tabulation
+              tabIndex={t.key === selected.key ? 0 : -1}
               onClick={() => onSelectVersion(t)}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
                 t.key === selected.key
@@ -704,21 +729,30 @@ export function ArtifactPanel({
         </Button>
       </div>
 
-      <ArtifactBody
-        artifact={selected}
-        source={source}
-        sourceError={sourceError}
-        onRetrySource={retrySource}
-        streamingContent={streamingContent}
-        versions={versions}
-        onRetry={onRetry}
-        fetchVersions={fetchVersions}
-      />
-      <ArtifactTurnTerminal
-        messageId={selected.messageId}
-        resolveTurnTools={resolveTurnTools}
-      />
-      <ArtifactMetaLine artifact={selected} />
+      {/* Lot 5 (audit) : le panneau ciblé par aria-controls des onglets —
+          les trois sections de contenu forment UNE tabpanel. */}
+      <div
+        id="artifact-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`artifact-tab-${selected.key}`}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <ArtifactBody
+          artifact={selected}
+          source={source}
+          sourceError={sourceError}
+          onRetrySource={retrySource}
+          streamingContent={streamingContent}
+          versions={versions}
+          onRetry={onRetry}
+          fetchVersions={fetchVersions}
+        />
+        <ArtifactTurnTerminal
+          messageId={selected.messageId}
+          resolveTurnTools={resolveTurnTools}
+        />
+        <ArtifactMetaLine artifact={selected} />
+      </div>
     </div>
   );
 }
