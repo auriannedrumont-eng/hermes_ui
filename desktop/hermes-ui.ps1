@@ -1084,6 +1084,33 @@ function Ensure-AgentCles {
             Log "  ATTENTION : pose du modele par défaut impossible ($($_.Exception.Message)) — l'agent pourrait rejeter les tours (modele amont par defaut)."
         }
     }
+    # (C1, plan 25/11 — constat n°1) Écouteur STABLE de l'agent : sans bloc
+    # webapp dans config.yaml, la gateway démarre sur un port ÉPHÉMÈRE
+    # (webapp_listener.py, bind port 0) que la certification du lanceur et
+    # la sonde 9120 ne voient JAMAIS — l'interface reste [HERMES_OFFLINE]
+    # alors que l'agent tourne. Pose idempotente du bloc officiel
+    # (webapp: enabled: true → listener 9120) ; une installation spéciale
+    # qui veut garder son port choisi bloque via HERMES_DISABLE_WEBAPP=1,
+    # et une ligne webapp: existante n'est JAMAIS réécrite.
+    if (-not $env:HERMES_DISABLE_WEBAPP) {
+        $aReglerWebapp = $true
+        if (Test-Path $cfgFile) {
+            try {
+                if ((Get-Content $cfgFile -Raw) -match '(?m)^webapp:') { $aReglerWebapp = $false }
+            } catch { }
+        }
+        if ($aReglerWebapp) {
+            try {
+                $cfgTxt = if (Test-Path $cfgFile) { Get-Content $cfgFile -Raw } else { '' }
+                if ($cfgTxt -and (-not $cfgTxt.EndsWith("`n"))) { $cfgTxt += "`n" }
+                $cfgTxt += "webapp:`n  enabled: true`n"
+                [System.IO.File]::WriteAllText($cfgFile, $cfgTxt, $utf8SansBom)
+                Log "• ecouteur webapp de l'agent pose (port 9120) : certification et chat le verront."
+            } catch {
+                Log "  ATTENTION : pose du bloc webapp impossible ($($_.Exception.Message)) — la gateway restera sur un port éphémère (le chantier C2 du connecteur couvre ce cas)."
+            }
+        }
+    }
 }
 
 # ((91)) INDEPENDANCE TOTALE d'avec toute autre installation Hermes de la

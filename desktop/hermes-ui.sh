@@ -903,6 +903,19 @@ start_agent_runtime() {
     return 0
   fi
   log "• démarrage de l'agent (moteur local) sur :9120…"
+  # (C1, plan 25/11 — constat n°1) Écouteur STABLE : sans bloc webapp dans
+  # config.yaml, la gateway démarre sur un port ÉPHÉMÈRE que la sonde 9120
+  # ci-dessus ne verra jamais. Pose idempotente ; HERMES_DISABLE_WEBAPP=1
+  # bloque (installation spéciale) ; une ligne webapp: existante n'est
+  # jamais réécrite.
+  if [ -z "$HERMES_DISABLE_WEBAPP" ] && [ -n "$maison" ]; then
+    local cfgw="$maison/config.yaml"
+    if [ ! -s "$cfgw" ] || ! grep -q '^webapp:' "$cfgw" 2>/dev/null; then
+      [ -s "$cfgw" ] && [ -n "$(tail -c1 "$cfgw" 2>/dev/null)" ] && printf '\n' >>"$cfgw"
+      printf 'webapp:\n  enabled: true\n' >>"$cfgw"
+      log "• écouteur webapp de l'agent posé (port 9120) : certification et chat le verront."
+    fi
+  fi
   # ((78)) Commande officielle amont (cf. l'essai de certification) : le
   # runtime supervise allume lui-même le listener 9120 (webapp_listener).
   mkdir -p "$ROOT/db"

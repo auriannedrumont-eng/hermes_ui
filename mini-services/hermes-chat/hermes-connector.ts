@@ -22,6 +22,7 @@ import type { LlmPoolApi, PoolTurnResult, TurnUsage } from "./llm-pool";
 import type { GatewayMode, ModelOption, ModelsResult } from "./types";
 import type { TurnCallbacks, TurnRequest } from "./local-engine";
 import { runRestTurn } from "./motor-rest";
+import { buildGatewayAttachments } from "./gateway-attachments";
 import { trace } from "./trace";
 import { portablePythonPath } from "./agent-starter";
 import { resolveAgentDir } from "./agent-motor";
@@ -33,7 +34,13 @@ const ENV_GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? null;
 const ENV_GATEWAY_TOKEN = process.env.HERMES_GATEWAY_TOKEN ?? null;
 const HANDSHAKE_TIMEOUT_MS = 3000;
 const REPROBE_TIMEOUT_MS = 1500;
-const TURN_TIMEOUT_MS = 180_000;
+// C4 (25/11, constat n°4) : le plafond de DURÉE (180 s) coupait les tours
+// longs de l'agent (outils, sous-agents). Remplacé par une garde
+// d'INACTIVITÉ : le tour vit tant qu'un événement arrive (delta, outil,
+// statut…) ; ce silence maximal clôture avec cause lisible. L'abort
+// utilisateur reste immédiat, le partiel reçu reste rendu.
+const TURN_INACTIVITY_MS = 240_000;
+const HEARTBEAT_INTERVAL_MS = 15_000;
 const MODELS_TIMEOUT_MS = 4000;
 
 // Protocole canonique de la gateway (hermes-gateway-v1) : l'upgrade exige un
@@ -67,10 +74,13 @@ function ticketPythonCandidates(): string[] {
   return list;
 }
 
-/** Minter un ticket one-use pour l'upgrade WebSocket canonique (30 s TTL).
- *  `gateway attach --json` renvoie aussi le ticket quand la gateway tourne
- *  déjà (state=ready) — c'est le chemin nominal. null = aucun python n'a
- *  répondu (la gateway est probablement absente ; la re-sonde s'en charge).
+/** Minter un ticket one-use + l'URL d'attachement pour l'upgrade WebSocket
+ *  canonique (30 s TTL). `gateway attach --json` renvoie aussi le ticket
+ *  quand la gateway tourne déjà (state=ready) — c'est le chemin nominal.
+ *  C2 (25/11, constat n°2) : la réponse contient AUSSI l'URL réelle de
+ *  l'écouteur (`url`, port éphémère compris) — elle est désormais capturée
+ *  au lieu d'être jetée. null = aucun python n'a répondu (la gateway est
+ *  probablement absente ; la re-sonde s'en charge).
  *  ((90)) La maison est ÉPINGLÉE (HERMES_HOME du dossier) : un héritage de
  *  l'environnement d'une AUTRE installation Hermes (console de lancement,
  *  IDE) faisait répondre la gateway de l'autre maison — ticket d'un autre
@@ -82,7 +92,14 @@ function ticketPythonCandidates(): string[] {
  *  de chaque tour gateway. execFile promisifié libère la boucle. */
 const execFileP = promisify(execFile);
 
-async function mintGatewayTicket(): Promise<string | null> {
+export interface GatewayAttachInfo {
+  ticket: string;
+  /** Origine réelle de l'écouteur (ws://…/api/ws, port compris). null si le
+   *  moteur ne la renvoie pas (version ancienne) — le repli 9120 reste. */
+  url: string | null;
+}
+
+async function mintGatewayAttach(): Promise<GatewayAttachInfo | null> {
   const maison = pathResolve(join(import.meta.dir, "..", "..", "data"));
   const env = { ...process.env, HERMES_HOME: maison };
   const cwd = resolveAgentDir() ?? process.cwd();
@@ -102,10 +119,16 @@ async function mintGatewayTicket(): Promise<string | null> {
         },
       );
       if (!out.stdout) continue;
-      const parsed = JSON.parse(out.stdout) as { ticket?: string; protocols?: string[] };
+      const parsed = JSON.parse(out.stdout) as { ticket?: string; url?: string; protocols?: string[] };
       const ticket = parsed.ticket
         ?? parsed.protocols?.find((p) => p.startsWith(TICKET_PROTOCOL_PREFIX))?.slice(TICKET_PROTOCOL_PREFIX.length);
-      if (ticket) return ticket;
+      // C2 (25/11) : l'URL d'attachement accompagne le ticket — c'est
+      // l'origine RÉELLE de l'écouteur, port éphémère compris. Tolérance :
+      // un moteur ancien sans champ url → null, le repli 9120 reste.
+      if (ticket) {
+        const url = typeof parsed.url === "string" ? parsed.url.trim() : "";
+        return { ticket, url: url || null };
+      }
     } catch {
       /* candidat suivant */
     }
@@ -192,6 +215,48 @@ function noEngineError(): Error {
   );
 }
 
+/** C4 (25/11, constat n°4) : garde d'inactivité + battement de cœur d'un
+ *  tour — À LA PLACE du plafond de durée 180 s qui coupait les tours longs
+ *  de l'agent. Retourne les commandes du tour : noteActivity (tout événement
+ *  de l'agent réarme la garde ; les pongs ne comptent PAS — sinon un agent
+ *  muet sur connexion vivante ne clôturerait jamais) et stop (nettoyage à
+ *  la clôture, idempotent). Budget CRAP du plan : ≤ 10. */
+function startTurnGuard(
+  ws: WebSocket,
+  nextRpcId: () => number,
+  finish: (err?: Error) => void,
+): { noteActivity: () => void; stop: () => void } {
+  let lastActivity = Date.now();
+  let inactivityTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+    // Garde d'inactivité : silence événementiel ≥ 240 s → clôture AVEC
+    // cause (l'ancien « Timeout du tour gateway » ne disait rien).
+    if (Date.now() - lastActivity >= TURN_INACTIVITY_MS) {
+      finish(new Error("Aucune activité de l'agent depuis 4 minutes — tour clôturé (garde d'inactivité, C4)"));
+    }
+  }, 5_000);
+  // Battement de cœur : gateway.ping toutes les 15 s (cadence des clients
+  // natifs du projet, tui_gateway/ws.py) — une connexion morte se voit en
+  // quinze secondes par error/close → finish, au lieu d'attendre la garde.
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ jsonrpc: "2.0", id: nextRpcId(), method: "gateway.ping", params: {} }));
+      } catch {
+        /* error/close suivra → finish */
+      }
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+  return {
+    noteActivity: () => { lastActivity = Date.now(); },
+    stop: () => {
+      if (inactivityTimer !== null) clearInterval(inactivityTimer);
+      if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
+      inactivityTimer = null;
+      heartbeatTimer = null;
+    },
+  };
+}
+
 /** Résultat d'un tour, augmenté du moteur qui l'a produit. */
 export interface TurnOutcome {
   content: string;
@@ -215,6 +280,12 @@ export class HermesConnector {
   private pool: LlmPoolApi | null = null;
   /** Dernière re-sonde infructueuse : throttle (une par 10 s max). */
   private lastReprobe = 0;
+  /** C2 (25/11) : true = l'URL active a été posée par la découverte
+   *  automatique (attachement du moteur) — une nouvelle origine du même
+   *  attachement (redémarrage sur un autre port éphémère) la remplace.
+   *  false = défaut/env/interface : la découverte peut s'appliquer, une
+   *  URL EXPLICITEMENT choisie n'est jamais écrasée. */
+  private autoGatewayUrl = false;
   /** Bascule REST (93) : le moteur annonce-t-il le contrat sessions natives
    *  (/v1/capabilities → session_create + session_chat_stream) ? null = pas
    *  encore sondé. Le listener 9120 du webapp n'a que le GET /api/sessions
@@ -266,6 +337,9 @@ export class HermesConnector {
       this.gatewayToken = null;
     }
     this.gatewayUrl = nextUrl;
+    // C2 (25/11) : toute décision explicite d'URL (saisie OU retour au
+    // défaut) ré-autorise la découverte automatique au prochain attach.
+    this.autoGatewayUrl = false;
     // Nouvelle destination (93) : le verdict REST repart de zéro.
     this.restContract = null;
     await this.init();
@@ -322,13 +396,41 @@ export class HermesConnector {
     }
   }
 
+  /** C2 (25/11, constat n°2) : quand la cible active est le DÉFAUT (aucune
+   *  saisie, aucun HERMES_GATEWAY_URL) ou déjà le fruit d'une découverte
+   *  automatique, l'URL d'attachement du moteur remplace le 9120 en dur —
+   *  port éphémère compris. Priorité conservée : interface >
+   *  HERMES_GATEWAY_URL > attach > défaut. S-02 intacte : cette résolution
+   *  ne touche JAMAIS une URL choisie explicitement, donc le jeton saisi
+   *  ne part que vers sa destination. toHttpBase() suit automatiquement
+   *  (il dérive de gatewayUrl) : liste des modèles et sonde REST parlent
+   *  à la vraie origine sans code supplémentaire. */
+  private applyAttachUrl(url: string | null): void {
+    if (!url) return;
+    const normalized = toWsUrl(url);
+    if (!normalized || normalized === DEFAULT_GATEWAY_URL) return;
+    if (this.gatewayUrl !== DEFAULT_GATEWAY_URL && !this.autoGatewayUrl) return;
+    this.autoGatewayUrl = true;
+    if (this.gatewayUrl === normalized) return;
+    this.gatewayUrl = normalized;
+    // Nouvelle origine (93) : le verdict REST repart de zéro.
+    this.restContract = null;
+    console.log(
+      `[hermes-chat] gateway détectée sur ${normalized} (URL d'attachement, C2)`
+    );
+  }
+
   private async probe(timeoutMs: number = HANDSHAKE_TIMEOUT_MS): Promise<boolean> {
     // Sonde canonique : un upgrade accepté exige un ticket one-use en
     // sous-protocole. Pas de ticket minter → gateway absente (rien à sonder).
     // Ticket minté ASYNCHRONE avant la promesse socket (revue 95) : jamais
     // de boucle d'événements figée pendant les essais python.
-    const ticket = await mintGatewayTicket();
-    if (!ticket) return false;
+    // C2 (25/11) : l'origine réelle de l'écouteur est appliquée AVANT le
+    // dial — le 9120 en dur ne sert que de repli.
+    const attach = await mintGatewayAttach();
+    if (!attach) return false;
+    this.applyAttachUrl(attach.url);
+    const ticket = attach.ticket;
     return new Promise((resolve) => {
       let settled = false;
       const done = (ok: boolean) => {
@@ -592,12 +694,17 @@ export class HermesConnector {
     // erreur claire (la re-sonde rebranchera au tour suivant). Minté
     // ASYNCHRONE avant la promesse socket (revue 95) — jamais de boucle
     // d'événements figée pendant les essais python.
-    const ticket = await mintGatewayTicket();
-    if (!ticket) {
+    // C2 (25/11) : l'origine réelle (port éphémère compris) prime sur le
+    // 9120 en dur quand l'URL active est encore le défaut — même priorité
+    // que la sonde (interface > env > attach > défaut).
+    const attach = await mintGatewayAttach();
+    if (!attach) {
       throw new Error(
         "Gateway Hermes injoignable : aucun ticket d'attachement (l'agent est-il lancé ?)"
       );
     }
+    this.applyAttachUrl(attach.url);
+    const ticket = attach.ticket;
     return new Promise((resolve, reject) => {
       let settled = false;
       // true = la gateway a annoncé la fin (message.complete). Une
@@ -619,10 +726,21 @@ export class HermesConnector {
       // synchrone pendant le montage (temporal dead zone interdite).
       const rpcRejectors = new Set<(err: Error) => void>();
 
+      // C4 (25/11) : garde d'inactivité + battement de cœur (startTurnGuard),
+      // arrêtée dans finish. Déclarée AVANT finish (même loi que rpcRejectors :
+      // l'abort peut être déjà posé et finish() appelé de façon synchrone
+      // pendant le montage — temporal dead zone interdite ; null = rien à
+      // nettoyer).
+      let turnGuard: ReturnType<typeof startTurnGuard> | null = null;
+      const clearTurnTimers = () => {
+        turnGuard?.stop();
+        turnGuard = null;
+      };
+
       const finish = (err?: Error) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clearTurnTimers();
         cb.signal.removeEventListener("abort", onAbort);
         try {
           ws.removeAllListeners();
@@ -670,7 +788,10 @@ export class HermesConnector {
       if (cb.signal.aborted) onAbort();
       else cb.signal.addEventListener("abort", onAbort, { once: true });
 
-      const timer = setTimeout(() => finish(new Error("Timeout du tour gateway")), TURN_TIMEOUT_MS);
+      // C4 (25/11) : si le tour est déjà clôturé (abort synchrone pendant le
+      // montage), la garde ne démarre même pas — un timer démarré après un
+      // finish() définitif ne serait jamais nettoyé.
+      if (!settled) turnGuard = startTurnGuard(ws, () => nextRpcId++, finish);
 
       let nextRpcId = 1;
       // Outils en cours (tool.start sans tool.complete) : clos d'office à la
@@ -743,14 +864,13 @@ export class HermesConnector {
           // 2. La soumission : submission_id OBLIGATOIRE (identité de la
           //    soumission, sert aux reprises/replays côté gateway).
           const submissionId = `hw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          // Pièces jointes : le contrat canonique n'accepte que {path, mime}
-          // — le chemin absolu du fichier déjà écrit sur disque par uploads.ts.
-          const attachments = req.attachments?.length
-            ? req.attachments.map((a) => ({
-                path: pathResolve(join(import.meta.dir, "..", "..", "db"), a.url.replace(/^\//, "")),
-                mime: a.mime,
-              }))
-            : undefined;
+          // Pièces jointes (C3, 25/11) : dépôt canonique via image.attach_bytes
+          // — le moteur n'accepte que des images de SON cache de staging ; les
+          // chemins db/ de l'interface étaient refusés (invalid_params). Lancé
+          // APRÈS session.create (le RPC vit sur la session en main) et AVANT
+          // prompt.submit : une pièce non image jette une erreur claire, le
+          // tour ne part pas, rien n'atteint le moteur.
+          const attachments = await buildGatewayAttachments(rpc, req.attachments);
           // 3. Le stream : frames d'événements (method=event, params.type).
           // Revue P1-P7 (B8) : l'écouteur est posé AVANT prompt.submit —
           // la gateway peut émettre message.delta / error / message.complete
@@ -766,6 +886,8 @@ export class HermesConnector {
               return;
             }
             if (data?.method !== "event") return;
+            // C4 : tout événement de l'agent réarme la garde d'inactivité.
+            turnGuard?.noteActivity();
             const params = data?.params ?? {};
             const evt: string = params?.type ?? "";
             const payload = params?.payload ?? {};
