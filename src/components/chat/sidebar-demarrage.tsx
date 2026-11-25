@@ -1,17 +1,20 @@
-// Feuille 6 — l'écran « Premiers pas » de la sidebar (2026-11-25, épuré
-// façon Claude/ChatGPT) : remplace le texte « Pas encore de conversation. »
-// quand la base est vide. Le verrou impose une première conversation RANGÉE
-// (hermes.conversations.defaultProject côté service) — l'unique action est
-// l'icône 📁↓ « ajouter un dossier de mon disque » (F-62 : pas de gros
-// boutons), qui ouvre l'AttachDiskDialog existant. Créer un dossier neuf se
-// fait dans l'explorateur Windows, pas ici. Copie minimale, une phrase :
-// dire où l'on est, pas un cours. Feuille dédiée (chantier CRAP) :
-// l'orchestrateur Sidebar reste maître d'état.
+// Feuille 6 — la section « Projets » de la sidebar (2026-11-25, renommée
+// depuis « Premiers pas ») : visible seulement quand la base est vide
+// (aucune conversation) — ensuite les en-têtes habituels reprennent la main.
+// Le verrou impose une première conversation RANGÉE (côté service) ;
+// l'icône 📁↓ (F-62 : pas de gros boutons) ouvre le SÉLECTEUR DE DOSSIERS
+// NATIF DE WINDOWS (window.showDirectoryPicker, Chromium/Brave) — l'utilisateur
+// choisit son dossier dans la vraie fenêtre de l'explorateur, création de
+// dossier comprise. Il devient un projet, la conversation naît dedans.
+// Repli (navigateur sans l'API) : l'AttachDiskDialog maison existant.
+// Feuille dédiée (chantier CRAP) : l'orchestrateur Sidebar reste maître
+// d'état ; cette feuille ne porte que busy + le repli dialogue.
 "use client";
 
 import { useState } from "react";
 import { Folder, FolderDown, Loader2, Sparkles } from "lucide-react";
 import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
+import { pickWindowsDirectory } from "@/lib/directory-picker";
 import type { Project } from "@/lib/chat-types";
 
 export function SidebarDemarrage({
@@ -23,7 +26,7 @@ export function SidebarDemarrage({
   projects: Project[];
   /** Crée la première conversation rangée (ou déclenche le garde du verrou). */
   onNew: (projectId?: string | null) => void;
-  /** Crée le dossier lié (projects:create { name, diskPath }) puis onNew. */
+  /** Crée le dossier (projects:create) puis onNew. */
   onCreateProject: (
     name: string,
     parentId?: string | null,
@@ -31,11 +34,34 @@ export function SidebarDemarrage({
   ) => Promise<Project | null>;
 }) {
   const [busy, setBusy] = useState(false);
+  /** Repli : dialogue maison si le sélecteur natif est indisponible. */
   const [attachDiskOpen, setAttachDiskOpen] = useState(false);
 
-  // Le dialogue de liaison disque crée le dossier (onAttach) ; à la
-  // fermeture SANS création, la carte reste. Avec création → la
-  // conversation naît rangée immédiatement.
+  // Crée le projet du dossier choisi puis la conversation rangée dedans.
+  // diskPath reste null : le sélecteur natif ne donne pas de chemin disque
+  // (sécurité du web) — le rangement porte le NOM du dossier.
+  const createFromName = async (name: string): Promise<void> => {
+    setBusy(true);
+    try {
+      const p = await onCreateProject(name, null, null);
+      if (p) onNew(p.id);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // L'icône : sélecteur natif de Windows. Sans l'API (Firefox/Safari,
+  // annulation) → repli sur le dialogue maison existant.
+  const handlePick = async (): Promise<void> => {
+    const picked = await pickWindowsDirectory();
+    if (picked?.name) {
+      await createFromName(picked.name);
+      return;
+    }
+    setAttachDiskOpen(true);
+  };
+
+  // Repli maison : à la création, la conversation naît rangée.
   const handleAttach = async (
     name: string,
     diskPath: string
@@ -43,9 +69,7 @@ export function SidebarDemarrage({
     setBusy(true);
     try {
       const p = await onCreateProject(name, null, diskPath);
-      if (p) {
-        onNew(p.id);
-      }
+      if (p) onNew(p.id);
       return p;
     } finally {
       setBusy(false);
@@ -54,27 +78,27 @@ export function SidebarDemarrage({
 
   return (
     <div className="px-3 pb-2">
-      {/* Titre discret + l'unique action (icône, droite — même gabarit que
-          les « + » de la sidebar). Pas de carte encadrée : la section vit
-          dans le flux de la sidebar, comme les autres. */}
+      {/* En-tête « Projets » + l'unique action (icône, droite — même gabarit
+          que les « + » de la sidebar). Aucune phrase : l'écran parle par
+          ses objets (title au survol pour la découverte). */}
       <div className="flex min-h-7 items-center gap-1.5 pt-2.5 pb-1">
         <Sparkles className="size-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
         <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Premiers pas
+          Projets
         </span>
         {busy ? (
           <span
             className="ml-auto flex size-6 items-center justify-center text-muted-foreground"
-            aria-label="Création du dossier en cours"
+            aria-label="Création du projet en cours"
           >
             <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
           </span>
         ) : (
           <button
             type="button"
-            onClick={() => setAttachDiskOpen(true)}
-            aria-label="Ajouter un dossier de mon disque"
-            title="Ajouter un dossier de mon disque"
+            onClick={() => void handlePick()}
+            aria-label="Ajouter un dossier"
+            title="Ajouter un dossier"
             className="ml-auto flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-hermes"
           >
             <FolderDown className="size-3.5" aria-hidden="true" />
@@ -100,8 +124,9 @@ export function SidebarDemarrage({
         </ul>
       ) : null}
 
-      {/* La section garde son état quand le dialogue ferme sans création :
-          avec création, la conversation naît dans handleAttach. */}
+      {/* Repli (sélecteur natif indisponible) : le dialogue maison garde
+          son état quand il ferme sans création ; avec création, la
+          conversation naît dans handleAttach. */}
       <AttachDiskDialog
         open={attachDiskOpen}
         onOpenChange={setAttachDiskOpen}
