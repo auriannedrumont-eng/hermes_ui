@@ -128,7 +128,10 @@ const service = spawn("bun", ["run", "mini-services/hermes-chat/index.ts"], {
   },
   stdio: ["ignore", "inherit", "inherit"],
 });
-const front = spawn("bun", ["dev"], { cwd: process.cwd(), stdio: ["ignore", "inherit", "inherit"] });
+const front = spawn("bun", ["dev"], {
+  detached: true, // chef de groupe : le cleanup tue l'arbre (bun dev → next dev → next-server)
+  cwd: process.cwd(), stdio: ["ignore", "inherit", "inherit"],
+});
 const caddy = spawn("caddy", ["run", "--config", "Caddyfile", "--adapter", "caddyfile"], {
   cwd: process.cwd(),
   stdio: ["ignore", "ignore", "inherit"],
@@ -150,6 +153,7 @@ async function waitHttp(url: string, ms: number): Promise<boolean> {
 
 function cleanup() {
   try { service.kill(); } catch { /* déjà parti */ }
+  try { process.kill(-front.pid!, "SIGTERM"); } catch { /* groupe déjà parti */ }
   try { front.kill(); } catch { /* déjà parti */ }
   try { caddy.kill(); } catch { /* déjà parti */ }
   stopGW();

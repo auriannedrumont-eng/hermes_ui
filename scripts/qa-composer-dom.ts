@@ -40,6 +40,7 @@ const service = spawn("bun", ["run", "mini-services/hermes-chat/index.ts"], {
   stdio: ["ignore", serviceLog, serviceLog],
 });
 const front = spawn("bun", ["dev"], {
+  detached: true, // chef de groupe : le cleanup tue l'arbre (bun dev → next dev → next-server)
   cwd: process.cwd(),
   stdio: ["ignore", frontLog, frontLog],
 });
@@ -60,6 +61,7 @@ async function waitHttp(url: string, ms: number): Promise<boolean> {
 
 function cleanup() {
   try { service.kill(); } catch { /* déjà parti */ }
+  try { process.kill(-front.pid!, "SIGTERM"); } catch { /* groupe déjà parti */ }
   try { front.kill(); } catch { /* déjà parti */ }
   rmSync(qaDir, { recursive: true, force: true });
 }

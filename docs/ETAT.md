@@ -38,7 +38,7 @@
 
 | Lot | Contenu | Effort |
 | --- | --- | --- |
-| **1 — Critique** | CORS loopback + jeton lanceur, Caddy figé, fuite streams fantômes (`llm-pool`), garde abort orchestrateur, race `conversations:open` | ~1-2 j |
+| **1 — Critique** | **TRAITÉ** (audits 17-19/11, clôture vérifiée 25-11, §9 (9)) : 1.1 `resolve` webchat ✓ (garde de source [1]) · 1.2 `hermes.modes.models` au registre ✓ (`test-settings-registry.ts`) · 1.3 CORS boucle locale + Origin + jeton ✓ (`auth.ts`, `test-origin-guards.ts`, jeton inliné au build par les lanceurs) · 1.4 passerelle durcie ✓ (`test-gateway-pinned-relay.ts` : vrai Caddy, pivot 9050 refusé, bind boucle locale — la refonte « chemin dédié socket.io » reste au Lot 6 : la socket vit sur le chemin racine, l'étiquette `?XTransformPort=` est le seul discriminateur possible sans changer le contrat WS) · 1.5 garde rendue sur `!res.ok` ✓ (`llm-streams.ts`, `test-pool-ghost-streams.ts` sur pool réel + base jetable) · 1.6 garde abort orchestrateur ✓ (`test-orchestrator-abort.ts` : débat/conseil/auto) · 1.7 gardes `activeIdRef` sur ack + `stream:*` ✓ (`test-source-guards.ts` [2]/[3]) | fait |
 | **4 — CI** | Scripts `test`/`qa:dom`, GitHub Actions typecheck+lint, tests de régression du Lot 1 | ~1 j |
 | **2 — Intégrité SQLite** | Purge artefacts orphelins, échappement `LIKE`, transactions, `JSON.parse` protégé, watchdog webchat | ~2-3 j |
 | **3 — État frontend** | `ModePicker` écrase `debateParallel`/`model`, brouillons figés, flux streams (dédoublonnage, ack stop) | ~2 j |
