@@ -70,7 +70,7 @@ try {
   ok("front démarré (:3000)", await waitHttp("http://127.0.0.1:3000", 90_000));
   ok("passerelle Caddy (:81)", await waitHttp(FRONT, 20_000));
 
-  const browser = await chromium.launch({ executablePath: EXEC });
+  browser = await chromium.launch({ executablePath: EXEC });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(FRONT, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForTimeout(4000);
