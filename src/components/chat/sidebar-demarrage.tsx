@@ -1,13 +1,12 @@
-// Feuille 6 — l'écran « Premiers pas » de la sidebar (2026-11-25, revu le
-// même jour) : remplace le simple texte « Pas encore de conversation. »
-// quand la base est vide. UNE SEULE action à l'écran — un bouton-icône
-// « ajouter un dossier » (📁↓, F-62 : pas de gros boutons) — qui ouvre
-// l'AttachDiskDialog existant : on y navigue dans SON disque, on lie le
-// dossier voulu, la première conversation naît rangée dedans. Créer un
-// dossier neuf se fait dans l'explorateur Windows, pas ici — le dialogue
-// liste ce qui existe ; les dossiers déjà liés apparaissent en dessous.
-// Feuille dédiée (chantier CRAP) : l'orchestrateur Sidebar reste maître
-// d'état, cette feuille ne porte qu'un état (busy + dialogue ouvert).
+// Feuille 6 — l'écran « Premiers pas » de la sidebar (2026-11-25, épuré
+// façon Claude/ChatGPT) : remplace le texte « Pas encore de conversation. »
+// quand la base est vide. Le verrou impose une première conversation RANGÉE
+// (hermes.conversations.defaultProject côté service) — l'unique action est
+// l'icône 📁↓ « ajouter un dossier de mon disque » (F-62 : pas de gros
+// boutons), qui ouvre l'AttachDiskDialog existant. Créer un dossier neuf se
+// fait dans l'explorateur Windows, pas ici. Copie minimale, une phrase :
+// dire où l'on est, pas un cours. Feuille dédiée (chantier CRAP) :
+// l'orchestrateur Sidebar reste maître d'état.
 "use client";
 
 import { useState } from "react";
@@ -54,24 +53,21 @@ export function SidebarDemarrage({
   };
 
   return (
-    <div
-      className="mx-1 mb-2 rounded-lg border border-border bg-card px-3 py-3.5"
-      data-testid="sidebar-demarrage"
-    >
-      <div className="flex items-center gap-2">
-        <Sparkles className="size-4 shrink-0 text-hermes-text" aria-hidden="true" />
-        <p className="text-[12.5px] font-semibold leading-snug">
-          Commencez par un dossier
-        </p>
-        {/* L'unique action : bouton-icône, même grammaire que les « + »
-            de la sidebar (F-62) — le dialogue de liaison disque fait le
-            reste (navigation, choix, création). */}
+    <div className="px-3 pb-2">
+      {/* Titre discret + l'unique action (icône, droite — même gabarit que
+          les « + » de la sidebar). Pas de carte encadrée : la section vit
+          dans le flux de la sidebar, comme les autres. */}
+      <div className="flex min-h-7 items-center gap-1.5 pt-2.5 pb-1">
+        <Sparkles className="size-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
+        <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Premiers pas
+        </span>
         {busy ? (
           <span
-            className="ml-auto flex size-[27px] items-center justify-center text-muted-foreground"
+            className="ml-auto flex size-6 items-center justify-center text-muted-foreground"
             aria-label="Création du dossier en cours"
           >
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
           </span>
         ) : (
           <button
@@ -79,26 +75,26 @@ export function SidebarDemarrage({
             onClick={() => setAttachDiskOpen(true)}
             aria-label="Ajouter un dossier de mon disque"
             title="Ajouter un dossier de mon disque"
-            className="ml-auto flex size-[27px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm focus-visible:outline-2 focus-visible:outline-hermes"
+            className="ml-auto flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-hermes"
           >
-            <FolderDown className="size-4" aria-hidden="true" />
+            <FolderDown className="size-3.5" aria-hidden="true" />
           </button>
         )}
       </div>
-      <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-        La première conversation est rangée dans un dossier — les suivantes
-        restent libres. Créez un dossier neuf depuis votre explorateur
-        Windows, puis ajoutez-le ici.
+      <p className="pb-1 text-[12.5px] leading-relaxed text-muted-foreground">
+        Choisissez un dossier pour votre première conversation — les suivantes
+        restent libres. Pour en créer un neuf : explorateur Windows, puis
+        l&apos;icône ci-dessus.
       </p>
 
       {projects.length > 0 ? (
-        <ul className="mt-2.5 space-y-0.5">
+        <ul className="space-y-0.5">
           {projects.map((p) => (
             <li key={p.id}>
               <button
                 type="button"
                 onClick={() => onNew(p.id)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent"
                 aria-label={`Commencer dans ${p.name}`}
               >
                 <Folder className="size-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
@@ -109,7 +105,7 @@ export function SidebarDemarrage({
         </ul>
       ) : null}
 
-      {/* La carte garde son état quand le dialogue ferme sans création :
+      {/* La section garde son état quand le dialogue ferme sans création :
           avec création, la conversation naît dans handleAttach. */}
       <AttachDiskDialog
         open={attachDiskOpen}

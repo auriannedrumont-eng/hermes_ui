@@ -593,6 +593,7 @@ export default function HermesWebPage() {
             onRetryArtifact={chat.retryArtifact}
             conversationMode={chat.conversationMode}
             modeFlowLive={chat.modeFlowLive}
+            baseVide={chat.conversations.length === 0}
           />
           <Composer
             disabled={!chat.connected}
