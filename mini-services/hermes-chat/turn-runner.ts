@@ -26,7 +26,6 @@ import {
   CUSTOM_INSTRUCTIONS_KEY,
   MEMORY_ENABLED_KEY,
   MEMORY_NOTES_KEY,
-  MEMORY_AUTO_KEY,
   composeLocalSystemPrompt,
 } from "./prompts";
 import { LOCAL_BASE_PROMPT } from "./local-engine";
@@ -1248,15 +1247,14 @@ const runAssistantTurn = async (
         modelId: turnModelId,
         attachments,
         motorSessionId,
-        // Réglages du tour : effort/permissions du composer + apprentissage
-        // mémoire (F-18, exploité par le moteur). Les NOTES de mémoire ne
-        // passent plus ici : elles vivent dans systemPrompt des DEUX moteurs
-        // (local composeLocalSystemPrompt / gateway gatewayContextSection) —
-        // l'ancien champ memoryNotes de ce littéral n'était lu par AUCUN
-        // connecteur (construit puis jeté, constat du 25/11).
+        // Réglages du tour : effort/permissions du composer. Les NOTES de
+        // mémoire vivent dans systemPrompt des DEUX moteurs (local
+        // composeLocalSystemPrompt / gateway gatewayContextSection) — les
+        // anciens champs memoryNotes ET memoryAutoLearn de ce littéral
+        // n'étaient lus par AUCUN connecteur (audit 25/11, retirés) :
+        // l'apprentissage mémoire est celui de la configuration de l'agent.
         settings: {
           ...opts.settings,
-          memoryAutoLearn: store.getSettingBool(MEMORY_AUTO_KEY, false),
         },
         // Instructions système du tour (F-11/F-19) : composées par le
         // service sans agent (pool de clés) ; en mode gateway, le CONTEXTE

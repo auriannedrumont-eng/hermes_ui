@@ -541,13 +541,11 @@ socket.on(
       permissionsMode: payload?.permissionsMode || undefined,
       ...ctx.sanitizeExpertSettings(payload),
     };
-    // F-30 — Mode Plan : le moteur est prié de se mettre en mode plan au
-    // PREMIER tour (tenté une fois, refus non bloquant) — la consigne écrite
-    // du mode reste la garantie dans tous les cas.
-    const modeForPlan = ctx.conversationModeState(conversationId);
-    if (modeForPlan.mode === "plan" && isFirstUserMessage) {
-      turnSettings.planMode = true;
-    }
+    // F-30 — Mode Plan : PAS de réglage moteur « mise en plan » — l'ancien
+    // champ planMode (api_turn_v1) n'est lu par AUCUN connecteur depuis le
+    // contrat canonique (audit 25/11) : la consigne ÉCRITE du mode
+    // (modes.ts, recomposée à chaque envoi dans systemPrompt) est la
+    // garantie unique, dans les deux moteurs.
     // F-17 : comparaison — deux tours parallèles, un par modèle. Le
     // message utilisateur est unique ; chaque réponse assistant porte
     // sa variante (a/b) et son modèle.

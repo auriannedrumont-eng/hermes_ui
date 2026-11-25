@@ -796,6 +796,12 @@ export class HermesConnector {
       const text = instructions
         ? `${instructions}\n\n---\n\n${req.content}`
         : req.content;
+      // Usage du tour (F-21 vivant en gateway) : baseline = dernières
+      // trames session.usage vues (fin du tour précédent sur session
+      // chaude) ; le delta avec message.complete.usage se calcule à la
+      // clôture (gateway-turn, outcome). Premier tour du canal → baseline
+      // null → PAS d'usage affiché (jamais inventé).
+      turn.captureUsageBaseline(sid);
       const admitted = await submitTurnPrompt(wire, cb.signal, {
         session_id: sid,
         text,

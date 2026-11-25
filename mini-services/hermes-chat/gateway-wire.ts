@@ -66,7 +66,46 @@ export class GatewayWire {
       }
       return;
     }
-    if (data?.method === "event") this.fanoutEvents(data?.params);
+    if (data?.method === "event") {
+      this.rememberUsage(data?.params);
+      this.fanoutEvents(data?.params);
+    }
+  }
+
+  /** Derniers compteurs d'usage vus PAR SESSION (trames `session.usage`
+   *  — publiées par le moteur après chaque appel API et à la fin d'un
+   *  tour ; amont gateway/session_usage.py). Sert de BASELINE à un tour :
+   *  l'usage d'un tour = `message.complete.usage` (cumul SESSION côté
+   *  moteur) − baseline au moment du submit. null = aucune trame encore
+   *  vue pour cette session (premier tour du canal) → l'interface n'affiche
+   *  PAS d'usage plutôt que d'inventer un delta. */
+  private readonly sessionUsage = new Map<
+    string,
+    { input: number; output: number; total: number }
+  >();
+
+  private rememberUsage(params: unknown): void {
+    const p = (params ?? {}) as any;
+    if (String(p?.type ?? "") !== "session.usage") return;
+    const sid = typeof p?.session_id === "string" ? p.session_id : null;
+    if (!sid) return;
+    const payload = p?.payload ?? {};
+    // Vue TUI (`payload.usage`, lecture recommandée amont) d'abord, compteurs
+    // plats dépréciés en repli — les deux voyagent dans la même trame.
+    const view = payload?.usage ?? payload;
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    this.sessionUsage.set(sid, {
+      input: num(view?.input ?? view?.input_tokens),
+      output: num(view?.output ?? view?.output_tokens),
+      total: num(view?.total ?? view?.total_tokens),
+    });
+  }
+
+  /** Baseline d'usage d'une session au moment T (null si inconnue). */
+  usageBaseline(
+    sessionId: string
+  ): { input: number; output: number; total: number } | null {
+    return this.sessionUsage.get(sessionId) ?? null;
   }
 
   /** Diffusion d'une notification `event` aux abonnés (copies : un

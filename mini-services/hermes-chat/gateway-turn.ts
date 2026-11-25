@@ -29,6 +29,9 @@ export interface GatewayTurnHandle {
   /** Session liée à la soumission : l'abort pourra l'interrompre côté
    *  moteur (session.interrupt) au lieu de tuer la socket partagée. */
   bindSession(sessionId: string): void;
+  /** Fige la baseline d'usage de la session (dernières trames
+   *  session.usage) — à appeler JUSTE AVANT la soumission. */
+  captureUsageBaseline(sessionId: string): void;
   /** Clôture administrée : désabonne TOUT (événements, mort, abort,
    *  garde) — la socket, elle, reste ouverte pour le tour suivant. */
   dispose(): void;
@@ -71,6 +74,23 @@ export function requireSessionId(reply: any, method: string): string {
   return sid;
 }
 
+/** Usage d'un tour = usage CUMULÉ de session à la complétion − baseline
+ *  capturée au submit (les trames du moteur portent des compteurs de
+ *  SESSION, jamais par tour). Sans baseline (premier tour du canal, aucune
+ *  trame session.usage encore vue) ou sans final → undefined : l'interface
+ *  n'affiche PAS d'usage plutôt que d'inventer un delta. Coût jamais
+ *  fabriqué : le moteur ne le publie pas. */
+function turnUsageFrom(
+  final: { input: number; output: number; total: number },
+  baseline: { input: number; output: number; total: number }
+): { input: number; output: number } | undefined {
+  const delta = (a: number, b: number) => Math.max(0, Math.round(a - b));
+  const input = delta(final.input, baseline.input);
+  const output = delta(final.output, baseline.output);
+  if (input <= 0 && output <= 0) return undefined;
+  return { input, output };
+}
+
 /** Monte le tour sur le wire : la promesse `done` se règle sur
  *  message.complete / error / abort / mort de la connexion / garde
  *  d'inactivité. Le connecteur attend `done` puis appelle `dispose`. */
@@ -83,6 +103,7 @@ export function beginGatewayTurn(
   const model = req.model || "hermes (gateway)";
   let settled = false;
   let sessionId: string | null = null;
+  let usageBaseline: { input: number; output: number; total: number } | null = null;
   let inactivityTimer: ReturnType<typeof setInterval> | null = null;
   let lastActivity = Date.now();
   const disposers: Array<() => void> = [];
@@ -92,12 +113,19 @@ export function beginGatewayTurn(
     inactivityTimer = null;
   };
 
-  const outcome = (): TurnOutcome => ({
-    content: sink.content,
-    reasoning: sink.reasoning,
-    model,
-    engine: "gateway",
-  });
+  const outcome = (): TurnOutcome => {
+    const usage =
+      sink.finalUsage && usageBaseline
+        ? turnUsageFrom(sink.finalUsage, usageBaseline)
+        : undefined;
+    return {
+      content: sink.content,
+      reasoning: sink.reasoning,
+      model,
+      engine: "gateway",
+      ...(usage ? { usage } : {}),
+    };
+  };
 
   const settle = (err?: Error) => {
     if (settled) return;
@@ -166,6 +194,13 @@ export function beginGatewayTurn(
     done,
     bindSession(sid: string) {
       sessionId = sid;
+    },
+    /** Baseline d'usage AU MOMENT du submit (juste avant prompt.submit) :
+     *  les dernières trames session.usage vues sur ce wire — c'est-à-dire
+     *  la fin du tour PRÉCÉDENT sur session chaude. Appelé par le
+     *  connecteur entre bindSession et submitTurnPrompt. */
+    captureUsageBaseline(sid: string) {
+      usageBaseline = wire.usageBaseline(sid);
     },
     dispose() {
       clearGuard();

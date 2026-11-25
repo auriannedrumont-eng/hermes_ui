@@ -7,9 +7,12 @@
 // correction, chantiers C5/C3/C6) :
 //   [1] mode gateway au hello : la sonde se branche (dial + ticket) ;
 //   [2] tour nominal : stream:done avec le texte final autoritaire ;
+//       usage ABSENT au premier tour (aucune baseline — jamais inventé) ;
 //   [3] SESSION CHAUDE : le 2e message NE rouvre PAS de socket et NE
 //       recrée PAS de session (créée 1 fois, submit ×2, connexions
-//       stables) — plus de récolte d'orphelin à 20 s (C5) ;
+//       stables) — plus de récolte d'orphelin à 20 s (C5) ; usage du
+//       tour 2 = delta de session (baseline session.usage au submit −
+//       cumul de message.complete : F-21 vivant en gateway) ;
 //   [4] C6 : model_override porte modèle + fournisseur (liste gateway)
 //       + effort de raisonnement du compositeur ;
 //   [5] C3 : pièce jointe image → image.attach_bytes (octets) puis
@@ -158,6 +161,11 @@ async function main() {
       String(r1.message?.content ?? "") === "réponse canonique à « premier message »",
       JSON.stringify(r1.message?.content ?? "").slice(0, 90)
     );
+    check(
+      "[2] usage du tour 1 ABSENT (aucune baseline avant la première trame session.usage — jamais inventé)",
+      r1.message?.usage == null,
+      JSON.stringify(r1.message?.usage ?? null)
+    );
     const connsAfterTurn1 = stats.connections;
     check("[2] une session créée, une soumission", stats.creates === 1 && stats.submits.length === 1, `creates=${stats.creates} submits=${stats.submits.length}`);
     check("[2] deux dials (sonde + canal persistant)", connsAfterTurn1 === 2, `connections=${connsAfterTurn1}`);
@@ -171,6 +179,15 @@ async function main() {
     check("[3] socket PERSISTANTE (aucun nouveau dial)", stats.connections === connsAfterTurn1, `connections=${stats.connections}`);
     check("[3] session réutilisée (aucun create)", stats.creates === 1, `creates=${stats.creates}`);
     check("[3] deux soumissions", stats.submits.length === 2, `submits=${stats.submits.length}`);
+    // F-21 vivant en gateway : usage du tour = usage CUMULÉ de session à la
+    // complétion − baseline figée au submit (fin du tour précédent). Tour 2 :
+    // 200−100 entrée, 50−25 sortie (la fausse gateway avance de +100/+25
+    // par tour accepté).
+    check(
+      "[3] usage du tour 2 = delta de session (100 entrée / 25 sortie)",
+      r2.message?.usage?.input === 100 && r2.message?.usage?.output === 25,
+      JSON.stringify(r2.message?.usage ?? null)
+    );
 
     // ── [4] C6 : model_override modèle + fournisseur + effort ─────────
     // Le cache de modèles doit venir de la GATEWAY (source « gateway »)

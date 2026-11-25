@@ -119,7 +119,8 @@ export function MemoryCard({
         </div>
       </div>
 
-      {/* Apprentissage automatique : réglage moteur (gateway), honnête en local */}
+      {/* Apprentissage automatique : préférence enregistrée — le contrat
+          gateway ne porte pas de réglage d'apprentissage (audit 25/11) */}
       <Label
         htmlFor="memory-auto-learn"
         className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
@@ -129,8 +130,9 @@ export function MemoryCard({
             Apprentissage automatique
           </span>
           <span className="mt-px block text-[11px] leading-snug text-muted-foreground">
-            Laisser Hermes enrichir la mémoire au fil des échanges (nécessite
-            le moteur réel).
+            Préférence enregistrée — l&apos;enrichissement automatique de la
+            mémoire est piloté par la configuration de l&apos;agent Hermes
+            (aucun réglage dans le contrat gateway).
           </span>
         </span>
         <Switch

@@ -18,6 +18,11 @@ export type SinkCallbacks = Pick<
 export class TurnEventSink {
   content = "";
   reasoning = "";
+  /** Usage porté par `message.complete` (vue TUI amont : compteurs CUMULÉS
+   *  de la session — input/output/total). Le tour en tire le delta du tour
+   *  avec la baseline du wire (gateway-wire.usageBaseline) ; absent = le
+   *  moteur n'a rien publié → l'interface n'affiche PAS d'usage. */
+  finalUsage: { input: number; output: number; total: number } | null = null;
   private endedProperly = false;
   private finalError: Error | null = null;
   private readonly openTools = new Set<string>();
@@ -83,11 +88,18 @@ export class TurnEventSink {
 
   /** Texte final autoritaire + filet outils : tout outil resté
    *  « running » (complete perdu) est clos — le fil ne garde AUCUN
-   *  spinner après la réponse livrée. */
+   *  spinner après la réponse livrée. L'usage cumulé de session porté
+   *  par la trame (vue TUI amont) est capturé : le tour en tire son
+   *  delta avec la baseline du submit (gateway-turn, F-21). */
   private onCompleteFrame(payload: any): void {
     this.closeOpenTools();
     const finalText = payload?.text ?? payload?.content;
     if (typeof finalText === "string" && finalText) this.content = finalText;
+    const u = payload?.usage;
+    if (u && typeof u === "object") {
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+      this.finalUsage = { input: num(u.input), output: num(u.output), total: num(u.total) };
+    }
     this.endedProperly = true;
   }
 

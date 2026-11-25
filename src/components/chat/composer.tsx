@@ -589,8 +589,8 @@ function ComposerBarre({
                   {mode !== "gateway"
                     ? "Autorisations de l'agent : actives quand le moteur Hermes est lancé (connexion automatique). Lancez le moteur puis revenez ici."
                     : permissionsMode === "auto"
-                      ? "Toutes permissions : l'agent exécute sans confirmation — cliquer pour revenir à la confirmation avant chaque action"
-                      : "Autorisations : confirmation avant chaque action — cliquer pour autoriser tout (terminal, fichiers, web)"}
+                      ? "Toutes permissions : préférence enregistrée — la politique d'exécution RÉELLE reste celle configurée dans l'agent Hermes (aucun réglage de permissions dans le contrat gateway)."
+                      : "Autorisations : préférence enregistrée — l'exécution réelle suit la configuration de l'agent Hermes (aucun réglage de permissions dans le contrat gateway)."}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -639,7 +639,8 @@ function ComposerAlertes({
           role="status"
         >
           <ShieldCheck className="h-[15px] w-[15px] shrink-0 text-warning" />
-          Mode toutes permissions actif — l&apos;agent exécute sans confirmation
+          Mode toutes permissions actif — préférence enregistrée ; l&apos;exécution
+          réelle reste pilotée par la configuration de l&apos;agent Hermes
           <button
             type="button"
             onClick={() => onPermissionsChange("ask")}
@@ -659,8 +660,10 @@ function ComposerAlertes({
               Autoriser toutes les actions ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Hermes pourra exécuter <strong>terminal, fichiers et web sans confirmation</strong>.
-              Le mode se réinitialise à la prochaine session.
+              Préférence enregistrée pour la session : plus de rappel visuel.
+              La politique d&apos;exécution <strong>réelle</strong> (terminal,
+              fichiers, web) reste celle configurée dans l&apos;agent Hermes —
+              le contrat gateway ne porte pas de réglage de permissions.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

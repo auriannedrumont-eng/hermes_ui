@@ -55,6 +55,11 @@ interface FakeSession {
   sid: string;
   running: boolean;
   history: string[];
+  /** Compteurs d'usage CUMULÉS de la session (le moteur publie des trames
+   *  `session.usage` après chaque appel API et à la fin d'un tour — le
+   *  connecteur en tire la baseline et `message.complete.usage` le final,
+   *  delta = usage du tour, F-21 vivant en gateway). */
+  usage: { input: number; output: number; total: number };
 }
 
 const hex8 = () => Math.random().toString(16).slice(2, 10);
@@ -136,7 +141,7 @@ export function startFakeGateway(port = 9321, slowMs = 600): FakeGateway {
           stats.creates++;
           const sid = hex8();
           const stored = stampKey();
-          const session: FakeSession = { sid, running: false, history: [] };
+          const session: FakeSession = { sid, running: false, history: [], usage: { input: 0, output: 0, total: 0 } };
           byStored.set(stored, session);
           bySid.set(sid, session);
           reply(ws, req.id, { session_id: sid, stored_session_id: stored, message_count: 0 });
@@ -145,7 +150,7 @@ export function startFakeGateway(port = 9321, slowMs = 600): FakeGateway {
         case "session.resume": {
           stats.resumes++;
           const stored = String(req?.params?.session_id ?? "");
-          const session = byStored.get(stored) ?? { sid: hex8(), running: false, history: [] };
+          const session = byStored.get(stored) ?? { sid: hex8(), running: false, history: [], usage: { input: 0, output: 0, total: 0 } };
           byStored.set(stored, session);
           bySid.set(session.sid, session);
           reply(ws, req.id, { session_id: session.sid, stored_session_id: stored, message_count: session.history.length });
@@ -203,10 +208,37 @@ export function startFakeGateway(port = 9321, slowMs = 600): FakeGateway {
           event(ws, "message.delta", { text: "réponse " });
           event(ws, "message.delta", { text: "canonique" });
           const text = String(p?.text ?? "");
+          // Usage cumulé de session : +100 entrée / +25 sortie PAR TOUR
+          // ACCEPTE (les refus busy 4009 ne comptent pas — comme amont).
+          const turnUsage = {
+            input: session.usage.input + 100,
+            output: session.usage.output + 25,
+            total: session.usage.total + 125,
+          };
           setTimeout(() => {
             session.running = false;
             session.history.push(text);
-            event(ws, "message.complete", { text: `réponse canonique à « ${text} »` });
+            session.usage = turnUsage;
+            // Trame `session.usage` au contrat amont : session_id AU NIVEAU
+            // params, payload = vue TUI (`usage`) + compteurs plats
+            // dépréciés — c'est la BASELINE du tour suivant (F-21).
+            ws.send(JSON.stringify({
+              method: "event",
+              params: {
+                type: "session.usage",
+                session_id: session.sid,
+                payload: {
+                  usage: { ...turnUsage },
+                  input_tokens: turnUsage.input,
+                  output_tokens: turnUsage.output,
+                  total_tokens: turnUsage.total,
+                },
+              },
+            }));
+            event(ws, "message.complete", {
+              text: `réponse canonique à « ${text} »`,
+              usage: { ...turnUsage },
+            });
           }, slowMs);
           return;
         }

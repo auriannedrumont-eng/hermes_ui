@@ -21,29 +21,34 @@ export interface ArtifactDeltaPayload {
   delta: string;
 }
 
-/** Réglages d'un tour au moment de l'envoi (persistés sur le message). */
+/** Réglages d'un tour au moment de l'envoi (persistés sur le message).
+ *  Audit 25/11 : permissionsMode est ENREGISTRÉ mais lu par aucun moteur —
+ *  l'exécution réelle est pilotée par la configuration de l'agent (le
+ *  contrat gateway n'a pas de réglage de permissions, session.mutate
+ *  amont non plus) ; l'écran le dit (composer, bouclier). */
 export interface TurnSettings {
   /** Échelle d'effort du fournisseur (off, low, medium, high, max, standard, élevé…). */
   reasoningEffort?: string;
-  /** ask : confirmation avant chaque action · auto : tout exécuter. */
+  /** ask : confirmation avant chaque action · auto : tout exécuter.
+   *  Préférence enregistrée (affichée, persistée) — ne change PAS la
+   *  politique d'exécution réelle (voir en-tête). */
   permissionsMode?: "ask" | "auto";
   // ── Mémoire utilisateur (F-18) ─────────────────────────────────────
   // Les NOTES de mémoire voyagent dans systemPrompt des deux moteurs
   // (composeLocalSystemPrompt / gatewayContextSection) — pas ici : le champ
   // memoryNotes de ce littéral n'était lu par aucun connecteur (constat
-  // 25/11). Seul l'apprentissage reste un réglage de tour.
-  /** Apprentissage automatique demandé au moteur. */
-  memoryAutoLearn?: boolean;
+  // 25/11). L'apprentissage mémoire (hermes.memory.autoLearn) est piloté
+  // par la configuration de l'AGENT — aucun champ du contrat ne le porte
+  // (champ memoryAutoLearn retiré : lu par personne, audit 25/11).
   // ── Mode expert (F-22) — température, plafond de sortie, graine ────
+  // Transmis aux modèles connectés PAR CLÉ (pool local, llm-streams) ; le
+  // contrat fermé prompt.submit n'en porte aucun (l'écran le dit).
   /** Température du tour (0–1 : le fournisseur refuse au-delà, erreur 1210). */
   temperature?: number;
   /** Plafond de jetons de la réponse (16–8192). */
   maxTokens?: number;
   /** Graine de reproductibilité (entier 32 bits). */
   seed?: number;
-  // ── Mode Plan (F-30) : mise en plan demandée au moteur au premier tour —
-  // tenté une fois, refus non bloquant — la consigne écrite reste la garantie.
-  planMode?: boolean;
 }
 
 // ── Prompt système & instructions personnalisées (F-11 / F-19) ──────────

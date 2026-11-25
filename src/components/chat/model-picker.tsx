@@ -137,9 +137,10 @@ function ExpertPanel({
         </Button>
         <InfoTip>
           Température, plafond de jetons et graine — champs vides = valeurs par
-          défaut du fournisseur. Envoyés dans{" "}
-          <code className="rounded bg-muted px-1 font-mono text-[11px]">api_turn_v1.settings</code>
-          , ignorés sans dommage si non supportés.
+          défaut du fournisseur. Appliqués aux modèles connectés{" "}
+          <strong>par clé</strong> (pool local). En mode agent Hermes, le
+          contrat fermé du moteur ne porte aucun de ces réglages : ils ne
+          partent pas (l&apos;agent applique sa propre configuration).
         </InfoTip>
       </div>
       {expanded ? (
