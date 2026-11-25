@@ -15,12 +15,12 @@ Vitest ajoutés au mini-service en sont la **première couverture mesurable**.
 | --- | --- |
 | `audit-cc30.txt` | Phase 1 — audit des 44 fonctions de production CC ≥ 30 (1052 fonctions analysées), familles A-E. |
 | `couverture-reelle.txt` | Phase 2 + vagues 1 à 4 + séances UI du 25/11 (vagues 5 à 7) — rapport de couverture réelle (Vitest 5.1 + @vitest/coverage-v8) et journal des vagues de refactoring, cibles suivantes incluses. |
-| `suite-tests.log` | Preuves de validation brutes de la dernière séance (fichier LOCAL — `*.log` gitignore, non commité comme les précédents) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM dédiée Composer 25/25, preuve VERBATIM du découpage Composer (12 plages, 728 lignes), classement crapper après la vague 6. |
+| `suite-tests.log` | Preuves de validation brutes de la dernière séance (fichier LOCAL — `*.log` gitignore, non commité comme les précédents) : tsc ×3, eslint, suite autonome 33/33, gardes de source, Vitest 144/144, QA DOM dédiée Composer 25/25, preuve VERBATIM du découpage Composer (12 plages, 728 lignes), classement crapper après la vague 7 (Lot 6 : le log est celui de la séance vague 7 — en-tête « vague 7 UI : StorageSection + SystemSection » vérifié). |
 | `refactoring.patch` | Vagues 1+2+3+4 + séances UI (vagues 5 à 7) — patch unifié `git diff HEAD` (nouveaux fichiers inclus via `git add -N`). Vérifié `git apply --check` sur HEAD propre. |
-| `table-crap.txt` | Snapshot crapper complet après la vague 6 UI du 25/11 (fonction, namespace, CC, couverture, CRAP). |
-| `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la vague 6 UI du 25/11. |
+| `table-crap.txt` | Snapshot crapper complet après la vague 7 du 25/11 (fonction, namespace, CC, couverture, CRAP) — contient SystemSection 55 et StorageSection 54. |
+| `rapport-crap-complet.txt` | Sortie brute de `crapper --use-existing-coverage` après la vague 7 du 25/11 (SystemSection présent). |
 | `crap.edn` | Métriques au format EDN pour uml-viewer. |
-| `hotspots.json` | Les 60 fonctions de production CC ≥ 30 après la vague 6 UI du 25/11 (chunks .next/ exclus de l'extraction), avec spans et décompte des décisions (if/ternaire/&&/…). |
+| `hotspots.json` | Les 62 fonctions de production CC ≥ 30 après la vague 7 du 25/11 (chunks .next/ exclus de l'extraction ; 60 → 62 au passage des sous-registres, cf. couverture-reelle.txt §F), avec spans et décompte des décisions (if/ternaire/&&/…). |
 | `digest-hotspots.txt` | Digest de lecture des hotspots : en-tête de fichier, signature, corps (le Top 15 = entrées 1-15). |
 | `lcov-mini-service.info` | LCOV Vitest du mini-service (store-messages 81,8-100 %, providers-validate 100 %, parseRepoInput 100 %, models 100 %, modes 98 %, prompts 97 %, fiches 95 %, parseModelOptions 100 %). |
 
