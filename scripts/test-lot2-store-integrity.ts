@@ -7,7 +7,7 @@
 // pointe vers un dossier temporaire AVANT l'import dynamique du Store — plus
 // de déplacement physique de la base de développement (fragile : un crash au
 // milieu laissait la base renommée en .test-lot2-backup).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ARTIFACTS_DIR, artifactThumbPath } from "../mini-services/hermes-chat/artifacts";
@@ -132,6 +132,63 @@ async function main() {
     const hitsComma = store.searchMessages("aXb, mot");
     check("une virgule ne casse plus la requête", Array.isArray(hitsComma) && hitsComma.length === 0,
       `${hitsComma.length} hit(s)`);
+
+    console.log("[5] sweep de démarrage des orphelins (L2-7)");
+    mkdirSync(ARTIFACTS_DIR, { recursive: true });
+    const conv5 = store.createConversation("lot2-sweep");
+    const live = store.insertArtifact({
+      conversationId: conv5.id,
+      messageId: "sweep-msg-1",
+      key: "sweep.html",
+      kind: "html",
+      name: "sweep.html",
+      mime: "text/html",
+      content: "<p>vivant</p>",
+      status: "ready",
+    });
+    writeFileSync(artifactThumbPath(live.id), "PNG-VIVANT");
+    // (a) fichiers dérivés SANS ligne : crash entre l'écriture et le DELETE
+    writeFileSync(join(ARTIFACTS_DIR, "orphelin-crash.png"), "PNG-ORPHELIN");
+    writeFileSync(join(ARTIFACTS_DIR, "orphelin-crash.pdf"), "PDF-ORPHELIN");
+    // (b) ligne SANS conversation : cascade manquée — DELETE direct, sans le
+    //     nettoyage du domaine (le chemin que le sweep doit réparer)
+    const deadConv = store.createConversation("lot2-morte");
+    const dead = store.insertArtifact({
+      conversationId: deadConv.id,
+      messageId: "sweep-msg-2",
+      key: "morte.html",
+      kind: "html",
+      name: "morte.html",
+      mime: "text/html",
+      content: "<p>morte</p>",
+      status: "ready",
+    });
+    writeFileSync(artifactThumbPath(dead.id), "PNG-MORTE");
+    store.db
+      .query("DELETE FROM conversations WHERE id = ?")
+      .run(deadConv.id);
+    const swept = store.sweepOrphanArtifacts();
+    check("le sweep voit 3 fichiers orphelins (2 crash + vignette morte)",
+      swept.removedFiles.length === 3, JSON.stringify(swept.removedFiles));
+    check("le sweep voit 1 ligne sans conversation",
+      swept.removedRows.length === 1 && swept.removedRows[0] === dead.id,
+      JSON.stringify(swept.removedRows));
+    check("orphelin-crash.png supprimé", !existsSync(join(ARTIFACTS_DIR, "orphelin-crash.png")));
+    check("orphelin-crash.pdf supprimé", !existsSync(join(ARTIFACTS_DIR, "orphelin-crash.pdf")));
+    check("la ligne morte n'existe plus", store.listConversationArtifacts(deadConv.id).length === 0);
+    check("la vignette de la ligne morte est partie", !existsSync(artifactThumbPath(dead.id)));
+    check("l'artefact VIVANT est intact (ligne + fichier)",
+      store.listConversationArtifacts(conv5.id).length === 1 &&
+      existsSync(artifactThumbPath(live.id)) &&
+      readFileSync(artifactThumbPath(live.id), "utf8") === "PNG-VIVANT");
+    const swept2 = store.sweepOrphanArtifacts();
+    check("idempotent : le 2e sweep ne touche à rien",
+      swept2.removedFiles.length === 0 && swept2.removedRows.length === 0);
+    rmSync(artifactThumbPath(live.id), { force: true });
+    check("plus aucun fichier du test ne reste dans db/artifacts",
+      !readdirSync(ARTIFACTS_DIR).some(
+        (f) => f.includes("orphelin-crash") || f.includes(live.id) || f.includes(dead.id)
+      ));
   } finally {
     store?.close();
     cleanupDb();

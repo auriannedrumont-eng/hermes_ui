@@ -1,11 +1,12 @@
 // Store — domaine artifacts — extrait de store.ts (découpage 2026-11, FORK.md §10).
 // Interface fusionnée dans Store (declaration merging) + implémentation
 // posée au prototype par store.ts : l'API publique est inchangée.
-import { artifactPdfPath, artifactThumbPath } from "./artifacts";
+import { ARTIFACTS_DIR, artifactPdfPath, artifactThumbPath } from "./artifacts";
 import { MAX_PINNED, MAX_VERSIONS, isIdenticalReissue, restoreLabel, restoredStatus, selectPurgeable } from "./versions";
 import type { Artifact, ArtifactKind } from "./types";
 import type { ArtifactRow, Store } from "./store";
-import { copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, unlinkSync } from "node:fs";
+import { basename, join } from "node:path";
 
 export interface StoreArtifactsMethods {
   insertArtifact(a: {
@@ -41,6 +42,9 @@ export interface StoreArtifactsMethods {
     key: string,
     keep?: number
   ): ArtifactRow[];
+  /** Sweep de démarrage (Lot 2, audit L2-7) : purges défensives des
+   *  orphelins laissés par un crash. Idempotent. */
+  sweepOrphanArtifacts(): { removedFiles: string[]; removedRows: string[] };
   copyArtifactsToFork(
     fromConversationId: string,
     toConversationId: string,
@@ -252,6 +256,77 @@ export function buildArtifacts(): StoreArtifactsMethods & ThisType<Store> {
         this.db.query("DELETE FROM artifacts WHERE id = ?").run(r.id);
       }
       return rows;
+    },
+
+    /** Sweep de démarrage (Lot 2, audit L2-7) : purge défensive des orphelins
+     *  de crash — fichiers dérivés sans ligne (écriture réussie, DELETE
+     *  manqué ou interrompu) et lignes sans conversation (cascade manquée à
+     *  la suppression d'une conversation). Les lignes sans FICHIER sont
+     *  volontairement épargnées : PNG/PDF sont des rendus dérivés à la
+     *  demande — une ligne sans rendu est un état légitime (il sera
+     *  régénéré). Idempotent : tout est cohérent ⇒ ne touche à rien. */
+    sweepOrphanArtifacts(): { removedFiles: string[]; removedRows: string[] } {
+      const removedFiles: string[] = [];
+      const removedRows: string[] = [];
+      // 1) fichiers dérivés sans ligne — restes de crash sur disque
+      try {
+        if (existsSync(ARTIFACTS_DIR)) {
+          const known = new Set(
+            (this.db.query("SELECT id FROM artifacts").all() as { id: string }[]).map(
+              (r) => r.id
+            )
+          );
+          for (const f of readdirSync(ARTIFACTS_DIR)) {
+            const m = /^(.+)\.(png|pdf)$/.exec(f);
+            if (m && !known.has(m[1])) {
+              try {
+                unlinkSync(join(ARTIFACTS_DIR, f));
+                removedFiles.push(f);
+              } catch {
+                /* déjà parti — rien à réclamer */
+              }
+            }
+          }
+        }
+      } catch {
+        /* répertoire illisible : le boot ne doit jamais mourir ici */
+      }
+      // 2) lignes sans conversation (cascade manquée) — leurs fichiers suivent
+      try {
+        const dangling = this.db
+          .query(
+            `SELECT a.id FROM artifacts a
+             LEFT JOIN conversations c ON c.id = a.conversation_id
+             WHERE c.id IS NULL`
+          )
+          .all() as { id: string }[];
+        if (dangling.length > 0) {
+          // Transaction (Lot 2, audit L2-5) : les DELETE des lignes pendantes
+          // forment un seul acte — les fichiers sont ensuite réclamés hors
+          // base (un unlink manqué ne laisse qu'un fichier, jamais une ligne).
+          this.db.transaction(() => {
+            for (const r of dangling) {
+              this.db.query("DELETE FROM artifacts WHERE id = ?").run(r.id);
+              removedRows.push(r.id);
+            }
+          })();
+          for (const r of dangling) {
+            for (const p of [artifactThumbPath(r.id), artifactPdfPath(r.id)]) {
+              try {
+                if (existsSync(p)) {
+                  unlinkSync(p);
+                  removedFiles.push(basename(p));
+                }
+              } catch {
+                /* déjà parti */
+              }
+            }
+          }
+        }
+      } catch {
+        /* DB indisponible au sweep : même garde de boot */
+      }
+      return { removedFiles, removedRows };
     },
 
     // ── Versionnage fichiers (F-26) : actions humaines sur le journal ───────

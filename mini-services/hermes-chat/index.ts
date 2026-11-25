@@ -464,6 +464,18 @@ io.use((socket, next) => {
 });
 
 const store = new Store();
+// Sweep de démarrage (Lot 2, audit L2-7) : purge défensive des orphelins de
+// crash (fichiers dérivés sans ligne, lignes sans conversation). Ne doit
+// JAMAIS empêcher le service de démarrer — le sweep est déjà blindé en
+// interne ; on ne trace que s'il a réellement retiré quelque chose.
+{
+  const swept = store.sweepOrphanArtifacts();
+  if (swept.removedFiles.length || swept.removedRows.length) {
+    console.log(
+      `sweep artefacts : ${swept.removedFiles.length} fichier(s) et ${swept.removedRows.length} ligne(s) orpheline(s) purgés`
+    );
+  }
+}
 const connector = new HermesConnector();
 // v2.3 : le moteur consomme le porte-clés du volet Paramètres — en moteur
 // local, les tours partent sur l'API du fournisseur à clé active.
