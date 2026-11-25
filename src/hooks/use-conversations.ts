@@ -7,6 +7,7 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { getSocket } from "@/lib/socket";
 import { readClientSetting } from "@/lib/settings";
+import { emitAck } from "@/lib/emit-ack";
 import { resolveMode, type ConversationMode, type ModeConfig } from "@/lib/modes";
 import { useToast } from "@/hooks/use-toast";
 import { useChatStream } from "@/hooks/use-chat-stream";
@@ -92,6 +93,32 @@ export function useConversations(deps: ConversationsDeps) {
       // « Nouvelle conversation » avant l'ack créait DEUX conversations.
       if (creatingRef.current) return null;
       creatingRef.current = true;
+      // ── Verrou « dossier des premières conversations » (2026-11-25) ──
+      // Base vide (aucune conversation) + appel SANS dossier explicite :
+      // la consigne du service est de ranger la première conversation dans
+      // le dossier par défaut. On le lit ICI pour que l'écran ne crée jamais
+      // à l'aveugle : réglage défini → injection ; réglage vide → blocage
+      // LOCAL avec un message qui dit où définir (le service aurait aussi
+      // refusé, mais l'erreur s'affiche mieux en amont).
+      let targetProjectId = projectId ?? null;
+      if (!targetProjectId && conversations.length === 0) {
+        const res = await emitAck<{ value?: unknown }>("settings:get", {
+          key: "hermes.conversations.defaultProject",
+        });
+        const defaultProjectId =
+          res && typeof res.value === "string" ? res.value.trim() : "";
+        if (!defaultProjectId) {
+          creatingRef.current = false;
+          toast({
+            title: "Première conversation bloquée",
+            description:
+              "Choisissez d'abord un dossier par défaut dans Paramètres → Interface — la toute première conversation doit être rangée.",
+            variant: "destructive",
+          });
+          return null;
+        }
+        targetProjectId = defaultProjectId;
+      }
       return new Promise((resolve) => {
         // (audit 2026-11-21) chien de garde : si l'ack n'arrive jamais
         // (service tué net, coupure socket au moment du clic), creatingRef
@@ -116,7 +143,7 @@ export function useConversations(deps: ConversationsDeps) {
         socket.emit(
           "conversations:create",
           {
-            projectId: projectId ?? null,
+            projectId: targetProjectId ?? null,
             ...(mode !== "chat" ? { mode, modeConfig: pending?.config } : {}),
           },
           (res: { conversation?: ConversationMeta }) => {
@@ -148,12 +175,15 @@ export function useConversations(deps: ConversationsDeps) {
     // compilateur React l'exige quand les deps traversent la frontière du
     // hook) — ce sont des setters useState et des refs : identités stables,
     // le callback garde la même fréquence de re-création qu'avant.
+    // 2026-11-25 : `conversations` rejoint la liste — le verrou « première
+    // conversation » lit sa LONGUEUR (base vide ou non) dans le corps.
     [
       toast,
       creatingRef,
       pendingModeRef,
       activeIdRef,
       loadingForRef,
+      conversations,
       setConversations,
       setActiveId,
       setMessages,

@@ -55,7 +55,26 @@ socket.on(
     // Compat : emit("conversations:create", cb) sans payload
     const cb = typeof payload === "function" ? payload : maybeCb;
     const src = payload && typeof payload === "object" ? payload : {};
-    const projectId = src.projectId ?? null;
+    let projectId = src.projectId ?? null;
+    // Verrou « dossier par défaut » (2026-11-25) : la PREMIÈRE conversation
+    // (base vide) ne peut pas naître hors dossier. Réglage serveur
+    // hermes.conversations.defaultProject = id du dossier imposé.
+    // - réglage défini → un appel sans projectId est RANGÉ dedans (le client
+    //   n'a pas à le savoir) ;
+    // - réglage absent → création SANS dossier REFUSÉE avec un message qui
+    //   dit où le définir (Paramètres → Interface).
+    // Les conversations suivantes (base non vide) gardent « Sans dossier ».
+    if (!projectId) {
+      const defaultProjectId = (ctx.store.getSetting("hermes.conversations.defaultProject") ?? "").trim();
+      if (defaultProjectId && ctx.store.getProject(defaultProjectId)) {
+        projectId = defaultProjectId;
+      } else if (ctx.store.listConversations().length === 0) {
+        if (typeof cb === "function") {
+          cb({ error: "Choisissez d'abord un dossier par défaut dans Paramètres → Interface — la première conversation doit être rangée." });
+        }
+        return;
+      }
+    }
     // F-30 : le mode des nouvelles conversations part du client (réglage
     // hermes.modes.defaultMode) — résolu et borné ici (valeur inconnue → chat).
     const mode = ctx.resolveMode(src.mode);

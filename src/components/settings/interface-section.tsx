@@ -5,7 +5,7 @@
 // section Modèles.
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Segmented } from "@/components/shared/segmented";
 import { Switch } from "@/components/ui/switch";
@@ -23,6 +23,7 @@ import {
   readClientSetting,
   writeClientSetting,
 } from "@/lib/settings";
+import { emitAck } from "@/lib/emit-ack";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/chat-types";
@@ -33,6 +34,11 @@ const SORT_LABELS: Record<string, string> = {
   created: "Création",
   title: "Nom",
 };
+
+// Clé serveur du verrou « première conversation rangée » (2026-11-25) :
+// la VRAIE valeur vit dans la table settings du service (settings:get/set) —
+// le registre n'en documente que la forme. Chaîne vide = non défini.
+const DEFAULT_PROJECT_KEY = "hermes.conversations.defaultProject";
 
 export function SettingRow({
   label,
@@ -71,6 +77,47 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
   const { theme, setTheme } = useTheme();
   const [rev, setRev] = useState(0);
   useEffect(() => onSettingsChanged(() => setRev((r) => r + 1)), []);
+
+  // ── Verrou « dossier des premières conversations » (2026-11-25) ──
+  // Réglage SERVEUR (table settings du service) : l'id du dossier où la
+  // première conversation doit naître. Tant que la valeur est vide, le
+  // service REFUSE conversations:create sans projectId — l'écran montre ici
+  // un sélecteur qui dit où définir. Lecture au montage + relecture au
+  // retour de chaque écriture (l'ack fait foi).
+  const [defaultProjectId, setDefaultProjectId] = useState<string | null>(null);
+  const loadDefaultProject = useCallback(async () => {
+    const res = await emitAck<{ value?: unknown }>("settings:get", {
+      key: DEFAULT_PROJECT_KEY,
+    });
+    if (res === null) {
+      setDefaultProjectId(null);
+      return;
+    }
+    setDefaultProjectId(typeof res.value === "string" ? res.value : "");
+  }, []);
+  useEffect(() => {
+    void loadDefaultProject();
+  }, [loadDefaultProject]);
+
+  const saveDefaultProject = useCallback(
+    async (value: string) => {
+      const res = await emitAck<{ ok?: boolean; error?: string }>(
+        "settings:set",
+        { key: DEFAULT_PROJECT_KEY, value }
+      );
+      if (res?.ok) {
+        setDefaultProjectId(value);
+        toast({ title: "Dossier par défaut enregistré" });
+      } else {
+        toast({
+          title: "Réglage non enregistré",
+          description: res?.error ?? "Le service a refusé la valeur.",
+          variant: "destructive",
+        });
+      }
+    },
+    [toast]
+  );
 
   // Lot audit : écriture localStorage en échec (quota, navigation privée) =
   // feedback visible — avant, le clic était mort sans message.
@@ -171,6 +218,39 @@ export function InterfacePane({ projects }: { projects: Project[] }) {
             {(getSettingDef("fork.projects.sort")!.options ?? []).map((v) => (
               <SelectItem key={v} value={v}>
                 {SORT_LABELS[v] ?? v}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingRow>
+
+      <SettingRow
+        label="Dossier des premières conversations"
+        description={
+          projects.length === 0
+            ? "Aucun dossier n'existe — créez-en un dans la sidebar (📁↓) pour pouvoir démarrer une première conversation."
+            : "La toute première conversation naît dans ce dossier ; les suivantes restent libres. Tant qu'aucun dossier n'est choisi, la première conversation est bloquée."
+        }
+      >
+        <Select
+          value={defaultProjectId || undefined}
+          onValueChange={(v) => void saveDefaultProject(v)}
+          disabled={projects.length === 0}
+        >
+          <SelectTrigger
+            aria-label="Dossier des premières conversations"
+            className="h-8 w-[190px] max-w-full rounded-md bg-background px-[11px] text-[12.5px] font-medium hover:border-hermes focus-visible:ring-hermes/50"
+          >
+            <SelectValue
+              placeholder={
+                defaultProjectId === null ? "…" : "À définir (obligatoire)"
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
               </SelectItem>
             ))}
           </SelectContent>

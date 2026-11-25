@@ -173,6 +173,7 @@ const SETTINGS_ALLOWED_KEYS = new Set<string>([
   "fork.webchat.browserPath",
   "hermes.modes.prompts",
   "hermes.modes.voiceChars",
+  "hermes.conversations.defaultProject",
   "hermes.pricing",
   "hermes.profiles",
 ]);

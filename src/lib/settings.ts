@@ -359,6 +359,18 @@ export const FORK_SETTINGS: SettingDef[] = [
     scope: "server",
     category: "Système",
   },
+  {
+    key: "hermes.conversations.defaultProject",
+    type: "string",
+    default: "",
+    label: "Dossier des premières conversations",
+    description:
+      "Identifiant du dossier où est rangée la première conversation — " +
+      "côté service (settings:get/set) ; tant qu'aucun dossier n'est choisi, " +
+      "la toute première conversation ne peut pas être créée. Vide = à définir.",
+    scope: "server",
+    category: "Projets",
+  },
 ];
 
 const PREFIX = "hermes-ui:";
