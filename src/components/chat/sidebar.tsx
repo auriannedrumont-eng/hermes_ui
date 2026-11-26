@@ -783,21 +783,23 @@ function SidebarDialogues({
         description={
           deleteProjectTarget
             ? (() => {
-                // F-59 : la garde compte TOUTES les conversations (dossier +
-                // sous-dossiers, cas limite plan §6.4) ; les sous-dossiers
-                // sont promus au premier niveau, jamais supprimés.
+                // ((108)) la suppression est RÉELLE : dossier, sous-dossiers
+                // et conversations — côté interface ET côté moteur Hermes
+                // (session supprimée dans data\state.db via la passerelle).
                 const ids = subtreeIds(deleteProjectTarget.id, projects);
                 const count = conversations.filter(
                   (c) => c.projectId && ids.has(c.projectId)
                 ).length;
-                const subs = projects.filter((p) => p.parentId === deleteProjectTarget!.id).length;
+                const subs = projects.filter(
+                  (p) => ids.has(p.id) && p.id !== deleteProjectTarget!.id
+                ).length;
                 const convTxt =
                   count > 0
-                    ? `Ses ${count} conversation${count > 1 ? "s" : ""} (dossier et sous-dossiers) seront conservées et déplacées dans « Sans dossier ». `
-                    : "Les conversations, s'il y en a, resteront dans « Sans dossier ». ";
+                    ? `Ses ${count} conversation${count > 1 ? "s" : ""} (dossier et sous-dossiers) seront supprimées : côté interface ET côté mémoire du moteur Hermes. `
+                    : "Aucune conversation dans ce dossier et ses sous-dossiers. ";
                 const subTxt =
                   subs > 0
-                    ? `Son${subs > 1 ? "s" : ""} ${subs} sous-dossier${subs > 1 ? "s" : ""} remonter${subs > 1 ? "nt" : ""} au premier niveau.`
+                    ? `${subs} sous-dossier${subs > 1 ? "s" : ""} ser${subs > 1 ? "ont" : "a"} supprimé${subs > 1 ? "s" : ""} avec lui.`
                     : "";
                 return `${convTxt}${subTxt}`;
               })()

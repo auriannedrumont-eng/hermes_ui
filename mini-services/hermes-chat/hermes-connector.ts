@@ -873,6 +873,59 @@ export class HermesConnector {
     return sid;
   }
 
+  /** ((108)) Supprime la session moteur d'une conversation côté passerelle :
+   *  session.mutate {operation:'delete'} — session, messages, routage et
+   *  médias orphelins dans data\state.db. Mutation bornée par révision :
+   *  session.info la lit, essais bornés si elle a bougé. Best-effort :
+   *  échec = false, la suppression interface continue (l'orphelin
+   *  resterait dans le vidage manuel). sessionId null (conversation sans
+   *  tour) → rien à supprimer, true. */
+  async deleteMotorSessionById(
+    sessionId: string | null,
+  ): Promise<{ ok: boolean; erreurs: string[] }> {
+    if (!sessionId) return { ok: true, erreurs: [] };
+    const erreurs: string[] = [];
+    try {
+      const wire = await this.gatewayChannel().ensureConnected();
+      let infos: unknown = null;
+      try {
+        infos = await wire.rpc("session.info", { session_id: sessionId });
+      } catch {
+        /* session déjà partie : la suppression d'un absent réussit quand même */
+      }
+      const revision = (() => {
+        const stack: unknown[] = [infos];
+        while (stack.length) {
+          const cur = stack.pop();
+          if (cur && typeof cur === "object") {
+            for (const [k, v] of Object.entries(cur as Record<string, unknown>)) {
+              if ((k === "revision" || k === "runtime_revision") && typeof v === "number") return v;
+              if (v && typeof v === "object") stack.push(v);
+            }
+          }
+        }
+        return 0;
+      })();
+      for (const expectedRevision of [revision, 0, 1]) {
+        try {
+          await wire.rpc("session.mutate", {
+            session_id: sessionId,
+            operation: "delete",
+            request_id: `delete-${sessionId}-${expectedRevision}-${Date.now()}`,
+            expected_revision: expectedRevision,
+            payload: {},
+          });
+          return { ok: true, erreurs };
+        } catch (err) {
+          erreurs.push(err instanceof Error ? err.message : String(err));
+        }
+      }
+      return { ok: false, erreurs };
+    } catch (err) {
+      return { ok: false, erreurs: [err instanceof Error ? err.message : String(err)] };
+    }
+  }
+
   /** Solder une admission « unknown » après reconnexion (journal 19) :
    *  prompt.receipt lit le statut, prompt.resolve_unknown l'acquitte —
    *  « Acknowledge a turn lost across an owner restart; the FIFO behind

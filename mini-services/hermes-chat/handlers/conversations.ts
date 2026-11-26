@@ -25,6 +25,27 @@ function validDiskPath(raw: unknown): string | null {
   }
 }
 
+/** ((108)) Supprime une conversation PARTOUT : pièces jointes, artefacts,
+ *  partages et ligne interface, PUIS sa session moteur (best-effort — un
+ *  échec réseau ne bloque jamais la suppression interface ; l'orphelin
+ *  resterait visible dans le vidage manuel de data\state.db). */
+async function supprimerConversationPartout(
+  id: string,
+): Promise<{ ok: boolean; erreurs: string[] }> {
+  const attachments = ctx.store.conversationAttachments(id);
+  const artifactRows = ctx.store.deleteConversationArtifacts(id);
+  ctx.deleteAttachmentFiles(attachments);
+  ctx.deleteArtifactFiles(artifactRows);
+  // Les liens de partage deviennent 410 Gone (snapshot conservé en base)
+  ctx.store.revokeSharesOfConversation(id);
+  ctx.store.deleteConversation(id);
+  // ((108)) la session moteur part via le canal WS du connecteur
+  // (session.mutate delete) — best-effort, jamais bloquant.
+  return ctx.connector.deleteMotorSessionById(
+    ctx.store.getConversationMotorSession(id)
+  );
+}
+
 
 // ── Découpage interne (audit CRAP 2026-11) ────────────────────────────────
 // registerConversationsHandlers ne pose plus 24 socket.on() dans un seul
@@ -166,7 +187,9 @@ socket.on("conversations:rename", (payload: { id?: string; title?: string }, cb?
   if (conversation) ctx.io.emit("conversations:renamed", { conversation });
 });
 
-socket.on("conversations:delete", (payload: { id?: string }, cb?: (data: unknown) => void) => {
+socket.on(
+  "conversations:delete",
+  async (payload: { id?: string }, cb?: (data: unknown) => void) => {
   const id = payload?.id;
   if (!id) {
     if (typeof cb === "function") cb({ error: "id requis" });
@@ -182,14 +205,9 @@ socket.on("conversations:delete", (payload: { id?: string }, cb?: (data: unknown
       cb({ error: "Un tour est en cours dans cette conversation — arrêtez-le avant de la supprimer" });
     return;
   }
-  // Nettoyage disque des pièces jointes et des artefacts de la conversation
-  const attachments = ctx.store.conversationAttachments(id);
-  const artifactRows = ctx.store.deleteConversationArtifacts(id);
-  ctx.deleteAttachmentFiles(attachments);
-  ctx.deleteArtifactFiles(artifactRows);
-  // Les liens de partage deviennent 410 Gone (snapshot conservé en base)
-  ctx.store.revokeSharesOfConversation(id);
-  ctx.store.deleteConversation(id);
+  // ((108)) Suppression PARTOUT : interface (pièces jointes, artefacts,
+  // partages, ligne) ET session moteur (base data\state.db du moteur).
+  await supprimerConversationPartout(id);
   if (typeof cb === "function") cb({ ok: true, id });
   // F-14 (broadcast) : la suppression doit atteindre toutes les sessions.
   ctx.io.emit("conversations:deleted", { id });
@@ -418,24 +436,53 @@ socket.on(
 
 
 // Supprime un projet : les conversations (du dossier et de ses sous-dossiers,
-// F-59) retombent dans « Sans projet », les sous-dossiers sont promus racine.
-// Le broadcast emporte la liste complète à jour : le front remplace sa liste
+// ((108)) Suppression d'un dossier : SOUS-ARBRE entier — le dossier, ses
+// sous-dossiers et TOUTES leurs conversations disparaissent (côté interface
+// ET côté moteur : sessions supprimées via DELETE /api/sessions). Le
+// broadcast emporte la liste complète à jour : le front remplace sa liste
 // en un seul événement (pas de cascade côté client).
-socket.on("projects:delete", (payload: { id?: string }, cb?: (data: unknown) => void) => {
-  const id = payload?.id;
-  if (!id) {
-    if (typeof cb === "function") cb({ error: "id requis" });
-    return;
+socket.on(
+  "projects:delete",
+  async (payload: { id?: string }, cb?: (data: unknown) => void) => {
+    const id = payload?.id;
+    if (!id) {
+      if (typeof cb === "function") cb({ error: "id requis" });
+      return;
+    }
+    if (!ctx.store.getProject(id)) {
+      if (typeof cb === "function") cb({ error: "Dossier introuvable" });
+      return;
+    }
+    // ((108)) Cascade SOUS-ARBRE (demande explicite de l'utilisatrice) :
+    // le dossier, ses sous-dossiers et TOUTES leurs conversations — côté
+    // interface ET côté moteur (session via DELETE /api/sessions).
+    const sousArbre = new Set([id]);
+    let grossi = true;
+    while (grossi) {
+      grossi = false;
+      for (const p of ctx.store.listProjects()) {
+        if (p.parentId && sousArbre.has(p.parentId) && !sousArbre.has(p.id)) {
+          sousArbre.add(p.id);
+          grossi = true;
+        }
+      }
+    }
+    const aSupprimer = ctx.store
+      .listConversations()
+      .filter((c) => c.projectId && sousArbre.has(c.projectId));
+    const enTour = aSupprimer.find((c) => ctx.isRunning(c.id));
+    if (enTour) {
+      if (typeof cb === "function")
+        cb({ error: "Un tour est en cours dans ce dossier — arrêtez-le avant de le supprimer" });
+      return;
+    }
+    for (const c of aSupprimer) await supprimerConversationPartout(c.id);
+    for (const pid of sousArbre) ctx.store.deleteProject(pid);
+    const projects = ctx.store.listProjects();
+    if (typeof cb === "function") cb({ ok: true, id, projects });
+    ctx.io.emit("projects:deleted", { id, projects });
   }
-  if (!ctx.store.getProject(id)) {
-    if (typeof cb === "function") cb({ error: "Dossier introuvable" });
-    return;
-  }
-  ctx.store.deleteProject(id);
-  const projects = ctx.store.listProjects();
-  if (typeof cb === "function") cb({ ok: true, id, projects });
-  ctx.io.emit("projects:deleted", { id, projects });
-});
+);
 
 socket.on(
   "projects:reorder",
