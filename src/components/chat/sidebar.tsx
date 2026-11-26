@@ -21,7 +21,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Folder, FolderDown, MessageSquare, Plus, Search } from "lucide-react";
+import { Folder, MessageSquare, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -43,11 +43,11 @@ import { DropZone, ProjectGroup } from "@/components/chat/project-group";
 import { type SubControls } from "@/components/chat/project-subgroup";
 import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
 import { SidebarDemarrage } from "@/components/chat/sidebar-demarrage";
+import { SidebarAjoutDossier } from "@/components/chat/sidebar-ajout-dossier";
 import { SidebarArchives } from "@/components/chat/sidebar-archives";
 import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
 import { buildProjectTree, subtreeIds, type ProjectNode } from "@/lib/project-tree";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
-import { pickWindowsDirectory } from "@/lib/directory-picker";
 import type {
   ConversationMeta,
   GatewayMode,
@@ -503,31 +503,9 @@ function SidebarDossiers({
 }: SidebarDossiersProps) {
   return (
             <>
-              <SidebarSectionHeader
-                title="Mes dossiers"
-                actions={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
-                    onClick={async () => {
-                      // ((107)) sélecteur natif d'abord (loi (30)) : la
-                      // fenêtre Windows porte le bouton « Nouveau dossier » ;
-                      // annulation ou API absente → dialogue maison (chemin
-                      // exact, sémantique disk_path).
-                      const picked = await pickWindowsDirectory();
-                      if (picked?.name) {
-                        await onCreateProject(picked.name, null, null);
-                        return;
-                      }
-                      setAttachDiskOpen(true);
-                    }}
-                    aria-label="Ajouter un dossier de mon disque"
-                    title="Ajouter un dossier de mon disque"
-                  >
-                    <FolderDown className="h-4 w-4" />
-                  </Button>
-                }
+              <SidebarAjoutDossier
+                onCreateProject={onCreateProject}
+                onFallback={() => setAttachDiskOpen(true)}
               />
               {projectTree.map((node: ProjectNode) => (
                 <DropZone
@@ -657,10 +635,14 @@ function SidebarDossiers({
   );
 }
 
-/** Feuille 3 — la branche « sans dossier » : épinglées puis groupes de
- *  dates. Corps déplacé VERBATIM de l'orchestrateur (chantier CRAP vague 5,
- *  2026-11-25) ; l'état « Pas encore de conversation. » reste la branche
- *  du ternaire parent (a toujours existé hors de ce fragment). */
+/** Feuille 3 — la branche « sans dossier » : l'en-tête « Mes dossiers » avec
+ *  son ajout 📁↓ ((38), 28/11 — l'ajout de dossier existe dans TOUS les
+ *  états : une conversation sans aucun dossier lié ne doit jamais laisser la
+ *  sidebar sans entrée d'ajout, capture du 28/11), puis épinglées et
+ *  groupes de dates ; le dialogue maison de lien disque en repli du
+ *  sélecteur natif. Corps déplacé VERBATIM de l'orchestrateur (chantier
+ *  CRAP vague 5, 2026-11-25) ; l'état « Pas encore de conversation. » reste
+ *  la branche du ternaire parent (a toujours existé hors de ce fragment). */
 interface SidebarHistoriqueProps {
   pinned: ConversationMeta[];
   activeId: string | null;
@@ -670,6 +652,14 @@ interface SidebarHistoriqueProps {
   setRenamingId: Dispatch<SetStateAction<string | null>>;
   itemProps: ConvItemShared;
   dateGroups: [string, ConversationMeta[]][];
+  onCreateProject: (
+    name: string,
+    parentId?: string | null,
+    diskPath?: string | null
+  ) => Promise<Project | null>;
+  setAttachDiskOpen: Dispatch<SetStateAction<boolean>>;
+  attachDiskOpen: boolean;
+  projects: Project[];
 }
 
 function SidebarHistorique({
@@ -681,9 +671,17 @@ function SidebarHistorique({
   setRenamingId,
   itemProps,
   dateGroups,
+  onCreateProject,
+  setAttachDiskOpen,
+  attachDiskOpen,
+  projects,
 }: SidebarHistoriqueProps) {
   return (
             <>
+              <SidebarAjoutDossier
+                onCreateProject={onCreateProject}
+                onFallback={() => setAttachDiskOpen(true)}
+              />
               {pinned.length > 0 ? (
                 <div className="mb-2">
                   <p className="px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -728,6 +726,12 @@ function SidebarHistorique({
                   </ul>
                 </div>
               ))}
+              <AttachDiskDialog
+                open={attachDiskOpen}
+                onOpenChange={setAttachDiskOpen}
+                projects={projects}
+                onAttach={(name, diskPath) => onCreateProject(name, null, diskPath)}
+              />
             </>
   );
 }
@@ -1277,6 +1281,10 @@ export function Sidebar({
               setRenamingId={setRenamingId}
               itemProps={itemProps}
               dateGroups={dateGroups}
+              onCreateProject={onCreateProject}
+              setAttachDiskOpen={setAttachDiskOpen}
+              attachDiskOpen={attachDiskOpen}
+              projects={projects}
             />
           )}
         </nav>
