@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 const execFile = promisify(execFileCb);
 import { mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, basename, dirname, sep, relative, isAbsolute } from "node:path";
+import { join, basename, dirname } from "node:path";
 import type { Store } from "./store";
 import { resolveUploadFile } from "./uploads";
 import { artifactPdfPath, artifactThumbPath } from "./artifacts";
@@ -109,10 +109,20 @@ export function createFilesServer(deps: HttpDeps) {
 
     // GET /disk/list?path=… — liaison « dossier du disque » (F-59 J5) :
     // liste les répertoires pour le dialogue 📁↓. Jeton requis (garde
-    // générale ci-dessus), chemin BORNÉ AU HOME, noms seuls — jamais de
-    // lecture du contenu du disque (plan D4, sémantique minimale).
+    // générale ci-dessus). 2026-11-25 (31) : navigation de TOUS LES DISQUES
+    // (demande explicite — « je veux pouvoir naviguer dans tous mes
+    // disques ») : plus de borne HOME, la racine d'un lecteur (C:\, F:\…)
+    // et « Ce PC » (racine virtuelle des lecteurs) sont navigables. Noms
+    // seuls, jamais de contenu de fichier (sémantique minimale conservée).
     if (u.pathname === "/disk/list") {
       handleDiskList(u, res);
+      return;
+    }
+
+    // GET /disk/drives — les lecteurs du poste (C:\, D:\, F:\…), point
+    // d'entrée de la navigation « Ce PC » du dialogue 📁↓. (31)
+    if (u.pathname === "/disk/drives") {
+      handleDiskDrives(res);
       return;
     }
 
@@ -234,10 +244,40 @@ async function handleDiagnostics(res: ServerResponse, deps: HttpDeps): Promise<v
   res.end(JSON.stringify(body, null, 2));
 }
 
+/** GET /disk/drives — les lecteurs du poste (Windows : lettres visibles via
+ *  les racines A:\ … Z:\ sondées ; Unix : la racine /). (31) Chaque lecteur
+ *  présent (readdir de la racine réussi) devient une entrée navigable. */
+function handleDiskDrives(res: ServerResponse): void {
+  const isWindows = process.platform === "win32";
+  const drives: { name: string; path: string }[] = [];
+  if (isWindows) {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (const l of letters) {
+      const root = `${l}:\\`;
+      try {
+        if (statSync(root).isDirectory()) {
+          drives.push({ name: `${l}:`, path: root });
+        }
+      } catch {
+        /* pas de lecteur à cette lettre */
+      }
+    }
+  } else {
+    drives.push({ name: "/", path: "/" });
+  }
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
+  res.end(JSON.stringify({ drives, home: homedir() }));
+}
+
 /** GET /disk/list?path=… — répertoires listables pour la liaison disque
  *  (F-59 J5). Le chemin demandé (HOME par défaut) est résolu (realpath :
- *  suit les liens symboliques AVANT la vérification) puis STRICTEMENT borné
- *  au HOME — jamais de chemin arbitraire, jamais de contenu (noms seuls).
+ *  suit les liens symboliques AVANT la vérification). 2026-11-25 (31) :
+ *  NAVIGATION DE TOUS LES DISQUES — la borne HOME est levée (demande
+ *  explicite) : racines de lecteurs et « Ce PC » navigables. Noms seuls,
+ *  jamais de contenu de fichier (sémantique minimale conservée).
  *  Réponse : { path, parent, home, dirs: [{ name, path }] }. */
 function handleDiskList(u: URL, res: ServerResponse): void {
   const jsonError = (code: number, error: string) => {
@@ -254,15 +294,9 @@ function handleDiskList(u: URL, res: ServerResponse): void {
     jsonError(400, "Chemin introuvable");
     return;
   }
-  // Revue P1-P7 : comparaison par path.relative() — sous Windows,
-  // target.startsWith(home + sep) échouait sur une différence de casse de
-  // lettre de lecteur (c:\ vs C:\) : 403 injustifié. path.relative()
-  // normalise (même casse, même racine) — comme webchat/paths.ts.
-  const relatif = relative(home, target);
-  if (relatif.startsWith("..") || isAbsolute(relatif)) {
-    jsonError(403, "Hors du dossier utilisateur");
-    return;
-  }
+  // (31) La borne HOME est levée : toute racine de lecteur et tout dossier
+  // de n'importe quel disque est navigable (noms seuls, jamais de contenu
+  // de fichier — le service reste un navigateur, pas un lecteur de disque).
   let entries: Dirent[];
   try {
     entries = readdirSync(target, { withFileTypes: true });
@@ -279,10 +313,15 @@ function handleDiskList(u: URL, res: ServerResponse): void {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
   });
+  // (31) Parent : le dossier parent — sauf à la racine d'un lecteur
+  // (C:\ n'a pas de parent navigable côté Windows : « Ce PC » est une vue
+  // du dialogue, pas un chemin) ni au HOME (le bouton « Dossier parent »
+  // se désactive dans le dialogue). Le dialogue dispose du bouton
+  // « Ce PC » (drives) pour changer de lecteur.
   res.end(
     JSON.stringify({
       path: target,
-      parent: target === home ? null : dirname(target),
+      parent: dirname(target) === target ? null : dirname(target),
       home,
       dirs,
     })

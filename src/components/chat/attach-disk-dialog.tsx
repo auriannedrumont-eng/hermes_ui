@@ -1,12 +1,14 @@
 // Dialogue « Ajouter un dossier de mon disque » (F-59 J5, maquette v6 📁↓).
-// Liste les répertoires via GET /disk/list (service HTTP 3004, jeton requis,
-// BORNÉ AU HOME côté service) ; lier un dossier crée un projet portant son
-// nom avec la colonne disk_path — sémantique minimale : le dossier reste où
-// il est, RIEN n'est lu ni déplacé. Fichier neuf (R1).
+// Liste les répertoires via GET /disk/list (service HTTP 3004, jeton requis) ;
+// 2026-11-25 (31) : NAVIGATION DE TOUS LES DISQUES (demande explicite) —
+// le point d'entrée est « Ce PC » (GET /disk/drives : C:\, D:\, F:\…), la
+// borne HOME du service est levée ; lier un dossier crée un projet portant
+// son nom avec la colonne disk_path — sémantique minimale : le dossier reste
+// où il est, RIEN n'est lu ni déplacé (noms seuls, jamais de contenu).
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Folder, FolderSymlink, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Folder, FolderSymlink, HardDrive, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +28,17 @@ interface DiskListing {
   dirs: { name: string; path: string }[];
 }
 
+/** Vue « Ce PC » (31) : les lecteurs du poste. */
+interface DrivesListing {
+  drives: { name: string; path: string }[];
+  home: string;
+}
+
+/** Mode d'affichage : les lecteurs (« Ce PC ») ou un dossier navigué. */
+type VueCourante =
+  | { vue: "drives"; drives: DrivesListing }
+  | { vue: "dossier"; listing: DiskListing };
+
 export function AttachDiskDialog({
   open,
   onOpenChange,
@@ -39,7 +52,7 @@ export function AttachDiskDialog({
   /** Crée le dossier lié (projects:create { name, diskPath }) côté parent. */
   onAttach: (name: string, diskPath: string) => Promise<Project | null>;
 }) {
-  const [listing, setListing] = useState<DiskListing | null>(null);
+  const [vue, setVue] = useState<VueCourante | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attaching, setAttaching] = useState<string | null>(null);
@@ -47,6 +60,26 @@ export function AttachDiskDialog({
   const linkedPaths = new Set(
     projects.map((p) => p.diskPath).filter((x): x is string => !!x)
   );
+
+  /** Charge la vue « Ce PC » : les lecteurs du poste. (31) */
+  const loadDrives = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const url = serviceUrl("/disk/drives", FILES_PORT);
+      const res = await fetch(url, { ...serviceFetchInit(), cache: "no-store" });
+      const json = (await res.json()) as DrivesListing & { error?: string };
+      if (!res.ok || json.error) {
+        setError(json.error ?? `Service a répondu HTTP ${res.status}`);
+        return;
+      }
+      setVue({ vue: "drives", drives: json });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Service injoignable");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const load = useCallback(async (path?: string) => {
     setLoading(true);
@@ -62,7 +95,7 @@ export function AttachDiskDialog({
         setError(json.error ?? `Service a répondu HTTP ${res.status}`);
         return;
       }
-      setListing(json);
+      setVue({ vue: "dossier", listing: json });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Service injoignable");
     } finally {
@@ -71,16 +104,15 @@ export function AttachDiskDialog({
   }, []);
 
   useEffect(() => {
-    if (open && !listing) void load();
-  }, [open, listing, load]);
-
-  // Recharge à chaque ouverture : le disque peut avoir changé.
-  useEffect(() => {
+    // Point d'entrée (31) : la vue « Ce PC » à l'ouverture — les lecteurs
+    // d'abord, chaque disque ensuite. Recharge à chaque ouverture : le
+    // disque peut avoir changé.
     if (open) {
-      setListing(null);
+      setVue(null);
       setError(null);
+      void loadDrives();
     }
-  }, [open]);
+  }, [open, loadDrives]);
 
   const attach = async (name: string, path: string) => {
     setAttaching(path);
@@ -110,14 +142,20 @@ export function AttachDiskDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Chemin courant + navigation */}
+        {/* Chemin courant + navigation — ou la vue « Ce PC » (31) */}
         <div className="flex items-center gap-1.5 rounded-lg border border-border bg-sidebar-accent/50 px-2.5 py-1.5">
           <Button
             variant="ghost"
             size="icon"
             className="h-6 w-6 shrink-0"
-            disabled={!listing?.parent || loading}
-            onClick={() => listing?.parent && void load(listing.parent)}
+            disabled={vue?.vue !== "dossier" || !vue.listing.parent || loading}
+            onClick={() => {
+              if (vue?.vue === "dossier" && vue.listing.parent) {
+                // Retour au parent, ou « Ce PC » si on remonte au dessus
+                // de la racine d'un lecteur (C:\ n'a pas de parent).
+                void load(vue.listing.parent);
+              }
+            }}
             aria-label="Dossier parent"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -127,46 +165,83 @@ export function AttachDiskDialog({
             size="icon"
             className="h-6 w-6 shrink-0"
             disabled={loading}
-            onClick={() => void load(listing?.path)}
+            onClick={() => void loadDrives()}
+            aria-label="Ce PC — tous les lecteurs"
+            title="Ce PC — tous les lecteurs"
+          >
+            <HardDrive className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            disabled={loading || vue?.vue !== "dossier"}
+            onClick={() => {
+              if (vue?.vue === "dossier") void load(vue.listing.path);
+            }}
             aria-label="Rafraîchir"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
           </Button>
-          <p className="truncate text-[12.5px] text-muted-foreground" title={listing?.path}>
-            {listing ? listing.path : "…"}
+          <p
+            className="truncate text-[12.5px] text-muted-foreground"
+            title={vue?.vue === "dossier" ? vue.listing.path : undefined}
+          >
+            {vue?.vue === "dossier"
+              ? vue.listing.path
+              : vue?.vue === "drives"
+                ? "Ce PC"
+                : "…"}
           </p>
         </div>
 
-        {/* Lier le dossier courant (jamais le HOME racine) */}
-        {listing && listing.path !== listing.home ? (
+        {/* Lier le dossier courant (pas les racines de lecteur) */}
+        {vue?.vue === "dossier" && vue.listing.path !== vue.listing.home ? (
           <Button
             variant="outline"
             size="sm"
             className="w-full justify-start gap-2"
-            disabled={loading || attaching === listing.path || linkedPaths.has(listing.path)}
-            onClick={() => void attach(basename(listing.path), listing.path)}
+            disabled={loading || attaching === vue.listing.path || linkedPaths.has(vue.listing.path)}
+            onClick={() => void attach(basename(vue.listing.path), vue.listing.path)}
           >
             <FolderSymlink className="h-3.5 w-3.5 text-hermes-text" />
-            {linkedPaths.has(listing.path)
+            {linkedPaths.has(vue.listing.path)
               ? "Déjà lié dans Mes dossiers"
-              : `Lier « ${basename(listing.path)} »`}
+              : `Lier « ${basename(vue.listing.path)} »`}
           </Button>
         ) : null}
 
-        {/* Répertoires du chemin courant */}
+        {/* Vue « Ce PC » (31) : les lecteurs, puis les dossiers navigués */}
         <div className="max-h-64 min-h-16 overflow-y-auto rounded-lg border border-border">
-          {loading && !listing ? (
+          {loading && !vue ? (
             <p className="flex items-center gap-2 px-3 py-4 text-[12.5px] text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Lecture du disque…
             </p>
-          ) : listing && listing.dirs.length === 0 ? (
+          ) : vue?.vue === "drives" ? (
+            <ul className="py-1">
+              {vue.drives.drives.map((d) => (
+                <li key={d.path}>
+                  <button
+                    type="button"
+                    onClick={() => void load(d.path)}
+                    disabled={loading}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`Ouvrir le lecteur ${d.name}`}
+                  >
+                    <HardDrive className="h-3.5 w-3.5 shrink-0 text-hermes-text" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-[12.5px]">{d.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : vue && vue.listing.dirs.length === 0 ? (
             <p className="px-3 py-4 text-[12.5px] text-muted-foreground">
               Aucun sous-dossier ici.
             </p>
-          ) : listing ? (
+          ) : vue ? (
             <ul className="py-1">
-              {listing.dirs.map((d) => {
+              {vue.listing.dirs.map((d) => {
                 const linked = linkedPaths.has(d.path);
                 return (
                   <li key={d.path}>
