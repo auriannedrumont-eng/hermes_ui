@@ -281,6 +281,11 @@ if [ "$(id -u)" -ne 0 ]; then
   GW_PORTS=(8081 8181 18081)
 fi
 UI_PORTS=(3000 3001 3002 3005)
+# ((104)) Port de la passerelle amont de CETTE installation (webapp.port
+# pose par le lanceur dans config.yaml) — distinct du 9120 amont pour ne
+# jamais croiser une autre installation Hermes (incidents du 24/11, 26/11).
+AGENT_PORT=9140
+export HERMES_AGENT_GATEWAY_PORT="$AGENT_PORT"
 
 MAX_RESTARTS=3
 URL_DISPLAY=""
@@ -560,7 +565,7 @@ install_agent_fresh() {
   # Le python système sert aussi à vos autres installations Hermes : leurs
   # dépendances se marchent dessus (la panne du 23/11). La maison a donc SON
   # python (.venv créé une fois), SES dépendances, et doit PROUVER qu'elle
-  # s'allume : allumage d'essai borné (90 s) avec sonde réelle du 9120.
+  # s'allume : allumage d'essai borné (90 s) avec sonde réelle du port de l'agent.
   # ((80)) Les dépendances sont résolues plus bas, depuis LE DÉPÔT
   # (pyproject.toml) — jamais depuis une liste copiée en dur : l'ancien
   # test « requirements.txt absent → rien installer » laissait l'agent
@@ -695,13 +700,13 @@ install_agent_fresh() {
     fi
   fi
   # ── CERTIFICATION (refonte (69) D2) : la gateway doit PROUVER qu'elle
-  # répond — allumage d'essai borné (90 s), sonde réelle du 9120. Port déjà
+  # répond — allumage d'essai borné (90 s), sonde réelle du port de l'agent. Port déjà
   # occupé (votre agent en marche ?) → reporté : on ne certifie jamais sur
   # le processus de quelqu'un d'autre.
   local certok="$RUNTIME_DIR/agent-certifie.ok" certflag="$RUNTIME_DIR/agent-certif.flag"
   [ -f "$certok" ] && return 0
-  if port_open 9120; then
-    log "• certification de l'agent reportée : le port 9120 est déjà occupé (votre Hermes est-il déjà en marche ?) — l'interface l'adoptera tant qu'il vit."
+  if port_open "$AGENT_PORT"; then
+    log "• certification de l'agent reportée : le port $AGENT_PORT est déjà occupé (votre Hermes est-il déjà en marche ?) — l'interface l'adoptera tant qu'il vit."
     return 0
   fi
   if [ -f "$certflag" ] && [ "$(( $(date +%s) - $(date -r "$certflag" +%s 2>/dev/null || echo 0) ))" -lt 3600 ]; then
@@ -714,7 +719,7 @@ install_agent_fresh() {
   mkdir -p "$ROOT/db" 2>/dev/null || true
   log "• certification de l'agent : allumage d'essai (90 s max)…"
   # ((78)) Commande officielle du projet amont : le runtime supervise
-  # (python -m hermes_cli.main gateway run) allume lui-même le listener 9120.
+  # (python -m hermes_cli.main gateway run) allume lui-même le listener (webapp.port).
   # run_api.py en fichier était doublement faux : package `gateway` non
   # importable depuis son dossier (ModuleNotFoundError, cas réel du 23/11)
   # et module qui exige un appelant ayant initialisé l'autorité de session.
@@ -726,7 +731,7 @@ install_agent_fresh() {
   for i in $(seq 1 45); do
     sleep 2
     kill -0 "$trial" 2>/dev/null || break
-    if port_open 9120; then certup=1; break; fi
+    if port_open "$AGENT_PORT"; then certup=1; break; fi
   done
   if [ "$certup" = "1" ]; then
     log "  agent CERTIFIÉ : la gateway a répondu à l'essai — elle saura s'allumer toute seule."
@@ -880,9 +885,9 @@ start_agent_runtime() {
     log "• agent : pas encore installé dans le dossier — le chat reste éteint ([HERMES_OFFLINE]) tant que le moteur n'est pas installé."
     return 0
   fi
-  if port_open 9120; then
-    set_sante_maillon agent "répond (9120) — adopté"
-    log "• agent : déjà en marche sur le port 9120 — l'interface l'adopte."
+  if port_open "$AGENT_PORT"; then
+    set_sante_maillon agent "répond ($AGENT_PORT) — adopté"
+    log "• agent : déjà en marche sur le port $AGENT_PORT — l'interface l'adopte."
     return 0
   fi
   # Revue P1-P7 (B22) : le chemin Python est recalculé ICI — l'ancien code
@@ -902,22 +907,23 @@ start_agent_runtime() {
     log "• agent : installé mais aucun python pour l'allumer — le chat reste éteint ce démarrage ([HERMES_OFFLINE])."
     return 0
   fi
-  log "• démarrage de l'agent (moteur local) sur :9120…"
+  log "• démarrage de l'agent (moteur local) sur :$AGENT_PORT…"
   # (C1, plan 25/11 — constat n°1) Écouteur STABLE : sans bloc webapp dans
-  # config.yaml, la gateway démarre sur un port ÉPHÉMÈRE que la sonde 9120
-  # ci-dessus ne verra jamais. Pose idempotente ; HERMES_DISABLE_WEBAPP=1
+  # config.yaml, la gateway démarre sur un port ÉPHÉMÈRE que la sonde du
+  # port de l'agent ci-dessus ne verra jamais. Pose idempotente avec le
+  # port ((104)) ; HERMES_DISABLE_WEBAPP=1
   # bloque (installation spéciale) ; une ligne webapp: existante n'est
   # jamais réécrite.
   if [ -z "$HERMES_DISABLE_WEBAPP" ] && [ -n "$maison" ]; then
     local cfgw="$maison/config.yaml"
     if [ ! -s "$cfgw" ] || ! grep -q '^webapp:' "$cfgw" 2>/dev/null; then
       [ -s "$cfgw" ] && [ -n "$(tail -c1 "$cfgw" 2>/dev/null)" ] && printf '\n' >>"$cfgw"
-      printf 'webapp:\n  enabled: true\n' >>"$cfgw"
-      log "• écouteur webapp de l'agent posé (port 9120) : certification et chat le verront."
+      printf 'webapp:\n  enabled: true\n  port: %s\n' "$AGENT_PORT" >>"$cfgw"
+      log "• écouteur webapp de l'agent posé (port $AGENT_PORT) : certification et chat le verront."
     fi
   fi
   # ((78)) Commande officielle amont (cf. l'essai de certification) : le
-  # runtime supervise allume lui-même le listener 9120 (webapp_listener).
+  # runtime supervise allume lui-même le listener (webapp.port).
   mkdir -p "$ROOT/db"
   ( cd "$maison" && PYTHONPATH="$maison${PYTHONPATH:+:$PYTHONPATH}" PYTHONIOENCODING=utf-8 exec "$apy" -m hermes_cli.main --profile default gateway run --quiet >>"$ROOT/db/agent.log" 2>&1 ) &
   state_set AGENT_PID "$!"
@@ -926,13 +932,13 @@ start_agent_runtime() {
   # touche que ce que le lanceur possède).
   state_set AGENT_OWNED 1
   for _ in $(seq 1 45); do
-    if port_open 9120; then up=1; break; fi
+    if port_open "$AGENT_PORT"; then up=1; break; fi
     pid_alive "$(state_get AGENT_PID)" || break
     sleep 1
   done
   if [ "$up" = 1 ]; then
-    set_sante_maillon agent "répond (9120)"
-    log "  OK agent branché (9120) — le moteur local tient la mémoire de vos tours."
+    set_sante_maillon agent "répond ($AGENT_PORT)"
+    log "  OK agent branché ($AGENT_PORT) — le moteur local tient la mémoire de vos tours."
   else
     cause="$(tail -5 "$ROOT/db/agent.log" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -1)"
     [ -n "$cause" ] || cause="toujours muet après 45 s (ou processus terminé)"
@@ -1077,8 +1083,8 @@ do_status() {
 # VIDE si absent ; c'est la seule maison connue.
 set_agent_home() {
   local dh="$ROOT/data"
-  if port_open 9120; then
-    log "• maison de l'agent : agent déjà en marche sur 9120 — maison non migrée ce boot (arrêtez tout, puis relancez, pour migrer)."
+  if port_open "$AGENT_PORT"; then
+    log "• maison de l'agent : agent déjà en marche sur $AGENT_PORT — maison non migrée ce boot (arrêtez tout, puis relancez, pour migrer)."
     [ -n "${HERMES_HOME:-}" ] || export HERMES_HOME="$dh"
     return 0
   fi
@@ -1266,10 +1272,10 @@ do_start() {
     set_sante_maillon passerelle "page OK mais liaison temps réelle muette (code $via)"
     log "  ATTENTION : liaison temps réelle muette à travers la passerelle (code $via) — l'onglet dirait « Hors ligne »"
   fi
-  # Agent : LE LANCEUR L'ALLUME (77), puis la sonde 9120 tranche la vérité
+  # Agent : LE LANCEUR L'ALLUME (77), puis la sonde du port tranche la vérité
   # du live (branché sur le nôtre, sur le vôtre déjà en marche, ou muet).
   start_agent_runtime
-  if port_open 9120; then set_sante_maillon agent "répond (9120)"; else set_sante_maillon agent "ne répond pas (9120)"; fi
+  if port_open "$AGENT_PORT"; then set_sante_maillon agent "répond ($AGENT_PORT)"; else set_sante_maillon agent "ne répond pas ($AGENT_PORT)"; fi
   write_sante "pret"
   if [ "${SANS_NAVIGATEUR:-0}" = "1" ]; then
     # Le lanceur lui-même fait-il partie de ce qui vient d'être reçu ? Dans

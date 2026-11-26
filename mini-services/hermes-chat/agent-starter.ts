@@ -175,7 +175,7 @@ export async function startAgentGatewayIfDown(): Promise<boolean> {
     const deadline = Date.now() + WAIT_MS;
     while (Date.now() < deadline) {
       if (await gatewayPortOpen()) {
-        trace("system", "agent Hermes démarré automatiquement — la gateway répond (9120)");
+        trace("system", "agent Hermes démarré automatiquement — la gateway répond");
         return true;
       }
       await new Promise((r) => setTimeout(r, 500));

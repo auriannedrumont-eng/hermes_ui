@@ -34,7 +34,10 @@ import { resolveAgentDir } from "./agent-motor";
 
 // URL par défaut : l'agent Hermes lancé localement (gateway/run_api.py).
 // Priorité : interface (Paramètres → Système) > HERMES_GATEWAY_URL > défaut.
-const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:9120/api/ws";
+// ((104)) Le port suit HERMES_AGENT_GATEWAY_PORT (posé par le lanceur,
+// webapp.port de config.yaml) — plus de 9120 figé, pour ne jamais croiser
+// la passerelle d'une autre installation Hermes.
+const DEFAULT_GATEWAY_URL = `ws://127.0.0.1:${process.env.HERMES_AGENT_GATEWAY_PORT ?? 9120}/api/ws`;
 const ENV_GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? null;
 const ENV_GATEWAY_TOKEN = process.env.HERMES_GATEWAY_TOKEN ?? null;
 const HANDSHAKE_TIMEOUT_MS = 3000;

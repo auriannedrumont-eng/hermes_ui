@@ -109,6 +109,11 @@ $ChatPort = 3003; $FilesPort = 3004
 # Ordre de preference pour les ports mobiles
 $GwPorts = @(81, 8081, 8181, 18081)
 $UiPorts = @(3000, 3001, 3002, 3005)
+# ((104)) Port de la passerelle amont de CETTE installation : pose dans
+# data\config.yaml (webapp.port) par Install-AgentIntoHome — distinct du
+# 9120 (defaut amont) pour que la passerelle de F:\hermes ne bloque plus
+# jamais la notre (incidents du 24/11 et du 26/11).
+$AgentPort = 9140
 $MaxRestarts = 3
 $Script:SupCycle = 0   # cycle de surveillance courant (voir Supervise-One)
 
@@ -1006,13 +1011,16 @@ function Ensure-Build([string]$nodeDir) {
 # <racine>\data est cree VIDE si absent ; c'est la seule maison connue.
 function Set-AgentHome {
     $DataHome = Join-Path $Root 'data'
-    if (Test-PortBusy 9120) {
-        Log "• maison de l'agent : agent deja en marche sur 9120 — maison non migree ce boot (arretez tout, puis relancez, pour migrer)."
+    if (Test-PortBusy $AgentPort) {
+        Log "• maison de l'agent : agent deja en marche sur $AgentPort — maison non migree ce boot (arretez tout, puis relancez, pour migrer)."
         if (-not $env:HERMES_HOME) { $env:HERMES_HOME = $DataHome }
         return
     }
     if (-not (Test-Path $DataHome)) { New-Item -ItemType Directory -Path $DataHome -Force | Out-Null }
     $env:HERMES_HOME = $DataHome
+    # ((104)) Le mini-service et les sondes maison suivent le port de
+    # l'agent — une seule source : $AgentPort.
+    $env:HERMES_AGENT_GATEWAY_PORT = "$AgentPort"
     Log "• maison de l'agent : $DataHome (dans le dossier, (89)) — plus aucune dependance a la console de lancement, aucune lecture d'une autre installation."
 }
 
@@ -1087,11 +1095,13 @@ function Ensure-AgentCles {
     # (C1, plan 25/11 — constat n°1) Écouteur STABLE de l'agent : sans bloc
     # webapp dans config.yaml, la gateway démarre sur un port ÉPHÉMÈRE
     # (webapp_listener.py, bind port 0) que la certification du lanceur et
-    # la sonde 9120 ne voient JAMAIS — l'interface reste [HERMES_OFFLINE]
-    # alors que l'agent tourne. Pose idempotente du bloc officiel
-    # (webapp: enabled: true → listener 9120) ; une installation spéciale
-    # qui veut garder son port choisi bloque via HERMES_DISABLE_WEBAPP=1,
-    # et une ligne webapp: existante n'est JAMAIS réécrite.
+    # la sonde du port de l'agent ne voient JAMAIS — l'interface reste
+    # [HERMES_OFFLINE] alors que l'agent tourne. Pose idempotente du bloc
+    # officiel (webapp: enabled: true, port $AgentPort ((104)) — distinct du
+    # 9120 amont pour ne jamais croiser l'autre installation Hermes) ; une
+    # installation spéciale qui veut garder son port choisi bloque via
+    # HERMES_DISABLE_WEBAPP=1, et une ligne webapp: existante n'est JAMAIS
+    # réécrite.
     if (-not $env:HERMES_DISABLE_WEBAPP) {
         $aReglerWebapp = $true
         if (Test-Path $cfgFile) {
@@ -1103,9 +1113,9 @@ function Ensure-AgentCles {
             try {
                 $cfgTxt = if (Test-Path $cfgFile) { Get-Content $cfgFile -Raw } else { '' }
                 if ($cfgTxt -and (-not $cfgTxt.EndsWith("`n"))) { $cfgTxt += "`n" }
-                $cfgTxt += "webapp:`n  enabled: true`n"
+                $cfgTxt += "webapp:`n  enabled: true`n  port: $AgentPort`n"
                 [System.IO.File]::WriteAllText($cfgFile, $cfgTxt, $utf8SansBom)
-                Log "• ecouteur webapp de l'agent pose (port 9120) : certification et chat le verront."
+                Log "• ecouteur webapp de l'agent pose (port $AgentPort) : certification et chat le verront."
             } catch {
                 Log "  ATTENTION : pose du bloc webapp impossible ($($_.Exception.Message)) — la gateway restera sur un port éphémère (le chantier C2 du connecteur couvre ce cas)."
             }
@@ -1469,7 +1479,7 @@ function Install-AgentIntoHome {
     # tant que agent-deps.ok n'existe pas — retentées À CHAQUE démarrage
     # après un échec, ((83)) : plus aucun verrou horaire), et
     # doit PROUVER qu'elle s'allume : allumage d'essai borné (90 s) avec
-    # sonde réelle du port 9120 → marqueur agent-certifie.ok. Échec de venv
+    # sonde réelle du port de l'agent → marqueur agent-certifie.ok. Échec de venv
     # → repli honnête sur le python système (comme (67)), cause dite.
     # ((80)) Les dépendances sont résolues plus bas, depuis LE DÉPÔT
     # (pyproject.toml) — jamais depuis une liste copiée en dur : l'ancien
@@ -1653,13 +1663,13 @@ function Install-AgentIntoHome {
     }
     # ── CERTIFICATION (refonte (69) D2) : un allumage d'essai BORNÉ — la
     # gateway doit PROUVER qu'elle répond avant qu'on la déclare prête.
-    # Port 9120 déjà occupé (votre agent en marche ?) → reporté : on ne
+    # Port de l'agent déjà occupé (votre agent en marche ?) → reporté : on ne
     # certifie jamais sur le processus de quelqu'un d'autre.
     $certOkF = Join-Path $RuntimeDir 'agent-certifie.ok'
     $certFlag = Join-Path $RuntimeDir 'agent-certif.flag'
     if (Test-Path $certOkF) { return }
-    if (Test-PortBusy 9120) {
-        Log "• certification de l'agent reportée : le port 9120 est déjà occupé (votre Hermes est-il déjà en marche ?) — l'interface l'adoptera tant qu'il vit."
+    if (Test-PortBusy $AgentPort) {
+        Log "• certification de l'agent reportée : le port $AgentPort est déjà occupé (votre Hermes est-il déjà en marche ?) — l'interface l'adoptera tant qu'il vit."
         return
     }
     if (Test-Path $certFlag) {
@@ -1677,7 +1687,7 @@ function Install-AgentIntoHome {
     $certLog = Join-Path $Root 'db\agent-certification.log'
     Log "• certification de l'agent : allumage d'essai (90 s max)…"
     # ((78)) La commande officielle du projet amont (hermes_cli.gateway_runtime_start.py
-    # la lance elle-meme) : le runtime supervise allume le listener 9120.
+    # la lance elle-meme) : le runtime supervise allume le listener de l'agent.
     # `gateway\run_api.py` en fichier etait doublement faux : le package
     # `gateway` n'est pas importable depuis son dossier (ModuleNotFoundError,
     # cas reel du 23/11) et ce module exige un appelant qui a deja initialise
@@ -1689,7 +1699,7 @@ function Install-AgentIntoHome {
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 2
         if ($certProc.HasExited) { break }
-        if (Test-PortBusy 9120) { $certUp = $true; break }
+        if (Test-PortBusy $AgentPort) { $certUp = $true; break }
     }
     if ($certUp) {
         Log "  agent CERTIFIÉ : la gateway a répondu à l'essai — elle saura s'allumer toute seule."
@@ -1737,7 +1747,7 @@ function Add-AgentToPth {
 }
 
 function Test-AgentOurs {
-    # ((100)) Le 9120 est occupé : est-ce NOTRE passerelle (même maison
+    # ((100)) Le port de l'agent est occupé : est-ce NOTRE passerelle (même maison
     # F:\hermes_web\data) ou celle d'une AUTRE installation ? Sans cette
     # sonde d'identité, le lanceur « adoptait » une passerelle étrangère
     # que l'app ne peut JAMAIS utiliser (maisons étanches, jetons
@@ -1791,7 +1801,7 @@ function Test-AgentOurs {
 }
 
 function Start-AgentRuntime {
-    # (77) LE LANCEUR ALLUME L'AGENT. Avant, il se bornait à SONDER le 9120
+    # (77) LE LANCEUR ALLUME L'AGENT. Avant, il se bornait à SONDER le port
     # après avoir allumé interface et passerelle : un agent installé mais
     # jamais allumé laissait l'interface à vie sur les clés fournisseurs
     # (cas réel du 23/11 matin : Phase 0 toute verte, bandeau « Hermes
@@ -1808,7 +1818,7 @@ function Start-AgentRuntime {
         Log "• agent : pas encore installé dans le dossier — le chat reste éteint ([HERMES_OFFLINE]) tant que le moteur n'est pas installé."
         return
     }
-    if (Test-PortBusy 9120) {
+    if (Test-PortBusy $AgentPort) {
         # ((100)) Ne plus adopter à l'aveugle : identifier QUI tient le
         # port. Une passerelle étrangère (autre installation Hermes) ne
         # peut jamais servir l'app — l'annoncer clairement plutôt que
@@ -1816,11 +1826,11 @@ function Start-AgentRuntime {
         # explication.
         $who = Test-AgentOurs
         if ($who -eq 'ours') {
-            Set-SanteMaillon 'agent' 'répond (9120) — adopté'
-            Log "• agent : notre passerelle déjà en marche sur le port 9120 — l'interface l'adopte."
+            Set-SanteMaillon 'agent' "répond ($AgentPort) — adopté"
+            Log "• agent : notre passerelle déjà en marche sur le port $AgentPort — l'interface l'adopte."
         } elseif ($who -eq 'foreign') {
-            Set-SanteMaillon 'agent' "port 9120 tenu par une AUTRE installation — chat éteint"
-            Log "• agent : le port 9120 est tenu par la passerelle d'une AUTRE installation Hermes (pas celle de ce dossier)."
+            Set-SanteMaillon 'agent' "port $AgentPort tenu par une AUTRE installation — chat éteint"
+            Log "• agent : le port $AgentPort est tenu par la passerelle d'une AUTRE installation Hermes (pas celle de ce dossier)."
             Log "  Le chat restera éteint tant qu'elle tourne : fermez l'autre installation Hermes, puis relancez Hermes-Web.bat."
         } else {
             # ((103)) Identité non prouvée = on n'adopte PAS : adopter une
@@ -1828,8 +1838,8 @@ function Start-AgentRuntime {
             # 26/11 — « l'interface l'adopte » posé au boot, puis « Hermes
             # éteint » à l'écran sans explication. Repli conservateur :
             # chat éteint ET annoncé, jamais la voix d'une autre maison.
-            Set-SanteMaillon 'agent' "port 9120 occupé, identité non prouvée — chat éteint"
-            Log "• agent : le port 9120 est occupé mais la sonde n'a pas prouvé que c'est NOTRE passerelle — le chat reste éteint ([HERMES_OFFLINE])."
+            Set-SanteMaillon 'agent' "port $AgentPort occupé, identité non prouvée — chat éteint"
+            Log "• agent : le port $AgentPort est occupé mais la sonde n'a pas prouvé que c'est NOTRE passerelle — le chat reste éteint ([HERMES_OFFLINE])."
             Log "  Arrêtez l'autre installation Hermes qui tient le port, puis relancez Hermes-Web.bat."
         }
         return
@@ -1854,11 +1864,11 @@ function Start-AgentRuntime {
         Log "• agent : installé mais aucun python pour l'allumer — le chat reste éteint ce démarrage ([HERMES_OFFLINE])."
         return
     }
-    Log "• demarrage de l'agent (moteur local) sur :9120..."
+    Log "• demarrage de l'agent (moteur local) sur :$AgentPort..."
     # ((78)) Commande officielle du projet amont (cf. l'essai de certification
     # plus haut) : `python -m hermes_cli.main gateway run`, cwd = racine de
-    # l'agent — le runtime supervise allume lui-meme le listener 9120
-    # (gateway/webapp_listener.py, DEFAULT_PORT = 9120).
+    # l'agent — le runtime supervise allume lui-meme le listener declare
+    # dans data\config.yaml (webapp.port ; defaut amont : 9120).
     Add-AgentToPth $house
     try { $env:PYTHONIOENCODING = 'utf-8' } catch { }
     $alog = Join-Path $Root 'db\agent.log'
@@ -1872,11 +1882,11 @@ function Start-AgentRuntime {
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 1
         if ($ap.HasExited) { break }
-        if (Test-PortBusy 9120) { $up = $true; break }
+        if (Test-PortBusy $AgentPort) { $up = $true; break }
     }
     if ($up) {
-        Set-SanteMaillon 'agent' 'répond (9120)'
-        Log "  OK agent branché (9120) — le moteur local tient la mémoire de vos tours."
+        Set-SanteMaillon 'agent' "répond ($AgentPort)"
+        Log "  OK agent branché ($AgentPort) — le moteur local tient la mémoire de vos tours."
     } else {
         $cause = ''
         try { $cause = (Get-Content $alog -Tail 5 | Where-Object { $_.Trim() } | Select-Object -Last 1) } catch { }

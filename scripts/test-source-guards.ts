@@ -230,11 +230,11 @@ async function main() {
   check("ps1 : venv dédié + allumage d'essai + marqueur agent-certifie.ok",
     ps1Coeur.includes("'.venv\\Scripts\\python.exe'") &&
       ps1Coeur.includes("agent-certifie.ok") &&
-      ps1Coeur.includes("Test-PortBusy 9120"));
+      ps1Coeur.includes("Test-PortBusy $AgentPort"));
   check("sh : venv dédié + allumage d'essai + marqueur agent-certifie.ok",
     shCoeur.includes(".venv/bin/python") &&
       shCoeur.includes("agent-certifie.ok") &&
-      shCoeur.includes("port_open 9120"));
+      shCoeur.includes('port_open "$AGENT_PORT"'));
   check("starter : le portable du dossier est le PREMIER candidat python (loi 8), venv ensuite",
     starterC.includes("portablePythonPath()") &&
       starterC.indexOf("portable") < starterC.indexOf("venvPython") &&
@@ -410,7 +410,7 @@ async function main() {
   check("ps1 : Start-AgentRuntime existe, PID en état",
     psN.includes("function Start-AgentRuntime") &&
       psN.includes("State-Set 'AGENT_PID'") &&
-      psN.includes("Test-PortBusy 9120"));
+      psN.includes("Test-PortBusy $AgentPort"));
   check("[78] LA COMMANDE OFFICIELLE amont, des deux lanceurs : python -m hermes_cli.main --profile default gateway run --quiet (cwd racine)",
     // Prouvé dans le dépôt amont : hermes_cli/gateway_runtime_start.py l.93
     // construit exactement [python, -m, hermes_cli.main, --profile, default,
@@ -423,13 +423,14 @@ async function main() {
     psN.includes("'-m', 'hermes_cli.main', '--profile', 'default', 'gateway', 'run', '--quiet'") &&
       shU.includes("-m hermes_cli.main --profile default gateway run --quiet") &&
       shU.includes('PYTHONIOENCODING=utf-8'));
-  // (100) puis revue P1-P7 (B21) : la sonde d'identité 9120 vit DANS
+  // (100) puis revue P1-P7 (B21) : la sonde d'identité du port de l'agent
+  // vit DANS
   // Start-AgentRuntime (après le garde « maison installée »), et l'appel du
   // flux de boot est suivi du verdict — l'ancienne ligne de sonde qui suivait
   // l'appel a été retirée (elle écrasait le diagnostic de la sonde).
-  check("ps1 : allumé dans le flux de boot avant le verdict, sonde 9120 portée par Start-AgentRuntime ((100)/(B21))",
+  check("ps1 : allumé dans le flux de boot avant le verdict, sonde du port de l'agent portée par Start-AgentRuntime ((100)/(B21))",
     /(^|\n)    Start-AgentRuntime\r?\n    Write-Sante -pret 'pret'/.test(psN) &&
-      /function Start-AgentRuntime \{[\s\S]*?if \(Test-PortBusy 9120\)/.test(psN));
+      /function Start-AgentRuntime \{[\s\S]*?if \(Test-PortBusy \$AgentPort\)/.test(psN));
   check("arrêt propre : marque = le runtime supervise (plus run_api.py), les deux lanceurs",
     psN.includes("Stop-Tree 'AGENT_PID' $MAgent") &&
       psN.includes("$MAgent = 'hermes_cli\\.main.*gateway'") &&
@@ -448,7 +449,7 @@ async function main() {
   check("sh : start_agent_runtime existe, PID dans l'état, appelé avant la sonde",
     shU.includes("start_agent_runtime()") &&
       shU.includes("state_set AGENT_PID") &&
-      /start_agent_runtime\r?\n\s*if port_open 9120/.test(shU));
+      /start_agent_runtime\r?\n\s*if port_open "\$AGENT_PORT"/.test(shU));
   check("sh : status connaît l'agent (la marque d'arrêt est vérifiée plus haut, [78])",
     shU.includes('"AGENT_PID:run_api.py:AGENT_OWNED:agent"'));
   check("allumage honnête : cause écrite si l'agent ne répond pas (db/agent.log), jamais de Die",
