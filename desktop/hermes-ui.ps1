@@ -1743,11 +1743,14 @@ function Test-AgentOurs {
     # que l'app ne peut JAMAIS utiliser (maisons étanches, jetons
     # différents) : message « l'interface l'adopte » au démarrage, puis
     # « Hermes éteint » à l'écran sans explication (cas réel du 24/11 :
-    # la passerelle de F:\hermes tenait le port). La sonde d'État du
-    # lanceur (HERMES_HOME + attach --json) répond à la question :
-    # « ready » = à nous, « absent/not ready » = étrangère (la voisine
-    # ne délivre pas de ticket à notre maison). Sortie : 'ours',
-    # 'foreign' ou 'unknown' (sonde impossible — repli conservateur).
+    # la passerelle de F:\hermes tenait le port). ((103)) CORRECTION :
+    # « ready » ne prouve RIEN — la voisine répond « ready » ET délivre
+    # un ticket à notre maison (attach.json du 24/11 : state ready +
+    # profile_id F:\hermes\data). L'identité se lit dans profile_id —
+    # la maison QUE LA PASSERELLE sert, comparée à la nôtre : égale =
+    # 'ours', différente ou « absent/not ready » = 'foreign', sonde
+    # impossible ou profile_id absent = 'unknown' (jamais adoptée :
+    # voir Start-AgentRuntime).
     $py = $null
     if ($Script:PortablePython -and (Test-Path $Script:PortablePython)) { $py = $Script:PortablePython }
     else {
@@ -1757,6 +1760,9 @@ function Test-AgentOurs {
     if (-not $py) { return 'unknown' }
     $house = Join-Path $Root 'hermes-agent'
     if (-not (Test-Path $house)) { return 'unknown' }
+    # ((103)) Notre maison attendue : celle que le lanceur épingle dans
+    # l'environnement (l.1015), sinon data\ du dossier.
+    $expected = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $Root 'data' }
     try {
         $env:PYTHONIOENCODING = 'utf-8'
         # hermes_cli n'est importable que DEPUIS la racine de l'agent —
@@ -1766,8 +1772,20 @@ function Test-AgentOurs {
         try {
             $out = & $py -m hermes_cli.main gateway attach --json 2>&1 | Out-String
         } finally { Pop-Location }
-        if ($out -match '"state"\s*:\s*"ready"') { return 'ours' }
         if ($out -match '"state"\s*:\s*"absent"' -or $out -match 'not ready') { return 'foreign' }
+        if ($out -match '"state"\s*:\s*"ready"') {
+            # ((103)) La maison servie (profile_id) fait foi — pas le seul
+            # fait qu'elle réponde. Dé-échappement JSON (\\ → \), séparateurs
+            # normalisés, comparaison EXACTE (F:\hermes\data n'est PAS
+            # F:\hermes_web\data malgré le préfixe commun).
+            if ($out -match '"profile_id"\s*:\s*"([^"]*)"') {
+                $served = ($Matches[1] -replace '\\\\', '\') -replace '/', '\'
+                $mine = $expected -replace '/', '\'
+                if ($served -ieq $mine.TrimEnd('\')) { return 'ours' }
+                return 'foreign'
+            }
+            return 'unknown'
+        }
     } catch { }
     return 'unknown'
 }
@@ -1805,8 +1823,14 @@ function Start-AgentRuntime {
             Log "• agent : le port 9120 est tenu par la passerelle d'une AUTRE installation Hermes (pas celle de ce dossier)."
             Log "  Le chat restera éteint tant qu'elle tourne : fermez l'autre installation Hermes, puis relancez Hermes-Web.bat."
         } else {
-            Set-SanteMaillon 'agent' 'répond (9120) — identité non vérifiable'
-            Log "• agent : déjà en marche sur le port 9120 (identité non vérifiable) — l'interface l'adopte."
+            # ((103)) Identité non prouvée = on n'adopte PAS : adopter une
+            # passerelle dont on ne prouve pas la maison recrée l'état du
+            # 26/11 — « l'interface l'adopte » posé au boot, puis « Hermes
+            # éteint » à l'écran sans explication. Repli conservateur :
+            # chat éteint ET annoncé, jamais la voix d'une autre maison.
+            Set-SanteMaillon 'agent' "port 9120 occupé, identité non prouvée — chat éteint"
+            Log "• agent : le port 9120 est occupé mais la sonde n'a pas prouvé que c'est NOTRE passerelle — le chat reste éteint ([HERMES_OFFLINE])."
+            Log "  Arrêtez l'autre installation Hermes qui tient le port, puis relancez Hermes-Web.bat."
         }
         return
     }
