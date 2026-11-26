@@ -21,7 +21,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Folder, FolderDown, MessageSquare, Plus, Search, Settings } from "lucide-react";
+import { Folder, FolderDown, MessageSquare, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -64,12 +64,10 @@ interface SidebarProps {
   projects: Project[];
   activeId: string | null;
   mode: GatewayMode | null;
-  serverModel: string | null;
   /** Fournisseurs LLM actionnables (v2.4) — carte de statut honnête. */
   engineProviders: string[] | null;
   /** v0.3.3 — révision disponible sur GitHub (null = à jour) : point
    *  orange sur l'engrenage, l'info vit sans ouvrir la page Système. */
-  updateAvailable?: string | null;
   connected: boolean;
   onNew: (projectId?: string | null) => void;
   onOpen: (id: string) => void;
@@ -96,7 +94,6 @@ interface SidebarProps {
   /** Menu conversation : copie l'identifiant de la conversation. */
   onCopyConversationId: (id: string) => void;
   /** Ouvre le sheet Paramètres (engrenage de la carte de statut — FORK.md §7.4). */
-  onOpenSettings: () => void;
 }
 
 function groupLabel(iso: string): string {
@@ -130,8 +127,6 @@ const SEARCH_EMPTY_SET: Set<string> = new Set();
 //                        lien disque ;
 //   SidebarHistorique  — la branche « sans dossier » : épinglées puis
 //                        groupes de dates ;
-//   SidebarStatut      — la carte de statut du moteur (voyant, libellé,
-//                        entrée unique des paramètres) ;
 //   SidebarDialogues   — les deux gardes de destruction (C5.1).
 // Deux algorithmes sortent en fonctions de module PURES :
 //   computeSearchTree   — l'arbre filtré de la recherche (le memo appelle) ;
@@ -139,9 +134,10 @@ const SEARCH_EMPTY_SET: Set<string> = new Set();
 //                         uniquement) ; retourne null si rien à faire, même
 //                         comportement que les retours early d'origine.
 // Tout l'état reste dans l'orchestrateur (Sidebar) ; les feuilles de branche
-// sont montées en exclusivité mutuelle (comme le JSX d'origine), Statut et
-// Dialogues en continu — même durée de vie. Structure DOM inchangée (mêmes
-// nœuds dans le même ordre) ; props publiques de Sidebar inchangées.
+// sont montées en exclusivité mutuelle (comme le JSX d'origine), Dialogues
+// en continu — même durée de vie. ((105)) La carte de statut est retirée
+// (voyant et entrée paramètres vivent dans l'en-tête) : serverModel,
+// updateAvailable et onOpenSettings ont quitté les props de Sidebar.
 // Recherche insensible aux ACCENTS (revue 95) : « reunion » doit trouver
 // « Réunion » — normalisation NFD + retrait des diacritiques des deux côtés.
 // (vague 5 : monte au niveau module — pure, utilisée par computeSearchTree
@@ -724,98 +720,6 @@ function SidebarHistorique({
   );
 }
 
-/** Feuille 4 — la carte de statut du moteur : le voyant d'état, le
- *  libellé (« une seule question à l'écran », §9 (62)) et l'entrée unique
- *  des paramètres. Corps déplacé VERBATIM de l'orchestrateur (chantier CRAP
- *  vague 5, 2026-11-25) ; la teinte de la carte PORTE l'état : vert = ça
- *  répond, ambre pulsant = il faut allumer Hermes, gris = hors ligne. */
-interface SidebarStatutProps {
-  connected: boolean;
-  mode: GatewayMode | null;
-  serverModel: string | null;
-  updateAvailable: string | null;
-  onOpenSettings: () => void;
-}
-
-function SidebarStatut({
-  connected,
-  mode,
-  serverModel,
-  updateAvailable,
-  onOpenSettings,
-}: SidebarStatutProps) {
-  return (
-      <div className="border-t border-sidebar-border p-3">
-        <div
-          className={`rounded-xl px-3 py-2.5 ring-1 ring-inset transition-colors ${
-            !connected
-              ? "bg-sidebar-accent ring-sidebar-border"
-              : mode === "gateway"
-                ? "bg-success/10 ring-success/30"
-                : "bg-warning/10 ring-warning/30"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                !connected
-                  ? "bg-muted-foreground/50"
-                  : mode === "gateway"
-                    ? "bg-success"
-                    : "bg-warning animate-pulse"
-              }`}
-              aria-hidden="true"
-            />
-            <p className="truncate text-[12.5px] font-semibold leading-none text-foreground">
-              {/* Dictionnaire (loi « tout simplement », 2026-11-22) : le sujet
-                  est toujours Hermes, en mots simples — plus de « moteur local ».
-                  Hermes éteint : l'application l'allume seule s'il est installé. */}
-              {!connected
-                ? "Hors ligne"
-                : mode === "gateway"
-                  ? "Hermes branché"
-                  : "Hermes est éteint"}
-            </p>
-            {/* Entrée unique des paramètres (décision v1 confirmée v3).
-                v0.3.3 : point orange tant qu'une mise à jour est
-                disponible — l'info arrive sans ouvrir la page Système. */}
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              title={updateAvailable ? "Mise à jour disponible — ouvrir Paramètres → Système" : "Paramètres"}
-              aria-label={
-                updateAvailable
-                  ? "Ouvrir les paramètres — mise à jour disponible"
-                  : "Ouvrir les paramètres"
-              }
-              className="relative ml-auto flex size-[27px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm focus-visible:outline-2 focus-visible:outline-hermes"
-            >
-              <Settings className="size-[14px]" />
-              {updateAvailable ? (
-                <i
-                  className="absolute -top-0.5 -right-0.5 size-[8px] rounded-full border-2 border-background bg-warning"
-                  aria-hidden="true"
-                />
-              ) : null}
-            </button>
-          </div>
-          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-            {!connected ? (
-              "Reconnexion automatique en cours…"
-            ) : mode === "gateway" ? (
-              (serverModel ?? "")
-            ) : (
-              <>
-                L&apos;application allume Hermes toute seule dès qu&apos;il est
-                installé — sans lui, aucune réponse n&apos;est envoyée.
-              </>
-            )}
-          </p>
-        </div>
-      </div>
-  );
-}
-
 /** Feuille 5 — les gardes de destruction (C5.1) : les deux dialogues de
  *  confirmation (conversation, dossier). Corps déplacé VERBATIM de
  *  l'orchestrateur (chantier CRAP vague 5, 2026-11-25) ; le décompte des
@@ -902,9 +806,7 @@ export function Sidebar({
   projects,
   activeId,
   mode,
-  serverModel,
   engineProviders,
-  updateAvailable = null,
   connected,
   onNew,
   onOpen,
@@ -920,7 +822,6 @@ export function Sidebar({
   onMoveConversation,
   onExportConversation,
   onCopyConversationId,
-  onOpenSettings,
 }: SidebarProps) {
   const [query, setQuery] = useState("");
   // Gardes de destruction (C5.1) : cibles des dialogues de confirmation.
@@ -1379,19 +1280,6 @@ export function Sidebar({
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      {/* Carte de statut du moteur — voyant d'état (§9 (62)) : une seule
-          question à l'écran — Hermes répond-il, et sinon que faire ? La
-          teinte de la carte PORTE l'état : vert = ça répond, ambre pulsant
-          = il faut allumer Hermes, gris = hors ligne (reconnexion seule
-          en cours). */}
-      <SidebarStatut
-        connected={connected}
-        mode={mode}
-        serverModel={serverModel}
-        updateAvailable={updateAvailable}
-        onOpenSettings={onOpenSettings}
-      />
 
       <SidebarDialogues
         deleteConvTarget={deleteConvTarget}

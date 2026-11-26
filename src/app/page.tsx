@@ -463,9 +463,7 @@ export default function HermesWebPage() {
       projects={chat.projects}
       activeId={chat.activeId}
       mode={chat.mode}
-      serverModel={chat.serverModel}
       engineProviders={chat.engineProviders}
-      updateAvailable={chat.updateAvailable}
       connected={chat.connected}
       onNew={handleNew}
       onOpen={handleOpen}
@@ -481,10 +479,6 @@ export default function HermesWebPage() {
       onMoveConversation={chat.moveConversation}
       onExportConversation={handleSidebarExport}
       onCopyConversationId={handleCopyConversationId}
-      onOpenSettings={() => {
-        setSettingsOpen(true);
-        setMobileOpen(false); // mobile : le sheet remplace la sidebar
-      }}
     />
   );
 
@@ -568,6 +562,8 @@ export default function HermesWebPage() {
             onOpenSidebar={() => setMobileOpen(true)}
             sidebarHidden={sidebarHidden}
             onToggleSidebar={toggleDesktopSidebar}
+            onOpenSettings={() => setSettingsOpen(true)}
+            updateAvailable={chat.updateAvailable}
           />
           <MessageList
             messages={chat.messages}

@@ -14,6 +14,7 @@ import {
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
   Sparkle,
   Sun,
   Unlink,
@@ -79,6 +80,11 @@ interface ChatHeaderProps {
    *  absent sur mobile (le bouton Sheet suffit). */
   sidebarHidden?: boolean;
   onToggleSidebar?: () => void;
+  /** Paramètres ((105)) : icône déplacée du pied de la barre latérale — en
+   *  haut à droite de l'en-tête. */
+  onOpenSettings: () => void;
+  /** v0.3.3 : point orange tant qu'une mise à jour est disponible. */
+  updateAvailable?: string | null;
 }
 
 export function ChatHeader({
@@ -96,6 +102,8 @@ export function ChatHeader({
   onOpenSidebar,
   sidebarHidden = false,
   onToggleSidebar,
+  onOpenSettings,
+  updateAvailable = null,
 }: ChatHeaderProps) {
   // Copie du lien : feedback inline « Lien copié » (toast inutile ici)
   const [copied, setCopied] = useState(false);
@@ -231,10 +239,13 @@ export function ChatHeader({
 
 
       {mode === "gateway" && connected ? (
-        <span className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success sm:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-          Gateway
-        </span>
+        /* ((105)) pastille seule — plus le mot « Gateway » */
+        <span
+          className="hidden h-1.5 w-1.5 rounded-full bg-success sm:block"
+          title="Hermes branché"
+          aria-label="Hermes branché"
+          role="img"
+        />
       ) : null}
       {!connected ? (
         <TooltipProvider>
@@ -376,6 +387,29 @@ export function ChatHeader({
       ) : null}
 
       <ThemeToggle />
+      {/* Paramètres ((105)) : déplacés du pied de la barre latérale — en
+          haut à droite. v0.3.3 : point orange tant qu'une mise à jour est
+          disponible — l'info arrive sans ouvrir la page Système. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+        title={updateAvailable ? "Mise à jour disponible — ouvrir Paramètres → Système" : "Paramètres"}
+        aria-label={
+          updateAvailable
+            ? "Ouvrir les paramètres — mise à jour disponible"
+            : "Ouvrir les paramètres"
+        }
+        onClick={onOpenSettings}
+      >
+        <Settings className="h-4.5 w-4.5" />
+        {updateAvailable ? (
+          <i
+            className="absolute -top-0.5 -right-0.5 size-[8px] rounded-full border-2 border-background bg-warning"
+            aria-hidden="true"
+          />
+        ) : null}
+      </Button>
       <ConfirmDestructiveDialog
         open={revokeOpen}
         onOpenChange={setRevokeOpen}
