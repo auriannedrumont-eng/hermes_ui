@@ -1336,6 +1336,46 @@ function Open-Browser([string]$url) {
             Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue
             try { [Microsoft.VisualBasic.Interaction]::AppActivate($suivi.Id) } catch { }
         }
+        else {
+            # ((106)) L'onglet Hermes peut être ouvert SANS être l'onglet
+            # actif de sa fenêtre : le titre de fenêtre ne montre que
+            # l'onglet affiché (cas réel du 26/11 : trois relances, trois
+            # onglets en plus). L'arbre d'accessibilité (UIA) expose chaque
+            # onglet des navigateurs comme un onglet nommé — chercher par
+            # le nom, le SÉLECTIONNER (le navigateur l'affiche), puis
+            # ramener la fenêtre au premier plan. Sans UIA ou sans
+            # résultat : on ouvre l'URL comme avant — jamais bloquant.
+            Add-Type -AssemblyName UIAutomationClient -ErrorAction SilentlyContinue
+            Add-Type -AssemblyName UIAutomationTypes -ErrorAction SilentlyContinue
+            Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue
+            $ongletInactif = $false
+            try {
+                $condOnglet = New-Object System.Windows.Automation.PropertyCondition(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                    [System.Windows.Automation.ControlType]::TabItem)
+                foreach ($proc in (Get-Process | Where-Object {
+                        $_.ProcessName -match $navigateurs -and $_.MainWindowHandle -ne 0
+                    })) {
+                    try {
+                        $fenetre = [System.Windows.Automation.AutomationElement]::FromHandle($proc.MainWindowHandle)
+                        $onglets = $fenetre.FindAll(
+                            [System.Windows.Automation.TreeScope]::Descendants, $condOnglet)
+                        foreach ($onglet in $onglets) {
+                            if ($onglet.Current.Name -match 'Hermes Web') {
+                                $onglet.GetCurrentPattern(
+                                    [System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+                                try { [Microsoft.VisualBasic.Interaction]::AppActivate($proc.Id) } catch { }
+                                $ongletInactif = $true
+                                Log ("• onglet Hermes retrouve inactif dans « {0} » ({1}) — selectionne, fenetre ramenee au premier plan." -f $onglet.Current.Name, $proc.ProcessName)
+                                break
+                            }
+                        }
+                    } catch { }
+                    if ($ongletInactif) { break }
+                }
+            } catch { }
+            if ($ongletInactif) { $dejaOuvert = $true }
+        }
     } catch { }
     if (-not $dejaOuvert) {
         try { Start-Process $url } catch { Log "• impossible d'ouvrir le navigateur : $url" }
