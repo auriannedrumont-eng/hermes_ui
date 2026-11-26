@@ -47,6 +47,7 @@ import { SidebarArchives } from "@/components/chat/sidebar-archives";
 import { SidebarSectionHeader } from "@/components/chat/sidebar-section-header";
 import { buildProjectTree, subtreeIds, type ProjectNode } from "@/lib/project-tree";
 import { onSettingsChanged, readClientSetting, writeClientSetting } from "@/lib/settings";
+import { pickWindowsDirectory } from "@/lib/directory-picker";
 import type {
   ConversationMeta,
   GatewayMode,
@@ -509,7 +510,18 @@ function SidebarDossiers({
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
-                    onClick={() => setAttachDiskOpen(true)}
+                    onClick={async () => {
+                      // ((107)) sélecteur natif d'abord (loi (30)) : la
+                      // fenêtre Windows porte le bouton « Nouveau dossier » ;
+                      // annulation ou API absente → dialogue maison (chemin
+                      // exact, sémantique disk_path).
+                      const picked = await pickWindowsDirectory();
+                      if (picked?.name) {
+                        await onCreateProject(picked.name, null, null);
+                        return;
+                      }
+                      setAttachDiskOpen(true);
+                    }}
                     aria-label="Ajouter un dossier de mon disque"
                     title="Ajouter un dossier de mon disque"
                   >

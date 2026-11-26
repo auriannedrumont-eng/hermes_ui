@@ -3,22 +3,21 @@
 // (ctx.store, ctx.io, ctx.connector, helpers du tour, vues wire) viennent du contexte
 // partagé handlers/context.ts — câblé une fois par index.ts.
 import type { Socket } from "socket.io";
-import { homedir } from "node:os";
 import { realpathSync, statSync } from "node:fs";
-import { sep } from "node:path";
 import { ctx } from "./context";
 import type { Attachment, TurnSettings } from "../types";
 import type { ModeConfig } from "../modes";
 
-/** F-59 (J5) : valide un chemin de liaison disque — dossier EXISTANT, borné
- *  au HOME de l'utilisateur (realpath suit les liens symboliques AVANT la
- *  vérification), jamais de chemin arbitraire (plan D4, sémantique minimale). */
+/** F-59 (J5) : valide un chemin de liaison disque — dossier EXISTANT
+ *  uniquement (realpath suit les liens symboliques AVANT la vérification).
+ *  ((107), 26/11) la borne HOME est levée : cohérente avec la navigation
+ *  tous disques ((31), /disk/drives + /disk/list) — lier ce que l'on peut
+ *  naviguer. L'endpoint reste jeton + 127.0.0.1 ; rien n'est lu ni déplacé
+ *  à la liaison (noms seuls). */
 function validDiskPath(raw: unknown): string | null {
   if (typeof raw !== "string" || !raw.trim()) return null;
   try {
-    const home = realpathSync(homedir());
     const target = realpathSync(raw);
-    if (target !== home && !target.startsWith(home + sep)) return null;
     if (!statSync(target).isDirectory()) return null;
     return target;
   } catch {
@@ -357,13 +356,14 @@ socket.on(
       }
       parentId = parent.id;
     }
-    // F-59 (J5) : liaison disque optionnelle — validée côté service (HOME).
+    // F-59 (J5) : liaison disque optionnelle — validée côté service
+    // (dossier existant ; borne HOME levée ((107)), voir validDiskPath).
     let diskPath: string | null = null;
     if (payload?.diskPath) {
       diskPath = validDiskPath(payload.diskPath);
       if (!diskPath) {
         if (typeof cb === "function") {
-          cb({ error: "Chemin de disque invalide (dossier utilisateur uniquement)" });
+          cb({ error: "Chemin de disque invalide (dossier introuvable ?)" });
         }
         return;
       }
