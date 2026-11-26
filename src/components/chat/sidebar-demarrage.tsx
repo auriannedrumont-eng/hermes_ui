@@ -12,8 +12,9 @@
 "use client";
 
 import { useState } from "react";
-import { Folder, FolderDown, Loader2, Sparkles } from "lucide-react";
+import { Folder, FolderDown, Loader2, Plus, Sparkles } from "lucide-react";
 import { AttachDiskDialog } from "@/components/chat/attach-disk-dialog";
+import { ChampCreationDossier } from "@/components/chat/sidebar-ajout-dossier";
 import { pickWindowsDirectory } from "@/lib/directory-picker";
 import type { Project } from "@/lib/chat-types";
 
@@ -36,6 +37,10 @@ export function SidebarDemarrage({
   const [busy, setBusy] = useState(false);
   /** Repli : dialogue maison si le sélecteur natif est indisponible. */
   const [attachDiskOpen, setAttachDiskOpen] = useState(false);
+  // ((39)) création d'un dossier NOMMÉ sur place (loi « pas de champ
+  // inline » levée le 28/11, demande répétée) : le champ vit dans la
+  // feuille, la création range et démarre la conversation dedans.
+  const [creationOuverte, setCreationOuverte] = useState(false);
 
   // Crée le projet du dossier choisi puis la conversation rangée dedans.
   // diskPath reste null : le sélecteur natif ne donne pas de chemin disque
@@ -59,6 +64,12 @@ export function SidebarDemarrage({
       return;
     }
     setAttachDiskOpen(true);
+  };
+
+  // ((39)) crée le dossier nommé puis démarre la conversation rangée dedans.
+  const confirmerCreation = async (nom: string): Promise<void> => {
+    await createFromName(nom);
+    setCreationOuverte(false);
   };
 
   // Repli maison : à la création, la conversation naît rangée.
@@ -94,17 +105,40 @@ export function SidebarDemarrage({
             <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => void handlePick()}
-            aria-label="Ajouter un dossier"
-            title="Ajouter un dossier"
-            className="ml-auto flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-hermes"
-          >
-            <FolderDown className="size-3.5" aria-hidden="true" />
-          </button>
+          <span className="ml-auto flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setCreationOuverte((v) => !v)}
+              // Empêche le blur-annule du champ quand on reclique +.
+              onMouseDown={(e) => {
+                if (creationOuverte) e.preventDefault();
+              }}
+              aria-label="Nouveau dossier"
+              title="Nouveau dossier"
+              className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handlePick()}
+              aria-label="Ajouter un dossier"
+              title="Ajouter un dossier"
+              className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-hermes"
+            >
+              <FolderDown className="size-3.5" aria-hidden="true" />
+            </button>
+          </span>
         )}
       </div>
+
+      {creationOuverte && !busy ? (
+        <ChampCreationDossier
+          projects={projects}
+          onConfirmer={(nom) => void confirmerCreation(nom)}
+          onFermer={() => setCreationOuverte(false)}
+        />
+      ) : null}
 
       {projects.length > 0 ? (
         <ul className="space-y-0.5">

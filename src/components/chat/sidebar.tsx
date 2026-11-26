@@ -506,6 +506,7 @@ function SidebarDossiers({
               <SidebarAjoutDossier
                 onCreateProject={onCreateProject}
                 onFallback={() => setAttachDiskOpen(true)}
+                projects={projects}
               />
               {projectTree.map((node: ProjectNode) => (
                 <DropZone
@@ -681,6 +682,7 @@ function SidebarHistorique({
               <SidebarAjoutDossier
                 onCreateProject={onCreateProject}
                 onFallback={() => setAttachDiskOpen(true)}
+                projects={projects}
               />
               {pinned.length > 0 ? (
                 <div className="mb-2">
