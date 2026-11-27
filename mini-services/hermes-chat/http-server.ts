@@ -46,7 +46,16 @@ export const FILES_PORT = Number(process.env.HERMES_CHAT_FILES_PORT ?? 3004); //
 export function createFilesServer(deps: HttpDeps) {
   const { store } = deps;
   return createServer((req: IncomingMessage, res: ServerResponse) => {
-    if (req.method !== "GET" || !req.url) {
+    if (!req.url) {
+      res.writeHead(405, { "Content-Type": "text/plain" });
+      res.end("Méthode non autorisée");
+      return;
+    }
+    const u = new URL(req.url, "http://localhost");
+    // ((40)) POST /disk/mkdir est l'unique mutation du 3004 : création d'un
+    // dossier RÉEL pour le dialogue 📁↓ — tout le reste reste GET-seul.
+    const isMkdirRoute = u.pathname === "/disk/mkdir";
+    if (req.method !== "GET" && !(isMkdirRoute && req.method === "POST")) {
       res.writeHead(405, { "Content-Type": "text/plain" });
       res.end("Méthode non autorisée");
       return;
@@ -62,8 +71,6 @@ export function createFilesServer(deps: HttpDeps) {
       res.end("Origine non autorisée");
       return;
     }
-    const u = new URL(req.url, "http://localhost");
-
     // Jeton de service (revue 2026-11-13) : les routes HTTP du 3004 servent
     // les pièces jointes et artefacts de l'utilisateur — protégées par le même
     // jeton que la socket, via Authorization: Bearer ou ?token=. EXCEPTIONS :
@@ -123,6 +130,15 @@ export function createFilesServer(deps: HttpDeps) {
     // d'entrée de la navigation « Ce PC » du dialogue 📁↓. (31)
     if (u.pathname === "/disk/drives") {
       handleDiskDrives(res);
+      return;
+    }
+
+    // ((40)) POST /disk/mkdir { path, name } — création d'un dossier RÉEL
+    // sur le disque, dans le dossier navigué du dialogue 📁↓ (demande
+    // répétée de l'utilisatrice : la création doit vivre DANS la modale).
+    // Jeton + origine + cross-site : gardes générales ci-dessus.
+    if (isMkdirRoute) {
+      void handleDiskMkdir(req, res);
       return;
     }
 
@@ -326,6 +342,82 @@ function handleDiskList(u: URL, res: ServerResponse): void {
       dirs,
     })
   );
+}
+
+/** POST /disk/mkdir { path, name } — crée un dossier RÉEL sous `path`
+ *  ((40), 28/11 : la création vit dans la modale d'ajout, demande répétée
+ *  de l'utilisatrice). Le parent doit exister (realpath suit les liens) ;
+ *  le nom est filtré (caractères interdits Windows, points seuls, taille) —
+ *  join(parent réel, name) sans séparateur dans le name : aucune
+ *  traversée possible. Réponse : { name, path } ou { error }. */
+async function handleDiskMkdir(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  const jsonError = (code: number, error: string) => {
+    res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error }));
+  };
+  const body = await new Promise<string>((resolve, reject) => {
+    let data = "";
+    req.on("data", (c: Buffer) => {
+      data += c.toString("utf8");
+      if (data.length > 4096) {
+        reject(new Error("corps trop volumineux"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  }).catch(() => null);
+  if (body === null) {
+    jsonError(400, "Corps illisible");
+    return;
+  }
+  let payload: { path?: unknown; name?: unknown };
+  try {
+    payload = JSON.parse(body) as { path?: unknown; name?: unknown };
+  } catch {
+    jsonError(400, "JSON invalide");
+    return;
+  }
+  const rawPath = typeof payload.path === "string" ? payload.path.trim() : "";
+  const name = typeof payload.name === "string" ? payload.name.trim() : "";
+  if (!rawPath || !name) {
+    jsonError(400, "Chemin et nom requis");
+    return;
+  }
+  // Un nom de dossier Windows : pas de séparateur ni de réservés, pas de
+  // points seuls, pas de contrôle, taille bornée.
+  if (
+    /[\\/:*?"<>|]/.test(name) ||
+    name === "." ||
+    name === ".." ||
+    name.length > 100
+  ) {
+    jsonError(400, "Nom de dossier invalide");
+    return;
+  }
+  let parent: string;
+  try {
+    parent = realpathSync(rawPath);
+    if (!statSync(parent).isDirectory()) {
+      jsonError(400, "Le chemin visé n'est pas un dossier");
+      return;
+    }
+  } catch {
+    jsonError(400, "Chemin introuvable");
+    return;
+  }
+  const target = join(parent, name);
+  try {
+    mkdirSync(target);
+  } catch {
+    jsonError(400, "Création impossible — un dossier de ce nom existe déjà ici");
+    return;
+  }
+  res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify({ name, path: target }));
 }
 
 /** Sert la source / les fichiers dérivés d'un artefact. */

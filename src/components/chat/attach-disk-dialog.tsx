@@ -8,8 +8,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Folder, FolderSymlink, HardDrive, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Folder, FolderPlus, FolderSymlink, HardDrive, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,83 @@ type VueCourante =
   | { vue: "drives"; drives: DrivesListing }
   | { vue: "dossier"; listing: DiskListing };
 
+/** ((40)) POST /disk/mkdir — crée un dossier RÉEL sous `dossier`. Retourne
+ *  l'erreur du service (nom invalide, doublon, service injoignable) ou null
+ *  au succès : le composant ne porte que l'état, pas le HTTP. */
+async function mkdirSurDisque(
+  dossier: string,
+  name: string
+): Promise<string | null> {
+  try {
+    const url = serviceUrl("/disk/mkdir", FILES_PORT);
+    const res = await fetch(url, {
+      ...serviceFetchInit(),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: dossier, name }),
+      cache: "no-store",
+    });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok || json.error) {
+      return json.error ?? `Service a répondu HTTP ${res.status}`;
+    }
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : "Service injoignable";
+  }
+}
+
+/** ((40)) champ « Nom du nouveau dossier » : Entrée crée sur le disque,
+ *  Échap ou clic extérieur annule ; l'erreur du service (nom invalide,
+ *  doublon) remonte à la zone d'erreur commune de la modale. */
+function ChampMkdirDossier({
+  dossier,
+  onErreur,
+  onCree,
+  onFerme,
+}: {
+  dossier: string;
+  onErreur: (message: string) => void;
+  onCree: () => Promise<void> | void;
+  onFerme: () => void;
+}) {
+  const [nom, setNom] = useState("");
+  const [occupe, setOccupe] = useState(false);
+
+  const creer = async (): Promise<void> => {
+    if (occupe) return;
+    const nomPropre = nom.trim();
+    if (!nomPropre) return;
+    setOccupe(true);
+    try {
+      const erreur = await mkdirSurDisque(dossier, nomPropre);
+      if (erreur) {
+        onErreur(erreur);
+        return;
+      }
+      await onCree();
+    } finally {
+      setOccupe(false);
+    }
+  };
+
+  return (
+    <Input
+      autoFocus
+      value={nom}
+      onChange={(e) => setNom(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void creer();
+        else if (e.key === "Escape") onFerme();
+      }}
+      onBlur={onFerme}
+      placeholder="Nom du nouveau dossier"
+      aria-label="Nom du nouveau dossier"
+      className="h-7 rounded-lg text-[12.5px]"
+    />
+  );
+}
+
 export function AttachDiskDialog({
   open,
   onOpenChange,
@@ -56,6 +134,11 @@ export function AttachDiskDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attaching, setAttaching] = useState<string | null>(null);
+  // ((40)) création d'un dossier RÉEL sur le disque, dans le dossier
+  // navigué (POST /disk/mkdir) — demande répétée de l'utilisatrice : la
+  // création vit DANS la modale, pas dans l'explorateur Windows. L'état du
+  // champ vit dans ChampMkdirDossier ; ici, juste son ouverture.
+  const [mkdirOuverte, setMkdirOuverte] = useState(false);
 
   const linkedPaths = new Set(
     projects.map((p) => p.diskPath).filter((x): x is string => !!x)
@@ -183,6 +266,22 @@ export function AttachDiskDialog({
           >
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            disabled={loading || vue?.vue !== "dossier"}
+            // Le clic sur le bouton pendant la saisie ne doit pas déclencher
+            // le blur-annule du champ (sinon « fermer » puis « rouvrir »).
+            onMouseDown={(e) => {
+              if (mkdirOuverte) e.preventDefault();
+            }}
+            onClick={() => setMkdirOuverte((v) => !v)}
+            aria-label="Nouveau dossier"
+            title="Nouveau dossier"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+          </Button>
           <p
             className="truncate text-[12.5px] text-muted-foreground"
             title={vue?.vue === "dossier" ? vue.listing.path : undefined}
@@ -194,6 +293,21 @@ export function AttachDiskDialog({
                 : "…"}
           </p>
         </div>
+
+        {/* ((40)) champ du nouveau dossier : Entrée crée RÉELLEMENT sur le
+            disque, Échap ou clic extérieur annule ; l'erreur du service
+            (nom invalide, doublon) s'affiche dans la zone d'erreur commune. */}
+        {mkdirOuverte && vue?.vue === "dossier" ? (
+          <ChampMkdirDossier
+            dossier={vue.listing.path}
+            onErreur={setError}
+            onCree={async () => {
+              setMkdirOuverte(false);
+              await load(vue.listing.path);
+            }}
+            onFerme={() => setMkdirOuverte(false)}
+          />
+        ) : null}
 
         {/* Lier le dossier courant (pas les racines de lecteur) */}
         {vue?.vue === "dossier" && vue.listing.path !== vue.listing.home ? (
